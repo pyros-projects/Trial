@@ -3,7 +3,7 @@
 ## Trial by Pyro: 2026-09-07
 
 - Added Copy link controls on cards and in the viewer, with direct links that open a specific build maximized and support reload and browser history.
-- Added practical What it tests and Look for guidance to all 30 catalog entries, displayed beside showcase prompt titles and stacked below them on small screens.
+- Added practical Look for guidance to all 30 catalog entries, displayed beside showcase prompt titles and stacked below them on small screens.
 - Introduced the A Vibe Benchmark by Pyro subtitle and an explicit, informal scope statement in the README and Why Trial? view: personal exploration, not a scientific model ranking.
 - Added public appsettings.json configuration for model order, display names, and card colors, with Astra, Grok, and Gemini as the current order.
 - Tinted model cards, missing-build placeholders, and viewer labels consistently, with stable colors for unlisted models.

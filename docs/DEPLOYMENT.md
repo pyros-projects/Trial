@@ -106,7 +106,7 @@ Model keys and run labels come from folder names. Public model display labels, o
 
 The supplied reference image is explicitly included as `/deep-swe-snapshot.png` with its original bytes. It is independent of run screenshots and remains included when `--screenshots none` is selected.
 
-Public catalog entries include `what_it_tests` and `look_for` when present. These short descriptions power the guidance beside each showcase prompt; private catalog fields are still excluded.
+Public catalog entries include `look_for` when present. These short hints power the guidance beside each showcase prompt; private catalog fields are still excluded.
 
 Turn off **Project configuration > General > Powered by Netlify badge** for this showcase. Netlify can inject that badge into HTML responses at its edge, including submitted builds, which changes their downloaded hashes. The setting is already off for `trial-by-pyro.netlify.app`; check it when creating a different site. [Netlify documents the per-project setting and edge injection](https://docs.netlify.com/manage/projects/powered-by-netlify-badge/).
 

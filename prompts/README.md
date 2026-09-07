@@ -8,7 +8,7 @@ Tasks 01–20 deliver `index.html`. Tasks 21–30 deliver `project/`. Each run m
 
 See `SELECTION_GUIDE.md` for task combinations. `catalog.json` is read by the gallery and importer.
 
-The catalog's optional `what_it_tests` and `look_for` fields provide the showcase's short reading cues. Edit those strings to change the guidance beside a prompt title, then restart the local gallery or rebuild the public site. They help visitors explore a build; the complete prompt and acceptance checks define the requirements.
+The catalog's optional `look_for` field provides the showcase's practical guidance. Edit that string to change the hints beside a prompt title, then restart the local gallery or rebuild the public site. These hints help visitors explore a build; the complete prompt and acceptance checks define the requirements.
 
 ## Choose a prompt
 

@@ -133,7 +133,6 @@ class StaticExportTests(unittest.TestCase):
         catalog_path = self.root / "prompts/catalog.json"
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         guidance = {
-            "what_it_tests": "Fluid that responds to a brush, with working pressure and flow controls.",
             "look_for": "Drag through the dye. Does it curl around obstacles and settle after you stop?",
         }
         catalog[0].update(guidance)

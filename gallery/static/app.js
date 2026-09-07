@@ -163,8 +163,8 @@
     });
     $('#cards').innerHTML=ordered.map(([key,runs])=>{
       const first=runs[0];const known=state.data.catalog.find(t=>t.id===key);
-      const guideFields=[['What it tests',known?.what_it_tests||known?.description],['Look for',known?.look_for]].filter(([,text])=>typeof text==='string'&&text.trim());
-      const guidance=guideFields.length?`<dl class="prompt-guide">${guideFields.map(([title,text])=>`<div><dt>${title}</dt><dd>${escape(text)}</dd></div>`).join('')}</dl>`:'';
+      const lookFor=known?.look_for;
+      const guidance=typeof lookFor==='string'&&lookFor.trim()?`<dl class="prompt-guide"><div><dt>Look for</dt><dd>${escape(lookFor)}</dd></div></dl>`:'';
       const comparisonModels=known?models:models.filter(model=>runs.some(row=>row.model_key===model.model_key));
       const columns=comparisonModels.map(model=>{
         const builds=runs.filter(r=>r.model_key===model.model_key);

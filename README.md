@@ -54,7 +54,7 @@ Keep the benchmarks. Get your hands on the work.
 
 ## What you can do
 
-- **Compare the same brief.** Browse builds grouped by prompt, with each model's screenshots side by side. Each group explains what the task tests and what to look for when trying it. Filter by model, task, track, status, or text.
+- **Compare the same brief.** Browse builds grouped by prompt, with each model's screenshots side by side. Each group gives you concrete things to look for when trying the builds. Filter by model, task, track, status, or text.
 - **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Download the source to inspect it yourself.
 - **Share a specific build.** Choose **Copy link** on a card or inside the viewer. The recipient lands directly in that model's maximized app.
 - **Run any of the 30 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.

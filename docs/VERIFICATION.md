@@ -2,6 +2,12 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Look for only: 2026-09-07
+
+Removed the What it tests copy and catalog field, keeping the practical Look for hints for all 30 prompts. Both focused guidance tests passed, covering browser layout at four widths, HTML escaping, and public export. JavaScript syntax and whitespace checks passed. Desktop and mobile showcase screenshots and the README comparison were refreshed.
+
+Production deployment `6a9f087dd6821a8284e32c5e` publishes **116 files totaling 3,661,003 bytes (3.49 MiB)**. Live checks confirmed exactly one Look for label in each of the eight displayed prompt groups, all 30 hints in the public catalog, no obsolete guidance field, and no horizontal page overflow at 390 pixels.
+
 ## Shared builds, prompt guidance, and Vibe Benchmark scope: 2026-09-07
 
 The complete WSL suite with both browser modes enabled passed **all 64 tests, with no skips**. Windows system Python passed **47 tests with 17 expected skips** for opt-in browser modes, optional Pillow, timezone data, and symlink permissions. JavaScript syntax validation and Git whitespace checks passed.

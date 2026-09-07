@@ -66,13 +66,12 @@ class BrowserTests(BrowserEnvironment):
         from playwright.sync_api import expect
         self.fixture()
         task = self.state.catalog_by_id['01-fluid-simulation']
-        task['what_it_tests'] = 'Fluid motion <img src=x onerror=alert(1)> & responsive controls.'
-        task['look_for'] = 'Drag through the dye. Does it curl around obstacles?'
+        task['look_for'] = 'Drag through the dye <img src=x onerror=alert(1)> & watch it curl around obstacles.'
         self.navigate_direct()
         group = self.page.locator('.prompt-group[data-task="01-fluid-simulation"]')
         guide = group.locator('.prompt-guide')
-        expect(guide.locator('dt')).to_have_text(['What it tests', 'Look for'])
-        expect(guide.locator('dd')).to_have_text([task['what_it_tests'], task['look_for']])
+        expect(guide.locator('dt')).to_have_text(['Look for'])
+        expect(guide.locator('dd')).to_have_text([task['look_for']])
         expect(guide.locator('img')).to_have_count(0)
         for width in (1440, 1024, 768, 390):
             self.page.set_viewport_size({'width': width, 'height': 1000})

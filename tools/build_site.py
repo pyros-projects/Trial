@@ -20,7 +20,7 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 from gallery import server
 
 STATIC_FILES = ("index.html", "app.js", "appsettings.json", "styles.css", "favicon.svg", "logo-mark.svg", "deep-swe-snapshot.png")
-CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "what_it_tests", "look_for", "track", "artifact_type", "rubric")
+CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "look_for", "track", "artifact_type", "rubric")
 OWNER_MARKER = "public-static-export-v1\n"
 REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n/sources/* /artifacts/:splat 200\n"
 ARTIFACT_SANDBOX = "sandbox allow-scripts allow-downloads allow-modals allow-pointer-lock"
