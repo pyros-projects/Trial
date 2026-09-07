@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ipaddress
 import io
 import json
 import os
@@ -11,9 +12,10 @@ import re
 import shutil
 import sys
 import tempfile
+from html import escape
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
@@ -21,6 +23,8 @@ from gallery import server
 
 STATIC_FILES = ("index.html", "app.js", "appsettings.json", "styles.css", "favicon.svg", "logo-mark.svg", "deep-swe-snapshot.png")
 CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "look_for", "track", "artifact_type", "rubric")
+# Existing settings without siteUrl keep using the established public origin.
+DEFAULT_SITE_URL = "https://trial-by-pyro.netlify.app"
 OWNER_MARKER = "public-static-export-v1\n"
 REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n/sources/* /artifacts/:splat 200\n"
 ARTIFACT_SANDBOX = "sandbox allow-scripts allow-downloads allow-modals allow-pointer-lock"
@@ -83,6 +87,88 @@ def public_catalog(root: Path) -> list[dict[str, str]]:
         item["prompt_file"] = f"{task_id}/prompt.md"
         catalog.append(item)
     return catalog
+
+
+def share_settings(root: Path) -> tuple[str, dict[str, str]]:
+    """Read public presentation settings, defaulting siteUrl to DEFAULT_SITE_URL."""
+    path = regular_file(root, "gallery/static/appsettings.json")
+    if path is None:
+        raise ValueError("gallery/static/appsettings.json must be a regular file inside the package.")
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(settings, dict):
+        raise ValueError("appsettings.json must contain a JSON object.")
+    origin = settings.get("siteUrl", DEFAULT_SITE_URL)
+    error = "appsettings.siteUrl must be an HTTP(S) origin without credentials, path, query, or fragment."
+    if not isinstance(origin, str) or not origin or any(character.isspace() or ord(character) < 32 or character in "\\?#" for character in origin):
+        raise ValueError(error)
+    try:
+        parsed = urlsplit(origin)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.path not in {"", "/"}:
+            raise ValueError(error)
+        hostname = parsed.hostname.encode("idna").decode("ascii")
+        if ":" in hostname:
+            hostname = f"[{ipaddress.IPv6Address(hostname)}]"
+        elif not all(re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?", label) for label in hostname.split(".")):
+            raise ValueError(error)
+        port = f":{parsed.port}" if parsed.port is not None else ""
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError(error) from exc
+    labels = {}
+    models = settings.get("models", [])
+    if isinstance(models, list):
+        for model in models:
+            if isinstance(model, dict) and isinstance(model.get("key"), str) and isinstance(model.get("label"), str) and model["label"].strip():
+                labels.setdefault(model["key"], model["label"])
+    return f"{parsed.scheme}://{hostname}{port}", labels
+
+
+def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
+    """Render crawler metadata and a browser handoff without duplicating artifacts."""
+    title = f"{model_label}: {row['task_title']} | Trial by Pyro"
+    description = " ".join(part for part in (
+        row["description"].strip(), f"Explore {model_label}'s interactive implementation on Trial by Pyro."
+    ) if part)
+    canonical = origin + row["share_url"]
+    viewer = "/#play/" + "/".join(quote(row[key], safe="") for key in ("model_key", "run_key"))
+    screenshot = row["artifact"]["screenshot_url"]
+    metadata = [
+        ("name", "description", description),
+        ("property", "og:type", "website"),
+        ("property", "og:site_name", "Trial by Pyro"),
+        ("property", "og:title", title),
+        ("property", "og:description", description),
+        ("property", "og:url", canonical),
+        ("name", "twitter:card", "summary_large_image" if screenshot else "summary"),
+        ("name", "twitter:title", title),
+        ("name", "twitter:description", description),
+    ]
+    if screenshot:
+        image = origin + screenshot
+        image_alt = f"{model_label}: {row['task_title']} implementation screenshot"
+        metadata.extend([
+            ("property", "og:image", image), ("property", "og:image:alt", image_alt),
+            ("name", "twitter:image", image), ("name", "twitter:image:alt", image_alt),
+        ])
+    tags = "\n".join(f'<meta {attribute}="{key}" content="{escape(value, quote=True)}">' for attribute, key, value in metadata)
+    # JSON quotes the script string; escaping '<' also protects the script boundary.
+    redirect = json.dumps(viewer, ensure_ascii=True).replace("<", "\\u003c")
+    return f'''<!doctype html>
+<html lang="en" prefix="og: https://ogp.me/ns#">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(title)}</title>
+<link rel="canonical" href="{escape(canonical, quote=True)}">
+{tags}
+</head>
+<body>
+<h1>{escape(title)}</h1>
+<p>{escape(description)}</p>
+<p><a href="{escape(viewer, quote=True)}">Open the interactive implementation</a></p>
+<script>location.replace({redirect});</script>
+</body>
+</html>
+'''
 
 
 class PublicGalleryState(server.GalleryState):
@@ -200,6 +286,7 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
         output = root / output
     marker = validate_output(root, output)
     catalog = public_catalog(root)
+    site_origin, model_labels = share_settings(root)
     state = PublicGalleryState(root, catalog)
     rows = state.scan()
     modules = pillow_modules() if screenshots == "auto" else None
@@ -259,6 +346,12 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
             row["artifact"]["screenshot_url"] = "/artifacts/" + "/".join(quote(part, safe="") for part in (*relative.parts[:-1], thumb.name))
             report["screenshots"] += 1
             report["screenshot_bytes"] += thumb.stat().st_size
+        for row in rows:
+            encoded = "/".join(quote(row[key], safe="") for key in ("model_key", "run_key"))
+            row["share_url"] = f"/share/{encoded}/"
+            page = stage / "share" / row["model_key"] / row["run_key"] / "index.html"
+            page.parent.mkdir(parents=True, exist_ok=True)
+            page.write_text(share_page(row, site_origin, model_labels.get(row["model_key"], row["model"])), encoding="utf-8")
         data = {"mode": "public", "generated_at": server.utc_iso(), "artifact_origin": "/artifacts",
                 "catalog": catalog, "summary": state.summary(rows), "results": rows}
         write_json(stage / "api/data.json", data)

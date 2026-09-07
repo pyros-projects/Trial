@@ -4,18 +4,32 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from html.parser import HTMLParser
 from unittest import mock
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tools import build_site
+
+
+class ShareDocument(HTMLParser):
+    def __init__(self, source):
+        super().__init__()
+        self.tags = []
+        self.feed(source)
+        self.metadata = {attrs.get("property", attrs.get("name")): attrs.get("content")
+                         for tag, attrs in self.tags if tag == "meta"}
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
 
 
 class StaticExportTests(unittest.TestCase):
@@ -65,6 +79,10 @@ class StaticExportTests(unittest.TestCase):
     def resolve_url(self, url):
         return self.output / unquote(url).lstrip("/")
 
+    def share_document(self, row):
+        source = (self.resolve_url(row["share_url"]) / "index.html").read_text(encoding="utf-8")
+        return source, ShareDocument(source)
+
     def test_private_files_and_fields_are_never_published_or_read(self):
         for name in ("metadata.json", "report.json", "notes.md", "notes.txt"):
             (self.run / name).write_text(json.dumps({
@@ -87,6 +105,7 @@ class StaticExportTests(unittest.TestCase):
         with mock.patch.object(Path, "read_text", checked_read):
             _, data = self.export(screenshots="none")
         row = data["results"][0]
+        self.assertTrue((self.resolve_url(row["share_url"]) / "index.html").is_file())
         self.assertEqual(row["model"], "Model One")
         self.assertIsNone(row["score"])
         self.assertIsNone(row["reported_score"])
@@ -182,6 +201,101 @@ class StaticExportTests(unittest.TestCase):
         self.assertIn("Content-Disposition: attachment", source_headers)
         self.assertIn("no-transform", source_headers)
 
+    def test_share_pages_have_canonical_metadata_and_plain_viewer_link(self):
+        report, data = self.export(screenshots="none")
+        row = data["results"][0]
+        self.assertEqual(row["share_url"], "/share/Model%20One/01-fluid-simulation/")
+        source, document = self.share_document(row)
+        canonical = "https://trial-by-pyro.netlify.app" + row["share_url"]
+        self.assertEqual(document.metadata["og:url"], canonical)
+        self.assertIn(("link", {"rel": "canonical", "href": canonical}), document.tags)
+        self.assertIn("Display name", document.metadata["og:title"])
+        self.assertIn("Fluid", document.metadata["og:title"])
+        self.assertIn("Interactive fluid.", document.metadata["og:description"])
+        self.assertEqual(document.metadata["og:type"], "website")
+        self.assertEqual(document.metadata["og:site_name"], "Trial by Pyro")
+        self.assertEqual(document.metadata["twitter:card"], "summary")
+        self.assertEqual(document.metadata["twitter:title"], document.metadata["og:title"])
+        self.assertEqual(document.metadata["twitter:description"], document.metadata["og:description"])
+        self.assertFalse(any(key and "image" in key for key in document.metadata))
+        viewer = "/#play/Model%20One/01-fluid-simulation"
+        self.assertIn(viewer, [attrs.get("href") for tag, attrs in document.tags if tag == "a"])
+        redirect = re.search(r"location\.replace\((.+?)\);", source)
+        self.assertIsNotNone(redirect)
+        self.assertEqual(json.loads(redirect.group(1)), viewer)
+        self.assertFalse(any(attrs.get("http-equiv", "").lower() == "refresh" for _, attrs in document.tags))
+        self.assertNotIn("/share/", (self.output / "_redirects").read_text(encoding="utf-8"))
+        self.assertLess(len(source.encode("utf-8")), 4096)
+        self.assertEqual(report["html_files"], 1)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.html"))), 1)
+        self.assertEqual(self.resolve_url(row["artifact"]["url"]).read_bytes(), self.html)
+
+    def test_share_pages_use_alternate_origin_and_existing_screenshot(self):
+        settings = json.loads(self.model_settings)
+        settings["siteUrl"] = "https://builds.example.test:8443/"
+        (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+        image = b"\x89PNG\r\n\x1a\nOriginal screenshot bytes."
+        (self.run / "screenshot.png").write_bytes(image)
+        with mock.patch.object(build_site, "pillow_modules", return_value=None):
+            _, data = self.export()
+        row = data["results"][0]
+        _, document = self.share_document(row)
+        origin = "https://builds.example.test:8443"
+        self.assertEqual(document.metadata["og:url"], origin + row["share_url"])
+        self.assertEqual(document.metadata["og:image"], origin + row["artifact"]["screenshot_url"])
+        self.assertEqual(document.metadata["twitter:image"], document.metadata["og:image"])
+        self.assertEqual(document.metadata["twitter:card"], "summary_large_image")
+        self.assertIn("Display name", document.metadata["og:image:alt"])
+        self.assertIn("Fluid", document.metadata["twitter:image:alt"])
+        self.assertEqual(self.resolve_url(row["artifact"]["screenshot_url"]).read_bytes(), image)
+        self.assertFalse(any(path.suffix in {".png", ".webp", ".jpg"} for path in (self.output / "share").rglob("*")))
+
+    def test_share_pages_escape_labels_titles_and_component_paths(self):
+        original_name = self.run.name
+        model_name = "Model ' & #"
+        model_folder = self.run.parent.with_name(model_name)
+        self.run.parent.rename(model_folder)
+        self.run = model_folder / original_name
+        run_name = original_name + " ' & #"
+        self.run.rename(model_folder / run_name)
+        self.run = model_folder / run_name
+        dangerous_label = 'Model "><img src=x onerror=alert(1)> & </script>'
+        dangerous_title = 'Fluid </title><script>alert("title")</script>'
+        settings = {"models": [{"key": model_name, "label": dangerous_label}]}
+        (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog[0]["title"] = dangerous_title
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        _, data = self.export(screenshots="none")
+        row = data["results"][0]
+        encoded = "/".join(quote(part, safe="") for part in (model_name, run_name))
+        self.assertEqual(row["share_url"], "/share/" + encoded + "/")
+        source, document = self.share_document(row)
+        self.assertIn(dangerous_label, document.metadata["og:title"])
+        self.assertIn(dangerous_title, document.metadata["og:title"])
+        self.assertEqual(sum(tag == "script" for tag, _ in document.tags), 1)
+        self.assertFalse(any(tag == "img" or "onerror" in attrs for tag, attrs in document.tags))
+        script = re.search(r"<script>(.*?)</script>", source, flags=re.DOTALL).group(1)
+        argument = re.search(r"location\.replace\((.+?)\);", script).group(1)
+        self.assertEqual(json.loads(argument), "/#play/" + encoded)
+        self.assertEqual(source.count("</script>"), 1)
+
+    def test_share_origin_rejects_unsafe_values_before_replacing_output(self):
+        self.export(screenshots="none")
+        previous = (self.output / "api/data.json").read_bytes()
+        unsafe = ["javascript:alert(1)", "//example.test", "https://user:secret@example.test",
+                  "https://example.test/path", "https://example.test?token=secret", "https://example.test#fragment",
+                  "https://example.test?", "https://example.test#", "https://example.test\\@evil.test",
+                  "https://example.test:99999", "https://example.test\n", "", 42, []]
+        for value in unsafe:
+            with self.subTest(siteUrl=value):
+                settings = {"siteUrl": value, "models": []}
+                (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    build_site.build_site(self.root, screenshots="none")
+                self.assertEqual((self.output / "api/data.json").read_bytes(), previous)
+
     def test_non_html_runs_and_extra_artifacts_are_excluded(self):
         (self.run / "result.html").write_text("Do not publish duplicate variants.")
         for name in ("source-only", "archive-only", "metadata-only"):
@@ -263,6 +377,8 @@ class StaticExportTests(unittest.TestCase):
             self.assertNotIn("private", image.info)
         self.assertEqual(destination.suffix, ".webp")
         self.assertNotIn(b"PRIVATE-IMAGE-METADATA", destination.read_bytes())
+        _, document = self.share_document(data["results"][0])
+        self.assertTrue(document.metadata["og:image"].endswith("/screenshot.webp"))
 
 
 class DeployScriptTests(unittest.TestCase):

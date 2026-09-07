@@ -11,7 +11,7 @@
     catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and real applications. The brief, the checks and the delivery requirements are all here.'],
     leaderboard:['THE EVALUATIONS','Bring the<br><em>receipts.</em>','Independent checks on the finished artifact. Keep the tasks, tools and budgets comparable.'],
     guide:['THE FIELD GUIDE','From prompt<br>to <em>proof.</em>','Choose a challenge. Let the agent build and test. Keep the result. Take a closer look.'],
-    why:['WHY THIS PROJECT?','You can’t play<br>a <em>percentage.</em>','A note from Pyro on scores, model judgment, and getting your hands on the work.']
+    why:['WHY THIS PROJECT?','You can’t play<br>a <em>percentage.</em>','Scores help. I still want to try what the model built.']
   };
   const filterIDs=['search','track-filter','model-filter','task-filter','status-filter','sort'];
   const storageKey='trial-by-pyro-ui-v1';
@@ -63,7 +63,8 @@
   }
   async function copyRunLink(id) {
     const row=state.data?.results.find(r=>r.id===id);if(!row?.artifact.url)return;
-    const url=new URL(location.pathname,location.origin);url.hash=playHash(row);
+    const share=isPublic()&&typeof row.share_url==='string'&&row.share_url.startsWith('/share/');
+    const url=new URL(share?row.share_url:location.pathname,location.origin);if(!share)url.hash=playHash(row);
     try{await navigator.clipboard.writeText(url.href);toast('Link copied. Opens the app at full size.');}
     catch{window.prompt('Copy this link to the live app:',url.href);}
   }
@@ -87,7 +88,8 @@
       if(row){
         setView('gallery',false);
         if(state.selected?.id===row.id&&$('#viewer').open&&$('#viewer').classList.contains('is-live'))return;
-        openRun(row.id);launchPreview(false);return;
+        const viewport=$('#viewer').classList.contains('is-live')?$('#viewport-size').value:'fit';
+        openRun(row.id);$('#viewport-size').value=viewport;launchPreview(false);return;
       }
       closeViewer();setView('gallery');
       $('#link-error').hidden=false;
@@ -291,7 +293,7 @@
   function detailSection(title,value,wide=false){return `<section class="detail-section${wide?' wide':''}"><h3>${escape(title)}</h3><pre>${escape(typeof value==='string'?value:JSON.stringify(value??{},null,2))}</pre></section>`;}
   function detailsContent(row) {
     const a=row.artifact;
-    if(isPublic())return detailSection('Build identity',{model:modelName(row),prompt:row.task_title,file:a.filename,bytes:a.bytes,sha256:a.sha256})+'<p class="viewer-note">The public showcase contains HTML builds and thumbnails. Evaluation records and development evidence stay local.</p>';
+    if(isPublic())return detailSection('Build identity',{model:modelName(row),prompt:row.task_title,file:a.filename,bytes:a.bytes,sha256:a.sha256})+'<p class="viewer-note">The public showcase contains HTML builds and thumbnails. Evaluation records and development evidence are excluded from this website export.</p>';
     return `<div class="detail-grid">${detailSection('Artifact identity',{file:a.filename,kind:a.kind,bytes:a.bytes,authored_files:a.file_count,sha256:a.sha256,digest_version:a.digest_version||'SHA-256 of file bytes'})}${detailSection('Score & rubric',{score:row.score,reported_score:row.reported_score,rubric:row.rubric,report_binding:row.report_binding,dimensions:row.score_details})}${a.manifest?detailSection('Declared project manifest — display only, never executed',a.manifest,true):''}${detailSection('Execution metrics',row.metrics)}${detailSection('Environment & parameters',{environment:row.environment,parameters:row.parameters})}${detailSection('Metadata',row.metadata,true)}</div><p class="viewer-note">Project downloads omit known dependency, runtime, database and secret-file patterns. This is not a complete secret scanner; inspect all source before sharing it.</p>`;
   }
   function renderViewer() {
@@ -310,19 +312,50 @@
     if(value==='fit'){frame.style.width='100%';frame.style.height='100%';}
     else{const [width,height]=value.split('x');frame.style.width=width+'px';frame.style.height=height+'px';}
   }
-  function launchPreview(updateUrl=true) {
+  function comparableBuilds(row) {
+    if(!row.task_id||!state.data.catalog.some(task=>task.id===row.task_id))return [row];
+    return state.data.results.filter(run=>run.task_id===row.task_id&&run.artifact.url)
+      .sort((a,b)=>compareModels(a,b)||a.run_id.localeCompare(b.run_id));
+  }
+  function liveModelControl(row) {
+    const builds=comparableBuilds(row);
+    const options=builds.map(run=>{
+      const repeated=builds.filter(other=>other.model_key===run.model_key).length>1;
+      return `<option value="${escape(run.id)}"${run.id===row.id?' selected':''}>${escape(modelName(run))}${repeated?' · '+escape(run.run_id):''}</option>`;
+    }).join('');
+    return `<label class="live-model"><span class="sr-only">Model for this prompt</span><select id="live-model"${builds.length<2?' disabled':''}>${options}</select></label>`;
+  }
+  function liveGuidance(row) {
+    const hint=state.data.catalog.find(task=>task.id===row.task_id)?.look_for;
+    if(typeof hint!=='string'||!hint.trim())return '';
+    return `<details class="live-guide"><summary class="button">Look for</summary><div class="live-guide-panel"><div class="live-guide-heading"><strong>${escape(row.task_title)}</strong><button id="close-live-guide" class="icon-button" aria-label="Close Look for">×</button></div><p>${escape(hint)}</p></div></details>`;
+  }
+  function closeLiveGuide() {
+    const guide=$('.live-guide');if(!guide?.open)return false;
+    guide.open=false;guide.querySelector('summary').focus();return true;
+  }
+  function switchLiveModel(id) {
+    if(!state.selected||!$('#viewer').classList.contains('is-live'))return;
+    const row=comparableBuilds(state.selected).find(run=>run.id===id);
+    if(!row||row.id===state.selected.id)return;
+    state.selected=row;launchPreview(true,'live-model');
+  }
+  function launchPreview(updateUrl=true, focusTarget='back-to-build') {
     const row=state.selected;if(!row?.artifact.url)return;
     if(updateUrl&&location.hash!==playHash(row))try{history.pushState(null,'',playHash(row));}catch{ /* The copy button still provides a link when history is unavailable. */ }
-    const viewport=$('#viewport-size').value;
+    const viewport=$('#viewport-size')?.value||'fit';
     $('#viewer').classList.add('is-live');
-    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button><span class="live-title">${escape(modelName(row))}<span>${escape(row.task_title)}</span></span>${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
+    $('#viewer').style.setProperty('--model-color',modelColor(row));
+    $('#viewer-title').textContent=`${row.task_title} · ${modelName(row)}`;
+    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button>${liveModelControl(row)}<span class="live-title">${escape(row.task_title)}</span><div class="live-tools">${liveGuidance(row)}${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label></div><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
     $('#viewport-size').value=viewport;
     const frame=document.createElement('iframe');frame.id='artifact-frame';frame.title=`Live ${row.task_title}`;
     frame.setAttribute('sandbox',isPublic()?'allow-scripts allow-downloads allow-modals allow-pointer-lock':'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-pointer-lock allow-popups');
     frame.allow='autoplay; fullscreen';frame.referrerPolicy='no-referrer';frame.src=row.artifact.url;
-    $('#preview-area').replaceChildren(frame);resizeFrame();$('#back-to-build').focus();
+    $('#preview-area').replaceChildren(frame);resizeFrame();$('#'+focusTarget).focus();
   }
   document.addEventListener('click',event=>{
+    const guide=$('.live-guide');if(guide?.open&&!guide.contains(event.target))guide.open=false;
     const target=event.target.closest('button,[data-view]');if(!target)return;
     if(target.dataset.view){event.preventDefault();setView(target.dataset.view);}
     if(target.dataset.openRun)openRun(target.dataset.openRun);
@@ -332,18 +365,30 @@
     if(target.id==='launch-preview')launchPreview();
     if(target.id==='back-to-build'){renderViewer();clearPlayLink();$('#launch-preview')?.focus();}
     if(target.id==='close-live')closeViewer();
+    if(target.id==='close-live-guide')closeLiveGuide();
   });
   filterIDs.forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',()=>{render();saveSettings();}));
-  document.addEventListener('change',event=>{if(event.target.id==='viewport-size')resizeFrame();});
+  document.addEventListener('change',event=>{
+    if(event.target.id==='viewport-size')resizeFrame();
+    if(event.target.id==='live-model')switchLiveModel(event.target.value);
+  });
   $('#refresh').addEventListener('click',loadData);
   $('#clear-filters').addEventListener('click',()=>{for(const id of filterIDs)$('#'+id).value=id==='search'?'':id==='sort'?'task':'all';render();saveSettings();});
   $('#close-viewer').addEventListener('click',closeViewer);
   $('#viewer').addEventListener('close',finishViewerClose);
-  $('#viewer').addEventListener('cancel',event=>{event.preventDefault();closeViewer();});
+  $('#viewer').addEventListener('cancel',event=>{event.preventDefault();if(!closeLiveGuide())closeViewer();});
   $('#close-prompt').addEventListener('click',()=>$('#prompt-dialog').close());
   $('#prompt-dialog').addEventListener('close',()=>{state.promptToken++;});
   $('#copy-prompt').addEventListener('click',copyPrompt);
-  document.addEventListener('keydown',event=>{if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}});
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&$('#viewer').open&&closeLiveGuide()){event.preventDefault();return;}
+    if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}
+  });
   window.addEventListener('hashchange',()=>followRoute());
+  window.addEventListener('blur',()=>{
+    if(document.activeElement===$('#artifact-frame')){
+      const guide=$('.live-guide');if(guide)guide.open=false;
+    }
+  });
   loadData();
 })();

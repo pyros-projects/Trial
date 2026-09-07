@@ -62,6 +62,151 @@ class BrowserEnvironment(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('RUN_BROWSER_TESTS')=='1','Set RUN_BROWSER_TESTS=1 for direct Chromium integration.')
 class BrowserTests(BrowserEnvironment):
+    def test_public_share_page_redirects_to_sandboxed_viewer_and_copies_its_url(self):
+        from http.server import SimpleHTTPRequestHandler
+        from playwright.sync_api import expect
+        from tools import build_site
+        self.fixture()
+        root = Path(self.temp.name)
+        shutil.copytree(ROOT / 'gallery/static', root / 'gallery/static')
+        shutil.copytree(ROOT / 'prompts', root / 'prompts')
+        output = root / 'dist/site'
+        build_site.build_site(root, screenshots='none')
+        data = json.loads((output / 'api/data.json').read_text())
+
+        class PublicHandler(SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=str(output), **kwargs)
+
+            def do_GET(self):
+                if urlsplit(self.path).path == '/api/data':
+                    self.path = '/api/data.json'
+                super().do_GET()
+
+            def log_message(self, *args):
+                pass
+
+        http = server.QuietThreadingHTTPServer(('127.0.0.1', 0), PublicHandler)
+        threading.Thread(target=http.serve_forever, daemon=True).start()
+        self.addCleanup(http.server_close);self.addCleanup(http.shutdown)
+        origin = f'http://127.0.0.1:{http.server_address[1]}'
+        row = data['results'][0]
+        share = origin + row['share_url']
+        document = self.page.request.get(share)
+        self.assertEqual(document.status, 200)
+        self.assertIn('property="og:title"', document.text())
+        self.assertNotIn('http-equiv="refresh"', document.text())
+        self.page.goto(share)
+        frame = self.page.frame_locator('#artifact-frame')
+        expect(frame.locator('#increment')).to_have_text('Count: 0')
+        expect(self.page.locator('#viewer')).to_have_class(re.compile(r'\bis-live\b'))
+        sandbox = self.page.locator('#artifact-frame').get_attribute('sandbox').split()
+        self.assertNotIn('allow-same-origin', sandbox)
+        self.assertEqual(urlsplit(self.page.url).fragment, 'play/' + quote(row['id'], safe='/'))
+        self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+        self.page.locator('.live-bar [data-copy-run]').click()
+        expect(self.page.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        self.page.locator('#close-live').click()
+        self.page.locator('#cards [data-copy-run]').click()
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        self.assertEqual(self.errors, [])
+
+    def test_viewer_switches_same_prompt_in_configured_order_and_keeps_viewport(self):
+        from playwright.sync_api import expect
+        self.fixture()
+        original = 'UI fixture - not a model evaluation/01-fluid-simulation-001'
+        for model, run_id in [('grok', '01-fluid-simulation-a'), ('grok', '01-fluid-simulation-b'), ('gemini', '01-fluid-simulation-a')]:
+            run = self.results / model / run_id
+            run.mkdir(parents=True)
+            (run / 'index.html').write_text('<!doctype html><title>Switch fixture</title><h1>' + model + '</h1>')
+        self.model_settings(json.dumps({'models': [
+            {'key': original.split('/')[0], 'label': 'Astra fixture', 'color': '#8FD7AF'},
+            {'key': 'grok', 'label': 'Grok fixture', 'color': '#E8AD82'},
+            {'key': 'gemini', 'label': 'Gemini fixture', 'color': '#91B5FF'},
+        ]}))
+        self.navigate_direct()
+        self.page.locator('#model-filter').select_option(original.split('/')[0])
+        self.page.goto(self.base + '/#play/' + quote(original, safe='/'))
+        switcher = self.page.get_by_role('combobox', name='Model for this prompt')
+        expect(switcher.locator('option')).to_have_text([
+            'Astra fixture', 'Grok fixture · 01-fluid-simulation-a',
+            'Grok fixture · 01-fluid-simulation-b', 'Gemini fixture'])
+        self.page.locator('#viewport-size').select_option('768x1024')
+        previous_frame = self.page.locator('#artifact-frame').element_handle()
+        selected = 'grok/01-fluid-simulation-b'
+        switcher.select_option(selected)
+        expect(self.page.frame_locator('#artifact-frame').locator('h1')).to_have_text('grok')
+        self.assertFalse(previous_frame.evaluate('(node) => node.isConnected'))
+        expect(self.page.locator('#artifact-frame')).to_have_count(1)
+        expect(self.page.locator('#viewer')).to_have_class(re.compile(r'\bis-live\b'))
+        expect(self.page.locator('#viewport-size')).to_have_value('768x1024')
+        expect(switcher).to_be_focused()
+        self.assertEqual(self.page.locator('#viewer').evaluate("node => node.style.getPropertyValue('--model-color')"), '#E8AD82')
+        self.assertEqual(self.page.frame_locator('#artifact-frame').locator('body').evaluate('() => [innerWidth, innerHeight]'), [768, 1024])
+        self.assertEqual(urlsplit(self.page.url).fragment, 'play/' + selected)
+        self.page.go_back()
+        expect(switcher).to_have_value(original)
+        expect(self.page.locator('#viewport-size')).to_have_value('768x1024')
+        self.page.go_forward()
+        expect(switcher).to_have_value(selected)
+        expect(self.page.locator('#viewport-size')).to_have_value('768x1024')
+        self.page.locator('#back-to-build').click()
+        expect(self.page.locator('#viewer-kicker')).to_contain_text('Grok fixture / 01-fluid-simulation-b')
+        self.assertEqual(self.errors, [])
+
+    def test_viewer_guidance_overlays_running_app_without_resize_or_restart(self):
+        from playwright.sync_api import expect
+        self.fixture()
+        task = self.state.catalog_by_id['01-fluid-simulation']
+        task['look_for'] = 'Drag <img src=x onerror=alert(1)> & watch the dye curl.'
+        self.navigate_direct()
+        self.page.locator('#track-filter').select_option('html')
+        self.page.locator('#cards .card-open').click()
+        self.page.locator('#launch-preview').click()
+        frame = self.page.frame_locator('#artifact-frame')
+        frame.locator('#increment').click()
+        for width in (1440, 768, 390, 320):
+            self.page.set_viewport_size({'width': width, 'height': 844})
+            before = self.page.locator('#artifact-frame').bounding_box()
+            self.page.locator('.live-guide summary').click()
+            panel = self.page.locator('.live-guide-panel')
+            expect(panel).to_be_visible()
+            expect(panel.locator('p')).to_have_text(task['look_for'])
+            expect(panel.locator('img')).to_have_count(0)
+            self.assertEqual(before, self.page.locator('#artifact-frame').bounding_box())
+            expect(frame.locator('#increment')).to_have_text('Count: 1')
+            bounds = panel.bounding_box()
+            self.assertGreaterEqual(bounds['x'], 0)
+            self.assertLessEqual(bounds['x'] + bounds['width'], width)
+            self.assertTrue(self.page.locator('.live-bar').evaluate('node => node.scrollWidth <= innerWidth'))
+            self.page.keyboard.press('Escape')
+            expect(panel).not_to_be_visible()
+            expect(self.page.locator('#viewer')).to_be_visible()
+        self.page.set_viewport_size({'width': 1440, 'height': 844})
+        self.page.locator('.live-guide summary').click()
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 2')
+        expect(self.page.locator('.live-guide-panel')).not_to_be_visible()
+        self.page.locator('#close-live').focus()
+        self.page.keyboard.press('Escape')
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        self.assertEqual(self.errors, [])
+
+    def test_unassigned_viewer_has_no_unrelated_models_or_invented_guidance(self):
+        from playwright.sync_api import expect
+        for model in ('Model A', 'Model B'):
+            run = self.results / model / 'unknown'
+            run.mkdir(parents=True)
+            (run / 'index.html').write_text('<!doctype html><title>Unassigned fixture</title>')
+        self.navigate_direct()
+        self.page.locator('#cards .card-open').first.click()
+        self.page.locator('#launch-preview').click()
+        expect(self.page.get_by_role('combobox', name='Model for this prompt')).to_be_disabled()
+        expect(self.page.locator('#live-model option')).to_have_count(1)
+        expect(self.page.locator('.live-guide')).to_have_count(0)
+        self.assertEqual(self.errors, [])
+
     def test_prompt_guidance_is_readable_and_escaped_across_viewports(self):
         from playwright.sync_api import expect
         self.fixture()

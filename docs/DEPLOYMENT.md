@@ -99,6 +99,7 @@ The deployment scripts also accept the Python and screenshot options described a
 | Gallery HTML, CSS, JavaScript, model presentation settings, favicon, logo and supplied Deep-SWE reference snapshot | Source code for the gallery server and build scripts |
 | Public prompt catalog, prompt and acceptance Markdown | Prompt fixtures, private evaluator material and extra documents |
 | One top-level HTML result per model/run folder | Raw projects, project archives, dependencies and extra HTML variants |
+| A small share page per implementation, reusing its existing screenshot | Duplicate HTML builds or screenshot copies for link previews |
 | One screenshot per run: metadata-free WebP up to 1280 pixels with Pillow, or the original selected screenshot otherwise | Extra screenshots, recordings, logs, audio and `evidence/` |
 | Minimal public JSON and CSV | Run `metadata.json`, `report.json`, notes, environments, metrics, manifests and check details |
 
@@ -106,7 +107,9 @@ Model keys and run labels come from folder names. Public model display labels, o
 
 The supplied reference image is explicitly included as `/deep-swe-snapshot.png` with its original bytes. It is independent of run screenshots and remains included when `--screenshots none` is selected.
 
-Public catalog entries include `look_for` when present. These short hints power the guidance beside each showcase prompt; private catalog fields are still excluded.
+Public catalog entries include `look_for` when present. These short hints power the guidance beside each showcase prompt and the expandable overlay in the maximized viewer; private catalog fields are still excluded.
+
+These exclusions apply to the static deployment, not GitHub. Evidence and other files committed to a public repository remain publicly accessible there. Inspect submissions before committing them; the exporter does not scan HTML for secrets or remove personal information visible in screenshot pixels.
 
 Turn off **Project configuration > General > Powered by Netlify badge** for this showcase. Netlify can inject that badge into HTML responses at its edge, including submitted builds, which changes their downloaded hashes. The setting is already off for `trial-by-pyro.netlify.app`; check it when creating a different site. [Netlify documents the per-project setting and edge injection](https://docs.netlify.com/manage/projects/powered-by-netlify-badge/).
 
@@ -120,7 +123,13 @@ The public data declares `mode: "public"` and a generation timestamp. Scores are
 
 Public artifact URLs live below `/artifacts/`. Source buttons use the `/sources/` attachment routes described above. The generated `_headers` applies a CSP sandbox to artifact pages, without `allow-same-origin`. The gallery also uses an opaque-origin iframe for public previews. This keeps submitted scripts from accessing the gallery's document, storage or service workers. Browser features that require a normal origin, including local storage, may be unavailable in public previews; download the HTML and run it separately when those features matter.
 
-**Copy link** creates a URL such as `https://trial-by-pyro.netlify.app/#play/gpt-6_astra/04-deformable-physics`. Opening it launches that known build directly in the maximized viewer, using the same sandbox. Links identify the model and run folders, so they survive display-name and sorting changes; renaming or removing those folders invalidates existing links. Shared links omit temporary query parameters and open at full viewport size. They require no additional server routes or exported files.
+**Copy link** creates a URL such as `https://trial-by-pyro.netlify.app/share/gpt-6_astra/04-deformable-physics/`. The exported `index.html` at that path contains the model label, prompt title, description, canonical URL, and Open Graph / Twitter card metadata. Its image points to the run's existing published screenshot. With screenshots disabled or absent, the page omits image metadata and uses a summary card. Link-preview appearance and refresh timing depend on the receiving platform.
+
+Set the top-level `siteUrl` in `gallery/static/appsettings.json` to the site's public origin, for example `https://trial-by-pyro.netlify.app`. It supplies absolute canonical and image URLs in share-page metadata. It must be an HTTP(S) origin without credentials, a path, a query, or a fragment. A trailing slash is accepted. If omitted, it defaults to the existing Trial production origin. Draft deploys use that configured production origin in preview metadata; set a different origin before building if the draft itself should be canonical.
+
+A real browser runs a tiny `location.replace` into the existing `/#play/<model>/<run>` viewer. Crawlers receive metadata in the initial HTML without executing JavaScript; there is no HTTP or meta-refresh redirect. A plain link remains available when JavaScript is disabled. The local Python gallery continues to copy `#play` links, and older public `#play` links still work.
+
+Links identify model and run folders, so they survive display-name and sorting changes; renaming or removing those folders invalidates existing links. Shared links omit temporary query parameters and open at full viewport size. The viewer's model picker offers available builds for that same prompt, in the configured model order, independently of gallery filters. Multiple runs from one model include their run labels. Switching replaces the current iframe, updates the link and color, and keeps the selected viewport size. **Look for** overlays the running app without restarting or resizing it.
 
 No source HTML is rewritten, executed, installed, or bundled by the exporter. Netlify serves the generated files and the explicitly generated `_headers` and `_redirects`. Submitted artifacts cannot supply their own deployment configuration.
 

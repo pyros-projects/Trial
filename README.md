@@ -5,7 +5,7 @@
     <img alt="Trial by Pyro" src=".github/logo-light.svg" width="80" height="80">
   </picture>
   <h1>Trial by Pyro</h1>
-  <p><strong>A Vibe Benchmark by Pyro.</strong><br>Show me what it built. Then let me try it.</p>
+  <p><strong>A Vibe Benchmark.</strong><br>Show me what it built. Then let me try it.</p>
 </div>
 
 <div align="center">
@@ -30,19 +30,17 @@
 
 ## Why this project?
 
-**A note from Pyro.**
-
 Let's be clear: **this is not scientific.** Trial is a Vibe Benchmark: a personal collection of hand-picked challenges and the builds that came back. Small sample, human judgment, plenty of taste. It cannot establish a reliable model ranking or prove which model is universally better. It can give you something to try, question, and form your own opinion about. That's the point.
 
 Numerical benchmarks matter. Research and training need guardrails, and a score is useful evidence. I use them. But equal scores do not mean equal experiences with the models behind them.
 
 Look at the Deep-SWE snapshot below. GPT-6 Astra [xhigh] and Gemini 3.8 Flash [high] both display **74%**, with different costs, token usage, and step counts. In my hands, these models don't even feel like they're playing the same game. One percentage compresses a lot of very different work.
 
-![User-supplied Deep-SWE snapshot showing GPT-6 Astra at xhigh and Gemini 3.8 Flash at high both displaying 74%](gallery/static/deep-swe-snapshot.png)
+![Deep-SWE snapshot showing GPT-6 Astra at xhigh and Gemini 3.8 Flash at high both displaying 74%](gallery/static/deep-swe-snapshot.png)
 
-*Deep-SWE snapshot supplied by Pyro. Different effort settings; captured values, not a live ranking.*
+*Deep-SWE snapshot. Different effort settings; captured values, not a live ranking.*
 
-What I keep missing in benchmark tables is the chance to try what the model built. Open the app. Push the controls. Follow a workflow until something breaks. You start to recognize a model's style, its strengths, and the things it consistently neglects. That experience is what Trial by Pyro puts within reach.
+What I keep missing in benchmark tables is the chance to try what the model built. Open the app. Push the controls. Follow a workflow until something breaks. You start to recognize a model's style, its strengths, and the things it consistently neglects. That's what I wanted to make easier with Trial.
 
 I like a good voxel world. Those Twitter fly-throughs can show real visual flair. I prefer demos that let me disturb the physics, make decisions in a playable game, play an instrument, or push an interface until it breaks. That exposes cause and effect, strengths, and failure modes. Voxel apps can do all of that too. A pretty camera orbit just hasn't demonstrated it yet.
 
@@ -55,12 +53,12 @@ Keep the benchmarks. Get your hands on the work.
 ## What you can do
 
 - **Compare the same brief.** Browse builds grouped by prompt, with each model's screenshots side by side. Each group gives you concrete things to look for when trying the builds. Filter by model, task, track, status, or text.
-- **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Download the source to inspect it yourself.
-- **Share a specific build.** Choose **Copy link** on a card or inside the viewer. The recipient lands directly in that model's maximized app.
+- **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Switch models without leaving the prompt, and open **Look for** when you want a few useful things to try. Download the source to inspect it yourself.
+- **Share a specific build.** Choose **Copy link** on a card or inside the viewer. The recipient lands directly in that model's maximized app; public share pages carry the matching model name, prompt title, and screenshot for link previews.
 - **Run any of the 30 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
 - **Inspect complete applications locally.** Review project source downloads, declared setup commands, notes, and manually started app previews.
 - **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, per-track score summaries, and CSV export. Missing scores stay missing.
-- **Share a focused showcase.** Export the gallery, public prompts, HTML builds, and thumbnails for static hosting. Evaluation records and project archives remain local.
+- **Share a focused showcase.** Export the gallery, public prompts, HTML builds, thumbnails, and small share pages for static hosting. Evaluation records and project archives are excluded from that export.
 
 ## When to use it
 
@@ -113,6 +111,7 @@ Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set
 
 ```json
 {
+  "siteUrl": "https://trial-by-pyro.netlify.app",
   "models": [
     {"key": "gpt-6_astra", "label": "GPT-6 Astra", "color": "#8FD7AF"},
     {"key": "xai_grok4.6", "label": "Grok 4.6", "color": "#E8AD82"},
@@ -123,7 +122,7 @@ Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set
 
 `key` identifies the model, `label` is its displayed name, and `color` must be a six-digit hex value. Array order controls showcase columns and the model picker. Scores remain sorted by score, with configured order breaking ties. Unlisted models follow the listed models alphabetically and receive stable fallback colors.
 
-This file is public presentation configuration. Choose **Refresh** to reload local settings; redeploy to update the public site.
+`siteUrl` supplies the public origin for link-preview images and canonical share URLs. Set it to your own domain when hosting a copy. This file is public presentation configuration. Choose **Refresh** to reload local settings; redeploy to update the public site.
 
 ### Build a public showcase
 
@@ -142,6 +141,8 @@ The export is written to `dist/site/`. The [hosting guide](docs/DEPLOYMENT.md) e
 ## Read the evidence
 
 The two tracks use different rubrics. Compare matching tasks and budgets before drawing conclusions from scores; a screenshot alone does not establish correctness. [Evaluation](EVALUATION.md) defines the checks and scoring, while the [verification record](docs/VERIFICATION.md) separates tests of this gallery from tests of submitted applications.
+
+The Netlify export omits raw evidence, but GitHub visibility is separate. Files committed to a public repository are public. Review logs, absolute paths, screenshots, and generated source before publishing a submission.
 
 ## Contributing
 

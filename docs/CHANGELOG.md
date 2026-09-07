@@ -2,17 +2,23 @@
 
 ## Trial by Pyro: 2026-09-07
 
+- Replaced third-person self-references with first-person copy or neutral captions in the README, site, and project description.
+- Added a model picker inside the maximized viewer, with configured ordering, same-prompt comparisons, preserved viewport presets, and browser history.
+- Added an expandable Look for overlay that leaves the running app's size and state intact.
+- Added per-implementation share pages with Open Graph and Twitter metadata using existing thumbnails, plus configurable canonical siteUrl.
+- Included Grok 4.6's SDF/CSG studio and its supplied default-scene screenshot, bringing the collection to 23 HTML builds.
+- Clarified that static-export exclusions do not make files in a public GitHub repository private.
 - Added GitHub links in the masthead and footer for the public Trial by Pyro repository.
 - Added Copy link controls on cards and in the viewer, with direct links that open a specific build maximized and support reload and browser history.
 - Added practical Look for guidance to all 30 catalog entries, displayed beside showcase prompt titles and stacked below them on small screens.
-- Introduced the A Vibe Benchmark by Pyro subtitle and an explicit, informal scope statement in the README and Why Trial? view: personal exploration, not a scientific model ranking.
+- Introduced the A Vibe Benchmark subtitle and an explicit, informal scope statement in the README and Why Trial? view: personal exploration, not a scientific model ranking.
 - Added public appsettings.json configuration for model order, display names, and card colors, with Astra, Grok, and Gemini as the current order.
 - Tinted model cards, missing-build placeholders, and viewer labels consistently, with stable colors for unlisted models.
-- Expanded the project rationale with Pyro's preference for interactive demonstrations that expose behavior beyond a voxel fly-through.
+- Explained why I prefer interactive demonstrations that expose behavior beyond a voxel fly-through.
 - Kept model and track filters readable on mobile screens.
 - Preserved exact public source downloads through attachment routes that avoid Netlify's HTML injection without duplicating artifact files.
 - Expanded live previews to the full browser viewport with a compact control bar and explicit device-size presets.
-- Added the Why Trial? reading view and README rationale in Pyro's voice, with the supplied Deep-SWE snapshot.
+- Added a first-person Why Trial? reading view and README rationale, with the Deep-SWE snapshot.
 - Included seven Gemini 3.8 Flash builds and selected existing evidence screenshots for their gallery previews.
 - Adopted the Trial by Pyro name and visual identity.
 - Grouped the showcase by prompt so submitted builds can be compared side by side.

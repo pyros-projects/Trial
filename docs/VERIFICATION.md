@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Viewer comparisons and implementation previews: 2026-09-07
+
+The complete WSL suite with both browser modes enabled passed **all 72 tests, with no skips**. Windows system Python passed **51 tests with 21 expected skips** for opt-in browser checks, optional Pillow, timezone data, and symlink permissions. Four focused viewer tests passed again after the final iframe-focus dismissal change. The existing Why view browser test also passed after replacing third-person self-references with first-person copy and neutral captions; the updated reading view was inspected at desktop and mobile sizes. JavaScript syntax and whitespace checks passed.
+
+Browser coverage verifies configured model order, independent gallery filters, multiple runs from the same model, unavailable-model omission, separate unassigned builds, safe text rendering, iframe replacement, source sandboxing, browser history, and preserved device sizes. Look for opens above the app without changing its dimensions or counter state; Escape closes the hint first, and interacting with the iframe dismisses it. A real exported share page opens the matching opaque-origin preview and copies its share URL from the viewer and gallery card.
+
+The actual collection now includes **23 HTML builds across eight prompts and three models**. Grok 4.6's SDF/CSG studio uses an unchanged copy of its supplied default-scene screenshot. Its model picker offers Astra and Grok, while prompts with all three submissions also offer Gemini. Measurements across 320–1600 pixel widths found no toolbar overflow. The app occupies the full width below a 43-pixel desktop bar or a 79-pixel mobile bar. Visual records: [desktop viewer](live-preview.png), [mobile viewer](live-preview-mobile.png), and updated gallery and README images.
+
+Production deployment **`6a9f1918c0f4f7767824f7b4`** publishes **141 files totaling 3,843,619 bytes (3.67 MiB)**. This includes 23 small share documents that reuse existing thumbnails rather than duplicate images or builds. Direct HTTP requests using a crawler user agent verified all 23 canonical URLs, model/prompt titles, Open Graph images, and Twitter large-image declarations in the initial HTML. All 23 image URLs loaded, all 23 source downloads matched their recorded SHA-256 values and retained attachment/sandbox headers, and six representative private routes returned 404. Actual social-platform unfurling and cache refresh behavior were not tested.
+
+Production browser checks verified direct shared entry, model switching, Copy link for the selected model, preserved 768×1024 dimensions through Back/Forward, hint dismissal on app interaction, 390×765 live content in a 390×844 mobile viewport, and complete iframe removal on close. Public previews retain the existing sandbox without `allow-same-origin`.
+
 ## Public repository links: 2026-09-07
 
 Trial by Pyro is publicly accessible on GitHub. The masthead and footer now link to that repository in a separate tab. Browser checks confirmed the correct destination, visible header controls, and no page overflow at 1600, 1024, 800, 768, 390, and 320 pixels. The existing mobile layout test passed. Showcase screenshots and the README comparison were refreshed.
@@ -46,7 +58,7 @@ Live previews now fill the browser viewport below a 43-pixel control bar. Real b
 
 The gallery now includes **22 submitted HTML builds from three models**, grouped into eight prompts. Seven Gemini 3.8 Flash runs were added for tasks 01-07. Their top-level screenshots are exact copies of visually inspected evidence images; the supplied HTML and evidence remain unchanged. Model search resolves the displayed Gemini name.
 
-The new [Why Trial? view](https://trial-by-pyro.netlify.app/#why) and README distinguish benchmark measurements from Pyro's experience using models. Runtime observations are attributed to Pyro's own runs. The user-supplied Deep-SWE image is included unchanged and labeled as a snapshot with different effort settings. No current-ranking or controlled model-performance claims were inferred from it.
+The new [Why Trial? view](https://trial-by-pyro.netlify.app/#why) and README distinguish benchmark measurements from my experience using models. Runtime observations refer to my own runs. The Deep-SWE image is included unchanged and labeled as a snapshot with different effort settings. No current-ranking or controlled model-performance claims were inferred from it.
 
 Desktop and mobile visual checks covered the reading view, the expanded live app, and the three-model gallery. See the [live app](live-preview.png), [project rationale](why-project-preview.png), and [mobile rationale](why-project-mobile.png). Public-mode interaction was checked with Netlify Dev; the export continues to omit raw metadata, reports, evaluator files, and development evidence.
 
