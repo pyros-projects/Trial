@@ -213,7 +213,7 @@ class StaticExportTests(unittest.TestCase):
         self.assertIn("Fluid", document.metadata["og:title"])
         self.assertIn("Interactive fluid.", document.metadata["og:description"])
         self.assertEqual(document.metadata["og:type"], "website")
-        self.assertEqual(document.metadata["og:site_name"], "Trial by Pyro")
+        self.assertEqual(document.metadata["og:site_name"], "Trial - a Vibe Benchmark")
         self.assertEqual(document.metadata["twitter:card"], "summary")
         self.assertEqual(document.metadata["twitter:title"], document.metadata["og:title"])
         self.assertEqual(document.metadata["twitter:description"], document.metadata["og:description"])

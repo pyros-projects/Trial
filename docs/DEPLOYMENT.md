@@ -1,4 +1,4 @@
-# Deploy Trial by Pyro to Netlify
+# Deploy Trial to Netlify
 
 The deployment scripts build a small public gallery in `dist/site`, then upload that directory through Netlify CLI. A draft deploy is the default. Production requires an explicit flag.
 

@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Trial name and complete model coverage: 2026-09-07
+
+The existing public repository was renamed to [pyros-projects/Trial](https://github.com/pyros-projects/Trial), preserving its repository ID and commit history. Website and README branding now reads **Trial - a Vibe Benchmark**, with **(by Pyro)** on a smaller line below. The masthead, footer, page title, source documentation, and share metadata use the new name. The existing Netlify origin and model/run link paths continue to serve the same builds.
+
+All **23 static-export and deployment-script tests passed** with the bundled Python runtime, and the existing mobile browser test passed. Visual checks at 1600, 1024, 800, 768, 580, 390, and 320 pixels confirmed the title and byline fit beside the GitHub link without page overflow. Gallery, Why view, and README images were refreshed.
+
+Gemini 3.8 Flash's new SDF/CSG studio completes **24 HTML builds: three models across all eight current prompts**. Its thumbnail is an unchanged copy of the supplied desktop screenshot. Browser inspection confirmed its live canvas opens in the public sandbox and the model picker offers Astra, Grok, and Gemini. This is a gallery smoke check, not a verification of the model's full task requirements.
+
+Production deployment **`6a9f1be7512a4232e7ae0d83`** contains **144 files totaling 4,026,929 bytes (3.84 MiB)**. Live checks verified all 24 share documents, updated Open Graph site names, thumbnail URLs, source-download hashes, and attachment/sandbox headers. Six representative private routes returned 404. The new public GitHub link returned HTTP 200; the published title, byline, build count, and direct Gemini share entry were also verified in the browser.
+
 ## Viewer comparisons and implementation previews: 2026-09-07
 
 The complete WSL suite with both browser modes enabled passed **all 72 tests, with no skips**. Windows system Python passed **51 tests with 21 expected skips** for opt-in browser checks, optional Pillow, timezone data, and symlink permissions. Four focused viewer tests passed again after the final iframe-focus dismissal change. The existing Why view browser test also passed after replacing third-person self-references with first-person copy and neutral captions; the updated reading view was inspected at desktop and mobile sizes. JavaScript syntax and whitespace checks passed.
@@ -16,7 +26,7 @@ Production browser checks verified direct shared entry, model switching, Copy li
 
 ## Public repository links: 2026-09-07
 
-Trial by Pyro is publicly accessible on GitHub. The masthead and footer now link to that repository in a separate tab. Browser checks confirmed the correct destination, visible header controls, and no page overflow at 1600, 1024, 800, 768, 390, and 320 pixels. The existing mobile layout test passed. Showcase screenshots and the README comparison were refreshed.
+Trial is publicly accessible on GitHub. The masthead and footer now link to that repository in a separate tab. Browser checks confirmed the correct destination, visible header controls, and no page overflow at 1600, 1024, 800, 768, 390, and 320 pixels. The existing mobile layout test passed. Showcase screenshots and the README comparison were refreshed.
 
 Production deployment `6a9f0e99206f4fccdf71e8a5` publishes **116 files totaling 3,661,854 bytes (3.49 MiB)**. Live verification followed the GitHub link to the public repository and checked the header at 320 pixels; both repository links have the expected URL and new-tab attributes. Anonymous GitHub API access also confirmed the repository is public.
 
@@ -64,11 +74,11 @@ Desktop and mobile visual checks covered the reading view, the expanded live app
 
 ## Production deployment: 2026-09-07
 
-Published [Trial by Pyro](https://trial-by-pyro.netlify.app/) through the authenticated Netlify CLI using the repository's PowerShell deployment script with production enabled and Pillow available. Deployment `6a9ee49ec0f4f7387924fa13` uploaded the 100-file, 2.27 MiB public export. No raw metadata, reports, evidence, or private evaluator files were uploaded.
+Published [Trial](https://trial-by-pyro.netlify.app/) through the authenticated Netlify CLI using the repository's PowerShell deployment script with production enabled and Pillow available. Deployment `6a9ee49ec0f4f7387924fa13` uploaded the 100-file, 2.27 MiB public export. No raw metadata, reports, evidence, or private evaluator files were uploaded.
 
 Verification against the live HTTPS site confirmed all 15 HTML files match their declared SHA-256 values, all 15 WebP previews load, and all artifact responses include the expected sandbox header. Representative metadata, evidence, local Netlify state, and private evaluator URLs return 404. Browser checks confirmed eight prompt groups, 15 builds, prompt reading, source download, a working live canvas preview, iframe cleanup, and no horizontal overflow at 390 pixels.
 
-## Trial by Pyro verification: 2026-09-07
+## Trial verification: 2026-09-07
 
 ### Automated checks
 
@@ -100,7 +110,7 @@ Current visual records are [desktop](gallery-results-preview.png), [mobile](gall
 
 ## Historical verification: 2026-09-06
 
-The record below describes the single-run edition before the Trial by Pyro redesign. Its test counts and environment limitations belong to that run, not to later changes or the current result collection.
+The record below describes the single-run edition before the Trial redesign. Its test counts and environment limitations belong to that run, not to later changes or the current result collection.
 
 ### Automated suite
 

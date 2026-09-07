@@ -342,7 +342,7 @@ def make_gallery_handler(state: GalleryState) -> type[CommonHandler]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p=argparse.ArgumentParser(description='Serve the Trial by Pyro gallery; never execute submitted code.')
+    p=argparse.ArgumentParser(description='Serve the Trial gallery; never execute submitted code.')
     p.add_argument('--host',default='127.0.0.1')
     p.add_argument('--port',type=int,default=8765)
     p.add_argument('--artifact-port',type=int,default=8766)

@@ -124,9 +124,9 @@ def share_settings(root: Path) -> tuple[str, dict[str, str]]:
 
 def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
     """Render crawler metadata and a browser handoff without duplicating artifacts."""
-    title = f"{model_label}: {row['task_title']} | Trial by Pyro"
+    title = f"{model_label}: {row['task_title']} | Trial"
     description = " ".join(part for part in (
-        row["description"].strip(), f"Explore {model_label}'s interactive implementation on Trial by Pyro."
+        row["description"].strip(), f"Explore {model_label}'s interactive implementation on Trial."
     ) if part)
     canonical = origin + row["share_url"]
     viewer = "/#play/" + "/".join(quote(row[key], safe="") for key in ("model_key", "run_key"))
@@ -134,7 +134,7 @@ def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
     metadata = [
         ("name", "description", description),
         ("property", "og:type", "website"),
-        ("property", "og:site_name", "Trial by Pyro"),
+        ("property", "og:site_name", "Trial - a Vibe Benchmark"),
         ("property", "og:title", title),
         ("property", "og:description", description),
         ("property", "og:url", canonical),

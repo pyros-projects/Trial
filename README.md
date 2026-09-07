@@ -2,10 +2,11 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/logo-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset=".github/logo-light.svg">
-    <img alt="Trial by Pyro" src=".github/logo-light.svg" width="80" height="80">
+    <img alt="Trial" src=".github/logo-light.svg" width="80" height="80">
   </picture>
-  <h1>Trial by Pyro</h1>
-  <p><strong>A Vibe Benchmark.</strong><br>Show me what it built. Then let me try it.</p>
+  <h1>Trial - a Vibe Benchmark</h1>
+  <p><sub>(by Pyro)</sub></p>
+  <p>Show me what it built. Then let me try it.</p>
 </div>
 
 <div align="center">
@@ -26,7 +27,7 @@
 
 ---
 
-![Trial by Pyro gallery comparing submitted builds for the same prompt](docs/gallery-results-preview.png)
+![Trial gallery comparing submitted builds for the same prompt](docs/gallery-results-preview.png)
 
 ## Why this project?
 
@@ -62,7 +63,7 @@ Keep the benchmarks. Get your hands on the work.
 
 ## When to use it
 
-Use Trial by Pyro when you want to inspect what a coding model can build, choose challenges for a comparison, or try the same prompt with your own agent. The gallery displays submitted work; an independent evaluator determines whether it meets the brief.
+Use Trial when you want to inspect what a coding model can build, choose challenges for a comparison, or try the same prompt with your own agent. The gallery displays submitted work; an independent evaluator determines whether it meets the brief.
 
 | Track | Tasks | What the agent delivers |
 |---|---|---|

@@ -1,18 +1,18 @@
 # Results and evaluation data
 
-Trial by Pyro reads one artifact per run from a results directory. The local gallery lets you compare builds for the same prompt, inspect the source, and review optional evaluation records. It does not generate implementations, start submitted projects, or automatically judge their correctness.
+Trial reads one artifact per run from a results directory. The local gallery lets you compare builds for the same prompt, inspect the source, and review optional evaluation records. It does not generate implementations, start submitted projects, or automatically judge their correctness.
 
 The public static export contains a smaller set: the gallery, public prompt text, standalone HTML builds, thumbnails, and small share pages with link-preview metadata. Metadata, evaluator reports, notes, evidence, project source, and archives are excluded. These exclusions apply to the static website: files committed to a public Git repository are still public. See [Hosting](DEPLOYMENT.md) for the export and deployment commands.
 
 ## Included results
 
-The 2026-09-07 checkout contains 23 submitted HTML builds for eight tasks across three model folders:
+The 2026-09-07 checkout contains 24 submitted HTML builds for eight tasks across three model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
 | `gpt-6_astra` | 8 | 01-08 |
 | `xai_grok4.6` | 8 | 01-08 |
-| `google_gemini3.8_flash` | 7 | 01-07 |
+| `google_gemini3.8_flash` | 8 | 01-08 |
 
 These are submitted artifacts, not verified passes. This snapshot includes no evaluator reports or scores. The gallery reads the files that are present, so its totals change as results are added.
 
