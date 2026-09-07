@@ -1,0 +1,13 @@
+from importlib.machinery import SourceFileLoader
+import json
+v=SourceFileLoader('v','evidence/browser-validation.py').load_module()
+v.ab('reload');v.select('Experiment preset','cavity');v.pause();d=v.state();assert any(p['frequency'] is not None for p in d['probes']);v.report('FIXED slow cavity frequency measurement',d['probes']);v.fieldvisible();v.shot('cavity-frequency-fixed.png')
+v.select('Experiment preset','array');v.pause();v.ab('focus','#phase');v.ab('press','Home');v.ab('press','ArrowRight');before=v.state()['sources']
+v.ab('find','text','Your workspace','click');v.ab('scrollintoview','#exportBtn');v.ab('download','#exportBtn',str(v.ROOT/'exported-scene.json'));saved=json.loads((v.ROOT/'exported-scene.json').read_text());assert saved['sources'][0]['phase']==-175 and len(saved['sources'])==8
+v.select('Experiment preset','double');v.pause();v.click('Import scene');v.ab('upload','#importFile',str(v.ROOT/'exported-scene.json'));v.ab('wait','--text','Scene restored and paused');after=v.state();assert after['sourceCount']==8 and after['sources'][0]['phase']==-175 and after['paused'] and after['time']==0;v.report('export and genuine file-import roundtrip',after);v.shot('import-restored.png')
+v.click('Save locally');v.ab('reload');v.pause();v.ab('find','text','Your workspace','click');v.click('Restore');d=v.state();assert d['sourceCount']==8 and d['sources'][0]['phase']==-175;v.report('local storage survives page reload',d)
+for name,body in [('invalid-json.json','{not json'),('invalid-scene.json',json.dumps({'format':'wave-lab','version':1,'resolution':999})),('invalid-geometry.json',json.dumps({**saved,'structures':[{'shape':'lens','type':'lens','index':1.5}]}))]:
+ path=v.ROOT/name;path.write_text(body);before=v.state();v.ab('upload','#importFile',str(path));v.ab('wait','--text','Import failed:');after=v.state();assert after['sourceCount']==before['sourceCount'] and after['time']==before['time'];v.report('invalid import rejected: '+name,{'toast':v.ev('document.getElementById("toast").textContent'),'sceneIntact':True});v.shot(name.replace('.json','.png'))
+# Empty-scene editing remains usable.
+v.select('Experiment preset','interference');v.pause();v.click('Remove');v.click('Remove');d=v.state();assert d['sourceCount']==0;v.click('Lens');v.fieldvisible();v.drag([(.45,.25),(.5,.5),(.55,.8)]);v.click('Remove selected structure');assert v.state()['structureCount']==0;v.report('geometry editing works with no sources',v.state())
+v.ab('errors');v.ab('console');v.ab('network','requests','--filter','http');v.report('external resource dependencies',v.ev('performance.getEntriesByType("resource").map(r=>r.name)'))

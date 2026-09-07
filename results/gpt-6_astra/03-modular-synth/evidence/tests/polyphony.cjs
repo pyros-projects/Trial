@@ -1,0 +1,3 @@
+const assert=require('node:assert/strict');const {evaluate}=require('./browser-lib.cjs');
+const d=evaluate(`(async()=>{const p=Core.makeProject();p.tracks[0].poly=1;const c=new OfflineAudioContext(2,44100,44100),e=new PhaseEngine(c,p);e.synth(0,60,.8,0,.04);e.synth(0,64,.8,.1,.04);const voicesAt150ms=e.voices.filter(v=>v.start<=.15&&v.end>.15).length;const b=await c.startRendering();let peak=0;for(const x of b.getChannelData(0))peak=Math.max(peak,Math.abs(x));return{voicesAt150ms,peak}})()`);
+assert.ok(d.peak>0);assert.equal(d.voicesAt150ms,1,'A release tail must be stolen when polyphony is one');console.log('PASS: polyphony limit includes release tails without an abrupt cut');

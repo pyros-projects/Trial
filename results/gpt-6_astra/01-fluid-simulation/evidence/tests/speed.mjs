@@ -1,0 +1,5 @@
+import {ab,click,setRange,inspect,frames,save,assert,close} from './driver.mjs';
+const data={};
+async function sample(name,key){await click('Reset');await click('Pause simulation');await setRange('Simulation speed',key);await click('Resume simulation');const start=await inspect();await frames(24);const end=await inspect();await click('Pause simulation');data[name]={configured:end.config.speed,steps:end.steps-start.steps,simulated:end.simTime-start.simTime,perStep:(end.simTime-start.simTime)/(end.steps-start.steps),start,end};}
+try{await sample('normal','Home');ab('find','label','Simulation speed','click'); // Direct label interaction is included in each sample.
+await click('Reset');await click('Pause simulation');await click('Resume simulation');const a=await inspect();await frames(24);const b=await inspect();await click('Pause simulation');data.normal={perStep:(b.simTime-a.simTime)/(b.steps-a.steps),start:a,end:b};await sample('double','End');assert(data.double.perStep>data.normal.perStep*1.5,'2x speed advances more simulation time per frame than 1x',{normal:data.normal.perStep,double:data.double.perStep});}finally{save('speed',data);close();}

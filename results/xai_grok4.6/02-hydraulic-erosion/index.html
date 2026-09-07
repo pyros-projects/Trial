@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hydraulic Erosion Laboratory</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%2310140c' width='64' height='64'/%3E%3Cpath fill='%23c4a36a' d='M8 44c8-18 16-10 24-22s12 4 24 2v20H8z'/%3E%3Cpath fill='%236aafa0' d='M8 50c10-8 18-2 28-10s12-2 20-4v12H8z'/%3E%3C/svg%3E">
+<style>
+:root {
+  --ink: #10140c;
+  --panel: rgba(20, 26, 16, 0.9);
+  --panel-solid: #161c12;
+  --brass: #c4a36a;
+  --brass-dim: #8a7348;
+  --copper: #c56a3a;
+  --moss: #b7d07a;
+  --aqua: #6aafa0;
+  --paper: #e8dfc8;
+  --muted: #9aa186;
+  --danger: #d16a52;
+  --line: rgba(196, 163, 106, 0.28);
+  --display: Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --ui: "Trebuchet MS", "Gill Sans", "Lucida Grande", sans-serif;
+  --mono: "Lucida Console", "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--ink); color: var(--paper);
+  font-family: var(--ui); font-size: 12px;
+}
+#glcanvas {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  display: block; touch-action: none; cursor: crosshair; z-index: 0;
+}
+#grain {
+  position: fixed; inset: 0; pointer-events: none; z-index: 4;
+  opacity: 0.045; mix-blend-mode: overlay;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.4) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 1px, transparent 1px 4px);
+}
+#minimap-wrap {
+  position: fixed; left: 14px; bottom: 64px; z-index: 8;
+  border: 1px solid var(--line); background: rgba(12,16,10,.72);
+  padding: 6px; box-shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+#minimap-wrap .cap {
+  font-family: var(--display); font-size: 9px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--brass); margin-bottom: 4px;
+}
+#minimap { display: block; width: 132px; height: 132px; image-rendering: pixelated; }
+#topbar {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 12; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 320px); pointer-events: none;
+}
+#topbar > * { pointer-events: auto; }
+#status {
+  position: fixed; top: 12px; left: 12px; z-index: 12;
+  min-width: 230px; max-width: min(300px, calc(100vw - 24px));
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 10px 12px 11px; backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.03);
+}
+#status h1 {
+  font-family: var(--display); font-weight: 400; font-size: 15px;
+  letter-spacing: 0.04em; margin: 0 0 2px; color: var(--paper);
+}
+#status .sub {
+  font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--brass); margin-bottom: 8px;
+}
+#status-lines {
+  font-family: var(--mono); font-size: 11px; line-height: 1.55;
+  color: var(--moss); white-space: pre;
+}
+#status .warn { color: var(--danger); }
+#panel {
+  position: fixed; top: 12px; right: 12px; bottom: 58px; z-index: 12;
+  width: 292px; overflow: auto; background: var(--panel);
+  border: 1px solid var(--line); padding: 8px 10px 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0,0,0,.4);
+}
+#toolbar {
+  position: fixed; left: 12px; right: 316px; bottom: 12px; z-index: 12;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 6px 8px; backdrop-filter: blur(10px);
+}
+#probe {
+  position: fixed; z-index: 14; display: none; pointer-events: none;
+  background: rgba(16,20,12,.92); border: 1px solid var(--brass-dim);
+  color: var(--paper); font-family: var(--mono); font-size: 10px;
+  line-height: 1.5; padding: 8px 10px; min-width: 188px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+#help, #err {
+  position: fixed; inset: 0; z-index: 30; display: none;
+  background: rgba(8,10,6,.72); align-items: center; justify-content: center;
+}
+#help.visible, #err.visible { display: flex; }
+#help .card, #err .card {
+  background: var(--panel-solid); border: 1px solid var(--brass);
+  max-width: 520px; width: calc(100% - 32px); padding: 20px 22px;
+  color: var(--paper);
+}
+#help h2, #err h2 { font-family: var(--display); font-weight: 400; margin: 0 0 10px; }
+#help pre { font-family: var(--mono); font-size: 11px; line-height: 1.55; color: var(--moss); }
+button, select, input[type="number"], input[type="text"] {
+  font-family: var(--ui); font-size: 11px; color: var(--paper);
+  background: rgba(8,10,6,.65); border: 1px solid var(--brass-dim);
+  border-radius: 0; padding: 5px 8px;
+}
+button {
+  cursor: pointer; letter-spacing: 0.04em; color: var(--brass);
+  text-transform: uppercase; font-size: 10px;
+}
+button:hover, button:focus-visible { border-color: var(--brass); color: var(--paper); background: rgba(196,163,106,.12); }
+button.active { background: rgba(197,106,58,.28); border-color: var(--copper); color: var(--paper); }
+button:disabled { opacity: 0.4; cursor: default; }
+.row {
+  display: grid; grid-template-columns: 1fr 92px 44px; gap: 6px;
+  align-items: center; margin: 3px 0;
+}
+.row label { color: var(--muted); font-size: 11px; }
+.row output { font-family: var(--mono); font-size: 10px; color: var(--moss); text-align: right; }
+input[type="range"] {
+  width: 100%; accent-color: var(--brass); height: 16px;
+}
+details {
+  border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px;
+}
+summary {
+  font-family: var(--display); letter-spacing: 0.12em; text-transform: uppercase;
+  font-size: 10px; color: var(--brass); cursor: pointer; list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+.btns { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.btns button { flex: 1 1 auto; }
+.field { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
+.field label { color: var(--muted); min-width: 64px; }
+.field input, .field select { flex: 1; }
+.tiny { font-size: 9px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin: 0 4px 0 2px; }
+#err-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40; display: none;
+  background: #4a1c14; color: #f3d2c4; padding: 8px 12px; font-family: var(--mono);
+}
+@media (max-width: 860px) {
+  #topbar { max-width: none; top: 6px; left: 6px; right: 6px; transform: none; }
+  #panel {
+    top: auto; bottom: 118px; left: 8px; right: 8px; width: auto;
+    max-height: 32vh; padding-bottom: 10px;
+  }
+  #toolbar { right: 8px; left: 8px; bottom: 8px; }
+  #minimap-wrap { left: auto; right: 12px; bottom: 122px; }
+  #minimap { width: 88px; height: 88px; }
+  #status { top: 46px; padding: 8px 10px; min-width: 0; }
+  #status h1 { font-size: 13px; }
+}
+@media (max-width: 420px) {
+  #status-lines { font-size: 10px; }
+  #minimap-wrap { display: none; }
+}
+</style>
+</head>
+<body>
+<canvas id="glcanvas" aria-label="3D hydraulic erosion terrain"></canvas>
+<div id="grain"></div>
+<div id="err-banner" role="alert"></div>
+<aside id="status">
+  <h1>Hydraulic Erosion Lab</h1>
+  <div class="sub">Live catchment bench</div>
+  <div id="status-lines">booting…</div>
+</aside>
+<div id="topbar">
+  <button type="button" id="btn-pause" aria-label="Pause or resume simulation">Pause</button>
+  <button type="button" id="btn-step" aria-label="Single-step simulation">Step</button>
+  <button type="button" id="btn-reset" aria-label="Reset terrain and water">Reset</button>
+  <button type="button" id="btn-regen" aria-label="Regenerate terrain">Regenerate</button>
+  <button type="button" id="btn-help" aria-label="Show keyboard help">Keys</button>
+</div>
+<aside id="panel">
+  <div class="field">
+    <label for="select-preset">Preset</label>
+    <select id="select-preset" aria-label="Terrain and climate preset">
+      <option value="mountains">Mountain drainage</option>
+      <option value="canyon">Canyon formation</option>
+      <option value="island">Island rainfall</option>
+      <option value="valley">River valley</option>
+      <option value="stress">Aggressive stress test</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="input-seed">Seed</label>
+    <input id="input-seed" type="number" value="42017" aria-label="Deterministic terrain seed">
+    <button type="button" id="btn-seed-rand" aria-label="Randomize seed">Dice</button>
+  </div>
+  <div class="field">
+    <label for="select-res">Resolution</label>
+    <select id="select-res" aria-label="Simulation resolution">
+      <option>64</option><option>96</option><option selected>128</option>
+      <option>160</option><option>192</option><option>256</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="select-viz">View</label>
+    <select id="select-viz" aria-label="Visualization mode">
+      <option value="0">Shaded terrain</option>
+      <option value="1">Elevation</option>
+      <option value="2">Water depth</option>
+      <option value="3">Sediment</option>
+      <option value="4">Erosion / deposition</option>
+      <option value="5">Slope</option>
+      <option value="6">Flow velocity</option>
+    </select>
+  </div>
+  <details open>
+    <summary>Simulation</summary>
+    <div class="row"><label for="rng-speed">Speed</label><input id="rng-speed" type="range" min="0.1" max="4" step="0.05" value="1"><output id="out-speed">1.00</output></div>
+    <div class="row"><label for="rng-sub">Substeps</label><input id="rng-sub" type="range" min="1" max="8" step="1" value="2"><output id="out-sub">2</output></div>
+    <div class="row"><label for="rng-rain">Rainfall</label><input id="rng-rain" type="range" min="0" max="0.12" step="0.001" value="0.012"><output id="out-rain">0.012</output></div>
+    <div class="row"><label for="rng-evap">Evaporation</label><input id="rng-evap" type="range" min="0" max="0.08" step="0.001" value="0.018"><output id="out-evap">0.018</output></div>
+    <div class="row"><label for="rng-erosion">Erosion</label><input id="rng-erosion" type="range" min="0" max="1.2" step="0.01" value="0.62"><output id="out-erosion">0.62</output></div>
+    <div class="row"><label for="rng-depo">Deposition</label><input id="rng-depo" type="range" min="0" max="1.2" step="0.01" value="0.22"><output id="out-depo">0.22</output></div>
+    <div class="row"><label for="rng-cap">Capacity</label><input id="rng-cap" type="range" min="0.02" max="2" step="0.01" value="0.48"><output id="out-cap">0.48</output></div>
+    <div class="row"><label for="rng-flow">Flow strength</label><input id="rng-flow" type="range" min="0.05" max="2" step="0.01" value="1.05"><output id="out-flow">1.05</output></div>
+    <div class="row"><label for="rng-thermal">Thermal</label><input id="rng-thermal" type="range" min="0" max="1" step="0.01" value="0.1"><output id="out-thermal">0.10</output></div>
+  </details>
+  <details open>
+    <summary>Brush &amp; view</summary>
+    <div class="row"><label for="rng-br">Brush radius</label><input id="rng-br" type="range" min="0.02" max="0.45" step="0.005" value="0.08"><output id="out-br">0.08</output></div>
+    <div class="row"><label for="rng-bs">Brush strength</label><input id="rng-bs" type="range" min="0.05" max="2" step="0.01" value="0.55"><output id="out-bs">0.55</output></div>
+    <div class="row"><label for="rng-exag">Vert. exagger.</label><input id="rng-exag" type="range" min="0.25" max="3" step="0.05" value="1.35"><output id="out-exag">1.35</output></div>
+    <div class="row"><label for="rng-wvis">Water visibility</label><input id="rng-wvis" type="range" min="0" max="1" step="0.01" value="0.88"><output id="out-wvis">0.88</output></div>
+    <div class="row"><label for="rng-az">Light azimuth</label><input id="rng-az" type="range" min="0" max="360" step="1" value="214"><output id="out-az">214°</output></div>
+    <div class="row"><label for="rng-el">Light elevation</label><input id="rng-el" type="range" min="8" max="85" step="1" value="36"><output id="out-el">36°</output></div>
+  </details>
+  <details>
+    <summary>Terrain genesis</summary>
+    <div class="row"><label for="rng-amp">Amplitude</label><input id="rng-amp" type="range" min="0.15" max="1.4" step="0.01" value="0.88"><output id="out-amp">0.88</output></div>
+    <div class="row"><label for="rng-rough">Roughness</label><input id="rng-rough" type="range" min="0.3" max="0.85" step="0.01" value="0.54"><output id="out-rough">0.54</output></div>
+    <div class="row"><label for="rng-freq">Frequency</label><input id="rng-freq" type="range" min="1.2" max="8" step="0.1" value="3.4"><output id="out-freq">3.4</output></div>
+    <div class="row"><label for="rng-ridge">Ridges</label><input id="rng-ridge" type="range" min="0" max="1" step="0.01" value="0.62"><output id="out-ridge">0.62</output></div>
+    <div class="row"><label for="rng-island">Island falloff</label><input id="rng-island" type="range" min="0" max="1" step="0.01" value="0.04"><output id="out-island">0.04</output></div>
+    <div class="row"><label for="rng-warp">Warp</label><input id="rng-warp" type="range" min="0" max="1" step="0.01" value="0.38"><output id="out-warp">0.38</output></div>
+  </details>
+  <details open>
+    <summary>Archive</summary>
+    <div class="btns">
+      <button type="button" id="btn-export-png" aria-label="Export heightfield as PNG">Export PNG</button>
+      <button type="button" id="btn-export-json" aria-label="Export simulation JSON">Export JSON</button>
+      <button type="button" id="btn-import-json" aria-label="Import simulation JSON">Import JSON</button>
+    </div>
+  </details>
+</aside>
+<footer id="toolbar">
+  <span class="tiny">Tools</span>
+  <button type="button" class="tool active" data-tool="orbit" aria-label="Orbit camera">Orbit</button>
+  <button type="button" class="tool" data-tool="raise" aria-label="Raise terrain">Raise</button>
+  <button type="button" class="tool" data-tool="lower" aria-label="Lower terrain">Lower</button>
+  <button type="button" class="tool" data-tool="smooth" aria-label="Smooth terrain">Smooth</button>
+  <button type="button" class="tool" data-tool="flatten" aria-label="Flatten terrain">Flatten</button>
+  <button type="button" class="tool" data-tool="water" aria-label="Add water">Water</button>
+  <button type="button" class="tool" data-tool="sediment" aria-label="Add sediment">Sediment</button>
+  <button type="button" class="tool" data-tool="dry" aria-label="Dry area">Dry</button>
+  <button type="button" class="tool" data-tool="probe" aria-label="Inspect values">Probe</button>
+  <span class="tiny">Maps</span>
+  <button type="button" class="viz active" data-viz="0" aria-label="Shaded visualization">Shade</button>
+  <button type="button" class="viz" data-viz="1" aria-label="Elevation visualization">Elev</button>
+  <button type="button" class="viz" data-viz="2" aria-label="Water depth visualization">Water</button>
+  <button type="button" class="viz" data-viz="3" aria-label="Sediment visualization">Sed</button>
+  <button type="button" class="viz" data-viz="4" aria-label="Erosion delta visualization">Delta</button>
+  <button type="button" class="viz" data-viz="5" aria-label="Slope visualization">Slope</button>
+  <button type="button" class="viz" data-viz="6" aria-label="Flow visualization">Flow</button>
+</footer>
+<div id="minimap-wrap">
+  <div class="cap">Catchment plan</div>
+  <canvas id="minimap" width="160" height="160" aria-label="Top-down water and terrain minimap"></canvas>
+</div>
+<div id="probe" role="status"></div>
+<div id="help"><div class="card">
+  <h2>Field notes</h2>
+  <pre>Space        pause / resume
+. or N       single step
+R            reset
+G            regenerate
+1–7          visualization
+Q / E        brush radius
+[ / ]        brush strength
+T            cycle tools
+H or ?       this card
+LMB          orbit or paint
+RMB / Alt    orbit
+MMB / Shift  pan
+Wheel        zoom
+Two-finger   pan + pinch zoom</pre>
+  <div class="btns"><button type="button" id="btn-help-close">Close</button></div>
+</div></div>
+<input id="import-json" type="file" accept="application/json,.json" hidden>
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("glcanvas");
+  const mini = $("minimap");
+  const miniCtx = mini.getContext("2d");
+  const probeEl = $("probe");
+  const statusEl = $("status-lines");
+  const errBanner = $("err-banner");
+
+  const VIZ = ["Shaded", "Elevation", "Water", "Sediment", "Erosion Δ", "Slope", "Flow"];
+  const TOOLS = ["orbit", "raise", "lower", "smooth", "flatten", "water", "sediment", "dry", "probe"];
+
+  const PRESETS = {
+    mountains: {
+      seed: 42017, N: 128, shape: "mountains", open: true, sea: 0.02,
+      speed: 1, sub: 2, rain: 0.012, evap: 0.018, erosion: 0.62, depo: 0.22,
+      cap: 0.48, flow: 1.05, thermal: 0.12,
+      amp: 0.88, rough: 0.54, freq: 3.4, ridge: 0.62, island: 0.04, warp: 0.38,
+      spring: null, dew: 0.002
+    },
+    canyon: {
+      seed: 91, N: 128, shape: "canyon", open: true, sea: 0.06,
+      speed: 1.15, sub: 3, rain: 0.007, evap: 0.01, erosion: 0.78, depo: 0.18,
+      cap: 0.72, flow: 1.05, thermal: 0.06,
+      amp: 0.7, rough: 0.42, freq: 2.6, ridge: 0.15, island: 0, warp: 0.22,
+      spring: { u: 0.08, v: 0.5, rate: 0.55 }, dew: 0.001
+    },
+    island: {
+      seed: 1703, N: 128, shape: "island", open: true, sea: 0.04,
+      speed: 1, sub: 2, rain: 0.028, evap: 0.016, erosion: 0.42, depo: 0.28,
+      cap: 0.5, flow: 0.86, thermal: 0.12,
+      amp: 0.72, rough: 0.5, freq: 3.1, ridge: 0.4, island: 0.86, warp: 0.45,
+      spring: null, dew: 0.004
+    },
+    valley: {
+      seed: 778, N: 128, shape: "valley", open: true, sea: 0.03,
+      speed: 1, sub: 2, rain: 0.018, evap: 0.011, erosion: 0.52, depo: 0.26,
+      cap: 0.6, flow: 0.95, thermal: 0.08,
+      amp: 0.78, rough: 0.48, freq: 2.8, ridge: 0.55, island: 0.08, warp: 0.3,
+      spring: { u: 0.5, v: 0.08, rate: 0.22 }, dew: 0.002
+    },
+    stress: {
+      seed: 13, N: 160, shape: "mountains", open: true, sea: 0.02,
+      speed: 2.2, sub: 3, rain: 0.035, evap: 0.022, erosion: 0.95, depo: 0.4,
+      cap: 0.9, flow: 1.35, thermal: 0.32,
+      amp: 0.95, rough: 0.62, freq: 4.2, ridge: 0.7, island: 0.1, warp: 0.55,
+      spring: null, dew: 0.01
+    }
+  };
+
+  const P = {
+    N: 128, seed: 42017, shape: "mountains", open: true, sea: 0.02,
+    speed: 1, sub: 2,     rain: 0.012, evap: 0.018, erosion: 0.62, depo: 0.22,
+    cap: 0.48, flow: 1.05, thermal: 0.12,
+    br: 0.08, bs: 0.55, exag: 1.35, wvis: 0.88, az: 214, el: 36,
+    amp: 0.88, rough: 0.54, freq: 3.4, ridge: 0.62, island: 0.04, warp: 0.38,
+    spring: null, dew: 0.002, viz: 0, tool: "orbit"
+  };
+
+  const sim = {
+    N: 128, H: null, W: null, S: null, H0: null,
+    fL: null, fR: null, fU: null, fD: null,
+    vX: null, vZ: null, dlt: null, slope: null, tmp: null, dH: null,
+    time: 0, waterVol: 0, sedAmt: 0, nanCount: 0, maxVel: 0, maxW: 0,
+    cflClamp: false, unstable: false
+  };
+
+  const cam = { theta: 0.62, phi: 0.92, r: 2.72, tx: 0, ty: 0.22, tz: 0 };
+  const ptr = {
+    down: false, btn: 0, lx: 0, ly: 0, x: 0, y: 0, alt: false, shift: false,
+    hit: false, hx: 0, hz: 0, hu: 0, hv: 0, flatten: 0.3,
+    touches: new Map()
+  };
+
+  let gl, extDeriv, paused = false, ready = false;
+  let fps = 0, frames = 0, fpsT = 0, simMs = 0, rendMs = 0;
+  let mesh = null, programs = null, skyBuf = null;
+  let lastT = 0, brushOn = false, flattenH = 0.3, lastStamp = 0;
+  let lastMini = 0, lastStatus = 0, heightHash0 = 0;
+
+  function showErr(msg) {
+    errBanner.style.display = "block";
+    errBanner.textContent = String(msg);
+  }
+  window.addEventListener("error", (e) => showErr(e.message || e));
+  window.addEventListener("unhandledrejection", (e) => showErr(e.reason));
+
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function hash2(x, z, s) {
+    let n = Math.imul(x | 0, 1597334677) ^ Math.imul(z | 0, 3812015801) ^ (s | 0);
+    n = Math.imul(n ^ (n >>> 16), 2246822507);
+    n = Math.imul(n ^ (n >>> 13), 3266489909);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+  function vnoise(x, z, s) {
+    const ix = Math.floor(x), iz = Math.floor(z);
+    const fx = x - ix, fz = z - iz;
+    const a = hash2(ix, iz, s), b = hash2(ix + 1, iz, s);
+    const c = hash2(ix, iz + 1, s), d = hash2(ix + 1, iz + 1, s);
+    const ux = smooth(fx), uz = smooth(fz);
+    return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
+  }
+  function fbm(x, z, s, oct, rough) {
+    let v = 0, a = 0.5, n = 0, f = 1;
+    for (let i = 0; i < oct; i++) {
+      v += a * vnoise(x * f, z * f, s + i * 97);
+      n += a; a *= rough; f *= 2.03;
+    }
+    return v / n;
+  }
+  function ridgeN(x, z, s, oct, rough) {
+    let v = 0, a = 0.5, n = 0, f = 1;
+    for (let i = 0; i < oct; i++) {
+      const r = 1 - Math.abs(vnoise(x * f, z * f, s + i * 131) * 2 - 1);
+      v += a * r * r;
+      n += a; a *= rough; f *= 2.02;
+    }
+    return v / n;
+  }
+
+  function alloc(N) {
+    const n = N * N;
+    sim.N = N;
+    sim.H = new Float32Array(n);
+    sim.W = new Float32Array(n);
+    sim.S = new Float32Array(n);
+    sim.H0 = new Float32Array(n);
+    sim.fL = new Float32Array(n);
+    sim.fR = new Float32Array(n);
+    sim.fU = new Float32Array(n);
+    sim.fD = new Float32Array(n);
+    sim.vX = new Float32Array(n);
+    sim.vZ = new Float32Array(n);
+    sim.dlt = new Float32Array(n);
+    sim.slope = new Float32Array(n);
+    sim.tmp = new Float32Array(n);
+    sim.dH = new Float32Array(n);
+  }
+
+  function sampleH(H, N, u, v) {
+    const x = clamp(u, 0, 1) * (N - 1);
+    const z = clamp(v, 0, 1) * (N - 1);
+    const x0 = Math.floor(x), z0 = Math.floor(z);
+    const x1 = Math.min(N - 1, x0 + 1), z1 = Math.min(N - 1, z0 + 1);
+    const tx = x - x0, tz = z - z0;
+    const a = H[z0 * N + x0], b = H[z0 * N + x1];
+    const c = H[z1 * N + x0], d = H[z1 * N + x1];
+    return lerp(lerp(a, b, tx), lerp(c, d, tx), tz);
+  }
+
+  function generateTerrain() {
+    const N = P.N | 0;
+    if (sim.N !== N || !sim.H) alloc(N);
+    const H = sim.H, seed = P.seed | 0;
+    const oct = 6;
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const u = x / (N - 1), v = z / (N - 1);
+        const wx = fbm(u * 2.1 + 8, v * 2.1, seed + 3, 4, 0.5) * P.warp;
+        const wz = fbm(u * 2.1, v * 2.1 + 5, seed + 9, 4, 0.5) * P.warp;
+        const px = (u + wx * 0.35) * P.freq;
+        const pz = (v + wz * 0.35) * P.freq;
+        let e = fbm(px, pz, seed, oct, P.rough);
+        const r = ridgeN(px * 0.85, pz * 0.85, seed + 21, oct, P.rough);
+        e = lerp(e, r, P.ridge);
+        if (P.shape === "canyon") {
+          const meander = 0.5 + 0.07 * Math.sin(u * 14.0 + fbm(u * 4, v, seed + 4, 3, 0.5) * 4);
+          const groove = Math.exp(-Math.pow((v - meander) * 16, 2));
+          const plateau = 0.58 + 0.1 * e;
+          e = plateau - groove * 0.3 + (e - 0.5) * 0.08;
+        } else if (P.shape === "valley") {
+          const r1 = Math.exp(-Math.pow((u - 0.28) * 5.2, 2));
+          const r2 = Math.exp(-Math.pow((u - 0.72) * 5.2, 2));
+          e = e * 0.28 + (r1 + r2) * 0.62 + Math.exp(-Math.pow((u - 0.5) * 8, 2)) * -0.08;
+          e += (1 - v) * 0.07;
+        } else if (P.shape === "island") {
+          e = Math.pow(Math.max(0, e), 1.05);
+        } else {
+          e = Math.pow(e, 1.12);
+          e += (1 - v) * 0.06;
+        }
+        if (P.island > 0.001) {
+          const dx = u - 0.5, dz = v - 0.5;
+          const d = Math.sqrt(dx * dx + dz * dz) * 2.05;
+          const fall = Math.pow(Math.max(0, 1 - d), 1.15 + P.island);
+          e *= lerp(1, fall, P.island);
+        }
+        H[z * N + x] = Math.max(0.002, e * P.amp);
+      }
+    }
+    sim.W.fill(0); sim.S.fill(0); sim.dlt.fill(0);
+    sim.fL.fill(0); sim.fR.fill(0); sim.fU.fill(0); sim.fD.fill(0);
+    sim.vX.fill(0); sim.vZ.fill(0);
+    if (P.dew > 0) {
+      for (let i = 0; i < H.length; i++) sim.W[i] = P.dew * (0.6 + 0.4 * (H[i] / (P.amp + 1e-6)));
+    }
+    if (P.spring) {
+      const sx = Math.round(P.spring.u * (N - 1));
+      const sz = Math.round(P.spring.v * (N - 1));
+      for (let z = sz - 2; z <= sz + 2; z++) {
+        for (let x = sx - 2; x <= sx + 2; x++) {
+          if (x >= 0 && z >= 0 && x < N && z < N) {
+            const w = 1 - Math.hypot(x - sx, z - sz) / 3;
+            if (w > 0) sim.W[z * N + x] += P.spring.rate * 0.08 * w;
+          }
+        }
+      }
+    }
+    sim.H0.set(sim.H);
+    sim.time = 0; sim.nanCount = 0; sim.unstable = false;
+    heightHash0 = hashHeights();
+    tallyMass();
+    buildMesh();
+  }
+
+  function resampleTo(newN) {
+    const oldN = sim.N, oH = sim.H, oW = sim.W, oS = sim.S, oD = sim.dlt, o0 = sim.H0;
+    const t = sim.time;
+    alloc(newN);
+    for (let z = 0; z < newN; z++) {
+      for (let x = 0; x < newN; x++) {
+        const u = x / (newN - 1), v = z / (newN - 1);
+        const i = z * newN + x;
+        sim.H[i] = sampleH(oH, oldN, u, v);
+        sim.W[i] = Math.max(0, sampleH(oW, oldN, u, v));
+        sim.S[i] = Math.max(0, sampleH(oS, oldN, u, v));
+        sim.dlt[i] = sampleH(oD, oldN, u, v);
+        sim.H0[i] = sampleH(o0, oldN, u, v);
+      }
+    }
+    sim.time = t;
+    P.N = newN;
+    buildMesh();
+  }
+
+  function hashHeights() {
+    const H = sim.H;
+    let h = 2166136261;
+    for (let i = 0; i < H.length; i += 7) {
+      h ^= Math.floor(H[i] * 1e6);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function neighborSurf(x, z, dir) {
+    const N = sim.N, H = sim.H, W = sim.W;
+    if (dir === 0) { // L
+      if (x > 0) return H[z * N + x - 1] + W[z * N + x - 1];
+      return P.open ? P.sea : H[z * N + x] + W[z * N + x];
+    }
+    if (dir === 1) {
+      if (x < N - 1) return H[z * N + x + 1] + W[z * N + x + 1];
+      return P.open ? P.sea : H[z * N + x] + W[z * N + x];
+    }
+    if (dir === 2) {
+      if (z > 0) return H[(z - 1) * N + x] + W[(z - 1) * N + x];
+      return P.open ? P.sea : H[z * N + x] + W[z * N + x];
+    }
+    if (z < N - 1) return H[(z + 1) * N + x] + W[(z + 1) * N + x];
+    return P.open ? P.sea : H[z * N + x] + W[z * N + x];
+  }
+
+  function hydroStep(dt) {
+    const N = sim.N, n = N * N;
+    const H = sim.H, W = sim.W, S = sim.S;
+    const fL = sim.fL, fR = sim.fR, fU = sim.fU, fD = sim.fD;
+    const vX = sim.vX, vZ = sim.vZ, dlt = sim.dlt, sl = sim.slope;
+    dt = clamp(dt, 0.0005, 0.05);
+    const acc = dt * (0.55 * P.flow) * 9.81;
+    const rain = P.rain * dt;
+    const cell = 1;
+
+    if (rain > 0) {
+      for (let i = 0; i < n; i++) W[i] += rain;
+    }
+    if (P.spring) {
+      const sx = Math.round(P.spring.u * (N - 1));
+      const sz = Math.round(P.spring.v * (N - 1));
+      const add = P.spring.rate * dt;
+      for (let z = sz - 1; z <= sz + 1; z++) {
+        for (let x = sx - 1; x <= sx + 1; x++) {
+          if (x >= 0 && z >= 0 && x < N && z < N) W[z * N + x] += add;
+        }
+      }
+    }
+
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i = z * N + x;
+        const surf = H[i] + W[i];
+        let oL = 0, oR = 0, oU = 0, oDn = 0;
+        if (x > 0 || P.open) oL = Math.max(0, fL[i] + acc * (surf - neighborSurf(x, z, 0)));
+        if (x < N - 1 || P.open) oR = Math.max(0, fR[i] + acc * (surf - neighborSurf(x, z, 1)));
+        if (z > 0 || P.open) oU = Math.max(0, fU[i] + acc * (surf - neighborSurf(x, z, 2)));
+        if (z < N - 1 || P.open) oDn = Math.max(0, fD[i] + acc * (surf - neighborSurf(x, z, 3)));
+        oL *= 0.995; oR *= 0.995; oU *= 0.995; oDn *= 0.995;
+        const sum = oL + oR + oU + oDn;
+        const maxOut = W[i] * cell / (dt + 1e-8);
+        const K = sum > maxOut && sum > 1e-12 ? maxOut / sum : 1;
+        fL[i] = oL * K; fR[i] = oR * K; fU[i] = oU * K; fD[i] = oDn * K;
+      }
+    }
+
+    sim.maxVel = 0; sim.maxW = 0;
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i = z * N + x;
+        const inL = x < N - 1 ? fL[i + 1] : 0;
+        const inR = x > 0 ? fR[i - 1] : 0;
+        const inU = z < N - 1 ? fU[i + N] : 0;
+        const inD = z > 0 ? fD[i - N] : 0;
+        const net = inL + inR + inU + inD - fL[i] - fR[i] - fU[i] - fD[i];
+        W[i] = Math.max(0, W[i] + dt * net / cell);
+        if (W[i] > 2.5) { W[i] = 2.5; sim.unstable = true; }
+        const d = Math.max(W[i], 0.0008);
+        vX[i] = (inR - fL[i] + fR[i] - inL) * 0.5 / d;
+        vZ[i] = (inD - fU[i] + fD[i] - inU) * 0.5 / d;
+        const spd = Math.hypot(vX[i], vZ[i]);
+        if (spd > sim.maxVel) sim.maxVel = spd;
+        if (W[i] > sim.maxW) sim.maxW = W[i];
+      }
+    }
+
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i = z * N + x;
+        const hl = x > 0 ? H[i - 1] : H[i];
+        const hr = x < N - 1 ? H[i + 1] : H[i];
+        const hu = z > 0 ? H[i - N] : H[i];
+        const hd = z < N - 1 ? H[i + N] : H[i];
+        const gx = (hr - hl) * 0.5;
+        const gz = (hd - hu) * 0.5;
+        sl[i] = Math.hypot(gx, gz);
+        const sinA = sl[i] / Math.sqrt(1 + sl[i] * sl[i]);
+        const spd = Math.hypot(vX[i], vZ[i]);
+        const cap = P.cap * (sinA + 0.015) * spd * (0.35 + 3.2 * Math.min(W[i], 0.4));
+        const wet = clamp(W[i] * 35, 0, 1);
+        dlt[i] *= 0.985;
+        if (cap > S[i]) {
+          let er = (cap - S[i]) * P.erosion * dt * wet;
+          er = Math.min(er, Math.max(0, H[i] - 0.002));
+          H[i] -= er; S[i] += er; dlt[i] -= er;
+        } else {
+          let dep = (S[i] - cap) * P.depo * dt;
+          dep = Math.min(dep, S[i]);
+          H[i] += dep; S[i] -= dep; dlt[i] += dep;
+        }
+      }
+    }
+
+    const tmp = sim.tmp;
+    tmp.set(S);
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i = z * N + x;
+        let px = x - vX[i] * dt;
+        let pz = z - vZ[i] * dt;
+        if (P.open) {
+          if (px < 0 || pz < 0 || px > N - 1 || pz > N - 1) { S[i] = 0; continue; }
+        }
+        px = clamp(px, 0, N - 1); pz = clamp(pz, 0, N - 1);
+        const x0 = Math.floor(px), z0 = Math.floor(pz);
+        const x1 = Math.min(N - 1, x0 + 1), z1 = Math.min(N - 1, z0 + 1);
+        const tx = px - x0, tz = pz - z0;
+        S[i] = lerp(lerp(tmp[z0 * N + x0], tmp[z0 * N + x1], tx), lerp(tmp[z1 * N + x0], tmp[z1 * N + x1], tx), tz);
+        if (!isFinite(S[i])) S[i] = 0;
+        S[i] = clamp(S[i], 0, 1.5);
+      }
+    }
+
+    const ke = clamp(P.evap * dt, 0, 0.25);
+    if (ke > 0) {
+      const f = 1 - ke;
+      for (let i = 0; i < n; i++) W[i] *= f;
+    }
+
+    if (P.thermal > 0) {
+      const cell = 2 / Math.max(1, N - 1);
+      const talus = Math.tan(38 * Math.PI / 180) * cell;
+      const k = P.thermal * dt * 0.45;
+      const dH = sim.dH;
+      dH.fill(0);
+      for (let z = 0; z < N; z++) {
+        for (let x = 0; x < N; x++) {
+          const i = z * N + x;
+          const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+          for (let d = 0; d < 4; d++) {
+            const nx = x + dirs[d][0], nz = z + dirs[d][1];
+            if (nx < 0 || nz < 0 || nx >= N || nz >= N) continue;
+            const j = nz * N + nx;
+            const diff = H[i] - H[j];
+            if (diff > talus) {
+              const m = (diff - talus) * 0.25 * k;
+              dH[i] -= m; dH[j] += m;
+            }
+          }
+        }
+      }
+      for (let i = 0; i < n; i++) H[i] = Math.max(0.001, H[i] + dH[i]);
+    }
+
+    let wv = 0, sv = 0, nans = 0;
+    for (let i = 0; i < n; i++) {
+      if (!isFinite(H[i]) || !isFinite(W[i]) || !isFinite(S[i])) {
+        H[i] = sim.H0[i]; W[i] = 0; S[i] = 0; nans++;
+      }
+      H[i] = clamp(H[i], 0.001, 3);
+      W[i] = clamp(W[i], 0, 2.5);
+      S[i] = clamp(S[i], 0, 1.5);
+      wv += W[i]; sv += S[i];
+    }
+    sim.nanCount += nans;
+    sim.waterVol = wv;
+    sim.sedAmt = sv;
+    if (nans) sim.unstable = true;
+  }
+
+  function tallyMass() {
+    let wv = 0, sv = 0;
+    for (let i = 0; i < sim.W.length; i++) { wv += sim.W[i]; sv += sim.S[i]; }
+    sim.waterVol = wv;
+    sim.sedAmt = sv;
+  }
+
+  function resetSim() {
+    sim.H.set(sim.H0);
+    sim.W.fill(0); sim.S.fill(0); sim.dlt.fill(0);
+    sim.fL.fill(0); sim.fR.fill(0); sim.fU.fill(0); sim.fD.fill(0);
+    sim.vX.fill(0); sim.vZ.fill(0);
+    if (P.dew > 0) {
+      for (let i = 0; i < sim.H.length; i++) sim.W[i] = P.dew;
+    }
+    sim.time = 0; sim.nanCount = 0; sim.unstable = false;
+    tallyMass();
+  }
+
+  /* ---------- math / GL ---------- */
+  function m4Persp(fovy, aspect, n, f) {
+    const t = 1 / Math.tan(fovy / 2), m = new Float32Array(16);
+    m[0] = t / aspect; m[5] = t; m[10] = (f + n) / (n - f); m[11] = -1;
+    m[14] = (2 * f * n) / (n - f); return m;
+  }
+  function m4Look(eye, c, up) {
+    const zx = eye[0] - c[0], zy = eye[1] - c[1], zz = eye[2] - c[2];
+    let zl = Math.hypot(zx, zy, zz) || 1;
+    const z0 = zx / zl, z1 = zy / zl, z2 = zz / zl;
+    let xx = up[1] * z2 - up[2] * z1, xy = up[2] * z0 - up[0] * z2, xz = up[0] * z1 - up[1] * z0;
+    let xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+    const y0 = z1 * xz - z2 * xy, y1 = z2 * xx - z0 * xz, y2 = z0 * xy - z1 * xx;
+    const m = new Float32Array(16);
+    m[0] = xx; m[1] = y0; m[2] = z0;
+    m[4] = xy; m[5] = y1; m[6] = z1;
+    m[8] = xz; m[9] = y2; m[10] = z2;
+    m[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+    m[13] = -(y0 * eye[0] + y1 * eye[1] + y2 * eye[2]);
+    m[14] = -(z0 * eye[0] + z1 * eye[1] + z2 * eye[2]);
+    m[15] = 1; return m;
+  }
+  function m4Mul(a, b) {
+    const m = new Float32Array(16);
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        m[j * 4 + i] = a[i] * b[j * 4] + a[4 + i] * b[j * 4 + 1] + a[8 + i] * b[j * 4 + 2] + a[12 + i] * b[j * 4 + 3];
+      }
+    }
+    return m;
+  }
+  function m4Inv(s) {
+    const t = s.slice();
+    const inv = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+    for (let i = 0; i < 4; i++) {
+      let p = i;
+      for (let j = i + 1; j < 4; j++) if (Math.abs(t[j * 4 + i]) > Math.abs(t[p * 4 + i])) p = j;
+      for (let k = 0; k < 4; k++) {
+        let tmp = t[i * 4 + k]; t[i * 4 + k] = t[p * 4 + k]; t[p * 4 + k] = tmp;
+        tmp = inv[i * 4 + k]; inv[i * 4 + k] = inv[p * 4 + k]; inv[p * 4 + k] = tmp;
+      }
+      const d = t[i * 4 + i] || 1e-12;
+      for (let k = 0; k < 4; k++) { t[i * 4 + k] /= d; inv[i * 4 + k] /= d; }
+      for (let j = 0; j < 4; j++) if (j !== i) {
+        const f = t[j * 4 + i];
+        for (let k = 0; k < 4; k++) {
+          t[j * 4 + k] -= f * t[i * 4 + k];
+          inv[j * 4 + k] -= f * inv[i * 4 + k];
+        }
+      }
+    }
+    return inv;
+  }
+  function xform(m, x, y, z, w) {
+    return [
+      m[0]*x + m[4]*y + m[8]*z + m[12]*w,
+      m[1]*x + m[5]*y + m[9]*z + m[13]*w,
+      m[2]*x + m[6]*y + m[10]*z + m[14]*w,
+      m[3]*x + m[7]*y + m[11]*z + m[15]*w
+    ];
+  }
+
+  function compile(vs, fs) {
+    const v = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(v, vs); gl.compileShader(v);
+    if (!gl.getShaderParameter(v, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(v));
+    const f = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(f, fs); gl.compileShader(f);
+    if (!gl.getShaderParameter(f, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(f));
+    const p = gl.createProgram();
+    gl.attachShader(p, v); gl.attachShader(p, f); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    return p;
+  }
+  function uloc(p, n) { return gl.getUniformLocation(p, n); }
+  function aloc(p, n) { return gl.getAttribLocation(p, n); }
+
+  const VS_T = [
+    "attribute vec3 aPos;",
+    "attribute vec3 aNrm;",
+    "attribute vec4 aDat;",
+    "attribute vec2 aFlw;",
+    "uniform mat4 uMVP;",
+    "varying vec3 vP, vN, vW;",
+    "varying vec4 vD;",
+    "varying vec2 vF;",
+    "void main(){",
+    "  vP=aPos; vN=normalize(aNrm); vD=aDat; vF=aFlw; vW=aPos;",
+    "  gl_Position=uMVP*vec4(aPos,1.0);",
+    "}"
+  ].join("\n");
+
+  const FS_T = [
+    "#ifdef GL_OES_standard_derivatives",
+    "#extension GL_OES_standard_derivatives : enable",
+    "#endif",
+    "precision mediump float;",
+    "varying vec3 vP, vN, vW;",
+    "varying vec4 vD;",
+    "varying vec2 vF;",
+    "uniform vec3 uSun, uCam;",
+    "uniform float uMode, uWVis, uExag;",
+    "uniform vec2 uBrush;",
+    "uniform float uBR, uBA, uCont;",
+    "vec3 hsv(float h,float s,float v){",
+    "  vec3 c=clamp(abs(mod(h*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0,0.0,1.0);",
+    "  return v*mix(vec3(1.0),c,s);",
+    "}",
+    "vec3 heat(float t){",
+    "  t=clamp(t,0.0,1.0);",
+    "  vec3 c=mix(vec3(0.07,0.08,0.18),vec3(0.12,0.38,0.72),smoothstep(0.0,0.28,t));",
+    "  c=mix(c,vec3(0.18,0.62,0.42),smoothstep(0.28,0.5,t));",
+    "  c=mix(c,vec3(0.88,0.78,0.2),smoothstep(0.5,0.75,t));",
+    "  return mix(c,vec3(0.82,0.22,0.12),smoothstep(0.75,1.0,t));",
+    "}",
+    "void main(){",
+    "  vec3 n=normalize(vN);",
+    "  vec3 V=normalize(uCam-vW);",
+    "  float h=vP.y/max(uExag,0.001);",
+    "  float w=vD.x, s=vD.y, dlt=vD.z, slp=vD.w;",
+    "  vec3 col;",
+    "  if(uMode<0.5){",
+    "    vec3 grass=vec3(0.30,0.38,0.18);",
+    "    vec3 dirt=vec3(0.42,0.32,0.20);",
+    "    vec3 rock=vec3(0.36,0.34,0.32);",
+    "    vec3 snow=vec3(0.84,0.85,0.86);",
+    "    vec3 sand=vec3(0.62,0.54,0.36);",
+    "    float steep=1.0-n.y;",
+    "    col=mix(grass,dirt,smoothstep(0.12,0.42,h));",
+    "    col=mix(col,rock,smoothstep(0.2,0.55,steep));",
+    "    col=mix(col,snow,smoothstep(0.58,0.8,h)*clamp(1.0-steep*1.6,0.0,1.0));",
+    "    col=mix(col,sand,clamp(dlt*10.0,0.0,0.55));",
+    "    col=mix(col,vec3(0.46,0.2,0.14),clamp(-dlt*14.0,0.0,0.5));",
+    "    float wet=smoothstep(0.0,0.035,w);",
+    "    col*=mix(1.0,0.52,wet*0.85);",
+    "    float ndl=max(0.0,(dot(n,uSun)+0.12)/1.12);",
+    "    vec3 hemi=mix(vec3(0.13,0.1,0.08),vec3(0.2,0.24,0.3),n.y*0.5+0.5);",
+    "    col=col*(hemi+vec3(1.05,0.95,0.82)*ndl);",
+    "    col+=pow(max(0.0,dot(reflect(-uSun,n),V)),22.0)*0.05;",
+    "  } else if(uMode<1.5){ col=heat(h);",
+    "  } else if(uMode<2.5){ col=mix(vec3(0.08,0.09,0.1),vec3(0.15,0.55,0.85),clamp(w*6.0,0.0,1.0));",
+    "  } else if(uMode<3.5){ col=mix(vec3(0.1,0.09,0.07),vec3(0.78,0.62,0.22),clamp(s*8.0,0.0,1.0));",
+    "  } else if(uMode<4.5){",
+    "    col=vec3(0.14);",
+    "    col+=vec3(0.78,0.18,0.1)*clamp(-dlt*18.0,0.0,1.0);",
+    "    col+=vec3(0.28,0.72,0.22)*clamp(dlt*18.0,0.0,1.0);",
+    "  } else if(uMode<5.5){ col=heat(clamp(slp*3.2,0.0,1.0));",
+    "  } else {",
+    "    float spd=length(vF);",
+    "    float ang=atan(vF.y,vF.x)/6.2831853;",
+    "    col=hsv(ang,0.85,clamp(spd*1.4,0.05,1.0));",
+    "  }",
+    "  #ifdef GL_OES_standard_derivatives",
+    "  if(uMode<0.5 && uCont>0.5){",
+    "    float cH=h*18.0; float fw=fwidth(cH)*1.15;",
+    "    float line=1.0-smoothstep(0.0,fw,abs(fract(cH)-0.5));",
+    "    col=mix(col,col*0.55,line*0.45);",
+    "  }",
+    "  #endif",
+    "  float fog=clamp((length(uCam-vW)-1.4)*0.22,0.0,0.55);",
+    "  col=mix(col,vec3(0.12,0.14,0.16),fog);",
+    "  if(uBA>0.01){",
+    "    float bd=length(vP.xz-uBrush);",
+    "    float ring=smoothstep(0.012,0.0,abs(bd-uBR));",
+    "    col+=vec3(0.55,0.85,0.55)*ring*uBA;",
+    "  }",
+    "  gl_FragColor=vec4(col,1.0);",
+    "}"
+  ].join("\n");
+
+  const VS_W = [
+    "attribute vec3 aPos;",
+    "attribute vec3 aNrm;",
+    "attribute vec4 aDat;",
+    "uniform mat4 uMVP;",
+    "varying vec3 vP, vN;",
+    "varying float vW, vS;",
+    "void main(){",
+    "  vP=aPos; vN=normalize(aNrm); vW=aDat.x; vS=aDat.y;",
+    "  gl_Position=uMVP*vec4(aPos,1.0);",
+    "}"
+  ].join("\n");
+
+  const FS_W = [
+    "precision mediump float;",
+    "varying vec3 vP, vN;",
+    "varying float vW, vS;",
+    "uniform vec3 uSun, uCam;",
+    "uniform float uWVis;",
+    "void main(){",
+    "  if(vW<0.0018) discard;",
+    "  vec3 n=normalize(vN);",
+    "  vec3 V=normalize(uCam-vP);",
+    "  float depth=clamp(vW*5.0,0.0,1.0);",
+    "  vec3 wc=mix(vec3(0.12,0.38,0.42),vec3(0.05,0.14,0.22),depth);",
+    "  wc=mix(wc,vec3(0.38,0.3,0.14),clamp(vS*6.0,0.0,0.7));",
+    "  float fres=pow(1.0-max(0.0,dot(n,V)),3.0);",
+    "  vec3 col=mix(wc,vec3(0.72,0.86,0.9),fres*0.55);",
+    "  col+=pow(max(0.0,dot(reflect(-uSun,n),V)),48.0)*0.35;",
+    "  float a=mix(0.28,0.78,depth)*uWVis;",
+    "  gl_FragColor=vec4(col,a);",
+    "}"
+  ].join("\n");
+
+  const VS_S = [
+    "attribute vec2 aClip;",
+    "varying vec2 vC;",
+    "void main(){ vC=aClip; gl_Position=vec4(aClip,0.999,1.0); }"
+  ].join("\n");
+  const FS_S = [
+    "precision mediump float;",
+    "varying vec2 vC;",
+    "uniform vec3 uFwd, uRight, uUp, uSun;",
+    "uniform float uThf, uAsp;",
+    "void main(){",
+    "  vec3 dir=normalize(uFwd + uRight*vC.x*uThf*uAsp + uUp*vC.y*uThf);",
+    "  float h=dir.y*0.5+0.5;",
+    "  vec3 zen=vec3(0.10,0.14,0.18);",
+    "  vec3 hor=vec3(0.18,0.16,0.12);",
+    "  vec3 col=mix(hor,zen,smoothstep(0.0,1.0,h));",
+    "  float sun=pow(max(0.0,dot(dir,normalize(uSun))), 180.0);",
+    "  col+=vec3(1.0,0.9,0.7)*sun*1.4;",
+    "  gl_FragColor=vec4(col,1.0);",
+    "}"
+  ].join("\n");
+
+  function initGL() {
+    gl = canvas.getContext("webgl", { antialias: true, alpha: false, depth: true, stencil: false, powerPreference: "high-performance" });
+    if (!gl) throw new Error("WebGL is required for the erosion laboratory.");
+    extDeriv = gl.getExtension("OES_standard_derivatives");
+    gl.getExtension("OES_element_index_uint");
+    const fsT = extDeriv ? FS_T : FS_T.replace("#extension GL_OES_standard_derivatives : enable", "");
+    const pt = compile(VS_T, fsT);
+    const pw = compile(VS_W, FS_W);
+    const ps = compile(VS_S, FS_S);
+    programs = {
+      t: { p: pt, aPos: aloc(pt,"aPos"), aNrm: aloc(pt,"aNrm"), aDat: aloc(pt,"aDat"), aFlw: aloc(pt,"aFlw"),
+           uMVP: uloc(pt,"uMVP"), uSun: uloc(pt,"uSun"), uCam: uloc(pt,"uCam"), uMode: uloc(pt,"uMode"),
+           uWVis: uloc(pt,"uWVis"), uExag: uloc(pt,"uExag"), uBrush: uloc(pt,"uBrush"), uBR: uloc(pt,"uBR"),
+           uBA: uloc(pt,"uBA"), uCont: uloc(pt,"uCont") },
+      w: { p: pw, aPos: aloc(pw,"aPos"), aNrm: aloc(pw,"aNrm"), aDat: aloc(pw,"aDat"),
+           uMVP: uloc(pw,"uMVP"), uSun: uloc(pw,"uSun"), uCam: uloc(pw,"uCam"), uWVis: uloc(pw,"uWVis") },
+      s: { p: ps, aClip: aloc(ps,"aClip"), uFwd: uloc(ps,"uFwd"), uRight: uloc(ps,"uRight"), uUp: uloc(ps,"uUp"),
+           uSun: uloc(ps,"uSun"), uThf: uloc(ps,"uThf"), uAsp: uloc(ps,"uAsp") }
+    };
+    skyBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, skyBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+  }
+
+  function buildMesh() {
+    const N = sim.N, vCount = N * N;
+    const pos = new Float32Array(vCount * 3);
+    const nrm = new Float32Array(vCount * 3);
+    const dat = new Float32Array(vCount * 4);
+    const flw = new Float32Array(vCount * 2);
+    const idxCount = (N - 1) * (N - 1) * 6;
+    const use32 = N * N > 65535;
+    const idx = use32 ? new Uint32Array(idxCount) : new Uint16Array(idxCount);
+    let k = 0;
+    for (let z = 0; z < N - 1; z++) {
+      for (let x = 0; x < N - 1; x++) {
+        const i = z * N + x;
+        idx[k++] = i; idx[k++] = i + N; idx[k++] = i + 1;
+        idx[k++] = i + 1; idx[k++] = i + N; idx[k++] = i + N + 1;
+      }
+    }
+    const bPos = gl.createBuffer(), bNrm = gl.createBuffer(), bDat = gl.createBuffer(), bFlw = gl.createBuffer(), bIdx = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPos); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bNrm); gl.bufferData(gl.ARRAY_BUFFER, nrm, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bDat); gl.bufferData(gl.ARRAY_BUFFER, dat, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bFlw); gl.bufferData(gl.ARRAY_BUFFER, flw, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bIdx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    mesh = { N, pos, nrm, dat, flw, idx, bPos, bNrm, bDat, bFlw, bIdx, count: idx.length, idxType: use32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, wpos: new Float32Array(vCount * 3), wnrm: new Float32Array(vCount * 3) };
+    uploadMesh();
+  }
+
+  function uploadMesh() {
+    const N = sim.N, H = sim.H, W = sim.W, S = sim.S, dlt = sim.dlt, sl = sim.slope;
+    const vX = sim.vX, vZ = sim.vZ, ex = P.exag;
+    const pos = mesh.pos, nrm = mesh.nrm, dat = mesh.dat, flw = mesh.flw;
+    const wpos = mesh.wpos, wnrm = mesh.wnrm;
+    const cell = 2 / (N - 1);
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i = z * N + x, p = i * 3;
+        const wx = (x / (N - 1)) * 2 - 1;
+        const wz = (z / (N - 1)) * 2 - 1;
+        const y = H[i] * ex;
+        pos[p] = wx; pos[p + 1] = y; pos[p + 2] = wz;
+        const yw = (H[i] + W[i]) * ex + 0.003;
+        wpos[p] = wx; wpos[p + 1] = yw; wpos[p + 2] = wz;
+        dat[i * 4] = W[i]; dat[i * 4 + 1] = S[i]; dat[i * 4 + 2] = dlt[i]; dat[i * 4 + 3] = sl[i];
+        flw[i * 2] = vX[i]; flw[i * 2 + 1] = vZ[i];
+      }
+    }
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const i = z * N + x, p = i * 3;
+        const hl = x > 0 ? H[i - 1] : H[i];
+        const hr = x < N - 1 ? H[i + 1] : H[i];
+        const hu = z > 0 ? H[i - N] : H[i];
+        const hd = z < N - 1 ? H[i + N] : H[i];
+        const dx = (hr - hl) * ex / (2 * cell);
+        const dz = (hd - hu) * ex / (2 * cell);
+        let nx = -dx, ny = 1, nz = -dz;
+        const len = Math.hypot(nx, ny, nz) || 1;
+        nrm[p] = nx / len; nrm[p + 1] = ny / len; nrm[p + 2] = nz / len;
+        const wl = x > 0 ? H[i - 1] + W[i - 1] : H[i] + W[i];
+        const wr = x < N - 1 ? H[i + 1] + W[i + 1] : H[i] + W[i];
+        const wu = z > 0 ? H[i - N] + W[i - N] : H[i] + W[i];
+        const wd = z < N - 1 ? H[i + N] + W[i + N] : H[i] + W[i];
+        const wdx = (wr - wl) * ex / (2 * cell);
+        const wdz = (wd - wu) * ex / (2 * cell);
+        nx = -wdx; ny = 1; nz = -wdz;
+        const wlen = Math.hypot(nx, ny, nz) || 1;
+        wnrm[p] = nx / wlen; wnrm[p + 1] = ny / wlen; wnrm[p + 2] = nz / wlen;
+      }
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bPos); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bNrm); gl.bufferSubData(gl.ARRAY_BUFFER, 0, nrm);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bDat); gl.bufferSubData(gl.ARRAY_BUFFER, 0, dat);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bFlw); gl.bufferSubData(gl.ARRAY_BUFFER, 0, flw);
+  }
+
+  function camEye() {
+    const ct = Math.cos(cam.theta), st = Math.sin(cam.theta);
+    const cp = Math.cos(cam.phi), sp = Math.sin(cam.phi);
+    return [cam.tx + cam.r * st * sp, cam.ty + cam.r * cp, cam.tz + cam.r * ct * sp];
+  }
+  function sunDir() {
+    const az = P.az * Math.PI / 180, el = P.el * Math.PI / 180;
+    return [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+  }
+
+  function bindAttr(buf, loc, n) {
+    if (loc < 0) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 0, 0);
+  }
+
+  function draw() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, canvas.clientWidth | 0);
+    const h = Math.max(1, canvas.clientHeight | 0);
+    if (canvas.width !== (w * dpr | 0) || canvas.height !== (h * dpr | 0)) {
+      canvas.width = w * dpr | 0; canvas.height = h * dpr | 0;
+    }
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    const eye = camEye();
+    const fov = 50 * Math.PI / 180;
+    const proj = m4Persp(fov, canvas.width / canvas.height, 0.06, 24);
+    const view = m4Look(eye, [cam.tx, cam.ty, cam.tz], [0, 1, 0]);
+    const mvp = m4Mul(proj, view);
+    const sun = sunDir();
+    const fwd = [cam.tx - eye[0], cam.ty - eye[1], cam.tz - eye[2]];
+    const fl = Math.hypot(fwd[0], fwd[1], fwd[2]) || 1;
+    fwd[0] /= fl; fwd[1] /= fl; fwd[2] /= fl;
+    let rx = fwd[1] * 0 - fwd[2] * 1, ry = fwd[2] * 0 - fwd[0] * 0, rz = fwd[0] * 1 - fwd[1] * 0;
+    let rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+    const ux = ry * fwd[2] - rz * fwd[1], uy = rz * fwd[0] - rx * fwd[2], uz = rx * fwd[1] - ry * fwd[0];
+    const thf = Math.tan(fov / 2);
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(programs.s.p);
+    bindAttr(skyBuf, programs.s.aClip, 2);
+    gl.uniform3f(programs.s.uFwd, fwd[0], fwd[1], fwd[2]);
+    gl.uniform3f(programs.s.uRight, rx, ry, rz);
+    gl.uniform3f(programs.s.uUp, ux, uy, uz);
+    gl.uniform3f(programs.s.uSun, sun[0], sun[1], sun[2]);
+    gl.uniform1f(programs.s.uThf, thf);
+    gl.uniform1f(programs.s.uAsp, canvas.width / canvas.height);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.useProgram(programs.t.p);
+    bindAttr(mesh.bPos, programs.t.aPos, 3);
+    bindAttr(mesh.bNrm, programs.t.aNrm, 3);
+    bindAttr(mesh.bDat, programs.t.aDat, 4);
+    bindAttr(mesh.bFlw, programs.t.aFlw, 2);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.bIdx);
+    gl.uniformMatrix4fv(programs.t.uMVP, false, mvp);
+    gl.uniform3f(programs.t.uSun, sun[0], sun[1], sun[2]);
+    gl.uniform3f(programs.t.uCam, eye[0], eye[1], eye[2]);
+    gl.uniform1f(programs.t.uMode, P.viz);
+    gl.uniform1f(programs.t.uWVis, P.wvis);
+    gl.uniform1f(programs.t.uExag, P.exag);
+    gl.uniform2f(programs.t.uBrush, ptr.hx, ptr.hz);
+    gl.uniform1f(programs.t.uBR, P.br);
+    gl.uniform1f(programs.t.uBA, ptr.hit && P.tool !== "orbit" ? 1 : (ptr.hit ? 0.35 : 0));
+    gl.uniform1f(programs.t.uCont, 1);
+    gl.drawElements(gl.TRIANGLES, mesh.count, mesh.idxType, 0);
+
+    if (P.wvis > 0.01 && P.viz === 0) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bPos); gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.wpos);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bNrm); gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.wnrm);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.useProgram(programs.w.p);
+      bindAttr(mesh.bPos, programs.w.aPos, 3);
+      bindAttr(mesh.bNrm, programs.w.aNrm, 3);
+      bindAttr(mesh.bDat, programs.w.aDat, 4);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.bIdx);
+      gl.uniformMatrix4fv(programs.w.uMVP, false, mvp);
+      gl.uniform3f(programs.w.uSun, sun[0], sun[1], sun[2]);
+      gl.uniform3f(programs.w.uCam, eye[0], eye[1], eye[2]);
+      gl.uniform1f(programs.w.uWVis, P.wvis);
+      gl.drawElements(gl.TRIANGLES, mesh.count, mesh.idxType, 0);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bPos); gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.pos);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.bNrm); gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.nrm);
+    }
+    return { proj, view, mvp, eye };
+  }
+
+  function raycast(mx, my, mvp) {
+    const rect = canvas.getBoundingClientRect();
+    const ndcX = ((mx - rect.left) / rect.width) * 2 - 1;
+    const ndcY = 1 - ((my - rect.top) / rect.height) * 2;
+    const inv = m4Inv(mvp);
+    const n = xform(inv, ndcX, ndcY, -1, 1);
+    const f = xform(inv, ndcX, ndcY, 1, 1);
+    if (n[3] === 0 || f[3] === 0) return null;
+    const nx = n[0] / n[3], ny = n[1] / n[3], nz = n[2] / n[3];
+    const fx = f[0] / f[3], fy = f[1] / f[3], fz = f[2] / f[3];
+    let dx = fx - nx, dy = fy - ny, dz = fz - nz;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    dx /= len; dy /= len; dz /= len;
+    let t = 0, hit = null;
+    const ex = P.exag;
+    for (let i = 0; i < 220; i++) {
+      const px = nx + dx * t, py = ny + dy * t, pz = nz + dz * t;
+      const u = (px + 1) * 0.5, v = (pz + 1) * 0.5;
+      if (u >= 0 && v >= 0 && u <= 1 && v <= 1) {
+        const hh = sampleH(sim.H, sim.N, u, v) * ex;
+        if (py <= hh + 0.002) { hit = { x: px, y: hh, z: pz, u, v }; break; }
+      }
+      t += 0.018;
+      if (t > 8) break;
+    }
+    return hit;
+  }
+
+  function cellAt(u, v) {
+    const N = sim.N;
+    const x = clamp(Math.round(u * (N - 1)), 0, N - 1);
+    const z = clamp(Math.round(v * (N - 1)), 0, N - 1);
+    return z * N + x;
+  }
+
+  function applyBrush(u, v, dt) {
+    const N = sim.N, r = P.br, s = P.bs;
+    const x0 = u * 2 - 1, z0 = v * 2 - 1;
+    const radCells = r * (N - 1) * 0.5 + 1;
+    const cx = u * (N - 1), cz = v * (N - 1);
+    const xMin = Math.max(0, Math.floor(cx - radCells));
+    const xMax = Math.min(N - 1, Math.ceil(cx + radCells));
+    const zMin = Math.max(0, Math.floor(cz - radCells));
+    const zMax = Math.min(N - 1, Math.ceil(cz + radCells));
+    const tool = P.tool;
+    for (let z = zMin; z <= zMax; z++) {
+      for (let x = xMin; x <= xMax; x++) {
+        const wx = (x / (N - 1)) * 2 - 1;
+        const wz = (z / (N - 1)) * 2 - 1;
+        const dist = Math.hypot(wx - x0, wz - z0);
+        if (dist > r) continue;
+        const fall = Math.pow(1 - dist / r, 2);
+        const k = fall * s * dt;
+        const i = z * N + x;
+        if (tool === "raise") sim.H[i] += 0.45 * k;
+        else if (tool === "lower") sim.H[i] = Math.max(0.002, sim.H[i] - 0.45 * k);
+        else if (tool === "flatten") sim.H[i] = lerp(sim.H[i], flattenH, clamp(k * 3, 0, 1));
+        else if (tool === "smooth") {
+          let acc = 0, c = 0;
+          for (let oz = -1; oz <= 1; oz++) for (let ox = -1; ox <= 1; ox++) {
+            const nx = x + ox, nz = z + oz;
+            if (nx >= 0 && nz >= 0 && nx < N && nz < N) { acc += sim.H[nz * N + nx]; c++; }
+          }
+          sim.H[i] = lerp(sim.H[i], acc / c, clamp(k * 4, 0, 1));
+        } else if (tool === "water") sim.W[i] += 0.9 * k;
+        else if (tool === "sediment") sim.S[i] += 0.35 * k;
+        else if (tool === "dry") {
+          sim.W[i] *= Math.max(0, 1 - k * 6);
+          sim.S[i] *= Math.max(0, 1 - k * 2);
+        }
+      }
+    }
+  }
+
+  function painting() {
+    return ptr.down && ptr.hit && P.tool !== "orbit" && P.tool !== "probe" && ptr.btn === 0 && !ptr.alt && !ptr.shift;
+  }
+
+  function orbitBy(dx, dy) {
+    cam.theta -= dx * 0.007;
+    cam.phi = clamp(cam.phi - dy * 0.007, 0.12, 1.35);
+  }
+  function panBy(dx, dy, eye) {
+    const ct = Math.cos(cam.theta), st = Math.sin(cam.theta);
+    const sp = Math.sin(cam.phi);
+    const rx = ct, rz = -st;
+    const ux = -st * Math.cos(cam.phi), uy = sp, uz = -ct * Math.cos(cam.phi);
+    const k = cam.r * 0.0025;
+    cam.tx += (-rx * dx + ux * dy) * k;
+    cam.ty += uy * dy * k;
+    cam.tz += (-rz * dx + uz * dy) * k;
+  }
+
+  function onPointerDown(e) {
+    if (e.pointerId != null && canvas.setPointerCapture) {
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    ptr.down = true; ptr.btn = e.button; ptr.lx = e.clientX; ptr.ly = e.clientY;
+    ptr.x = e.clientX; ptr.y = e.clientY;
+    ptr.alt = e.altKey; ptr.shift = e.shiftKey;
+    if (e.pointerType === "touch") ptr.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptr.hit && P.tool === "flatten") flattenH = sampleH(sim.H, sim.N, ptr.hu, ptr.hv);
+    if (painting()) applyBrush(ptr.hu, ptr.hv, 0.08);
+    lastInput = performance.now();
+  }
+  function onPointerMove(e) {
+    ptr.x = e.clientX; ptr.y = e.clientY;
+    ptr.alt = e.altKey; ptr.shift = e.shiftKey;
+    const dx = e.clientX - ptr.lx, dy = e.clientY - ptr.ly;
+    if (e.pointerType === "touch" && ptr.touches.has(e.pointerId)) {
+      const prev = ptr.touches.get(e.pointerId);
+      ptr.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptr.touches.size === 2) {
+        const pts = Array.from(ptr.touches.values());
+        const d0 = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        return;
+      }
+    }
+    if (ptr.down) {
+      const paint = painting();
+      const orbit = !paint && (ptr.btn === 2 || ptr.btn === 0 && (P.tool === "orbit" || P.tool === "probe" || ptr.alt));
+      const pan = ptr.btn === 1 || ptr.shift;
+      if (pan) panBy(dx, dy);
+      else if (orbit) orbitBy(dx, dy);
+    }
+    ptr.lx = e.clientX; ptr.ly = e.clientY;
+  }
+  function onPointerUp(e) {
+    ptr.down = false;
+    ptr.touches.delete(e.pointerId);
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+  }
+
+  let lastInput = 0;
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("mousedown", (e) => { if (performance.now() - lastInput < 80) return; onPointerDown(e); });
+  canvas.addEventListener("mousemove", (e) => { if (performance.now() - lastInput < 80) return; onPointerMove(e); });
+  canvas.addEventListener("mouseup", (e) => { if (performance.now() - lastInput < 80) return; onPointerUp(e); });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    cam.r = clamp(cam.r * Math.exp(e.deltaY * 0.0012), 0.7, 8);
+  }, { passive: false });
+
+  let pinch0 = 0, pinchMid0 = null;
+  canvas.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+      pinch0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      pinchMid0 = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+    }
+  }, { passive: true });
+  canvas.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2 && pinch0) {
+      e.preventDefault();
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      cam.r = clamp(cam.r * (pinch0 / Math.max(8, d)), 0.7, 8);
+      pinch0 = d;
+      const mid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+      panBy(mid.x - pinchMid0.x, mid.y - pinchMid0.y);
+      pinchMid0 = mid;
+    }
+  }, { passive: false });
+
+  function setTool(t) {
+    P.tool = t;
+    document.querySelectorAll(".tool").forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
+    canvas.style.cursor = t === "orbit" ? "grab" : t === "probe" ? "help" : "crosshair";
+  }
+  function setViz(v) {
+    P.viz = v | 0;
+    $("select-viz").value = String(P.viz);
+    document.querySelectorAll(".viz").forEach((b) => b.classList.toggle("active", (b.dataset.viz | 0) === P.viz));
+  }
+
+  document.querySelectorAll(".tool").forEach((b) => b.addEventListener("click", () => setTool(b.dataset.tool)));
+  document.querySelectorAll(".viz").forEach((b) => b.addEventListener("click", () => setViz(b.dataset.viz)));
+
+  function bindRange(id, key, fmt) {
+    const el = $(id), out = $("out-" + id.replace("rng-", ""));
+    const sync = () => {
+      P[key] = parseFloat(el.value);
+      if (key === "sub") P[key] = parseInt(el.value, 10);
+      out.textContent = fmt ? fmt(P[key]) : P[key].toFixed(id === "rng-sub" ? 0 : (P[key] >= 10 ? 0 : 2));
+      if (key === "az" || key === "el") out.textContent = (P[key] | 0) + "°";
+    };
+    el.addEventListener("input", sync);
+    sync();
+  }
+  bindRange("rng-speed", "speed");
+  bindRange("rng-sub", "sub");
+  bindRange("rng-rain", "rain");
+  bindRange("rng-evap", "evap");
+  bindRange("rng-erosion", "erosion");
+  bindRange("rng-depo", "depo");
+  bindRange("rng-cap", "cap");
+  bindRange("rng-flow", "flow");
+  bindRange("rng-thermal", "thermal");
+  bindRange("rng-br", "br");
+  bindRange("rng-bs", "bs");
+  bindRange("rng-exag", "exag");
+  bindRange("rng-wvis", "wvis");
+  bindRange("rng-az", "az");
+  bindRange("rng-el", "el");
+  bindRange("rng-amp", "amp");
+  bindRange("rng-rough", "rough");
+  bindRange("rng-freq", "freq");
+  bindRange("rng-ridge", "ridge");
+  bindRange("rng-island", "island");
+  bindRange("rng-warp", "warp");
+
+  function writeParamsToUI() {
+    const map = {
+      "rng-speed": P.speed, "rng-sub": P.sub, "rng-rain": P.rain, "rng-evap": P.evap,
+      "rng-erosion": P.erosion, "rng-depo": P.depo, "rng-cap": P.cap, "rng-flow": P.flow,
+      "rng-thermal": P.thermal, "rng-br": P.br, "rng-bs": P.bs, "rng-exag": P.exag,
+      "rng-wvis": P.wvis, "rng-az": P.az, "rng-el": P.el, "rng-amp": P.amp,
+      "rng-rough": P.rough, "rng-freq": P.freq, "rng-ridge": P.ridge,
+      "rng-island": P.island, "rng-warp": P.warp
+    };
+    Object.keys(map).forEach((id) => {
+      $(id).value = map[id];
+      $(id).dispatchEvent(new Event("input"));
+    });
+    $("input-seed").value = P.seed;
+    $("select-res").value = String(P.N);
+    $("select-viz").value = String(P.viz);
+  }
+
+  function applyPreset(name, regen) {
+    const pr = PRESETS[name];
+    if (!pr) return;
+    Object.assign(P, pr);
+    $("select-preset").value = name;
+    writeParamsToUI();
+    if (regen !== false) generateTerrain();
+  }
+
+  $("select-preset").addEventListener("change", () => applyPreset($("select-preset").value, true));
+  $("select-viz").addEventListener("change", () => setViz($("select-viz").value));
+  $("select-res").addEventListener("change", () => {
+    const n = parseInt($("select-res").value, 10);
+    if (n !== sim.N) resampleTo(n);
+  });
+  $("input-seed").addEventListener("change", () => { P.seed = parseInt($("input-seed").value, 10) || 1; });
+  $("btn-seed-rand").addEventListener("click", () => {
+    P.seed = (Math.random() * 1e7) | 0;
+    $("input-seed").value = P.seed;
+    generateTerrain();
+  });
+
+  function togglePause() {
+    paused = !paused;
+    $("btn-pause").textContent = paused ? "Resume" : "Pause";
+    $("btn-pause").setAttribute("aria-label", paused ? "Resume simulation" : "Pause simulation");
+  }
+  $("btn-pause").addEventListener("click", togglePause);
+  $("btn-step").addEventListener("click", () => {
+    paused = true;
+    $("btn-pause").textContent = "Resume";
+    const dt = 1 / 30 * P.speed / Math.max(1, P.sub);
+    for (let i = 0; i < P.sub; i++) hydroStep(dt);
+    sim.time += 1 / 30 * P.speed;
+  });
+  $("btn-reset").addEventListener("click", resetSim);
+  $("btn-regen").addEventListener("click", () => {
+    P.seed = parseInt($("input-seed").value, 10) || P.seed;
+    generateTerrain();
+  });
+  $("btn-help").addEventListener("click", () => $("help").classList.add("visible"));
+  $("btn-help-close").addEventListener("click", () => $("help").classList.remove("visible"));
+  $("help").addEventListener("click", (e) => { if (e.target.id === "help") $("help").classList.remove("visible"); });
+
+  function downloadBlob(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+  $("btn-export-png").addEventListener("click", () => {
+    const N = sim.N, c = document.createElement("canvas");
+    c.width = N; c.height = N;
+    const ctx = c.getContext("2d");
+    const img = ctx.createImageData(N, N);
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < sim.H.length; i++) { mn = Math.min(mn, sim.H[i]); mx = Math.max(mx, sim.H[i]); }
+    const span = mx - mn || 1;
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const g = ((sim.H[z * N + x] - mn) / span) * 255;
+        const o = (z * N + x) * 4;
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = g;
+        img.data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    c.toBlob((b) => downloadBlob(b, "heightfield.png"), "image/png");
+  });
+  $("btn-export-json").addEventListener("click", () => {
+    const payload = {
+      version: 1, time: sim.time, params: Object.assign({}, P),
+      H: Array.from(sim.H), W: Array.from(sim.W), S: Array.from(sim.S),
+      H0: Array.from(sim.H0), dlt: Array.from(sim.dlt)
+    };
+    downloadBlob(new Blob([JSON.stringify(payload)], { type: "application/json" }), "erosion-state.json");
+  });
+  $("btn-import-json").addEventListener("click", () => $("import-json").click());
+  $("import-json").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data || !data.H || !data.params) throw new Error("Missing fields");
+        Object.assign(P, data.params);
+        P.N = Math.sqrt(data.H.length) | 0;
+        writeParamsToUI();
+        alloc(P.N);
+        sim.H.set(data.H);
+        if (data.W) sim.W.set(data.W);
+        if (data.S) sim.S.set(data.S);
+        if (data.H0) sim.H0.set(data.H0); else sim.H0.set(sim.H);
+        if (data.dlt) sim.dlt.set(data.dlt);
+        sim.time = data.time || 0;
+        buildMesh();
+      } catch (err) { showErr("Import failed: " + err.message); }
+    };
+    reader.readAsText(f);
+    e.target.value = "";
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA")) return;
+    if (e.code === "Space") { e.preventDefault(); togglePause(); }
+    else if (e.key === "." || e.key === "n" || e.key === "N") $("btn-step").click();
+    else if (e.key === "r" || e.key === "R") $("btn-reset").click();
+    else if (e.key === "g" || e.key === "G") $("btn-regen").click();
+    else if (e.key === "h" || e.key === "H" || e.key === "?") $("help").classList.toggle("visible");
+    else if (e.key >= "1" && e.key <= "7") setViz(parseInt(e.key, 10) - 1);
+    else if (e.key === "q" || e.key === "Q") { $("rng-br").value = clamp(P.br - 0.01, 0.02, 0.45); $("rng-br").dispatchEvent(new Event("input")); }
+    else if (e.key === "e" || e.key === "E") { $("rng-br").value = clamp(P.br + 0.01, 0.02, 0.45); $("rng-br").dispatchEvent(new Event("input")); }
+    else if (e.key === "[") { $("rng-bs").value = clamp(P.bs - 0.05, 0.05, 2); $("rng-bs").dispatchEvent(new Event("input")); }
+    else if (e.key === "]") { $("rng-bs").value = clamp(P.bs + 0.05, 0.05, 2); $("rng-bs").dispatchEvent(new Event("input")); }
+    else if (e.key === "t" || e.key === "T") setTool(TOOLS[(TOOLS.indexOf(P.tool) + 1) % TOOLS.length]);
+    else if (e.key === "Escape") { $("help").classList.remove("visible"); setTool("orbit"); }
+  });
+
+  function drawMini() {
+    const N = sim.N, s = mini.width, img = miniCtx.createImageData(s, s);
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < sim.H.length; i++) { mn = Math.min(mn, sim.H[i]); mx = Math.max(mx, sim.H[i]); }
+    const span = mx - mn || 1;
+    for (let y = 0; y < s; y++) {
+      for (let x = 0; x < s; x++) {
+        const u = x / (s - 1), v = y / (s - 1);
+        const h = (sampleH(sim.H, N, u, v) - mn) / span;
+        const w = sampleH(sim.W, N, u, v);
+        const sed = sampleH(sim.S, N, u, v);
+        let r = 40 + h * 140, g = 48 + h * 110, b = 36 + h * 80;
+        if (w > 0.004) {
+          const t = clamp(w * 8, 0, 1);
+          r = lerp(r, 30, t); g = lerp(g, 110, t); b = lerp(b, 160, t);
+        }
+        if (sed > 0.02) {
+          const t = clamp(sed * 6, 0, 0.5);
+          r = lerp(r, 180, t); g = lerp(g, 150, t); b = lerp(b, 60, t);
+        }
+        const o = (y * s + x) * 4;
+        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+      }
+    }
+    miniCtx.putImageData(img, 0, 0);
+  }
+
+  function probeText(u, v) {
+    const i = cellAt(u, v);
+    const N = sim.N, x = i % N, z = (i / N) | 0;
+    return [
+      "x " + x + "  z " + z,
+      "H " + sim.H[i].toFixed(4),
+      "W " + sim.W[i].toFixed(4),
+      "S " + sim.S[i].toFixed(4),
+      "slope " + sim.slope[i].toFixed(4),
+      "flow " + Math.hypot(sim.vX[i], sim.vZ[i]).toFixed(3),
+      "Δ " + sim.dlt[i].toFixed(5)
+    ].join("\n");
+  }
+
+  function statusText() {
+    const warn = sim.unstable || sim.nanCount ? "  UNSTABLE" : (sim.cflClamp ? "  CFL" : "");
+    return [
+      (fps | 0) + " fps   " + sim.N + "×" + sim.N + "   t=" + sim.time.toFixed(2) + "s",
+      (paused ? "PAUSED" : "RUNNING") + "   " + VIZ[P.viz] + "   " + P.tool,
+      "water " + sim.waterVol.toFixed(1) + "   sed " + sim.sedAmt.toFixed(2),
+      "maxW " + sim.maxW.toFixed(3) + "  |v| " + sim.maxVel.toFixed(2),
+      "sim " + simMs.toFixed(1) + "ms  draw " + rendMs.toFixed(1) + "ms",
+      "NaN repairs " + sim.nanCount + warn
+    ].join("\n");
+  }
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000 || 0.016);
+    lastT = now;
+    frames++;
+    if (now - fpsT > 500) { fps = frames * 1000 / (now - fpsT); frames = 0; fpsT = now; }
+
+    const t0 = performance.now();
+    if (!paused) {
+      sim.cflClamp = false;
+      const inner = Math.max(1, P.sub | 0);
+      let step = dt * P.speed / inner;
+      if (step > 0.033) { step = 0.033; sim.cflClamp = true; }
+      for (let i = 0; i < inner; i++) hydroStep(step);
+      sim.time += dt * P.speed;
+    }
+    simMs = performance.now() - t0;
+
+    const t1 = performance.now();
+    uploadMesh();
+    const mats = draw();
+    rendMs = performance.now() - t1;
+
+    const hit = raycast(ptr.x, ptr.y, mats.mvp);
+    if (hit) {
+      ptr.hit = true; ptr.hx = hit.x; ptr.hz = hit.z; ptr.hu = hit.u; ptr.hv = hit.v;
+      probeEl.style.display = "block";
+      probeEl.textContent = probeText(hit.u, hit.v);
+      probeEl.style.left = Math.min(ptr.x + 14, window.innerWidth - 210) + "px";
+      probeEl.style.top = Math.min(ptr.y + 14, window.innerHeight - 140) + "px";
+    } else {
+      ptr.hit = false;
+      if (P.tool !== "probe") probeEl.style.display = "none";
+    }
+    if (painting()) {
+      applyBrush(ptr.hu, ptr.hv, dt);
+      lastStamp = now;
+      tallyMass();
+    }
+
+    if (now - lastStatus > 180) {
+      statusEl.textContent = statusText();
+      statusEl.className = sim.unstable ? "warn" : "";
+      lastStatus = now;
+    }
+    if (now - lastMini > 280) { drawMini(); lastMini = now; }
+    requestAnimationFrame(frame);
+  }
+
+  function getStats() {
+    let mn = Infinity, mx = -Infinity, mean = 0;
+    for (let i = 0; i < sim.H.length; i++) {
+      mn = Math.min(mn, sim.H[i]); mx = Math.max(mx, sim.H[i]); mean += sim.H[i];
+    }
+    mean /= sim.H.length;
+    return {
+      fps, N: sim.N, time: sim.time, waterVol: sim.waterVol, sediment: sim.sedAmt,
+      viz: VIZ[P.viz], paused, tool: P.tool, heightMin: mn, heightMax: mx, heightMean: mean,
+      heightHash: hashHeights(), heightHash0, waterMax: sim.maxW, maxVel: sim.maxVel,
+      nanCount: sim.nanCount, simMs, rendMs, unstable: sim.unstable
+    };
+  }
+
+  window.ErosionLab = {
+    ready: false,
+    getStats,
+    getParams: () => Object.assign({}, P),
+    setParam: (k, v) => { P[k] = v; writeParamsToUI(); },
+    pause: () => { paused = true; $("btn-pause").textContent = "Resume"; },
+    resume: () => { paused = false; $("btn-pause").textContent = "Pause"; },
+    step: () => $("btn-step").click(),
+    reset: () => resetSim(),
+    regen: () => generateTerrain(),
+    applyPreset: (n) => applyPreset(n, true),
+    sample: (u, v) => {
+      const i = cellAt(u, v);
+      return { H: sim.H[i], W: sim.W[i], S: sim.S[i], dlt: sim.dlt[i], slope: sim.slope[i], vX: sim.vX[i], vZ: sim.vZ[i] };
+    },
+    heights: () => Array.from(sim.H),
+    water: () => Array.from(sim.W)
+  };
+
+  function boot() {
+    initGL();
+    applyPreset("mountains", true);
+    writeParamsToUI();
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    window.ErosionLab.ready = true;
+    ready = true;
+    requestAnimationFrame(frame);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

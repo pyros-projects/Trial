@@ -1,0 +1,9 @@
+import {send,close} from './cdp.mjs';import fs from 'node:fs';
+const read=async e=>(await send('Runtime.evaluate',{expression:e,returnByValue:true})).result.value;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));const touch=async(type,pts)=>{await send('Input.dispatchTouchEvent',{type,touchPoints:pts.map(([x,y,id])=>({x,y,id,radiusX:3,radiusY:3,force:1}))});await wait(70);};
+await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
+const before=await read('window.terra.diagnostics()');
+await touch('touchStart',[[150,440,1],[240,500,2]]);await touch('touchMove',[[130,430,1],[260,520,2]]);await touch('touchEnd',[[130,430,1]]);const one=await read('window.terra.diagnostics()');await touch('touchMove',[[285,535,2]]);const moved=await read('window.terra.diagnostics()');await touch('touchEnd',[]);if(moved.camera.yaw===one.camera.yaw)throw Error('Remaining finger did not continue orbit');if(moved.water!==before.water||moved.terrain!==before.terrain)throw Error('Two-finger camera edited terrain/water with water brush selected');
+// A quick single-finger tap must paint, including before any animation frame.
+await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:215,y:460,id:1,radiusX:3,radiusY:3,force:1}]});await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});const tapped=await read('window.terra.diagnostics()');if(tapped.water<=moved.water)throw Error('Quick touch tap failed');
+const out={before:before.camera,oneRemaining:one.camera,continued:moved.camera,noAccidentalPainting:moved.water===before.water,quickTapWaterAdded:tapped.water-moved.water};fs.writeFileSync(new URL('../logs/touch-continuation.json',import.meta.url),JSON.stringify(out,null,2));console.log(JSON.stringify(out,null,2));await send('Emulation.setTouchEmulationEnabled',{enabled:false,maxTouchPoints:1});close();

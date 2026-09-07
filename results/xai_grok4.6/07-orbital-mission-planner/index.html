@@ -1,0 +1,1912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>FDL-07 Orbital Mission Planner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e8a23a'/%3E%3Ccircle cx='8' cy='8' r='2' fill='%2305070a'/%3E%3C/svg%3E">
+<style>
+:root {
+  --void: #05070a;
+  --panel: rgba(8, 12, 18, 0.88);
+  --panel-edge: #1c2a36;
+  --amber: #e8a23a;
+  --amber-dim: #8a5e1c;
+  --foam: #6ef0c0;
+  --foam-dim: #1d6a52;
+  --ice: #9ec8e8;
+  --alert: #ff5a45;
+  --ok: #8cff6a;
+  --muted: #7d8b97;
+  --text: #d6e0e8;
+  --font-ui: "Bahnschrift", "Agency FB", "DIN Alternate", "Eurostile", "Trebuchet MS", sans-serif;
+  --font-mono: "Cascadia Mono", "IBM Plex Mono", "ui-monospace", "Source Code Pro", Consolas, "Liberation Mono", monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--void); color: var(--text); font-family: var(--font-ui); overflow: hidden; }
+body::before {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none; z-index: 8; opacity: 0.035;
+  background: repeating-linear-gradient(0deg, #fff 0 1px, transparent 1px 3px);
+}
+#app { position: relative; width: 100%; height: 100%; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; z-index: 1; }
+#hud {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  display: flex; align-items: stretch; justify-content: space-between; gap: 8px;
+  padding: 8px 12px 10px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(5,7,10,0.92) 0%, rgba(5,7,10,0.35) 70%, transparent 100%);
+}
+#hud .brand { pointer-events: auto; min-width: 210px; }
+#hud .brand h1 {
+  font-size: 13px; letter-spacing: 0.28em; font-weight: 600; color: var(--amber);
+  text-transform: uppercase;
+}
+#hud .brand p { font-size: 10px; letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+#hud-strip {
+  pointer-events: auto; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+}
+.hud-cell { display: flex; flex-direction: column; min-width: 64px; }
+.hud-cell span { color: var(--muted); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
+.hud-cell b { color: var(--foam); font-weight: 500; font-variant-numeric: tabular-nums; }
+.hud-cell b.warn { color: var(--alert); }
+.hud-cell b.pause { color: var(--amber); }
+.panel {
+  position: absolute; top: 58px; bottom: 52px; z-index: 5;
+  width: min(320px, 34vw); background: var(--panel);
+  border: 1px solid var(--panel-edge); backdrop-filter: blur(10px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#left { left: 10px; }
+#right { right: 10px; }
+.panel header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-bottom: 1px solid var(--panel-edge);
+  letter-spacing: 0.22em; font-size: 10px; text-transform: uppercase; color: var(--amber);
+}
+.panel .body { overflow: auto; padding: 10px 12px 16px; flex: 1; }
+.sec { margin-bottom: 14px; }
+.sec h3 {
+  font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ice);
+  margin-bottom: 8px; border-bottom: 1px solid #15202a; padding-bottom: 4px;
+}
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; align-items: center; }
+label.k {
+  display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 90px;
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+input[type="range"] { width: 100%; accent-color: var(--amber); }
+input[type="number"], input[type="text"], select, textarea {
+  background: #0a1118; color: var(--text); border: 1px solid #243240;
+  font-family: var(--font-mono); font-size: 11px; padding: 5px 7px; border-radius: 2px; width: 100%;
+}
+textarea { min-height: 54px; resize: vertical; }
+button, .file-btn {
+  font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  background: #121c26; color: var(--text); border: 1px solid #314556; padding: 6px 9px;
+  cursor: pointer; border-radius: 2px;
+}
+button:hover, .file-btn:hover { border-color: var(--amber); color: var(--amber); }
+button.primary { background: #1a2a20; border-color: var(--foam-dim); color: var(--foam); }
+button.danger { border-color: #5a2018; color: var(--alert); }
+button.active { background: #2a2210; border-color: var(--amber); color: var(--amber); }
+button:disabled { opacity: 0.4; cursor: default; }
+.file-btn input { display: none; }
+.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.toggles button { font-size: 10px; padding: 5px 4px; }
+.tele { font-family: var(--font-mono); font-size: 11px; line-height: 1.55; }
+.tele div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid #101820; }
+.tele dt { color: var(--muted); }
+.tele dd { color: var(--foam); text-align: right; font-variant-numeric: tabular-nums; }
+.hint { font-size: 10px; color: var(--muted); line-height: 1.4; margin-top: 4px; }
+#dock {
+  position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 6;
+  display: flex; gap: 8px; align-items: center; justify-content: space-between;
+  pointer-events: none;
+}
+#dock .cluster { pointer-events: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+#help {
+  display: none; position: absolute; inset: 10% 18%; z-index: 9; background: rgba(6,10,14,0.96);
+  border: 1px solid var(--amber-dim); padding: 22px 26px; overflow: auto;
+}
+#help.open { display: block; }
+#help h2 { color: var(--amber); letter-spacing: 0.2em; font-size: 14px; margin-bottom: 10px; }
+#help pre { font-family: var(--font-mono); font-size: 12px; color: var(--ice); line-height: 1.6; white-space: pre-wrap; }
+#toast {
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
+  z-index: 10; font-size: 12px; letter-spacing: 0.08em; color: var(--amber);
+  background: rgba(10,14,18,0.9); border: 1px solid var(--amber-dim); padding: 6px 12px;
+  opacity: 0; transition: opacity 0.25s; pointer-events: none;
+}
+#toast.show { opacity: 1; }
+.drawer-btn { display: none; }
+@media (max-width: 860px) {
+  .panel { width: min(100% - 16px, 360px); top: auto; height: min(58vh, 480px); bottom: 48px; display: none; }
+  .panel.open { display: flex; }
+  #left.open { left: 8px; }
+  #right.open { right: 8px; left: auto; }
+  .drawer-btn { display: inline-flex; }
+  #hud-strip { font-size: 10px; gap: 4px 8px; }
+  .hud-cell { min-width: 52px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="view" aria-label="Orbital map canvas"></canvas>
+  <header id="hud">
+    <div class="brand">
+      <h1>FDL-07 Mission Lab</h1>
+      <p>N-body flight dynamics · symplectic</p>
+    </div>
+    <div id="hud-strip">
+      <div class="hud-cell"><span>FPS</span><b id="hud-fps">—</b></div>
+      <div class="hud-cell"><span>Sim time</span><b id="hud-time">T+0</b></div>
+      <div class="hud-cell"><span>Warp</span><b id="hud-warp">×1</b></div>
+      <div class="hud-cell"><span>Steps/fr</span><b id="hud-steps">0</b></div>
+      <div class="hud-cell"><span>Bodies</span><b id="hud-bodies">0</b></div>
+      <div class="hud-cell"><span>Energy ε</span><b id="hud-energy">0</b></div>
+      <div class="hud-cell"><span>Frame</span><b id="hud-frame">INERTIAL</b></div>
+      <div class="hud-cell"><span>State</span><b id="hud-pause" class="pause">PAUSED</b></div>
+    </div>
+  </header>
+
+  <aside id="left" class="panel" aria-label="System controls">
+    <header>System · Integrator</header>
+    <div class="body">
+      <div class="sec">
+        <h3>Clock</h3>
+        <div class="row">
+          <button id="btn-pause" class="primary" data-action="pause" aria-label="Pause or resume">Pause</button>
+          <button id="btn-step" data-action="step" aria-label="Single step">Step</button>
+          <button id="btn-rewind" data-action="rewind" aria-label="Rewind to checkpoint">Rewind</button>
+          <button id="btn-reset" data-action="reset" aria-label="Reset scenario">Reset</button>
+        </div>
+        <label class="k">Time warp
+          <input id="warp" type="range" min="0" max="14" step="1" value="6" aria-label="Time warp">
+        </label>
+        <div class="hint" id="warp-label">×1.00  (smooth)</div>
+      </div>
+      <div class="sec">
+        <h3>Overlays</h3>
+        <div class="toggles">
+          <button id="ov-traj" class="active" data-ov="traj" aria-label="Toggle trajectories">Trajectories</button>
+          <button id="ov-pred" class="active" data-ov="pred" aria-label="Toggle prediction">Prediction</button>
+          <button id="ov-vel" class="active" data-ov="vel" aria-label="Toggle velocity vectors">Velocity</button>
+          <button id="ov-acc" data-ov="acc" aria-label="Toggle acceleration vectors">Acceleration</button>
+          <button id="ov-pot" data-ov="pot" aria-label="Toggle gravitational potential">Potential</button>
+          <button id="ov-elem" class="active" data-ov="elem" aria-label="Toggle orbital guides">Orbital guides</button>
+          <button id="ov-soi" data-ov="soi" aria-label="Toggle sphere of influence">SOI</button>
+          <button id="ov-enc" class="active" data-ov="enc" aria-label="Toggle encounter markers">Encounters</button>
+          <button id="ov-err" class="active" data-ov="err" aria-label="Toggle integration error">Error</button>
+          <button id="ov-grid" class="active" data-ov="grid" aria-label="Toggle map grid">Grid</button>
+        </div>
+      </div>
+      <div class="sec">
+        <h3>Integrator</h3>
+        <label class="k">Timestep dt
+          <input id="dt" type="number" step="0.0005" min="0.0001" value="0.004" aria-label="Integration timestep">
+        </label>
+        <label class="k">Gravitational G
+          <input id="G" type="number" step="0.01" min="0.01" value="1" aria-label="Gravitational constant">
+        </label>
+        <label class="k">Softening / tolerance
+          <input id="soften" type="number" step="0.01" min="0" value="0.15" aria-label="Softening length">
+        </label>
+        <label class="k">Collision
+          <select id="collision" aria-label="Collision behavior">
+            <option value="none">Ignore</option>
+            <option value="bounce">Bounce</option>
+            <option value="merge">Merge</option>
+            <option value="destroy" selected>Destroy craft</option>
+          </select>
+        </label>
+      </div>
+      <div class="sec">
+        <h3>Prediction & trails</h3>
+        <label class="k">Prediction horizon
+          <input id="horizon" type="range" min="2" max="80" value="22" aria-label="Prediction horizon">
+        </label>
+        <label class="k">Prediction resolution
+          <input id="predres" type="range" min="40" max="600" value="220" aria-label="Prediction resolution">
+        </label>
+        <label class="k">Trail length
+          <input id="trail" type="range" min="20" max="2400" value="520" aria-label="Trail length">
+        </label>
+        <label class="k">Body display scale
+          <input id="bodyscale" type="range" min="0.4" max="8" step="0.1" value="1.6" aria-label="Body display scale">
+        </label>
+      </div>
+      <div class="sec">
+        <h3>Reference frame</h3>
+        <label class="k">Frame
+          <select id="frame" aria-label="Reference frame">
+            <option value="inertial">Inertial (barycentric)</option>
+            <option value="body">Selected-body centered</option>
+            <option value="rotating">Rotating body–moon</option>
+          </select>
+        </label>
+        <div class="hint">Trails and velocity vectors transform with the frame.</div>
+      </div>
+      <div class="sec">
+        <h3>Scenarios</h3>
+        <label class="k">Preset
+          <select id="scenario" aria-label="Scenario preset">
+            <option value="default">Star · planet · moon · craft</option>
+            <option value="circular">Circular orbit</option>
+            <option value="ellipse">Elliptical orbit</option>
+            <option value="hohmann">Hohmann-like transfer</option>
+            <option value="moon">Moon transfer</option>
+            <option value="slingshot">Gravitational slingshot</option>
+            <option value="threebody">Unstable three-body</option>
+            <option value="escape">Escape trajectory</option>
+          </select>
+        </label>
+        <div class="row">
+          <button id="btn-load" class="primary" data-action="load-scenario" aria-label="Load scenario">Load</button>
+          <button id="btn-add-craft" data-action="add-craft" aria-label="Add spacecraft">+ Craft</button>
+          <button id="btn-add-body" data-action="add-body" aria-label="Add body">+ Body</button>
+        </div>
+        <div class="row">
+          <button id="btn-export" data-action="export" aria-label="Export state">Export</button>
+          <label class="file-btn">Import<input id="import" type="file" accept="application/json,.json" aria-label="Import state"></label>
+        </div>
+        <p class="hint" id="scenario-blurb"></p>
+      </div>
+    </div>
+  </aside>
+
+  <aside id="right" class="panel" aria-label="Telemetry and maneuvers">
+    <header>Telemetry · Maneuvers</header>
+    <div class="body">
+      <div class="sec">
+        <h3>Selected body</h3>
+        <label class="k">Select
+          <select id="sel" aria-label="Select body"></select>
+        </label>
+        <div class="row">
+          <label class="k">Name<input id="b-name" type="text" aria-label="Body name"></label>
+        </div>
+        <div class="row">
+          <label class="k">Mass<input id="b-m" type="number" step="any" aria-label="Body mass"></label>
+          <label class="k">Radius<input id="b-r" type="number" step="any" aria-label="Body radius"></label>
+        </div>
+        <div class="row">
+          <label class="k">x<input id="b-x" type="number" step="any" aria-label="Position x"></label>
+          <label class="k">y<input id="b-y" type="number" step="any" aria-label="Position y"></label>
+        </div>
+        <div class="row">
+          <label class="k">vx<input id="b-vx" type="number" step="any" aria-label="Velocity x"></label>
+          <label class="k">vy<input id="b-vy" type="number" step="any" aria-label="Velocity y"></label>
+        </div>
+        <p class="hint">Paused: drag the craft or its velocity handle on the map.</p>
+      </div>
+      <div class="sec">
+        <h3>Orbital &amp; state vector</h3>
+        <div class="tele" id="telemetry"></div>
+      </div>
+      <div class="sec">
+        <h3>System conserved</h3>
+        <div class="tele" id="conserved"></div>
+      </div>
+      <div class="sec">
+        <h3>Maneuver node</h3>
+        <label class="k">Burn time (absolute)
+          <input id="mn-t" type="number" step="0.05" aria-label="Maneuver time">
+        </label>
+        <label class="k">Mode
+          <select id="mn-mode" aria-label="Delta-v mode">
+            <option value="prograde">Prograde / retrograde</option>
+            <option value="radial">Radial in / out</option>
+            <option value="normal">Normal (in-plane ⊥v)</option>
+            <option value="cartesian">Cartesian vx / vy</option>
+          </select>
+        </label>
+        <div class="row">
+          <label class="k">Δv A<input id="mn-a" type="number" step="0.01" value="0.25" aria-label="Delta-v component A"></label>
+          <label class="k">Δv B<input id="mn-b" type="number" step="0.01" value="0" aria-label="Delta-v component B"></label>
+        </div>
+        <div class="row">
+          <button id="btn-add-node" class="primary" data-action="add-node" aria-label="Add maneuver node">Add node</button>
+          <button id="btn-apply-node" data-action="update-node" aria-label="Update selected node">Update</button>
+          <button id="btn-del-node" class="danger" data-action="delete-node" aria-label="Delete selected node">Delete</button>
+        </div>
+        <p class="hint">Click the predicted path to drop a node. Burns execute when simulated time reaches them.</p>
+        <div id="node-list" class="tele"></div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="dock">
+    <div class="cluster">
+      <button class="drawer-btn" id="btn-sys" aria-label="Toggle system panel">Sys</button>
+      <button id="btn-help" aria-label="Help">Keys</button>
+      <button class="drawer-btn" id="btn-pause-dock" data-action="pause" aria-label="Pause or resume mobile">Pause</button>
+      <button class="drawer-btn" id="btn-step-dock" data-action="step" aria-label="Single step mobile">Step</button>
+    </div>
+    <div class="cluster" id="legend"></div>
+    <div class="cluster">
+      <button class="drawer-btn" id="btn-tlm" aria-label="Toggle telemetry panel">Tlm</button>
+    </div>
+  </div>
+  <div id="help" role="dialog" aria-label="Keyboard help">
+    <h2>Flight keys</h2>
+    <pre>Space        pause / resume
+.            single step
+,            rewind checkpoint
+R            reset scenario
+[ ]          warp down / up
+F            cycle reference frames
+1–8          load scenario
+N            add node at 30% of prediction
+Click pred.  place maneuver node
+Drag craft   (paused) edit position
+Drag handle  (paused) edit velocity
+Scroll       zoom    ·  drag empty  pan
+Esc          close / deselect</pre>
+  </div>
+  <div id="toast" role="status"></div>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const WARP_STEPS = [1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("view");
+  const ctx = canvas.getContext("2d", { alpha: false });
+
+  function hypot(x, y) { return Math.hypot(x, y); }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function fmt(v, d) {
+    if (!isFinite(v)) return "—";
+    const n = Number(v);
+    const ad = Math.abs(n);
+    if (ad !== 0 && (ad < 1e-3 || ad >= 1e5)) return n.toExponential(d ?? 3);
+    return n.toFixed(d ?? 3);
+  }
+  function uid(p) { return p + "_" + Math.random().toString(36).slice(2, 8); }
+
+  function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  const overlays = {
+    traj: true, pred: true, vel: true, acc: false, pot: false,
+    elem: true, soi: false, enc: true, err: true, grid: true
+  };
+
+  const sim = {
+    G: 1,
+    dt: 0.004,
+    t: 0,
+    soften: 0.15,
+    bodies: [],
+    maneuvers: [],
+    paused: true,
+    warpIndex: 6,
+    warp: 1,
+    warpTarget: 1,
+    collision: "destroy",
+    trailLen: 520,
+    horizon: 22,
+    predRes: 220,
+    bodyScale: 1.6,
+    frame: "inertial",
+    selectedId: null,
+    rotatingA: null,
+    rotatingB: null,
+    scenario: "default",
+    checkpoints: [],
+    initial: null,
+    energy0: 0,
+    L0: 0,
+    Px0: 0,
+    Py0: 0,
+    history: [],
+    prediction: null,
+    selectedNode: null,
+    lastSteps: 0,
+    collisions: 0,
+    date0: Date.UTC(2035, 2, 14, 12, 0, 0)
+  };
+
+  const cam = { x: 0, y: 0, zoom: 2.2, dpr: 1, w: 800, h: 600 };
+  const input = {
+    pointers: new Map(),
+    mode: null,
+    lastX: 0, lastY: 0,
+    dragId: null,
+    dragKind: null
+  };
+  const stars = [];
+  const potBuf = { c: null, ctx: null, w: 160, h: 100, dirty: 0 };
+
+  let fps = 60, frames = 0, fpsT = 0, inspectorLock = false, toastTimer = 0;
+
+  function toast(msg) {
+    const el = $("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 1600);
+  }
+
+  function makeBody(o) {
+    return {
+      id: o.id || uid(o.kind || "b"),
+      name: o.name,
+      kind: o.kind || "planet",
+      m: o.m, x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0,
+      ax: 0, ay: 0, r: o.r, color: o.color || "#9ec8e8",
+      trail: []
+    };
+  }
+
+  function circVel(G, M, dx, dy, ccw) {
+    const r = hypot(dx, dy) || 1e-9;
+    const s = Math.sqrt(Math.max(0, G * M / r));
+    const sx = -dy / r, sy = dx / r;
+    const sgn = ccw === false ? -1 : 1;
+    return { vx: sgn * s * sx, vy: sgn * s * sy };
+  }
+
+  function recenterMomentum(bodies) {
+    let m = 0, px = 0, py = 0, cx = 0, cy = 0;
+    for (const b of bodies) { m += b.m; px += b.m * b.vx; py += b.m * b.vy; cx += b.m * b.x; cy += b.m * b.y; }
+    if (m <= 0) return;
+    const vx = px / m, vy = py / m, x = cx / m, y = cy / m;
+    for (const b of bodies) { b.vx -= vx; b.vy -= vy; b.x -= x; b.y -= y; }
+  }
+
+  function barycenter(bodies) {
+    let m = 0, x = 0, y = 0;
+    for (const b of bodies) { m += b.m; x += b.m * b.x; y += b.m * b.y; }
+    if (m <= 0) return { x: 0, y: 0, m: 0 };
+    return { x: x / m, y: y / m, m };
+  }
+
+  function mostMassive(bodies) {
+    let best = bodies[0];
+    for (const b of bodies) if (b.m > best.m) best = b;
+    return best;
+  }
+
+  function primaryOf(body, bodies) {
+    const others = bodies.filter((b) => b.id !== body.id && b.kind !== "craft");
+    if (!others.length) return mostMassive(bodies);
+    let best = others[0], bestF = -1;
+    for (const b of others) {
+      const r2 = (b.x - body.x) ** 2 + (b.y - body.y) ** 2 + 1e-9;
+      const f = b.m / r2;
+      if (f > bestF) { bestF = f; best = b; }
+    }
+    return best;
+  }
+
+  function pairForRotating(bodies) {
+    const planets = bodies.filter((b) => b.kind === "planet");
+    const moons = bodies.filter((b) => b.kind === "moon");
+    if (planets[0] && moons[0]) return [planets[0], moons[0]];
+    const massive = bodies.filter((b) => b.kind !== "craft").sort((a, c) => c.m - a.m);
+    if (massive.length >= 2) return [massive[0], massive[1]];
+    return [massive[0] || bodies[0], massive[1] || bodies[0]];
+  }
+
+  function accelerations(bodies, G, soften) {
+    const n = bodies.length;
+    const acc = new Array(n);
+    for (let i = 0; i < n; i++) acc[i] = { x: 0, y: 0 };
+    const eps2 = soften * soften;
+    for (let i = 0; i < n; i++) {
+      const bi = bodies[i];
+      for (let j = i + 1; j < n; j++) {
+        const bj = bodies[j];
+        const dx = bj.x - bi.x, dy = bj.y - bi.y;
+        const r2 = dx * dx + dy * dy + eps2;
+        const invR = 1 / Math.sqrt(r2);
+        const invR3 = invR * invR * invR;
+        const s = G * invR3;
+        const ax = s * dx, ay = s * dy;
+        acc[i].x += bj.m * ax; acc[i].y += bj.m * ay;
+        acc[j].x -= bi.m * ax; acc[j].y -= bi.m * ay;
+      }
+    }
+    return acc;
+  }
+
+  function applyAcc(bodies, acc) {
+    for (let i = 0; i < bodies.length; i++) { bodies[i].ax = acc[i].x; bodies[i].ay = acc[i].y; }
+  }
+
+  function energyMomentum(bodies, G, soften) {
+    let ke = 0, pe = 0, L = 0, px = 0, py = 0;
+    const eps2 = soften * soften;
+    for (let i = 0; i < bodies.length; i++) {
+      const b = bodies[i];
+      ke += 0.5 * b.m * (b.vx * b.vx + b.vy * b.vy);
+      L += b.m * (b.x * b.vy - b.y * b.vx);
+      px += b.m * b.vx; py += b.m * b.vy;
+      for (let j = i + 1; j < bodies.length; j++) {
+        const c = bodies[j];
+        const r = Math.sqrt((c.x - b.x) ** 2 + (c.y - b.y) ** 2 + eps2);
+        pe -= G * b.m * c.m / r;
+      }
+    }
+    return { E: ke + pe, ke, pe, L, px, py };
+  }
+
+  function orbitalElements(body, primary, G) {
+    const mu = G * (primary.m + body.m);
+    const rx = body.x - primary.x, ry = body.y - primary.y;
+    const vx = body.vx - primary.vx, vy = body.vy - primary.vy;
+    const r = hypot(rx, ry) || 1e-12;
+    const v2 = vx * vx + vy * vy;
+    const speed = Math.sqrt(v2);
+    const h = rx * vy - ry * vx;
+    const energy = 0.5 * v2 - mu / r;
+    const evecx = (vy * h) / mu - rx / r;
+    const evecy = (-vx * h) / mu - ry / r;
+    const e = hypot(evecx, evecy);
+    let a = Infinity;
+    if (Math.abs(energy) > 1e-14) a = -mu / (2 * energy);
+    const peri = (e < 1 && isFinite(a)) ? a * (1 - e) : (h * h / mu) / (1 + e);
+    const apo = (e < 1 && isFinite(a)) ? a * (1 + e) : Infinity;
+    const period = (e < 1 && a > 0) ? TAU * Math.sqrt(a * a * a / mu) : Infinity;
+    return { rx, ry, vx, vy, r, speed, h, energy, e, a, peri, apo, period, mu, primaryName: primary.name, primaryId: primary.id };
+  }
+
+  function velocityVerlet(bodies, G, dt, soften) {
+    let acc = accelerations(bodies, G, soften);
+    applyAcc(bodies, acc);
+    for (const b of bodies) {
+      b.x += b.vx * dt + 0.5 * b.ax * dt * dt;
+      b.y += b.vy * dt + 0.5 * b.ay * dt * dt;
+      b.vx += 0.5 * b.ax * dt;
+      b.vy += 0.5 * b.ay * dt;
+    }
+    acc = accelerations(bodies, G, soften);
+    applyAcc(bodies, acc);
+    for (const b of bodies) {
+      b.vx += 0.5 * b.ax * dt;
+      b.vy += 0.5 * b.ay * dt;
+    }
+  }
+
+  function resolveCollisions(world) {
+    const mode = world.collision;
+    if (mode === "none") return;
+    const b = world.bodies;
+    for (let i = 0; i < b.length; i++) {
+      for (let j = i + 1; j < b.length; j++) {
+        const A = b[i], C = b[j];
+        const dx = C.x - A.x, dy = C.y - A.y;
+        const dist = hypot(dx, dy);
+        const min = A.r + C.r;
+        if (dist >= min || dist < 1e-12) continue;
+        world.collisions++;
+        const craft = A.kind === "craft" ? A : C.kind === "craft" ? C : null;
+        const other = craft === A ? C : craft === C ? A : null;
+        if (mode === "destroy" && craft) {
+          world.bodies = world.bodies.filter((x) => x.id !== craft.id);
+          if (world.selectedId === craft.id) world.selectedId = other ? other.id : (world.bodies[0] && world.bodies[0].id);
+          toast(craft.name + " destroyed");
+          return;
+        }
+        if (mode === "merge") {
+          const m = A.m + C.m;
+          const keep = A.m >= C.m ? A : C;
+          const drop = keep === A ? C : A;
+          keep.x = (A.m * A.x + C.m * C.x) / m;
+          keep.y = (A.m * A.y + C.m * C.y) / m;
+          keep.vx = (A.m * A.vx + C.m * C.vx) / m;
+          keep.vy = (A.m * A.vy + C.m * C.vy) / m;
+          keep.m = m;
+          keep.r = Math.cbrt(A.r ** 3 + C.r ** 3);
+          world.bodies = world.bodies.filter((x) => x.id !== drop.id);
+          toast("Merged into " + keep.name);
+          return;
+        }
+        if (mode === "bounce") {
+          const nx = dx / dist, ny = dy / dist;
+          const rvx = C.vx - A.vx, rvy = C.vy - A.vy;
+          const velN = rvx * nx + rvy * ny;
+          if (velN < 0) {
+            const inv = 1 / A.m + 1 / C.m;
+            const jimp = -(1 + 0.92) * velN / inv;
+            A.vx -= jimp * nx / A.m; A.vy -= jimp * ny / A.m;
+            C.vx += jimp * nx / C.m; C.vy += jimp * ny / C.m;
+          }
+          const pen = min - dist + 1e-4;
+          const s = pen / (A.m + C.m);
+          A.x -= nx * s * C.m; A.y -= ny * s * C.m;
+          C.x += nx * s * A.m; C.y += ny * s * A.m;
+        }
+      }
+    }
+  }
+
+  function recordTrail(world) {
+    const cap = world.trailLen;
+    const frame = { t: world.t, pos: world.bodies.map((b) => ({ id: b.id, x: b.x, y: b.y, vx: b.vx, vy: b.vy })) };
+    world.history.push(frame);
+    if (world.history.length > cap) world.history.splice(0, world.history.length - cap);
+    for (const b of world.bodies) {
+      b.trail.push({ x: b.x, y: b.y, t: world.t });
+      if (b.trail.length > cap) b.trail.splice(0, b.trail.length - cap);
+    }
+  }
+
+  function snapshot(world) {
+    return {
+      t: world.t,
+      G: world.G,
+      dt: world.dt,
+      soften: world.soften,
+      collision: world.collision,
+      bodies: deepClone(world.bodies.map(({ trail, ...rest }) => rest)),
+      maneuvers: deepClone(world.maneuvers),
+      selectedId: world.selectedId,
+      energy0: world.energy0, L0: world.L0, Px0: world.Px0, Py0: world.Py0,
+      collisions: world.collisions
+    };
+  }
+
+  function restore(world, snap, keepHistory) {
+    world.t = snap.t;
+    world.G = snap.G; world.dt = snap.dt; world.soften = snap.soften;
+    world.collision = snap.collision;
+    world.bodies = snap.bodies.map((b) => makeBody(b));
+    world.maneuvers = deepClone(snap.maneuvers);
+    world.selectedId = snap.selectedId;
+    world.energy0 = snap.energy0; world.L0 = snap.L0; world.Px0 = snap.Px0; world.Py0 = snap.Py0;
+    world.collisions = snap.collisions || 0;
+    if (!keepHistory) {
+      world.history = [];
+      for (const b of world.bodies) b.trail = [];
+    }
+    world.prediction = null;
+  }
+
+  function pushCheckpoint(world) {
+    world.checkpoints.push(snapshot(world));
+    if (world.checkpoints.length > 48) world.checkpoints.shift();
+  }
+
+  function craftOf(world) {
+    const sel = world.bodies.find((b) => b.id === world.selectedId);
+    if (sel && sel.kind === "craft") return sel;
+    return world.bodies.find((b) => b.kind === "craft") || sel || world.bodies[0];
+  }
+
+  function dvFromMode(body, mode, a, b, primary) {
+    if (mode === "cartesian") return { dvx: a, dvy: b };
+    const vx = body.vx - (primary ? primary.vx : 0);
+    const vy = body.vy - (primary ? primary.vy : 0);
+    const sp = hypot(vx, vy) || 1e-9;
+    const px = body.x - (primary ? primary.x : 0);
+    const py = body.y - (primary ? primary.y : 0);
+    const pr = hypot(px, py) || 1e-9;
+    if (mode === "prograde") {
+      return { dvx: (a * vx) / sp, dvy: (a * vy) / sp };
+    }
+    if (mode === "radial") {
+      return { dvx: (a * px) / pr, dvy: (a * py) / pr };
+    }
+    const nx = -vy / sp, ny = vx / sp;
+    return { dvx: a * nx, dvy: a * ny };
+  }
+
+  function applyManeuverTo(bodies, man, t0, t1) {
+    if (man.done) return false;
+    if (!(man.t >= t0 && man.t <= t1)) return false;
+    const craft = bodies.find((b) => b.id === man.craftId);
+    if (!craft) return false;
+    const prim = primaryOf(craft, bodies);
+    const dv = dvFromMode(craft, man.mode, man.a, man.b, prim);
+    craft.vx += dv.dvx; craft.vy += dv.dvy;
+    man.done = true;
+    man.appliedDv = hypot(dv.dvx, dv.dvy);
+    return true;
+  }
+
+  function remainingDv(world, craftId) {
+    let s = 0;
+    for (const m of world.maneuvers) {
+      if (!m.done && m.craftId === craftId) s += hypot(m.a, m.b);
+    }
+    return s;
+  }
+
+  function predict(world) {
+    const horizon = world.horizon;
+    const samples = world.predRes;
+    const dt = Math.min(world.dt, horizon / Math.max(40, samples));
+    const clone = deepClone(world.bodies.map(({ trail, ...r }) => r));
+    const mans = world.maneuvers.filter((m) => !m.done).map((m) => ({ ...m, done: false }));
+    const path = [];
+    const encounters = {};
+    const craft0 = clone.find((b) => b.id === (craftOf(world) || {}).id) || clone.find((b) => b.kind === "craft");
+    if (!craft0) { world.prediction = { path: [], samples: [], encounters: {}, nodes: [] }; return; }
+    for (const b of clone) {
+      if (b.kind !== "craft") encounters[b.id] = { min: Infinity, t: 0, x: 0, y: 0, name: b.name };
+    }
+    let t = world.t;
+    const tEnd = world.t + horizon;
+    const every = Math.max(1, Math.floor((horizon / dt) / samples));
+    let k = 0;
+    const elem0 = orbitalElements(craft0, primaryOf(craft0, clone), world.G);
+    function sampleNow() {
+      const craft = clone.find((b) => b.id === craft0.id);
+      if (!craft) return;
+      path.push({
+        t, x: craft.x, y: craft.y, vx: craft.vx, vy: craft.vy, id: craft.id,
+        pos: clone.map((b) => ({ id: b.id, x: b.x, y: b.y, vx: b.vx, vy: b.vy }))
+      });
+    }
+    sampleNow();
+    while (t < tEnd) {
+      const step = Math.min(dt, tEnd - t);
+      const tNext = t + step;
+      for (const m of mans) applyManeuverTo(clone, m, t, tNext);
+      velocityVerlet(clone, world.G, step, world.soften);
+      t = tNext;
+      k++;
+      const craft = clone.find((b) => b.id === craft0.id);
+      if (!craft) break;
+      if (k % every === 0) sampleNow();
+      for (const b of clone) {
+        if (b.kind === "craft" || b.id === craft.id) continue;
+        const d = hypot(b.x - craft.x, b.y - craft.y);
+        const e = encounters[b.id];
+        if (e && d < e.min) { e.min = d; e.t = t; e.x = craft.x; e.y = craft.y; }
+      }
+    }
+    const craftF = clone.find((b) => b.id === craft0.id);
+    const elem1 = craftF ? orbitalElements(craftF, primaryOf(craftF, clone), world.G) : elem0;
+    world.prediction = {
+      path, encounters, t0: world.t, t1: tEnd,
+      elem0, elem1,
+      nodes: mans.map((m) => ({ id: m.id, t: m.t, done: m.done }))
+    };
+  }
+
+  function stepWorld(world, dt) {
+    const t0 = world.t;
+    for (const m of world.maneuvers) {
+      if (applyManeuverTo(world.bodies, m, t0, t0 + dt)) toast("Burn executed · " + m.name);
+    }
+    velocityVerlet(world.bodies, world.G, dt, world.soften);
+    world.t += dt;
+    resolveCollisions(world);
+  }
+
+  /* ---------- scenarios ---------- */
+  function scenarioDefault() {
+    const G = 1;
+    const star = makeBody({ name: "Helios", kind: "star", m: 800, x: 0, y: 0, r: 14, color: "#f0c14b" });
+    const pdx = 180, pdy = 0;
+    const pv = circVel(G, star.m, pdx, pdy);
+    const planet = makeBody({ name: "Kepler", kind: "planet", m: 12, x: pdx, y: pdy, vx: pv.vx, vy: pv.vy, r: 5.2, color: "#5aa9e6" });
+    const mdx = 22, mdy = 0;
+    const mv = circVel(G, planet.m, mdx, mdy);
+    const moon = makeBody({ name: "Lira", kind: "moon", m: 0.18, x: planet.x + mdx, y: planet.y + mdy, vx: planet.vx + mv.vx, vy: planet.vy + mv.vy, r: 2.1, color: "#d8d2c4" });
+    const cdx = 9.5, cdy = 0;
+    const cv = circVel(G, planet.m, cdx, cdy);
+    const craft = makeBody({ name: "Aerie-1", kind: "craft", m: 1e-6, x: planet.x + cdx, y: planet.y + cdy, vx: planet.vx + cv.vx, vy: planet.vy + cv.vy, r: 1.1, color: "#6ef0c0" });
+    const bodies = [star, planet, moon, craft];
+    recenterMomentum(bodies);
+    return {
+      blurb: "Star, planet, moon, and a low-orbit spacecraft. Mutual n-body gravity with a symplectic Verlet integrator.",
+      G, dt: 0.004, soften: 0.18, bodies, look: { x: 70, y: 0, zoom: 1.45 },
+      select: craft.id, rotating: [planet.id, moon.id]
+    };
+  }
+
+  function scenarioCircular() {
+    const G = 1, M = 500, r = 120;
+    const star = makeBody({ name: "Primus", kind: "star", m: M, x: 0, y: 0, r: 12, color: "#ffcf70" });
+    const v = circVel(G, M, r, 0);
+    const craft = makeBody({ name: "Circ-1", kind: "craft", m: 1e-6, x: r, y: 0, vx: v.vx, vy: v.vy, r: 1.2, color: "#6ef0c0" });
+    const bodies = [star, craft];
+    recenterMomentum(bodies);
+    return { blurb: "Near-circular two-body orbit. Energy and eccentricity should stay nearly constant.", G, dt: 0.005, soften: 0.12, bodies, look: { x: 0, y: 0, zoom: 3.2 }, select: craft.id };
+  }
+
+  function scenarioEllipse() {
+    const G = 1, M = 500, rp = 70;
+    const star = makeBody({ name: "Primus", kind: "star", m: M, x: 0, y: 0, r: 12, color: "#ffcf70" });
+    const vcirc = Math.sqrt(G * M / rp);
+    const craft = makeBody({ name: "Ellip-1", kind: "craft", m: 1e-6, x: rp, y: 0, vx: 0, vy: vcirc * 1.32, r: 1.2, color: "#e8a23a" });
+    const bodies = [star, craft];
+    recenterMomentum(bodies);
+    return { blurb: "Elliptical transfer-like ellipse. Periapsis at +x; apoapsis opposite.", G, dt: 0.005, soften: 0.12, bodies, look: { x: 40, y: 0, zoom: 2.6 }, select: craft.id };
+  }
+
+  function scenarioHohmann() {
+    const G = 1, M = 400, r1 = 90, r2 = 200;
+    const star = makeBody({ name: "Sol-N", kind: "star", m: M, x: 0, y: 0, r: 11, color: "#f4c45a" });
+    const v1 = Math.sqrt(G * M / r1);
+    const a = 0.5 * (r1 + r2);
+    const vp = Math.sqrt(G * M * (2 / r1 - 1 / a));
+    const va = Math.sqrt(G * M * (2 / r2 - 1 / a));
+    const v2 = Math.sqrt(G * M / r2);
+    const dv1 = vp - v1;
+    const dv2 = v2 - va;
+    const periodH = Math.PI * Math.sqrt(a * a * a / (G * M));
+    const craft = makeBody({ name: "Transfer", kind: "craft", m: 1e-6, x: r1, y: 0, vx: 0, vy: v1, r: 1.2, color: "#6ef0c0" });
+    const marker = makeBody({ name: "Target orbit", kind: "planet", m: 1e-8, x: r2, y: 0, vx: 0, vy: v2, r: 1.6, color: "#5aa9e6" });
+    const bodies = [star, craft, marker];
+    recenterMomentum(bodies);
+    const man = [
+      { id: uid("mn"), name: "HOH-1 periapsis", craftId: craft.id, t: 0.08, mode: "prograde", a: dv1, b: 0, done: false },
+      { id: uid("mn"), name: "HOH-2 apoapsis", craftId: craft.id, t: 0.08 + periodH, mode: "prograde", a: dv2, b: 0, done: false }
+    ];
+    return {
+      blurb: "Hohmann-like transfer from r=" + r1 + " to r=" + r2 + ". Two prograde nodes: inject then circularize.",
+      G, dt: 0.004, soften: 0.1, bodies, maneuvers: man, look: { x: 40, y: 0, zoom: 2.1 }, select: craft.id, horizon: 55
+    };
+  }
+
+  function scenarioMoon() {
+    const G = 1;
+    const star = makeBody({ name: "Helios", kind: "star", m: 700, x: 0, y: 0, r: 12, color: "#f0c14b" });
+    const pv = circVel(G, star.m, 200, 0);
+    const planet = makeBody({ name: "Kepler", kind: "planet", m: 16, x: 200, y: 0, vx: pv.vx, vy: pv.vy, r: 5.4, color: "#5aa9e6" });
+    const mv = circVel(G, planet.m, 28, 0);
+    const moon = makeBody({ name: "Lira", kind: "moon", m: 0.22, x: 228, y: 0, vx: planet.vx + mv.vx, vy: planet.vy + mv.vy, r: 2.2, color: "#d8d2c4" });
+    const cv = circVel(G, planet.m, 8, 0);
+    const craft = makeBody({ name: "Lunar-1", kind: "craft", m: 1e-6, x: 208, y: 0, vx: planet.vx + cv.vx, vy: planet.vy + cv.vy, r: 1.1, color: "#6ef0c0" });
+    const bodies = [star, planet, moon, craft];
+    recenterMomentum(bodies);
+    const mu = G * planet.m;
+    const r1 = 8, r2 = 28;
+    const v1 = Math.sqrt(mu / r1);
+    const a = 0.5 * (r1 + r2);
+    const vp = Math.sqrt(mu * (2 / r1 - 1 / a));
+    const dv = vp - v1;
+    const man = [{ id: uid("mn"), name: "TLI-like", craftId: craft.id, t: 0.12, mode: "prograde", a: dv * 0.92, b: 0, done: false }];
+    return {
+      blurb: "Low planet orbit with a scheduled prograde burn toward the moon. Watch the encounter marker.",
+      G, dt: 0.0035, soften: 0.16, bodies, maneuvers: man, look: { x: 200, y: 0, zoom: 4.4 }, select: craft.id,
+      rotating: [planet.id, moon.id], horizon: 18
+    };
+  }
+
+  function scenarioSlingshot() {
+    const G = 1;
+    const star = makeBody({ name: "Helios", kind: "star", m: 900, x: 0, y: 0, r: 13, color: "#f0c14b" });
+    const pv = circVel(G, star.m, 160, 0);
+    const planet = makeBody({ name: "Gasgiant", kind: "planet", m: 28, x: 160, y: 0, vx: pv.vx, vy: pv.vy, r: 7, color: "#d0894a" });
+    const craft = makeBody({
+      name: "Probe", kind: "craft", m: 1e-6,
+      x: 118, y: -42, vx: 0.15, vy: 2.72, r: 1.15, color: "#6ef0c0"
+    });
+    const bodies = [star, planet, craft];
+    recenterMomentum(bodies);
+    return {
+      blurb: "Hyperbolic planetary encounter. The probe should gain or lose heliocentric speed after the flyby.",
+      G, dt: 0.003, soften: 0.2, bodies, look: { x: 130, y: -10, zoom: 3.4 }, select: craft.id, horizon: 28
+    };
+  }
+
+  function scenarioThreeBody() {
+    const G = 1;
+    const s = 42;
+    const A = makeBody({ name: "M3", kind: "planet", m: 3, x: 0, y: 0, r: 4.2, color: "#e07a5f" });
+    const B = makeBody({ name: "M4", kind: "planet", m: 4, x: 3 * s, y: 0, r: 4.8, color: "#81b29a" });
+    const C = makeBody({ name: "M5", kind: "planet", m: 5, x: 0, y: 4 * s, r: 5.4, color: "#f2cc8f" });
+    const craft = makeBody({ name: "Witness", kind: "craft", m: 1e-6, x: 1.4 * s, y: 1.1 * s, vx: 0.4, vy: -0.15, r: 1.1, color: "#6ef0c0" });
+    const bodies = [A, B, C, craft];
+    recenterMomentum(bodies);
+    return {
+      blurb: "Pythagorean three-body problem (masses 3-4-5 at rest, plus a tracer). Chaotic, unstable interaction.",
+      G, dt: 0.0025, soften: 0.35, bodies, look: { x: 60, y: 70, zoom: 2.2 }, select: craft.id, horizon: 40, collision: "bounce"
+    };
+  }
+
+  function scenarioEscape() {
+    const G = 1, M = 500, r = 80;
+    const star = makeBody({ name: "Primus", kind: "star", m: M, x: 0, y: 0, r: 12, color: "#ffcf70" });
+    const vesc = Math.sqrt(2 * G * M / r);
+    const craft = makeBody({ name: "Escape-1", kind: "craft", m: 1e-6, x: r, y: 0, vx: 0, vy: vesc * 1.12, r: 1.2, color: "#ff7a5c" });
+    const bodies = [star, craft];
+    recenterMomentum(bodies);
+    return {
+      blurb: "Hyperbolic escape. Specific energy should be positive; no closed apoapsis.",
+      G, dt: 0.004, soften: 0.12, bodies, look: { x: 80, y: 40, zoom: 2.4 }, select: craft.id, horizon: 36
+    };
+  }
+
+  const SCENARIOS = {
+    default: scenarioDefault,
+    circular: scenarioCircular,
+    ellipse: scenarioEllipse,
+    hohmann: scenarioHohmann,
+    moon: scenarioMoon,
+    slingshot: scenarioSlingshot,
+    threebody: scenarioThreeBody,
+    escape: scenarioEscape
+  };
+
+  function loadScenario(name) {
+    const fn = SCENARIOS[name] || scenarioDefault;
+    const s = fn();
+    sim.scenario = name;
+    sim.G = s.G; sim.dt = s.dt; sim.soften = s.soften;
+    sim.collision = s.collision || "destroy";
+    sim.bodies = s.bodies;
+    sim.maneuvers = s.maneuvers || [];
+    sim.t = 0; sim.paused = false; sim.collisions = 0;
+    sim.history = []; sim.checkpoints = [];
+    sim.selectedNode = null;
+    sim.warp = sim.warpTarget = WARP_STEPS[sim.warpIndex];
+    for (const b of sim.bodies) b.trail = [];
+    sim.selectedId = s.select || sim.bodies[0].id;
+    if (s.rotating) { sim.rotatingA = s.rotating[0]; sim.rotatingB = s.rotating[1]; }
+    else {
+      const p = pairForRotating(sim.bodies);
+      sim.rotatingA = p[0].id; sim.rotatingB = p[1].id;
+    }
+    if (s.horizon) sim.horizon = s.horizon;
+    else sim.horizon = 22;
+    const em = energyMomentum(sim.bodies, sim.G, sim.soften);
+    sim.energy0 = em.E; sim.L0 = em.L; sim.Px0 = em.px; sim.Py0 = em.py;
+    sim.initial = snapshot(sim);
+    recordTrail(sim);
+    pushCheckpoint(sim);
+    if (s.look) { cam.x = s.look.x; cam.y = s.look.y; cam.zoom = s.look.zoom; }
+    $("G").value = sim.G; $("dt").value = sim.dt; $("soften").value = sim.soften;
+    $("collision").value = sim.collision; $("scenario").value = name;
+    $("horizon").value = sim.horizon;
+    $("scenario-blurb").textContent = s.blurb;
+    predict(sim);
+    fillSelect();
+    syncInspector();
+    toast("Loaded " + name);
+  }
+
+  /* ---------- frames / camera ---------- */
+  function frameBasis(world, tOverride) {
+    const mode = world.frame;
+    if (mode === "inertial") {
+      const b = barycenter(world.bodies);
+      return { ox: b.x, oy: b.y, c: 1, s: 0, ovx: 0, ovy: 0, w: 0 };
+    }
+    if (mode === "body") {
+      const sel = world.bodies.find((b) => b.id === world.selectedId) || world.bodies[0];
+      return { ox: sel.x, oy: sel.y, c: 1, s: 0, ovx: sel.vx, ovy: sel.vy, w: 0, originId: sel.id };
+    }
+    const A = world.bodies.find((b) => b.id === world.rotatingA) || world.bodies[0];
+    const B = world.bodies.find((b) => b.id === world.rotatingB) || world.bodies[1] || A;
+    const dx = B.x - A.x, dy = B.y - A.y;
+    const ang = Math.atan2(dy, dx);
+    const r2 = dx * dx + dy * dy || 1e-9;
+    const w = ((B.vx - A.vx) * dy * -1 + (B.vy - A.vy) * dx) / r2;
+    const mA = A.m, mB = B.m, m = mA + mB;
+    return {
+      ox: (mA * A.x + mB * B.x) / m,
+      oy: (mA * A.y + mB * B.y) / m,
+      c: Math.cos(-ang), s: Math.sin(-ang),
+      ovx: (mA * A.vx + mB * B.vx) / m,
+      ovy: (mA * A.vy + mB * B.vy) / m,
+      w, originId: null, A, B
+    };
+  }
+
+  function toFrame(x, y, vx, vy, basis) {
+    const rx = x - basis.ox, ry = y - basis.oy;
+    const fx = rx * basis.c - ry * basis.s;
+    const fy = rx * basis.s + ry * basis.c;
+    let rvx = vx - basis.ovx, rvy = vy - basis.ovy;
+    let fvx = rvx * basis.c - rvy * basis.s;
+    let fvy = rvx * basis.s + rvy * basis.c;
+    if (basis.w) {
+      fvx -= -basis.w * fy;
+      fvy -= basis.w * fx;
+    }
+    return { x: fx, y: fy, vx: fvx, vy: fvy };
+  }
+
+  function baryFromSample(pos) {
+    let m = 0, x = 0, y = 0;
+    const map = {};
+    for (const p of pos) map[p.id] = p;
+    for (const b of sim.bodies) {
+      const p = map[b.id]; if (!p) continue;
+      m += b.m; x += b.m * p.x; y += b.m * p.y;
+    }
+    if (m <= 0) return { x: 0, y: 0 };
+    return { x: x / m, y: y / m };
+  }
+
+  function transformSample(p, sample) {
+    if (sim.frame === "inertial") {
+      const b = baryFromSample(sample.pos);
+      return { x: p.x - b.x, y: p.y - b.y };
+    }
+    if (sim.frame === "body") {
+      const orig = sample.pos.find((q) => q.id === sim.selectedId) || sample.pos[0];
+      return { x: p.x - orig.x, y: p.y - orig.y };
+    }
+    const A = sample.pos.find((q) => q.id === sim.rotatingA);
+    const B = sample.pos.find((q) => q.id === sim.rotatingB);
+    if (!A || !B) return { x: p.x, y: p.y };
+    const mA = (sim.bodies.find((b) => b.id === sim.rotatingA) || { m: 1 }).m;
+    const mB = (sim.bodies.find((b) => b.id === sim.rotatingB) || { m: 1 }).m;
+    const m = mA + mB;
+    const ox = (mA * A.x + mB * B.x) / m, oy = (mA * A.y + mB * B.y) / m;
+    const ang = Math.atan2(B.y - A.y, B.x - A.x);
+    const c = Math.cos(-ang), s = Math.sin(-ang);
+    const rx = p.x - ox, ry = p.y - oy;
+    return { x: rx * c - ry * s, y: rx * s + ry * c };
+  }
+
+  function worldToScreen(x, y) {
+    return {
+      x: cam.w / 2 + (x - cam.x) * cam.zoom,
+      y: cam.h / 2 + (y - cam.y) * cam.zoom
+    };
+  }
+  function screenToWorld(sx, sy) {
+    return {
+      x: cam.x + (sx - cam.w / 2) / cam.zoom,
+      y: cam.y + (sy - cam.h / 2) / cam.zoom
+    };
+  }
+
+  function bodyScreenPos(body) {
+    const basis = frameBasis(sim);
+    const p = toFrame(body.x, body.y, body.vx, body.vy, basis);
+    return { ...worldToScreen(p.x, p.y), f: p };
+  }
+
+  function resize() {
+    cam.dpr = Math.max(1, window.devicePixelRatio || 1);
+    cam.w = window.innerWidth;
+    cam.h = window.innerHeight;
+    canvas.width = Math.floor(cam.w * cam.dpr);
+    canvas.height = Math.floor(cam.h * cam.dpr);
+    canvas.style.width = cam.w + "px";
+    canvas.style.height = cam.h + "px";
+    ctx.setTransform(cam.dpr, 0, 0, cam.dpr, 0, 0);
+  }
+
+  function seedStars() {
+    stars.length = 0;
+    for (let i = 0; i < 220; i++) {
+      stars.push({ x: Math.random() * 4000 - 2000, y: Math.random() * 4000 - 2000, s: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
+    }
+  }
+
+  /* ---------- draw ---------- */
+  function drawPotential(basis) {
+    if (!overlays.pot) return;
+    potBuf.dirty++;
+    if (potBuf.dirty % 3 !== 0 && potBuf.c) {
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(potBuf.c, 0, 0, cam.w, cam.h);
+      ctx.restore();
+      return;
+    }
+    const w = potBuf.w, h = potBuf.h;
+    if (!potBuf.c) {
+      potBuf.c = document.createElement("canvas");
+      potBuf.c.width = w; potBuf.c.height = h;
+      potBuf.ctx = potBuf.c.getContext("2d");
+    }
+    const img = potBuf.ctx.createImageData(w, h);
+    const d = img.data;
+    let vmin = Infinity, vmax = -Infinity;
+    const vals = new Float32Array(w * h);
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const sx = (i + 0.5) / w * cam.w, sy = (j + 0.5) / h * cam.h;
+        const wp = screenToWorld(sx, sy);
+        const wx = basis.c * wp.x + basis.s * wp.y + basis.ox;
+        const wy = -basis.s * wp.x + basis.c * wp.y + basis.oy;
+        let pot = 0;
+        for (const b of sim.bodies) {
+          if (b.kind === "craft") continue;
+          const r = hypot(wx - b.x, wy - b.y) + sim.soften;
+          pot -= sim.G * b.m / r;
+        }
+        vals[j * w + i] = pot;
+        if (pot < vmin) vmin = pot;
+        if (pot > vmax) vmax = pot;
+      }
+    }
+    const span = vmax - vmin || 1;
+    for (let k = 0; k < vals.length; k++) {
+      const t = (vals[k] - vmin) / span;
+      const o = k * 4;
+      d[o] = Math.floor(20 + 180 * t);
+      d[o + 1] = Math.floor(10 + 40 * t + 80 * (1 - t));
+      d[o + 2] = Math.floor(40 + 30 * (1 - t));
+      d[o + 3] = 150;
+    }
+    potBuf.ctx.putImageData(img, 0, 0);
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.globalAlpha = 0.55;
+    ctx.drawImage(potBuf.c, 0, 0, cam.w, cam.h);
+    ctx.restore();
+  }
+
+  function drawGrid() {
+    if (!overlays.grid) return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(80,110,130,0.18)";
+    ctx.lineWidth = 1;
+    const stepWorld = niceStep(80 / cam.zoom);
+    const tl = screenToWorld(0, 0), br = screenToWorld(cam.w, cam.h);
+    const x0 = Math.floor(tl.x / stepWorld) * stepWorld;
+    const y0 = Math.floor(tl.y / stepWorld) * stepWorld;
+    ctx.beginPath();
+    for (let x = x0; x < br.x; x += stepWorld) {
+      const s = worldToScreen(x, 0);
+      ctx.moveTo(s.x, 0); ctx.lineTo(s.x, cam.h);
+    }
+    for (let y = y0; y < br.y; y += stepWorld) {
+      const s = worldToScreen(0, y);
+      ctx.moveTo(0, s.y); ctx.lineTo(cam.w, s.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function niceStep(x) {
+    const p = Math.pow(10, Math.floor(Math.log10(x)));
+    const n = x / p;
+    if (n < 2) return 2 * p;
+    if (n < 5) return 5 * p;
+    return 10 * p;
+  }
+
+  function drawStars() {
+    ctx.fillStyle = "#05070a";
+    ctx.fillRect(0, 0, cam.w, cam.h);
+    ctx.save();
+    for (const s of stars) {
+      const p = worldToScreen(s.x * 0.15 + cam.x * 0.15, s.y * 0.15 + cam.y * 0.15);
+      if (p.x < -10 || p.y < -10 || p.x > cam.w + 10 || p.y > cam.h + 10) continue;
+      ctx.globalAlpha = s.a;
+      ctx.fillStyle = "#cfe6ff";
+      ctx.fillRect(p.x, p.y, s.s, s.s);
+    }
+    ctx.restore();
+  }
+
+  function drawTrails() {
+    if (!overlays.traj || sim.history.length < 2) {
+      for (const body of sim.bodies) drawSimpleTrail(body);
+      return;
+    }
+    for (const body of sim.bodies) {
+      ctx.beginPath();
+      let started = false;
+      const n = sim.history.length;
+      for (let i = Math.max(0, n - sim.trailLen); i < n; i++) {
+        const sample = sim.history[i];
+        const p = sample.pos.find((q) => q.id === body.id);
+        if (!p) continue;
+        const f = transformSample(p, sample);
+        const s = worldToScreen(f.x, f.y);
+        if (!started) { ctx.moveTo(s.x, s.y); started = true; }
+        else ctx.lineTo(s.x, s.y);
+      }
+      ctx.strokeStyle = body.kind === "craft" ? "rgba(110,240,192,0.7)" : hexA(body.color, 0.45);
+      ctx.lineWidth = body.kind === "craft" ? 1.6 : 1.1;
+      ctx.stroke();
+    }
+  }
+
+  function drawSimpleTrail(body) {
+    if (!body.trail || body.trail.length < 2) return;
+    const basis = frameBasis(sim);
+    ctx.beginPath();
+    for (let i = 0; i < body.trail.length; i++) {
+      const q = toFrame(body.trail[i].x, body.trail[i].y, 0, 0, basis);
+      const s = worldToScreen(q.x, q.y);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    }
+    ctx.strokeStyle = hexA(body.color, 0.4);
+    ctx.stroke();
+  }
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+  }
+
+  function predToScreen(pt) {
+    if (pt.pos) {
+      const f = transformSample(pt, { pos: pt.pos });
+      return worldToScreen(f.x, f.y);
+    }
+    const f = toFrame(pt.x, pt.y, 0, 0, frameBasis(sim));
+    return worldToScreen(f.x, f.y);
+  }
+
+  function drawPrediction() {
+    if (!overlays.pred || !sim.prediction || sim.prediction.path.length < 2) return;
+    const path = sim.prediction.path;
+    ctx.beginPath();
+    for (let i = 0; i < path.length; i++) {
+      const s = predToScreen(path[i]);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    }
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = "rgba(232,162,58,0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const m of sim.maneuvers) {
+      if (m.done) continue;
+      const pt = nearestPath(path, m.t);
+      if (!pt) continue;
+      const s = predToScreen(pt);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, sim.selectedNode === m.id ? 7 : 5, 0, TAU);
+      ctx.fillStyle = "#e8a23a";
+      ctx.fill();
+      ctx.strokeStyle = "#05070a";
+      ctx.stroke();
+    }
+    if (overlays.enc && sim.prediction.encounters) {
+      for (const id of Object.keys(sim.prediction.encounters)) {
+        const e = sim.prediction.encounters[id];
+        if (!isFinite(e.min) || e.min > 80) continue;
+        const pt = nearestPath(path, e.t) || { x: e.x, y: e.y };
+        const s = predToScreen(pt);
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.strokeStyle = "#ff5a45";
+        ctx.strokeRect(-5, -5, 10, 10);
+        ctx.restore();
+      }
+    }
+  }
+
+  function nearestPath(path, t) {
+    let best = path[0], bd = Infinity;
+    for (const p of path) {
+      const d = Math.abs(p.t - t);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  function drawOsculating(body, basis) {
+    if (!overlays.elem || body.kind === "star") return;
+    const prim = primaryOf(body, sim.bodies);
+    if (!prim || prim.id === body.id) return;
+    const el = orbitalElements(body, prim, sim.G);
+    if (!(el.e < 0.98) || !isFinite(el.a) || el.a <= 0) return;
+    const rx = body.x - prim.x, ry = body.y - prim.y;
+    const vx = body.vx - prim.vx, vy = body.vy - prim.vy;
+    const h = el.h;
+    const e = el.e, a = el.a, b = a * Math.sqrt(Math.max(0, 1 - e * e));
+    const mu = el.mu;
+    const evecx = (vy * h) / mu - rx / hypot(rx, ry);
+    const evecy = (-vx * h) / mu - ry / hypot(rx, ry);
+    const phi = Math.atan2(evecy, evecx);
+    ctx.beginPath();
+    for (let i = 0; i <= 96; i++) {
+      const th = i / 96 * TAU;
+      const ex = a * (Math.cos(th) - e);
+      const ey = b * Math.sin(th);
+      const c = Math.cos(phi), s = Math.sin(phi);
+      const wx = prim.x + c * ex - s * ey;
+      const wy = prim.y + s * ex + c * ey;
+      const f = toFrame(wx, wy, 0, 0, basis);
+      const p = worldToScreen(f.x, f.y);
+      if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.strokeStyle = "rgba(158,200,232,0.35)";
+    ctx.setLineDash([2, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawBody(body, basis) {
+    const f = toFrame(body.x, body.y, body.vx, body.vy, basis);
+    const p = worldToScreen(f.x, f.y);
+    const rad = Math.max(2.4, Math.min(72, body.r * cam.zoom * sim.bodyScale));
+    if (overlays.soi && body.kind !== "craft" && body.kind !== "star") {
+      const host = mostMassive(sim.bodies);
+      const dx = body.x - host.x, dy = body.y - host.y;
+      const a = hypot(dx, dy);
+      const soi = a * Math.pow(body.m / host.m, 0.4);
+      const rpx = soi * cam.zoom;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rpx, 0, TAU);
+      ctx.strokeStyle = hexA(body.color, 0.25);
+      ctx.stroke();
+    }
+    if (body.kind === "star") {
+      const g = ctx.createRadialGradient(p.x, p.y, rad * 0.2, p.x, p.y, rad * 3.4);
+      g.addColorStop(0, "rgba(255,220,120,0.9)");
+      g.addColorStop(0.35, "rgba(240,160,40,0.35)");
+      g.addColorStop(1, "rgba(240,160,40,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rad * 3.4, 0, TAU); ctx.fill();
+    }
+    ctx.beginPath();
+    if (body.kind === "craft") {
+      const ang = Math.atan2(f.vy, f.vx);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(ang);
+      ctx.fillStyle = body.color;
+      ctx.beginPath();
+      ctx.moveTo(rad * 1.6, 0);
+      ctx.lineTo(-rad, rad * 0.7);
+      ctx.lineTo(-rad * 0.4, 0);
+      ctx.lineTo(-rad, -rad * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.arc(p.x, p.y, rad, 0, TAU);
+      ctx.fillStyle = body.color;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(5,7,10,0.55)";
+      ctx.stroke();
+    }
+    if (body.id === sim.selectedId) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rad + 5, 0, TAU);
+      ctx.strokeStyle = "#e8a23a";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#d6e0e8";
+    ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+    ctx.fillText(body.name, p.x + rad + 6, p.y - 4);
+
+    if (overlays.vel) {
+      const sc = 18;
+      const q = worldToScreen(f.x + f.vx * sc, f.y + f.vy * sc);
+      arrow(p.x, p.y, q.x, q.y, "#6ef0c0");
+    }
+    if (overlays.acc) {
+      const sc = 90;
+      const af = toFrame(body.x + body.ax * sc, body.y + body.ay * sc, 0, 0, basis);
+      const q = worldToScreen(af.x, af.y);
+      arrow(p.x, p.y, q.x, q.y, "#ff5a45");
+    }
+    if (sim.paused && body.kind === "craft" && body.id === sim.selectedId) {
+      const sc = 18;
+      const q = worldToScreen(f.x + f.vx * sc, f.y + f.vy * sc);
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, 7, 0, TAU);
+      ctx.fillStyle = "#e8a23a";
+      ctx.fill();
+    }
+  }
+
+  function arrow(x0, y0, x1, y1, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const ang = Math.atan2(y1 - y0, x1 - x0);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - 7 * Math.cos(ang - 0.4), y1 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x1 - 7 * Math.cos(ang + 0.4), y1 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawHudCorners() {
+    ctx.strokeStyle = "rgba(232,162,58,0.35)";
+    ctx.lineWidth = 1;
+    const m = 18, L = 22;
+    [[m, m, 1, 1], [cam.w - m, m, -1, 1], [m, cam.h - m, 1, -1], [cam.w - m, cam.h - m, -1, -1]].forEach(([x, y, sx, sy]) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y + sy * L); ctx.lineTo(x, y); ctx.lineTo(x + sx * L, y);
+      ctx.stroke();
+    });
+  }
+
+  function render() {
+    const basis = frameBasis(sim);
+    drawStars();
+    drawPotential(basis);
+    drawGrid();
+    drawTrails();
+    drawPrediction();
+    for (const b of sim.bodies) drawOsculating(b, basis);
+    for (const b of sim.bodies) drawBody(b, basis);
+    drawHudCorners();
+    if (overlays.err) {
+      const em = energyMomentum(sim.bodies, sim.G, sim.soften);
+      const err = sim.energy0 !== 0 ? (em.E - sim.energy0) / Math.abs(sim.energy0) : em.E - sim.energy0;
+      ctx.font = "11px ui-monospace, monospace";
+      ctx.fillStyle = Math.abs(err) > 1e-2 ? "#ff5a45" : "rgba(110,240,192,0.75)";
+      ctx.fillText("ΔE/E " + err.toExponential(3) + "   ΔL " + fmt(em.L - sim.L0, 4), 24, cam.h - 28);
+    }
+  }
+
+  /* ---------- UI ---------- */
+  function fillSelect() {
+    const sel = $("sel");
+    const cur = sim.selectedId;
+    sel.innerHTML = sim.bodies.map((b) => '<option value="' + b.id + '">' + b.name + " (" + b.kind + ")</option>").join("");
+    if (sim.bodies.some((b) => b.id === cur)) sel.value = cur;
+    else if (sim.bodies[0]) { sim.selectedId = sim.bodies[0].id; sel.value = sim.selectedId; }
+  }
+
+  function selectedBody() {
+    return sim.bodies.find((b) => b.id === sim.selectedId) || sim.bodies[0];
+  }
+
+  function syncInspector() {
+    const b = selectedBody();
+    if (!b) return;
+    inspectorLock = true;
+    $("sel").value = b.id;
+    $("b-name").value = b.name;
+    $("b-m").value = b.m;
+    $("b-r").value = b.r;
+    $("b-x").value = roundish(b.x);
+    $("b-y").value = roundish(b.y);
+    $("b-vx").value = roundish(b.vx);
+    $("b-vy").value = roundish(b.vy);
+    inspectorLock = false;
+  }
+
+  function roundish(v) { return Math.round(v * 1e6) / 1e6; }
+
+  function applyInspector() {
+    if (inspectorLock) return;
+    const b = selectedBody();
+    if (!b) return;
+    b.name = $("b-name").value;
+    b.m = num($("b-m").value, b.m);
+    b.r = num($("b-r").value, b.r);
+    b.x = num($("b-x").value, b.x);
+    b.y = num($("b-y").value, b.y);
+    b.vx = num($("b-vx").value, b.vx);
+    b.vy = num($("b-vy").value, b.vy);
+    predict(sim);
+  }
+
+  function num(v, d) { const n = parseFloat(v); return isFinite(n) ? n : d; }
+
+  function teleRow(k, v) { return "<div><dt>" + k + "</dt><dd>" + v + "</dd></div>"; }
+
+  function updateTelemetry() {
+    const b = selectedBody();
+    if (!b) return;
+    const prim = primaryOf(b, sim.bodies);
+    const el = orbitalElements(b, prim, sim.G);
+    const enc = (sim.prediction && sim.prediction.encounters) || {};
+    let closest = "—", closestD = Infinity;
+    for (const id of Object.keys(enc)) {
+      if (enc[id].min < closestD) { closestD = enc[id].min; closest = enc[id].name + " @ " + fmt(enc[id].min, 3) + " (t=" + fmt(enc[id].t, 2) + ")"; }
+    }
+    const dvLeft = remainingDv(sim, b.id);
+    $("telemetry").innerHTML = [
+      teleRow("Position", fmt(b.x, 3) + " , " + fmt(b.y, 3)),
+      teleRow("Velocity", fmt(b.vx, 4) + " , " + fmt(b.vy, 4)),
+      teleRow("Speed", fmt(el.speed, 4)),
+      teleRow("Distance / primary", fmt(el.r, 3) + "  (" + el.primaryName + ")"),
+      teleRow("Specific energy ε", fmt(el.energy, 5)),
+      teleRow("Ang. mom. h", fmt(el.h, 4)),
+      teleRow("Periapsis", fmt(el.peri, 3)),
+      teleRow("Apoapsis", isFinite(el.apo) ? fmt(el.apo, 3) : "∞"),
+      teleRow("Eccentricity", fmt(el.e, 4)),
+      teleRow("Period", isFinite(el.period) ? fmt(el.period, 3) : "unbound"),
+      teleRow("Scheduled Δv", fmt(dvLeft, 4)),
+      teleRow("Closest encounter", closest)
+    ].join("");
+    const em = energyMomentum(sim.bodies, sim.G, sim.soften);
+    const eErr = sim.energy0 !== 0 ? (em.E - sim.energy0) / Math.abs(sim.energy0) : em.E - sim.energy0;
+    const pErr = hypot(em.px - sim.Px0, em.py - sim.Py0);
+    $("conserved").innerHTML = [
+      teleRow("Total E", fmt(em.E, 5)),
+      teleRow("Energy error ΔE/E", eErr.toExponential(3)),
+      teleRow("Angular L", fmt(em.L, 4)),
+      teleRow("ΔL", fmt(em.L - sim.L0, 4)),
+      teleRow("|Δp|", pErr.toExponential(3)),
+      teleRow("Collisions", String(sim.collisions))
+    ].join("");
+    $("node-list").innerHTML = sim.maneuvers.map((m) => {
+      const mark = m.done ? "done" : (sim.selectedNode === m.id ? "sel" : "arm");
+      return teleRow((mark === "sel" ? "▸ " : "") + m.name, "t=" + fmt(m.t, 2) + "  Δv=" + fmt(hypot(m.a, m.b), 3) + (m.done ? "  ✓" : ""));
+    }).join("") || teleRow("Nodes", "none");
+  }
+
+  function updateHud() {
+    $("hud-fps").textContent = String(fps);
+    const date = new Date(sim.date0 + sim.t * 86400000 * 0.12);
+    $("hud-time").textContent = "T+" + fmt(sim.t, 3) + "  " + date.toISOString().slice(0, 19) + "Z";
+    $("hud-warp").textContent = "×" + (Math.round(sim.warp * 100) / 100);
+    $("hud-steps").textContent = String(sim.lastSteps);
+    $("hud-bodies").textContent = String(sim.bodies.length);
+    const em = energyMomentum(sim.bodies, sim.G, sim.soften);
+    const eErr = sim.energy0 !== 0 ? (em.E - sim.energy0) / Math.abs(sim.energy0) : 0;
+    const energyEl = $("hud-energy");
+    energyEl.textContent = eErr.toExponential(2);
+    energyEl.className = Math.abs(eErr) > 0.02 ? "warn" : "";
+    $("hud-frame").textContent = sim.frame.toUpperCase();
+    const st = $("hud-pause");
+    st.textContent = sim.paused ? "PAUSED" : "LIVE";
+    st.className = sim.paused ? "pause" : "";
+    $("btn-pause").textContent = sim.paused ? "Resume" : "Pause";
+    $("btn-pause-dock").textContent = sim.paused ? "Go" : "Halt";
+    $("warp-label").textContent = "×" + WARP_STEPS[sim.warpIndex] + "  (applied ×" + (Math.round(sim.warp * 100) / 100) + ")";
+    $("legend").innerHTML = sim.bodies.map((b) => '<span style="color:' + b.color + ';font-size:11px;letter-spacing:0.08em">' + b.name + "</span>").join("<span style='opacity:.3'> · </span>");
+  }
+
+  function bind() {
+    $("btn-pause").onclick = () => { sim.paused = !sim.paused; if (!sim.paused) pushCheckpoint(sim); };
+    $("btn-pause-dock").onclick = () => $("btn-pause").click();
+    $("btn-step").onclick = () => { sim.paused = true; stepWorld(sim, sim.dt); recordTrail(sim); predict(sim); syncInspector(); };
+    $("btn-step-dock").onclick = () => $("btn-step").click();
+    $("btn-reset").onclick = () => { if (sim.initial) restore(sim, sim.initial); sim.paused = true; predict(sim); fillSelect(); syncInspector(); toast("Reset"); };
+    $("btn-rewind").onclick = () => {
+      if (sim.checkpoints.length > 1) sim.checkpoints.pop();
+      const snap = sim.checkpoints[sim.checkpoints.length - 1] || sim.initial;
+      if (snap) restore(sim, snap);
+      predict(sim); fillSelect(); syncInspector(); toast("Rewind");
+    };
+    $("warp").oninput = () => {
+      sim.warpIndex = parseInt($("warp").value, 10);
+      sim.warpTarget = WARP_STEPS[sim.warpIndex];
+    };
+    $("dt").onchange = () => { sim.dt = Math.max(1e-4, num($("dt").value, sim.dt)); };
+    $("G").onchange = () => { sim.G = Math.max(1e-6, num($("G").value, sim.G)); predict(sim); };
+    $("soften").onchange = () => { sim.soften = Math.max(0, num($("soften").value, sim.soften)); };
+    $("collision").onchange = () => { sim.collision = $("collision").value; };
+    $("horizon").oninput = () => { sim.horizon = parseFloat($("horizon").value); predict(sim); };
+    $("predres").oninput = () => { sim.predRes = parseInt($("predres").value, 10); predict(sim); };
+    $("trail").oninput = () => { sim.trailLen = parseInt($("trail").value, 10); };
+    $("bodyscale").oninput = () => { sim.bodyScale = parseFloat($("bodyscale").value); };
+    $("frame").onchange = () => { sim.frame = $("frame").value; };
+    $("sel").onchange = () => { sim.selectedId = $("sel").value; syncInspector(); predict(sim); };
+    ["b-name","b-m","b-r","b-x","b-y","b-vx","b-vy"].forEach((id) => {
+      $(id).onchange = applyInspector;
+      $(id).oninput = () => { if (!sim.paused) return; applyInspector(); };
+    });
+    document.querySelectorAll("[data-ov]").forEach((btn) => {
+      btn.onclick = () => {
+        const k = btn.getAttribute("data-ov");
+        overlays[k] = !overlays[k];
+        btn.classList.toggle("active", overlays[k]);
+      };
+    });
+    $("btn-load").onclick = () => loadScenario($("scenario").value);
+    $("scenario").onchange = () => loadScenario($("scenario").value);
+    $("btn-add-craft").onclick = addCraft;
+    $("btn-add-body").onclick = addPlanet;
+    $("btn-add-node").onclick = () => {
+      const typed = parseFloat($("mn-t").value);
+      let t = sim.t + sim.horizon * 0.3;
+      if (isFinite(typed) && typed > sim.t + 1e-9) t = typed;
+      addNodeAt(t);
+    };
+    $("btn-apply-node").onclick = updateSelectedNode;
+    $("btn-del-node").onclick = deleteSelectedNode;
+    $("btn-export").onclick = exportState;
+    $("import").onchange = importState;
+    $("btn-help").onclick = () => $("help").classList.toggle("open");
+    $("btn-sys").onclick = () => { $("left").classList.toggle("open"); $("right").classList.remove("open"); };
+    $("btn-tlm").onclick = () => { $("right").classList.toggle("open"); $("left").classList.remove("open"); };
+
+    window.addEventListener("keydown", onKey);
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerUp);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("resize", resize);
+  }
+
+  function addCraft() {
+    const host = selectedBody() || mostMassive(sim.bodies);
+    const r = Math.max(8, host.r * 4);
+    const v = circVel(sim.G, host.m, r, 0);
+    const c = makeBody({
+      name: "Craft-" + (sim.bodies.filter((b) => b.kind === "craft").length + 1),
+      kind: "craft", m: 1e-6, x: host.x + r, y: host.y, vx: host.vx + v.vx, vy: host.vy + v.vy, r: 1.1, color: "#8cff6a"
+    });
+    sim.bodies.push(c);
+    sim.selectedId = c.id;
+    fillSelect(); predict(sim); syncInspector();
+  }
+
+  function addPlanet() {
+    const star = mostMassive(sim.bodies);
+    const r = 140 + sim.bodies.length * 20;
+    const v = circVel(sim.G, star.m, r, 0);
+    const p = makeBody({
+      name: "Body-" + sim.bodies.length, kind: "planet", m: 2, x: star.x + r, y: star.y,
+      vx: star.vx + v.vx, vy: star.vy + v.vy, r: 3.4, color: "#9ec8e8"
+    });
+    sim.bodies.push(p);
+    fillSelect(); predict(sim);
+  }
+
+  function addNodeAt(t, craftId) {
+    const craft = craftId ? sim.bodies.find((b) => b.id === craftId) : craftOf(sim);
+    if (!craft || craft.kind !== "craft") { toast("Select a spacecraft"); return; }
+    const mode = $("mn-mode").value;
+    const a = num($("mn-a").value, 0.2);
+    const b = num($("mn-b").value, 0);
+    const man = {
+      id: uid("mn"), name: "MN-" + (sim.maneuvers.length + 1),
+      craftId: craft.id, t, mode, a, b, done: false
+    };
+    sim.maneuvers.push(man);
+    sim.selectedNode = man.id;
+    $("mn-t").value = roundish(t);
+    pushCheckpoint(sim);
+    predict(sim);
+    toast("Node at t=" + fmt(t, 2));
+  }
+
+  function updateSelectedNode() {
+    const m = sim.maneuvers.find((x) => x.id === sim.selectedNode);
+    if (!m) { toast("No node selected"); return; }
+    m.t = num($("mn-t").value, m.t);
+    m.mode = $("mn-mode").value;
+    m.a = num($("mn-a").value, m.a);
+    m.b = num($("mn-b").value, m.b);
+    m.done = false;
+    predict(sim);
+  }
+
+  function deleteSelectedNode() {
+    if (!sim.selectedNode) return;
+    sim.maneuvers = sim.maneuvers.filter((m) => m.id !== sim.selectedNode);
+    sim.selectedNode = null;
+    predict(sim);
+  }
+
+  function exportState() {
+    const blob = new Blob([JSON.stringify({ sim: snapshot(sim), cam, overlays, scenario: sim.scenario }, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "orbital-state.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function importState(ev) {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        restore(sim, data.sim);
+        sim.initial = snapshot(sim);
+        if (data.cam) Object.assign(cam, { x: data.cam.x, y: data.cam.y, zoom: data.cam.zoom });
+        fillSelect(); predict(sim); syncInspector(); toast("Imported");
+      } catch (e) { toast("Import failed"); }
+    };
+    reader.readAsText(f);
+  }
+
+  function onKey(e) {
+    if (e.target && /input|select|textarea/i.test(e.target.tagName)) return;
+    if (e.code === "Space") { e.preventDefault(); sim.paused = !sim.paused; }
+    else if (e.key === ".") { sim.paused = true; stepWorld(sim, sim.dt); recordTrail(sim); predict(sim); }
+    else if (e.key === ",") $("btn-rewind").click();
+    else if (e.key === "r" || e.key === "R") $("btn-reset").click();
+    else if (e.key === "[") { sim.warpIndex = Math.max(0, sim.warpIndex - 1); $("warp").value = sim.warpIndex; sim.warpTarget = WARP_STEPS[sim.warpIndex]; }
+    else if (e.key === "]") { sim.warpIndex = Math.min(WARP_STEPS.length - 1, sim.warpIndex + 1); $("warp").value = sim.warpIndex; sim.warpTarget = WARP_STEPS[sim.warpIndex]; }
+    else if (e.key === "f" || e.key === "F") {
+      const modes = ["inertial", "body", "rotating"];
+      sim.frame = modes[(modes.indexOf(sim.frame) + 1) % 3];
+      $("frame").value = sim.frame;
+    } else if (e.key === "n" || e.key === "N") addNodeAt(sim.t + sim.horizon * 0.3);
+    else if (e.key === "Escape") { $("help").classList.remove("open"); sim.selectedNode = null; }
+    else if (/^[1-8]$/.test(e.key)) {
+      const names = Object.keys(SCENARIOS);
+      if (names[parseInt(e.key, 10) - 1]) loadScenario(names[parseInt(e.key, 10) - 1]);
+    }
+  }
+
+  function hitBody(sx, sy) {
+    let best = null, bd = 22;
+    const basis = frameBasis(sim);
+    for (const b of sim.bodies) {
+      const f = toFrame(b.x, b.y, b.vx, b.vy, basis);
+      const p = worldToScreen(f.x, f.y);
+      const rad = Math.max(8, Math.min(40, b.r * cam.zoom * sim.bodyScale + 6));
+      const d = hypot(p.x - sx, p.y - sy);
+      if (d < rad + 8 && d < bd) { bd = d; best = { id: b.id, kind: "body" }; }
+    }
+    const craft = selectedBody();
+    if (sim.paused && craft && craft.kind === "craft") {
+      const f = toFrame(craft.x, craft.y, craft.vx, craft.vy, basis);
+      const p = worldToScreen(f.x, f.y);
+      const q = worldToScreen(f.x + f.vx * 18, f.y + f.vy * 18);
+      if (hypot(q.x - sx, q.y - sy) < 12) return { id: craft.id, kind: "vel" };
+    }
+    return best;
+  }
+
+  function hitPrediction(sx, sy) {
+    if (!sim.prediction) return null;
+    let best = null, bd = 10;
+    for (const p of sim.prediction.path) {
+      const s = predToScreen(p);
+      const d = hypot(s.x - sx, s.y - sy);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  function onPointerDown(e) {
+    canvas.setPointerCapture(e.pointerId);
+    input.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (input.pointers.size === 2) { input.mode = "pinch"; return; }
+    const hit = hitBody(e.clientX, e.clientY);
+    if (hit && hit.kind === "vel") {
+      input.mode = "vel"; input.dragId = hit.id; sim.paused = true; return;
+    }
+    if (hit && hit.kind === "body") {
+      sim.selectedId = hit.id; fillSelect(); syncInspector(); predict(sim);
+      const b = selectedBody();
+      if (sim.paused && b && b.kind === "craft") { input.mode = "pos"; input.dragId = b.id; }
+      else input.mode = "pan";
+      input.lastX = e.clientX; input.lastY = e.clientY;
+      return;
+    }
+    const pred = hitPrediction(e.clientX, e.clientY);
+    if (pred) {
+      addNodeAt(pred.t);
+      const m = sim.maneuvers[sim.maneuvers.length - 1];
+      if (m) { sim.selectedNode = m.id; $("mn-t").value = roundish(m.t); }
+      return;
+    }
+    input.mode = "pan";
+    input.lastX = e.clientX; input.lastY = e.clientY;
+  }
+
+  function onPointerMove(e) {
+    if (input.mode === "pinch" && input.pointers.size === 2) {
+      const pts = [...input.pointers.values()];
+      const old = hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      input.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const pts2 = [...input.pointers.values()];
+      const nw = hypot(pts2[0].x - pts2[1].x, pts2[0].y - pts2[1].y);
+      if (old > 1) zoomAt(cam.w / 2, cam.h / 2, nw / old);
+      return;
+    }
+    if (input.mode === "pan") {
+      const dx = e.clientX - input.lastX, dy = e.clientY - input.lastY;
+      cam.x -= dx / cam.zoom; cam.y -= dy / cam.zoom;
+      input.lastX = e.clientX; input.lastY = e.clientY;
+    } else if (input.mode === "pos" && input.dragId) {
+      const w = screenToWorld(e.clientX, e.clientY);
+      const b = sim.bodies.find((x) => x.id === input.dragId);
+      const basis = frameBasis(sim);
+      const wx = basis.c * w.x + basis.s * w.y + basis.ox;
+      const wy = -basis.s * w.x + basis.c * w.y + basis.oy;
+      if (b) { b.x = wx; b.y = wy; predict(sim); syncInspector(); }
+    } else if (input.mode === "vel" && input.dragId) {
+      const b = sim.bodies.find((x) => x.id === input.dragId);
+      if (!b) return;
+      const basis = frameBasis(sim);
+      const f = toFrame(b.x, b.y, b.vx, b.vy, basis);
+      const p = worldToScreen(f.x, f.y);
+      const wx = (e.clientX - p.x) / cam.zoom / 18;
+      const wy = (e.clientY - p.y) / cam.zoom / 18;
+      const vx = basis.c * wx + basis.s * wy + basis.ovx;
+      const vy = -basis.s * wx + basis.c * wy + basis.ovy;
+      b.vx = vx; b.vy = vy;
+      predict(sim); syncInspector();
+    }
+    input.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  }
+
+  function onPointerUp(e) {
+    input.pointers.delete(e.pointerId);
+    if (input.pointers.size < 2 && input.mode === "pinch") input.mode = null;
+    if (input.pointers.size === 0) { input.mode = null; input.dragId = null; }
+  }
+
+  function zoomAt(sx, sy, factor) {
+    const before = screenToWorld(sx, sy);
+    cam.zoom = clamp(cam.zoom * factor, 0.05, 80);
+    const after = screenToWorld(sx, sy);
+    cam.x += before.x - after.x;
+    cam.y += before.y - after.y;
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    const f = e.deltaY > 0 ? 0.92 : 1.08;
+    zoomAt(e.clientX, e.clientY, f);
+  }
+
+  /* ---------- loop ---------- */
+  let last = performance.now();
+  function tick(now) {
+    const realDt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    frames++;
+    fpsT += realDt;
+    if (fpsT >= 0.4) { fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
+
+    sim.warp += (sim.warpTarget - sim.warp) * (1 - Math.exp(-realDt * 3.2));
+    sim.lastSteps = 0;
+    if (!sim.paused) {
+      const need = sim.warp * realDt;
+      let acc = 0;
+      const maxSteps = 420;
+      while (acc + sim.dt * 0.5 < need && sim.lastSteps < maxSteps) {
+        stepWorld(sim, sim.dt);
+        acc += sim.dt;
+        sim.lastSteps++;
+        if (sim.lastSteps % 4 === 0) recordTrail(sim);
+      }
+      if (sim.lastSteps % 4 !== 0) recordTrail(sim);
+      if (sim.lastSteps > 0) predict(sim);
+      if ((sim.checkpoints.length === 0) || (sim.t - sim.checkpoints[sim.checkpoints.length - 1].t > 2.5)) pushCheckpoint(sim);
+    }
+
+    render();
+    updateHud();
+    updateTelemetry();
+    if (sim.paused) {
+      const ae = document.activeElement;
+      if (!ae || !/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) syncInspector();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function getHud() {
+    const em = energyMomentum(sim.bodies, sim.G, sim.soften);
+    const eErr = sim.energy0 !== 0 ? (em.E - sim.energy0) / Math.abs(sim.energy0) : 0;
+    const b = selectedBody();
+    const prim = b ? primaryOf(b, sim.bodies) : null;
+    const el = b && prim ? orbitalElements(b, prim, sim.G) : null;
+    return {
+      fps, t: sim.t, warp: sim.warp, steps: sim.lastSteps, n: sim.bodies.length,
+      energyError: eErr, momentumError: hypot(em.px - sim.Px0, em.py - sim.Py0),
+      dL: em.L - sim.L0, frame: sim.frame, paused: sim.paused,
+      selected: b && b.name, elements: el, maneuvers: sim.maneuvers,
+      predictionSamples: sim.prediction ? sim.prediction.path.length : 0,
+      encounters: sim.prediction && sim.prediction.encounters
+    };
+  }
+
+  window.OMP = {
+    sim, cam, overlays, getHud,
+    pause() { sim.paused = true; },
+    play() { sim.paused = false; },
+    toggle() { sim.paused = !sim.paused; },
+    step(n) { n = n || 1; sim.paused = true; for (let i = 0; i < n; i++) { stepWorld(sim, sim.dt); recordTrail(sim); } predict(sim); syncInspector(); },
+    reset() { $("btn-reset").click(); },
+    rewind() { $("btn-rewind").click(); },
+    setWarp(i) { sim.warpIndex = clamp(i, 0, WARP_STEPS.length - 1); sim.warpTarget = WARP_STEPS[sim.warpIndex]; $("warp").value = sim.warpIndex; },
+    setFrame(f) { sim.frame = f; $("frame").value = f; },
+    loadScenario,
+    addNodeAt,
+    select(id) { sim.selectedId = id; fillSelect(); syncInspector(); },
+    energyMomentum: () => energyMomentum(sim.bodies, sim.G, sim.soften),
+    bodyScreen(id) {
+      const b = sim.bodies.find((x) => x.id === id) || selectedBody();
+      return b ? bodyScreenPos(b) : null;
+    },
+  };
+
+  seedStars();
+  resize();
+  bind();
+  loadScenario("default");
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

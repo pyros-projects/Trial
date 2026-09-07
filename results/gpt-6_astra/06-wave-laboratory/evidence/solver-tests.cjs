@@ -1,0 +1,25 @@
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const artifact = path.join(__dirname, '..', 'index.html');
+assert.ok(fs.existsSync(artifact), 'Delivered solver artifact must exist');
+const html = fs.readFileSync(artifact, 'utf8');
+const match = html.match(/<script id="wave-solver">([\s\S]*?)<\/script>/);
+assert.ok(match, 'Executable solver module must exist');
+vm.runInThisContext(match[1]);
+const make = () => new WaveSolver(120, 72, {speed:3,dt:0.03,damping:0.015,boundary:'absorbing'});
+const source=(phase=0)=>({x:.28,y:.5,frequency:1.2,amplitude:1,phase,type:'point',waveform:'sine',active:true,duration:1,start:0,angle:90,length:.4});
+const run=(s,n,sources=[])=>{for(let i=0;i<n;i++)s.step(sources);};
+const max=(s)=>s.u.reduce((m,v)=>Math.max(m,Math.abs(v)),0);
+const rms=(s,x,y,r=2)=>{let q=0,n=0;for(let j=y-r;j<=y+r;j++)for(let i=x-r;i<=x+r;i++){q+=s.u[j*s.nx+i]**2;n++;}return Math.sqrt(q/n);};
+const tests=[];
+function test(name,fn){fn();tests.push(name);console.log('PASS',name);}
+test('point excitation propagates to a remote cell',()=>{const s=make();run(s,170,[source()]);assert.ok(rms(s,70,36)>.003);assert.ok(max(s)<10);});
+test('two sources obey superposition and opposite-phase cancellation',()=>{const a=make(),b=make(),both=make(),cancel=make();const sa=source(),sb={...source(),y:.7};run(a,130,[sa]);run(b,130,[sb]);run(both,130,[sa,sb]);run(cancel,130,[sa,source(180)]);let error=0;for(let i=0;i<a.u.length;i++)error=Math.max(error,Math.abs(a.u[i]+b.u[i]-both.u[i]));assert.ok(error<1e-4,error);assert.ok(max(cancel)<1e-5,max(cancel));});
+test('an impermeable barrier changes the transmitted field',()=>{const open=make(),wall=make();for(let y=0;y<72;y++)wall.solid[y*120+55]=1;run(open,200,[source()]);run(wall,200,[source()]);assert.ok(rms(open,80,36)>.005);assert.ok(rms(wall,80,36)<1e-8);});
+test('a slower medium delays arrival of a finite pulse',()=>{const fast=make(),slow=make();slow.index.fill(1.8);slow.updateCoefficients();const pulse={...source(),type:'pulse',duration:.7};run(fast,115,[pulse]);run(slow,115,[pulse]);assert.ok(rms(fast,78,36)>.0003);assert.ok(rms(slow,78,36)<rms(fast,78,36)*.2);});
+test('unsafe requested timesteps are clamped and remain finite',()=>{const s=new WaveSolver(240,144,{speed:8,dt:.12,damping:0,boundary:'reflecting'});assert.ok(s.stability().clamped);assert.ok(s.stability().ratio<=.94);run(s,500,[source()]);assert.ok(s.u.every(Number.isFinite));assert.ok(max(s)<20);});
+test('clear removes displacement, velocity, energy, and elapsed time',()=>{const s=make();run(s,100,[source()]);s.clear();assert.equal(max(s),0);assert.ok(s.v.every(v=>v===0));assert.ok(s.energy.every(v=>v===0));assert.equal(s.time,0);});
+test('a short pulse deposits energy even when a step spans its duration',()=>{const s=new WaveSolver(160,96,{speed:.5,dt:.12,damping:0,boundary:'absorbing'});run(s,25,[{...source(),type:'pulse',duration:.1}]);assert.ok(max(s)>.0001,`short pulse field max ${max(s)}`);});
+console.log(`${tests.length} solver behavior tests passed`);

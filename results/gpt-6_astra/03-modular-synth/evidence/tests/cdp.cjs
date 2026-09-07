@@ -1,0 +1,7 @@
+const {command,root}=require('./browser-lib.cjs');const fs=require('node:fs'),path=require('node:path');
+async function connect(){const url=command('get','cdp-url').cdpUrl;const socket=new WebSocket(url);await new Promise((r,j)=>{socket.onopen=r;socket.onerror=j});let id=0,listener=()=>{};const pending=new Map();socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.method)listener(m);if(m.id&&pending.has(m.id)){const {r,j}=pending.get(m.id);pending.delete(m.id);m.error?j(new Error(JSON.stringify(m.error))):r(m.result)}};return{onEvent:fn=>listener=fn,send:(method,params={},sessionId)=>new Promise((r,j)=>{const n=++id;pending.set(n,{r,j});fs.appendFileSync(path.join(root,'logs/cdp-commands.log'),JSON.stringify({method,params,sessionId})+'\n');socket.send(JSON.stringify({id:n,method,params,...(sessionId?{sessionId}:{})}))}),close:()=>socket.close()}}
+let downloadConnection;
+async function downloads(dir){if(!downloadConnection)downloadConnection=await connect();fs.mkdirSync(dir,{recursive:true});await downloadConnection.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:dir,eventsEnabled:true});return downloadConnection}
+function closeDownloads(){downloadConnection?.close();downloadConnection=null}
+module.exports={connect,downloads,closeDownloads};
+if(require.main===module)downloads(path.resolve(process.argv[2]||path.join(root,'downloads'))).then(()=>{console.log('Downloads configured');closeDownloads()}).catch(e=>{console.error(e);process.exit(1)});

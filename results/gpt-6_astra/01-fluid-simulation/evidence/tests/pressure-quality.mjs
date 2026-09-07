@@ -1,0 +1,2 @@
+import {click,simSeconds,inspect,save,assert,close} from './driver.mjs';
+try {await click('Reset');await simSeconds(.4);await click('Pause simulation');const s=await inspect();save('pressure-quality',s);assert(s.divergenceAfter<s.divergenceBefore*.5,'Pressure solve removes most injected divergence',{before:s.divergenceBefore,after:s.divergenceAfter,ratio:s.divergenceAfter/s.divergenceBefore});}finally{close();}

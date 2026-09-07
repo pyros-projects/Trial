@@ -1,0 +1,6 @@
+import {send,close} from './cdp.mjs';import fs from 'node:fs';
+const read=async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true})).result.value;const wait=ms=>new Promise(r=>setTimeout(r,ms));
+await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
+const before=await read('window.terra.diagnostics()');
+for(const[type,x,y]of[['touchStart',215,450],['touchMove',225,455],['touchMove',235,460]]){await send('Input.dispatchTouchEvent',{type,touchPoints:[{x,y,id:1,radiusX:4,radiusY:4,force:1}]});await wait(250);}
+await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await wait(100);const after=await read('window.terra.diagnostics()');if(after.water<=before.water+30||after.time!==before.time||after.terrain!==before.terrain)throw Error('Touch water brush failed');await wait(500);const released=await read('window.terra.diagnostics()');if(released.water!==after.water)throw Error('Touch painting continued after release');const result={beforeWater:before.water,afterWater:after.water,releasedWater:released.water,time:after.time,terrainUnchanged:after.terrain===before.terrain};fs.writeFileSync(new URL('../logs/touch-paint.json',import.meta.url),JSON.stringify(result,null,2));console.log(JSON.stringify(result));await send('Emulation.setTouchEmulationEnabled',{enabled:false,maxTouchPoints:1});close();

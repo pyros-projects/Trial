@@ -1,0 +1,34 @@
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const file=path.join(__dirname,'../../index.html');
+assert.ok(fs.existsSync(file),'The delivered index.html must exist');
+const html=fs.readFileSync(file,'utf8');
+const code=html.match(/<script id="sdf-core">([\s\S]*?)<\/script>/)?.[1];
+assert.ok(code,'Embedded pure scene core must exist');
+const SDF=vm.runInNewContext(code+'; SDF;', {console});
+const approx=(a,b,t=1e-5)=>assert.ok(Math.abs(a-b)<t,`${a} differs from ${b}`);
+const sphere=SDF.object('sphere');
+assert.ok(SDF.distance([0,0,0],sphere,0)<0);
+approx(SDF.distance([1,0,0],sphere,0),0);
+assert.ok(SDF.distance([2,0,0],sphere,0)>0);
+for(const type of ['box','roundedBox','cylinder','capsule','torus','plane','wave']){
+ const o=SDF.object(type); assert.ok(Number.isFinite(SDF.distance([0.4,0.5,0.6],o,0)),type+' finite');
+}
+const a=SDF.object('sphere'), b=SDF.object('sphere'); b.position=[1,0,0];
+const at=p=>SDF.field(p,[a,b],0).d;
+b.operation='union';assert.ok(at([1.5,0,0])<0,'union includes both volumes');
+b.operation='subtract';assert.ok(at([0.5,0,0])>0,'subtraction cuts overlap');assert.ok(at([-0.5,0,0])<0,'subtraction keeps outside cutter');
+b.operation='intersect';assert.ok(at([0.5,0,0])<0,'intersection keeps overlap');assert.ok(at([-0.5,0,0])>0,'intersection removes outside overlap');
+b.operation='smoothUnion';b.blend=.5;assert.ok(at([.5,.86,0])<Math.min(SDF.distance([.5,.86,0],a),SDF.distance([.5,.86,0],b)),'smooth union adds a blend');
+b.operation='smoothSubtract';assert.ok(Number.isFinite(at([0,0,0])));
+b.operation='subtract';assert.notEqual(SDF.field([.5,0,0],[a,b]).d,SDF.field([.5,0,0],[b,a]).d,'stack ordering changes field');
+b.visible=false;approx(at([0,0,0]),-1);
+sphere.position=[3,0,0];sphere.scale=[2,1,.5];approx(SDF.distance([5,0,0],sphere),0);approx(SDF.distance([3,0,.5],sphere),0);
+const scene=SDF.preset('sculpture');const str=SDF.serialize(scene);approx(SDF.validate(JSON.parse(str)).objects.length,scene.objects.length);assert.equal(SDF.serialize(SDF.validate(JSON.parse(str))),str,'JSON round trip deterministic');
+assert.throws(()=>SDF.validate({version:1,objects:[{type:'unknown'}]}));
+assert.throws(()=>SDF.validate({...JSON.parse(str),objects:Array(33).fill(JSON.parse(str).objects[0])}));
+const bad=JSON.parse(str);bad.objects[0].scale=[0,1,1];assert.throws(()=>SDF.validate(bad));
+assert.ok(!/<(?:script|link)[^>]*(?:src|href)=["']https?:/i.test(html),'No external scripts/styles');
+console.log('PASS: primitive signs, all primitive types, transforms, ordered CSG, smooth operations, visibility, deterministic serialization, invalid imports and dependency checks.');

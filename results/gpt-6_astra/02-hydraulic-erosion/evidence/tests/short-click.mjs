@@ -1,0 +1,4 @@
+import {send,close} from './cdp.mjs';import fs from 'node:fs';
+const read=async e=>(await send('Runtime.evaluate',{expression:e,returnByValue:true})).result.value;
+const results=[];for(let i=0;i<8;i++){const before=await read('sim.metrics().water');await send('Input.dispatchMouseEvent',{type:'mousePressed',x:480,y:430,button:'left',buttons:1,clickCount:1});await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:480,y:430,button:'left',buttons:0,clickCount:1});const after=await read('sim.metrics().water');results.push({before,after,changed:after>before});}
+fs.writeFileSync(new URL('../logs/short-click-'+(results.every(r=>r.changed)?'pass':'fail')+'.json',import.meta.url),JSON.stringify(results,null,2));console.log(JSON.stringify(results));close();if(!results.every(r=>r.changed))process.exitCode=1;

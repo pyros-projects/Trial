@@ -1,0 +1,5 @@
+const [url,path]=process.argv.slice(2);const ws=new WebSocket(url);let id=0;const pending=new Map();
+const call=(method,params={})=>new Promise((resolve,reject)=>{const i=++id;pending.set(i,{resolve,reject});ws.send(JSON.stringify({id:i,method,params}))});
+ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.reject(m.error):p.resolve(m.result)}}else if(m.method?.startsWith('Browser.download')){console.log(JSON.stringify(m));if(m.params.state==='completed'||m.params.state==='canceled')ws.close()}};
+ws.onopen=async()=>{const ts=await call('Target.getTargets');console.log(JSON.stringify(ts.targetInfos.filter(t=>t.type==='page')));for(const t of ts.targetInfos.filter(t=>t.type==='page')){try{await call('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:path,eventsEnabled:true,browserContextId:t.browserContextId})}catch(e){console.log('Context skipped',t.browserContextId)}}console.log('Download observer ready')};
+setTimeout(()=>{ws.close();console.log('Observer timeout')},20000).unref();
