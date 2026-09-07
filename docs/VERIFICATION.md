@@ -2,6 +2,14 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Grok task 11 and skipped prompts: 2026-09-07
+
+Grok's **Factory Automation and Logistics Game** brings the collection to **31 HTML builds across ten prompts**. Discovery correctly assigns `11-factory-automation` by its complete task ID despite Grok's missing tasks 09 and 10. Browser checks confirmed Grok's missing-build card remains in task 09, task 10 with no submissions creates no showcase group, and task 11 contains one Grok build plus the other four models' placeholders in the configured order. No gallery code changes were needed.
+
+The new top-level screenshot is an exact copy of `evidence/screenshots/13-congested-preset.png`. All 19 original submission files remain byte-for-byte unchanged. The factory canvas starts in the public sandbox, and its direct implementation link opens a 1440 × 1057 app beneath the 43-pixel bar. These checks cover discovery, display, and launching the app; they do not establish simulation correctness or an evaluator score.
+
+Production deployment **`6a9f330e5a5ea6f49c974f18`** publishes **185 files totaling 5,786,525 bytes (5.52 MiB)**. Live HTTPS verification passed for all 31 implementation share pages, thumbnails, exact source hashes and attachment/sandbox headers; all ten comparison pages and images; and the five model profiles. Fifteen representative private paths, including the new result's evidence and copied harness skill, returned 404. The new category Copy link and direct app handoff also passed production browser checks.
+
 ## Expanded category grid: 2026-09-07
 
 Expanded categories now show every model entry in a wrapping grid: three columns above 1100 pixels, two from 581–1100, and one at 580 or below. Later models occupy additional rows reached by vertical scrolling. The expanded view shows a total model count and Copy link; the main showcase retains horizontal paging. Opening an expanded category starts at the top, and closing it preserves the main gallery's filters, carousel position, and focus.

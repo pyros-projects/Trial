@@ -6,13 +6,13 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-07 checkout contains 30 submitted HTML builds for nine tasks across five model folders:
+The 2026-09-07 checkout contains 31 submitted HTML builds for ten tasks across five model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
 | `gpt-6_astra` | 9 | 01-09 |
 | `anthropic_opus5` | 2 | 01-02 |
-| `xai_grok4.6` | 8 | 01-08 |
+| `xai_grok4.6` | 9 | 01-08, 11 |
 | `zai_glm5.3_flash` | 3 | 01-03 |
 | `google_gemini3.8_flash` | 8 | 01-08 |
 
