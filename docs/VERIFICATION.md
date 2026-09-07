@@ -2,6 +2,20 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Five-model comparisons and category sharing: 2026-09-07
+
+The collection now contains **30 HTML builds across nine prompts and five models**, ordered **GPT-6 Astra, Opus 5, Grok 4.6, GLM 5.3 Flash, Gemini 3.8 Flash**. The new profiles record **Claude Code / Max** for Opus and **Pi / High** for GLM. Their five top-level screenshots are exact copies of supplied final evidence images; the original HTML and evidence files remain unchanged. The masthead and README now give *a Vibe Benchmark* the same font size as Trial, with a smaller **by Pyro** line and no parentheses.
+
+The complete WSL suite with both browser modes enabled passed **97 tests with no skips**. JavaScript syntax and Git whitespace checks also passed. Coverage includes three columns above 1100 pixels, two from 581 through 1100, and one at 580 or below; one-column arrow steps, native scrolling, keyboard navigation, missing builds, and repeated runs. Expanded categories preserve the main gallery's position and filters. Closing a nested app or prompt returns to the comparison, and closing the comparison restores focus to its Expand control.
+
+Category **Copy link** is available beside the arrows and inside the expanded view. Real-server browser tests verify local hash links, exported `/compare/<task-id>/` pages, saved-filter bypass, configured model order, browser history, close and reload, invalid links, and complete dialog/iframe cleanup. Export tests cover prompt-specific metadata, exact counts, safe paths and escaped text, distinct-model image selection, source metadata removal, and fallbacks without Pillow or screenshots.
+
+Visual checks of the actual gallery, expanded comparison, title, and Why view found no page overflow at desktop, tablet, or mobile sizes. See the [expanded desktop comparison](prompt-comparison-preview.png), [mobile comparison](prompt-comparison-mobile.png), and refreshed gallery and README images. Both the five-model fluid preview and the one-model sand preview were inspected. The export contains **nine 1200 × 630 comparison JPEGs totaling 608,015 bytes**, composed from already published thumbnails, with no additional submitted HTML or raw evidence copies.
+
+Production deployment **`6a9f2d0dd4b8356b274415ca`** publishes **180 files totaling 5,612,861 bytes (5.35 MiB)**. Live HTTPS verification passed for all 30 implementation share pages, thumbnails, exact source hashes and attachment/sandbox headers; all nine comparison pages, canonical URLs, titles, counts and metadata-free JPEGs; and the five allowlisted model profiles. Thirteen representative private routes returned 404. Social-platform cache refresh and actual message unfurling were not tested.
+
+Production browser checks confirmed a shared fluid comparison opens all five models despite saved filters that hide every main-gallery result. Copy link returned the canonical comparison URL. Opus and GLM's fluid canvases opened without page errors in 1600 × 1057 frames below the 43-pixel bar, and closing the app restored the expanded comparison and its URL. The sand comparison opened and copied its correct link at 390 × 844 without page overflow. These are gallery smoke checks, not an evaluation of the submitted simulations.
+
 ## Shared model setups and Astra task 09: 2026-09-07
 
 Each model now has an optional `results/<model>/model.toml` containing its reported provider, harness, setting, and homepage links. The current profiles record **Codex CLI / Max**, **Cursor Desktop / High Fast**, and **Antigravity CLI / High**. Cards show the harness and setting; **Setup** in the maximized viewer and the build-details tab show the profile and external links. The copy identifies this as shared collection context, rather than equivalent budgets or a complete per-run record. Model order and colors remain in `appsettings.json`.

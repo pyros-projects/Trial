@@ -15,7 +15,7 @@ import tempfile
 from html import escape
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
@@ -122,15 +122,9 @@ def share_settings(root: Path) -> tuple[str, dict[str, str]]:
     return f"{parsed.scheme}://{hostname}{port}", labels
 
 
-def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
-    """Render crawler metadata and a browser handoff without duplicating artifacts."""
-    title = f"{model_label}: {row['task_title']} | Trial"
-    description = " ".join(part for part in (
-        row["description"].strip(), f"Explore {model_label}'s interactive implementation on Trial."
-    ) if part)
-    canonical = origin + row["share_url"]
-    viewer = "/#play/" + "/".join(quote(row[key], safe="") for key in ("model_key", "run_key"))
-    screenshot = row["artifact"]["screenshot_url"]
+def social_page(title: str, description: str, canonical: str, viewer: str, *,
+                image: str | None, image_alt: str, link_text: str) -> str:
+    """Keep initial crawler metadata and an escaped browser handoff in one page."""
     metadata = [
         ("name", "description", description),
         ("property", "og:type", "website"),
@@ -138,13 +132,11 @@ def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
         ("property", "og:title", title),
         ("property", "og:description", description),
         ("property", "og:url", canonical),
-        ("name", "twitter:card", "summary_large_image" if screenshot else "summary"),
+        ("name", "twitter:card", "summary_large_image" if image else "summary"),
         ("name", "twitter:title", title),
         ("name", "twitter:description", description),
     ]
-    if screenshot:
-        image = origin + screenshot
-        image_alt = f"{model_label}: {row['task_title']} implementation screenshot"
+    if image:
         metadata.extend([
             ("property", "og:image", image), ("property", "og:image:alt", image_alt),
             ("name", "twitter:image", image), ("name", "twitter:image:alt", image_alt),
@@ -164,11 +156,26 @@ def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
 <body>
 <h1>{escape(title)}</h1>
 <p>{escape(description)}</p>
-<p><a href="{escape(viewer, quote=True)}">Open the interactive implementation</a></p>
+<p><a href="{escape(viewer, quote=True)}">{escape(link_text)}</a></p>
 <script>location.replace({redirect});</script>
 </body>
 </html>
 '''
+
+
+def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
+    """Render crawler metadata without duplicating the submitted artifact."""
+    description = " ".join(part for part in (
+        row["description"].strip(), f"Explore {model_label}'s interactive implementation on Trial."
+    ) if part)
+    viewer = "/#play/" + "/".join(quote(row[key], safe="") for key in ("model_key", "run_key"))
+    screenshot = row["artifact"]["screenshot_url"]
+    return social_page(
+        f"{model_label}: {row['task_title']} | Trial", description, origin + row["share_url"], viewer,
+        image=origin + screenshot if screenshot else None,
+        image_alt=f"{model_label}: {row['task_title']} implementation screenshot",
+        link_text="Open the interactive implementation",
+    )
 
 
 class PublicGalleryState(server.GalleryState):
@@ -239,6 +246,109 @@ def thumbnail(source: Path, destination: Path, modules) -> None:
         clean.save(destination, "WEBP", quality=78, method=4)
 
 
+def comparison_image(stage: Path, task: dict[str, str], rows: list[dict[str, Any]],
+                     labels: dict[str, str], counts: str, modules) -> tuple[str | None, str]:
+    """Compose only published thumbnails, falling back to an existing image URL."""
+    candidates = [row for row in rows if row["artifact"]["screenshot_url"]]
+    if not candidates:
+        return None, ""
+    first = candidates[0]
+    fallback = (first["artifact"]["screenshot_url"],
+                f"{labels.get(first['model_key'], first['model'])}: {task.get('title', task['id'])} screenshot")
+    if modules is None:
+        return fallback
+    from PIL import ImageDraw, ImageFont
+
+    image_module, image_ops = modules
+    panels = []
+    seen = set()
+    for row in candidates:
+        if row["model_key"] in seen:
+            continue
+        source = regular_file(stage, unquote(row["artifact"]["screenshot_url"]).lstrip("/"))
+        if source is None:
+            continue
+        try:
+            with image_module.open(source) as original:
+                panels.append((labels.get(row["model_key"], row["model"]), original.convert("RGB")))
+        except (OSError, ValueError):
+            continue
+        seen.add(row["model_key"])
+        if len(panels) == 3:
+            break
+    if not panels:
+        return fallback
+
+    def font(size: int):
+        for name in ("DejaVuSans.ttf", "Arial.ttf"):
+            try:
+                return ImageFont.truetype(name, size)
+            except OSError:
+                pass
+        return ImageFont.load_default(size=size)
+
+    try:
+        title_font, label_font, small_font = font(44), font(22), font(20)
+    except (OSError, TypeError):
+        # Older Pillow versions without a scalable bundled font still get an image.
+        return fallback
+    canvas = image_module.new("RGB", (1200, 630), "#151713")
+    draw = ImageDraw.Draw(canvas)
+
+    def fit(text: str, face, width: int) -> str:
+        value = " ".join(text.split())[:400]
+        if draw.textlength(value, font=face) <= width:
+            return value
+        while value and draw.textlength(value + "...", font=face) > width:
+            value = value[:-1]
+        return value.rstrip() + "..."
+
+    draw.rectangle((48, 42, 79, 47), fill="#e48b69")
+    draw.text((93, 29), "TRIAL / COMPARE", font=small_font, fill="#d6b5a2")
+    draw.text((48, 89), fit(task.get("title", task["id"]), title_font, 1104), font=title_font, fill="#f4eee3")
+    draw.text((48, 168), counts, font=label_font, fill="#b9bdaf")
+    width = min(560, (1104 - 18 * (len(panels) - 1)) // len(panels))
+    start = (1200 - width * len(panels) - 18 * (len(panels) - 1)) // 2
+    for index, (label, screenshot) in enumerate(panels):
+        left = start + index * (width + 18)
+        draw.rounded_rectangle((left, 237, left + width, 557), radius=12, fill="#242720", outline="#3c4135")
+        preview = image_ops.contain(screenshot, (width - 2, 234), image_module.Resampling.LANCZOS)
+        canvas.paste(preview, (left + (width - preview.width) // 2, 246 + (234 - preview.height) // 2))
+        draw.text((left + 16, 507), fit(label, label_font, width - 32), font=label_font, fill="#f4eee3")
+    draw.text((48, 586), "One prompt. Explore every implementation.", font=small_font, fill="#a7ad9c")
+    destination = stage / "comparisons" / f"{task['id']}.jpg"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # New RGB canvas: source metadata and submitted image bytes stay untouched.
+    canvas.save(destination, "JPEG", quality=82, optimize=True, progressive=True)
+    return (f"/comparisons/{quote(task['id'], safe='')}.jpg",
+            f"{task.get('title', task['id'])}: {', '.join(label for label, _ in panels)}. {counts}.")
+
+
+def comparison_pages(stage: Path, catalog: list[dict[str, str]], rows: list[dict[str, Any]],
+                     origin: str, labels: dict[str, str], modules) -> dict[str, str]:
+    order = {key: index for index, key in enumerate(labels)}
+    urls = {}
+    for task in catalog:
+        builds = sorted((row for row in rows if row["task_id"] == task["id"]), key=lambda row: (
+            order.get(row["model_key"], len(order)), row["model_key"].casefold(), row["run_key"].casefold()))
+        if not builds:
+            continue
+        models = list(dict.fromkeys(row["model_key"] for row in builds))
+        counts = f"{len(builds)} {'build' if len(builds) == 1 else 'builds'} from {len(models)} {'model' if len(models) == 1 else 'models'}"
+        description = f"Compare {counts} for the same prompt. Models: {', '.join(labels.get(key, key) for key in models)}."
+        encoded = quote(task["id"], safe="")
+        urls[task["id"]] = f"/compare/{encoded}/"
+        image_url, image_alt = comparison_image(stage, task, builds, labels, counts, modules)
+        page = stage / "compare" / task["id"] / "index.html"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(social_page(
+            f"{task.get('title', task['id'])} | Trial", description, origin + urls[task["id"]],
+            f"/#compare/{encoded}", image=origin + image_url if image_url else None,
+            image_alt=image_alt, link_text="Open the interactive comparison",
+        ), encoding="utf-8")
+    return urls
+
+
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
@@ -292,7 +402,8 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
     modules = pillow_modules() if screenshots == "auto" else None
     report: dict[str, Any] = {"output": str(output), "html_files": len(rows), "screenshots": 0,
                               "unoptimized_screenshots": 0, "source_screenshot_bytes": 0,
-                              "screenshot_bytes": 0, "warnings": []}
+                              "screenshot_bytes": 0, "comparison_images": 0,
+                              "comparison_image_bytes": 0, "warnings": []}
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".site-build-", dir=output.parent) as temporary:
         stage = Path(temporary) / "site"
@@ -352,8 +463,13 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
             page = stage / "share" / row["model_key"] / row["run_key"] / "index.html"
             page.parent.mkdir(parents=True, exist_ok=True)
             page.write_text(share_page(row, site_origin, model_labels.get(row["model_key"], row["model"])), encoding="utf-8")
+        comparison_urls = comparison_pages(stage, catalog, rows, site_origin, model_labels, modules)
+        comparison_images = list((stage / "comparisons").glob("*.jpg"))
+        report.update(comparison_pages=len(comparison_urls), comparison_images=len(comparison_images),
+                      comparison_image_bytes=sum(path.stat().st_size for path in comparison_images))
         data = {"mode": "public", "generated_at": server.utc_iso(), "artifact_origin": "/artifacts",
                 "catalog": catalog, "summary": state.summary(rows), "results": rows,
+                "comparison_urls": comparison_urls,
                 "model_profiles": server.load_model_profiles(state.results_root, (row["model_key"] for row in rows))}
         write_json(stage / "api/data.json", data)
         (stage / "api/export.csv").write_bytes(export_csv(rows))

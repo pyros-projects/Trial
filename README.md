@@ -4,8 +4,8 @@
     <source media="(prefers-color-scheme: light)" srcset=".github/logo-light.svg">
     <img alt="Trial" src=".github/logo-light.svg" width="80" height="80">
   </picture>
-  <h1>Trial - a Vibe Benchmark</h1>
-  <p><sub>(by Pyro)</sub></p>
+  <h1>Trial - <em>a Vibe Benchmark</em></h1>
+  <p><sub>by Pyro</sub></p>
   <p>Show me what it built. Then let me try it.</p>
 </div>
 
@@ -53,9 +53,9 @@ Keep the benchmarks. Get your hands on the work.
 
 ## What you can do
 
-- **Compare the same brief.** Browse builds grouped by prompt, with each model's screenshots side by side. Each group gives you concrete things to look for when trying the builds. Filter by model, task, track, status, or text.
+- **Compare the same brief.** Browse three models side by side on desktop, two on smaller screens, or one on mobile. Use the arrows or swipe through the model lineup. **Expand** gives one prompt the whole screen, with its Look for hints and builds together. Filter by model, task, track, status, or text.
 - **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Switch models without leaving the prompt, and open **Look for** when you want a few useful things to try. Download the source to inspect it yourself.
-- **Share a specific build.** Choose **Copy link** on a card or inside the viewer. The recipient lands directly in that model's maximized app; public share pages carry the matching model name, prompt title, and screenshot for link previews.
+- **Share a build or a whole comparison.** Choose **Copy link** on a card to share its maximized app, or beside a prompt to share the expanded comparison. Category links open all models for that prompt and carry their own title and screenshot preview; individual build links keep their model-specific previews.
 - **Run any of the 30 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
 - **Inspect complete applications locally.** Review project source downloads, declared setup commands, notes, and manually started app previews.
 - **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, per-track score summaries, and CSV export. Missing scores stay missing.
@@ -115,7 +115,9 @@ Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set
   "siteUrl": "https://trial-by-pyro.netlify.app",
   "models": [
     {"key": "gpt-6_astra", "label": "GPT-6 Astra", "color": "#8FD7AF"},
+    {"key": "anthropic_opus5", "label": "Opus 5", "color": "#D8ACE7"},
     {"key": "xai_grok4.6", "label": "Grok 4.6", "color": "#E8AD82"},
+    {"key": "zai_glm5.3_flash", "label": "GLM 5.3 Flash", "color": "#DED27B"},
     {"key": "google_gemini3.8_flash", "label": "Gemini 3.8 Flash", "color": "#91B5FF"}
   ]
 }
@@ -130,7 +132,9 @@ Record the shared harness and setting in `results/<model>/model.toml`. Cards sho
 | Model | Harness | Setting |
 |---|---|---|
 | GPT-6 Astra | [Codex CLI](https://developers.openai.com/codex/cli) | Max |
+| Opus 5 | [Claude Code](https://claude.com/product/claude-code) | Max |
 | Grok 4.6 | [Cursor Desktop](https://cursor.com/) | High Fast |
+| GLM 5.3 Flash | [Pi](https://pi.dev/) | High |
 | Gemini 3.8 Flash | [Antigravity CLI](https://antigravity.google/) | High |
 
 These are the settings I used, with their original labels. They describe this collection; they aren't equivalent budgets or a complete record of each run. See the [model setup format](docs/results.md#shared-model-setup) to edit them. Selected setup fields are public; raw run metadata and evidence stay out of the website export.

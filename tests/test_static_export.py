@@ -83,6 +83,205 @@ class StaticExportTests(unittest.TestCase):
         source = (self.resolve_url(row["share_url"]) / "index.html").read_text(encoding="utf-8")
         return source, ShareDocument(source)
 
+    def comparison_document(self, data, task_id="01-fluid-simulation"):
+        source = (self.resolve_url(data["comparison_urls"][task_id]) / "index.html").read_text(encoding="utf-8")
+        return source, ShareDocument(source)
+
+    def test_comparison_pages_count_builds_models_and_escape_public_metadata(self):
+        title = 'Fluid </title><script>alert("title")</script>'
+        label = 'Model "><img src=x onerror=alert(1)>'
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog[0]["title"] = title
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        original_catalog = catalog_path.read_bytes()
+        prompt = self.root / "prompts/01-fluid-simulation/prompt.md"
+        original_prompt = prompt.read_bytes()
+        settings = {"siteUrl": "https://comparisons.example.test:8443/", "models": [{"key": "Model One", "label": label}]}
+        (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+        for model, run in [("Model One", "01-fluid-simulation-two"), ("Model Two", "01-fluid-simulation")]:
+            folder = self.root / "results" / model / run
+            folder.mkdir(parents=True)
+            (folder / "index.html").write_bytes(self.html)
+        (self.run / "screenshot.png").write_bytes(b"Do not read images with --screenshots none")
+        report, data = self.export(screenshots="none")
+        self.assertEqual(data["comparison_urls"], {"01-fluid-simulation": "/compare/01-fluid-simulation/"})
+        source, document = self.comparison_document(data)
+        canonical = "https://comparisons.example.test:8443/compare/01-fluid-simulation/"
+        self.assertEqual(document.metadata["og:url"], canonical)
+        self.assertIn(("link", {"rel": "canonical", "href": canonical}), document.tags)
+        self.assertEqual(document.metadata["og:title"], title + " | Trial")
+        self.assertIn("3 builds", document.metadata["og:description"])
+        self.assertIn("2 models", document.metadata["og:description"])
+        self.assertIn(label, document.metadata["og:description"])
+        self.assertEqual(document.metadata["twitter:title"], document.metadata["og:title"])
+        self.assertEqual(document.metadata["twitter:description"], document.metadata["og:description"])
+        self.assertEqual(document.metadata["twitter:card"], "summary")
+        self.assertFalse(any(key and "image" in key for key in document.metadata))
+        viewer = "/#compare/01-fluid-simulation"
+        self.assertIn(viewer, [attrs.get("href") for tag, attrs in document.tags if tag == "a"])
+        script = re.search(r"<script>(.*?)</script>", source, flags=re.DOTALL).group(1)
+        self.assertEqual(json.loads(re.search(r"location\.replace\((.+?)\);", script).group(1)), viewer)
+        self.assertEqual(source.count("</script>"), 1)
+        self.assertFalse(any(tag == "img" or "onerror" in attrs or attrs.get("http-equiv", "").lower() == "refresh" for tag, attrs in document.tags))
+        self.assertNotIn("/compare/", (self.output / "_redirects").read_text(encoding="utf-8"))
+        self.assertFalse((self.output / "comparisons").exists())
+        self.assertEqual(report["html_files"], 3)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.html"))), 3)
+        self.assertEqual(catalog_path.read_bytes(), original_catalog)
+        self.assertEqual(prompt.read_bytes(), original_prompt)
+        self.assertLess(len(source.encode("utf-8")), 4096)
+
+    def test_comparison_urls_exclude_unknown_and_non_html_tasks_and_reject_unsafe_ids(self):
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog.append({"id": "02-source-only", "title": "Source task", "track": "real-apps"})
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        prompt = self.root / "prompts/02-source-only"
+        prompt.mkdir()
+        for name in ("prompt.md", "acceptance.md"):
+            (prompt / name).write_text("Public source task", encoding="utf-8")
+        source = self.root / "results/Model One/02-source-only/project"
+        source.mkdir(parents=True)
+        (source / "main.py").write_text("PRIVATE PROJECT", encoding="utf-8")
+        unknown = self.root / "results/Unknown Model/unknown"
+        unknown.mkdir(parents=True)
+        (unknown / "index.html").write_bytes(self.html)
+        _, data = self.export(screenshots="none")
+        self.assertEqual(set(data["comparison_urls"]), {"01-fluid-simulation"})
+        self.assertEqual(len(list((self.output / "compare").rglob("index.html"))), 1)
+        self.assertEqual(len(data["results"]), 2)
+        previous = (self.output / "api/data.json").read_bytes()
+        catalog[0]["id"] = "../outside"
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            self.export(screenshots="none")
+        self.assertEqual((self.output / "api/data.json").read_bytes(), previous)
+        catalog[0]["id"] = "01-fluid-simulation"
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        (self.run / "index.html").unlink()
+        _, data = self.export(screenshots="none")
+        self.assertEqual(data["comparison_urls"], {})
+        self.assertFalse((self.output / "compare").exists())
+
+    def test_comparison_without_pillow_reuses_first_image_in_configured_order(self):
+        (self.run / "screenshot.png").write_bytes(b"Original first-model screenshot")
+        second = self.root / "results/Model Two/01-fluid-simulation"
+        second.mkdir(parents=True)
+        (second / "index.html").write_bytes(self.html)
+        second_image = b"Original second-model screenshot"
+        (second / "screenshot.png").write_bytes(second_image)
+        settings = {"models": [{"key": "Model Two", "label": "Second display"}, {"key": "Model One", "label": "First display"}]}
+        (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+        with mock.patch.object(build_site, "pillow_modules", return_value=None):
+            report, data = self.export()
+        _, document = self.comparison_document(data)
+        second_row = next(row for row in data["results"] if row["model_key"] == "Model Two")
+        expected_image = build_site.DEFAULT_SITE_URL + second_row["artifact"]["screenshot_url"]
+        self.assertEqual(document.metadata["og:image"], expected_image)
+        self.assertEqual(document.metadata["twitter:image"], expected_image)
+        self.assertEqual(document.metadata["twitter:card"], "summary_large_image")
+        description = document.metadata["og:description"]
+        self.assertLess(description.index("Second display"), description.index("First display"))
+        self.assertIn("Second display", document.metadata["og:image:alt"])
+        self.assertEqual(self.resolve_url(second_row["artifact"]["screenshot_url"]).read_bytes(), second_image)
+        self.assertFalse((self.output / "comparisons").exists())
+        self.assertEqual(report["comparison_images"], 0)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.png"))), 2)
+
+    def test_comparison_jpeg_uses_three_distinct_models_and_strips_source_metadata(self):
+        try:
+            from PIL import Image, ImageDraw, PngImagePlugin
+        except ImportError:
+            self.skipTest("Optional Pillow is not installed")
+        models = [("Model One", "First display", "#ff0000"), ("Model Two", "Second display", "#0000ff"),
+                  ("Model Three", "Third display", "#00ff00"), ("Model Four", "Fourth display", "#ffff00")]
+        original_images = {}
+        for key, _, color in models:
+            folder = self.root / "results" / key / "01-fluid-simulation"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "index.html").write_bytes(self.html)
+            metadata = PngImagePlugin.PngInfo()
+            metadata.add_text("private", "PRIVATE-IMAGE-METADATA")
+            path = folder / "screenshot.png"
+            Image.new("RGB", (600, 400), color).save(path, pnginfo=metadata)
+            original_images[path] = path.read_bytes()
+        duplicate = self.root / "results/Model Three/01-fluid-simulation-two"
+        duplicate.mkdir()
+        (duplicate / "index.html").write_bytes(self.html)
+        Image.new("RGB", (600, 400), "magenta").save(duplicate / "screenshot.png")
+        order = [models[2], models[0], models[1], models[3]]
+        settings = {"models": [{"key": key, "label": label} for key, label, _ in order]}
+        (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+        drawn = []
+        original_text = ImageDraw.ImageDraw.text
+
+        def record_text(draw, position, text, *args, **kwargs):
+            drawn.append((text, getattr(kwargs.get("font"), "size", 0)))
+            return original_text(draw, position, text, *args, **kwargs)
+
+        with mock.patch.object(ImageDraw.ImageDraw, "text", record_text):
+            report, data = self.export()
+        _, document = self.comparison_document(data)
+        self.assertEqual(document.metadata["og:image"], build_site.DEFAULT_SITE_URL + "/comparisons/01-fluid-simulation.jpg")
+        self.assertEqual(document.metadata["twitter:image"], document.metadata["og:image"])
+        self.assertIn("5 builds", document.metadata["og:description"])
+        self.assertIn("4 models", document.metadata["og:description"])
+        jpeg = self.output / "comparisons/01-fluid-simulation.jpg"
+        with Image.open(jpeg) as image:
+            self.assertEqual(image.format, "JPEG")
+            self.assertEqual(image.size, (1200, 630))
+            self.assertEqual(image.mode, "RGB")
+            self.assertFalse(image.getexif())
+            self.assertNotIn("comment", image.info)
+            self.assertNotIn("icc_profile", image.info)
+            for point, channel in [((200, 360), 1), ((600, 360), 0), ((1000, 360), 2)]:
+                pixel = image.getpixel(point)
+                self.assertGreater(pixel[channel], 200)
+                self.assertTrue(all(value < 50 for index, value in enumerate(pixel) if index != channel))
+        labels = [text for text, _ in drawn if text in {entry[1] for entry in models}]
+        self.assertEqual(labels, ["Third display", "First display", "Second display"])
+        self.assertTrue(all(size >= 18 for text, size in drawn if text in labels))
+        self.assertTrue(any("Fluid" in text for text, _ in drawn))
+        self.assertTrue(any("5 builds" in text and "4 models" in text for text, _ in drawn))
+        self.assertNotIn(b"PRIVATE", jpeg.read_bytes())
+        self.assertLess(jpeg.stat().st_size, 200 * 1024)
+        self.assertEqual(report["comparison_images"], 1)
+        self.assertEqual(report["comparison_image_bytes"], jpeg.stat().st_size)
+        self.assertEqual(len(list((self.output / "comparisons").iterdir())), 1)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.html"))), 5)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.webp"))), 5)
+        for path, content in original_images.items():
+            self.assertEqual(path.read_bytes(), content)
+
+    def test_comparison_with_unreadable_screenshot_keeps_text_preview(self):
+        if build_site.pillow_modules() is None:
+            self.skipTest("Optional Pillow is not installed")
+        (self.run / "screenshot.png").write_bytes(b"Unreadable screenshot fixture")
+        _, data = self.export()
+        _, document = self.comparison_document(data)
+        self.assertEqual(document.metadata["twitter:card"], "summary")
+        self.assertNotIn("og:image", document.metadata)
+        self.assertFalse((self.output / "comparisons").exists())
+
+    def test_comparison_with_one_model_has_one_image_and_singular_counts(self):
+        modules = build_site.pillow_modules()
+        if modules is None:
+            self.skipTest("Optional Pillow is not installed")
+        image_module, _ = modules
+        image_module.new("RGB", (800, 500), "navy").save(self.run / "screenshot.png")
+        report, data = self.export()
+        _, document = self.comparison_document(data)
+        self.assertIn("1 build from 1 model", document.metadata["og:description"])
+        self.assertIn("Display name", document.metadata["og:image:alt"])
+        self.assertEqual(report["comparison_images"], 1)
+        image_url = document.metadata["og:image"].removeprefix(build_site.DEFAULT_SITE_URL)
+        with image_module.open(self.resolve_url(image_url)) as image:
+            self.assertEqual(image.size, (1200, 630))
+            self.assertEqual(image.format, "JPEG")
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.webp"))), 1)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.html"))), 1)
+
     def test_private_files_and_fields_are_never_published_or_read(self):
         for name in ("metadata.json", "report.json", "notes.md", "notes.txt"):
             (self.run / name).write_text(json.dumps({

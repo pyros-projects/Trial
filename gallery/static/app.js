@@ -5,7 +5,7 @@
   const score = value => value == null ? '—' : Number(value).toFixed(1);
   const bytes = value => value == null ? 'Unknown' : value < 1024 ? `${value} B` : value < 1048576 ? `${(value/1024).toFixed(1)} KiB` : `${(value/1048576).toFixed(1)} MiB`;
   const label = track => track === 'real-apps' ? 'REAL APPLICATION' : 'HTML EXPERIENCE';
-  const state = {data:null, modelSettings:new Map(), view:'gallery', selected:null, tab:'preview', promptText:'', promptToken:0, loading:false};
+  const state = {data:null, modelSettings:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, tab:'preview', promptText:'', promptToken:0, loading:false};
   const headings = {
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
     catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and real applications. The brief, the checks and the delivery requirements are all here.'],
@@ -64,6 +64,7 @@
     clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').hidden=true,2600);
   }
   const playHash=row=>'#play/'+row.id.split('/').map(encodeURIComponent).join('/');
+  const comparisonHash=key=>'#compare/'+encodeURIComponent(key);
   function copyLinkButton(row, className='button quiet') {
     return row.artifact.url?`<button class="${className}" data-copy-run="${escape(row.id)}" aria-label="Copy link to ${escape(modelName(row))}: ${escape(row.task_title)}">Copy link</button>`:'';
   }
@@ -74,9 +75,22 @@
     try{await navigator.clipboard.writeText(url.href);toast('Link copied. Opens the app at full size.');}
     catch{window.prompt('Copy this link to the live app:',url.href);}
   }
+  function copyCategoryButton(key) {
+    const task=state.data.catalog.find(task=>task.id===key);
+    return task?`<button class="button" data-copy-task="${escape(key)}" aria-label="Copy link to comparison: ${escape(task.title)}">Copy link</button>`:'';
+  }
+  async function copyCategoryLink(key) {
+    if(!state.data.catalog.some(task=>task.id===key)||!state.data.results.some(row=>row.task_id===key))return;
+    const share=state.data.comparison_urls?.[key];
+    const publicLink=isPublic()&&typeof share==='string'&&share.startsWith('/compare/');
+    const url=new URL(publicLink?share:location.pathname,location.origin);if(!publicLink)url.hash=comparisonHash(key);
+    try{await navigator.clipboard.writeText(url.href);toast('Link copied. Opens the full prompt comparison.');}
+    catch{window.prompt('Copy this link to the prompt comparison:',url.href);}
+  }
   function clearPlayLink() {
     if(location.hash.startsWith('#play/')){
-      try{history.replaceState(null,'',location.pathname+location.search+(state.view==='gallery'?'':'#'+state.view));}catch{ /* Browser history may be unavailable when embedded. */ }
+      const comparison=$('#category-viewer').open&&state.data.catalog.some(task=>task.id===state.categoryTask)?comparisonHash(state.categoryTask):'';
+      try{history.replaceState(null,'',location.pathname+location.search+(comparison||(state.view==='gallery'?'':'#'+state.view)));}catch{ /* Browser history may be unavailable when embedded. */ }
     }
   }
   function finishViewerClose() {
@@ -88,23 +102,36 @@
     if(!state.data)return;
     $('#prompt-dialog').close();$('#link-error').hidden=true;
     const route=location.hash.slice(1);
+    if(route.startsWith('compare/')){
+      let key;try{key=decodeURIComponent(route.slice(8));}catch{ /* Invalid links use the unavailable-comparison message. */ }
+      closeViewer();
+      if(state.data.catalog.some(task=>task.id===key)&&state.data.results.some(row=>row.task_id===key)){
+        if(state.categoryTask===key&&$('#category-viewer').open)return;
+        closeCategory(false);setView('gallery',false);openCategory(key,null,true,false);return;
+      }
+      closeCategory(false);setView('gallery',false);
+      $('#link-error').textContent='This shared comparison is unavailable. Choose a prompt with submitted builds from the showcase.';
+      $('#link-error').hidden=false;return;
+    }
     if(route.startsWith('play/')){
       let id;try{id=decodeURIComponent(route.slice(5));}catch{ /* Malformed shared links use the unavailable-build message. */ }
       const row=state.data.results.find(r=>r.id===id&&r.artifact.url);
       if(row){
-        setView('gallery',false);
+        if(state.categoryTask!==groupKey(row)){closeCategory(false);setView('gallery',false);}
         if(state.selected?.id===row.id&&$('#viewer').open&&$('#viewer').classList.contains('is-live'))return;
         const viewport=$('#viewer').classList.contains('is-live')?$('#viewport-size').value:'fit';
         openRun(row.id);$('#viewport-size').value=viewport;launchPreview(false);return;
       }
-      closeViewer();setView('gallery');
+      closeCategory(false);closeViewer();setView('gallery');
+      $('#link-error').textContent='This shared build is unavailable. It may have been moved or removed. Choose a build from the showcase.';
       $('#link-error').hidden=false;
       return;
     }
-    closeViewer();setView(route||fallback);
+    closeCategory(false);closeViewer();setView(route||fallback);
   }
   function setView(view, updateUrl=true) {
     if (!Object.hasOwn(headings,view)||(isPublic()&&view==='leaderboard')) view='gallery';
+    if(state.view!==view)closeCategory();
     $('#link-error').hidden=true;
     if(state.view!==view)window.scrollTo({top:0,behavior:'instant'});
     state.view=view;
@@ -158,30 +185,90 @@
     const footer=repeated?escape(row.run_id):!isPublic()&&row.report_binding!=='none'?checksSummary(row):`${bytes(a.bytes)} · ${a.kind==='html'?'HTML build':'Source project'}`;
     return `<article class="run-card"><div class="card-model">${modelIdentity(row)}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div><div class="card-bottom"><span class="check-summary">${footer}</span><div class="card-actions">${copyLinkButton(row,'copy-link')}<button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></div></article>`;
   }
+  const groupKey=row=>row.task_id||`unassigned:${row.id}`;
+  function promptGroup(key,runs,expanded=false,allModels=false) {
+    const first=runs[0];const known=state.data.catalog.find(task=>task.id===key);
+    const selectedModel=allModels?'all':$('#model-filter').value;
+    const models=[...new Map(state.data.results.filter(row=>selectedModel==='all'||row.model_key===selectedModel).map(row=>[row.model_key,row])).values()].sort(compareModels);
+    const comparisonModels=known?models:models.filter(model=>runs.some(row=>row.model_key===model.model_key));
+    const lookFor=known?.look_for;
+    const guidance=typeof lookFor==='string'&&lookFor.trim()?`<dl class="prompt-guide"><div><dt>Look for</dt><dd>${escape(lookFor)}</dd></div></dl>`:'';
+    const columns=comparisonModels.map(model=>{
+      const builds=runs.filter(row=>row.model_key===model.model_key);
+      if(builds.length)return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}">${builds.map(row=>runCard(row,builds.length>1)).join('')}</div>`;
+      const exists=state.data.results.some(row=>groupKey(row)===key&&row.model_key===model.model_key);
+      return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}"><div class="missing-build"><div class="card-model">${modelIdentity(model)}</div><div class="missing-visual"><span aria-hidden="true">/ /</span>${exists?'No matching build':'No build recorded'}</div><div class="missing-foot">${exists?'Hidden by the current filters.':'This model has not submitted this prompt.'}</div></div></div>`;
+    }).join('');
+    const title=escape(first.task_title);
+    return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header${guidance?' has-guidance':''}"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'REAL APPLICATION':'HTML EXPERIENCE'}</div><h3${expanded?' id="category-title"':''}>${title}</h3></div></div>${guidance}<div class="prompt-header-actions">${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}${expanded?'':`<button class="button expand-comparison" data-expand-task="${escape(key)}" aria-label="Expand ${title}">Expand <span aria-hidden="true">↗</span></button>`}</div></header><div class="comparison-toolbar"><span class="comparison-range" aria-live="polite" aria-atomic="true"></span><div class="comparison-actions">${copyCategoryButton(key)}<div class="model-navigation" role="group" aria-label="Browse models for ${title}"><button class="button model-arrow" data-shift-models="-1" aria-label="Previous models for ${title}">←</button><button class="button model-arrow" data-shift-models="1" aria-label="Next models for ${title}">→</button></div></div></div><div class="group-builds" style="--columns:${Math.max(1,comparisonModels.length)}" tabindex="0" role="group" aria-label="${title} model builds">${columns}</div></section>`;
+  }
+  function comparisonPosition(group) {
+    const viewport=group.querySelector('.group-builds');const columns=[...viewport.children];
+    const gap=parseFloat(getComputedStyle(viewport).columnGap)||0;
+    const step=(columns[0]?.getBoundingClientRect().width||viewport.clientWidth)+gap;
+    const visible=Math.max(1,Math.min(columns.length,Math.round((viewport.clientWidth+gap)/step)||1));
+    const first=Math.max(0,Math.min(columns.length-visible,Math.round(viewport.scrollLeft/step)||0));
+    return {viewport,columns,step,visible,first};
+  }
+  function updateComparison(group) {
+    const {viewport,columns,visible,first}=comparisonPosition(group);
+    const overflow=viewport.scrollWidth>viewport.clientWidth+2;
+    group.querySelector('.model-navigation').hidden=!overflow;
+    group.querySelector('[data-shift-models="-1"]').disabled=viewport.scrollLeft<=2;
+    group.querySelector('[data-shift-models="1"]').disabled=viewport.scrollLeft>=viewport.scrollWidth-viewport.clientWidth-2;
+    const range=group.querySelector('.comparison-range');
+    const text=overflow?`${visible===1?'Model':'Models'} ${first+1}${visible===1?'':'–'+Math.min(columns.length,first+visible)} of ${columns.length}`:`${columns.length} ${columns.length===1?'model':'models'}`;
+    if(range.textContent!==text)range.textContent=text;
+  }
+  function positionComparison(group,index) {
+    const {viewport,columns,visible,step}=comparisonPosition(group);
+    viewport.scrollTo({left:Math.max(0,Math.min(columns.length-visible,index))*step,behavior:'instant'});updateComparison(group);
+  }
+  function shiftComparison(group,direction) {
+    const {first}=comparisonPosition(group);positionComparison(group,first+direction);
+  }
+  function renderCategory() {
+    if(!$('#category-viewer').open)return;
+    const runs=(state.categoryAllModels?state.data.results:matchingRuns()).filter(row=>groupKey(row)===state.categoryTask);
+    if(!runs.length){closeCategory();return;}
+    const previous=$('#category-content .prompt-group');const index=previous?comparisonPosition(previous).first:0;
+    $('#category-content').innerHTML=promptGroup(state.categoryTask,runs,true,state.categoryAllModels);
+    positionComparison($('#category-content .prompt-group'),index);
+  }
+  function openCategory(key,trigger=null,allModels=false,updateUrl=true) {
+    const runs=(allModels?state.data.results:matchingRuns()).filter(row=>groupKey(row)===key);if(!runs.length)return;
+    const index=trigger?comparisonPosition(trigger.closest('.prompt-group')).first:0;
+    state.categoryTask=key;state.categoryTrigger=trigger;state.categoryAllModels=allModels;
+    $('#category-content').innerHTML=promptGroup(key,runs,true,allModels);
+    $('#category-viewer').showModal();positionComparison($('#category-content .prompt-group'),index);
+    if(updateUrl&&state.data.catalog.some(task=>task.id===key)&&location.hash!==comparisonHash(key))try{history.pushState(null,'',comparisonHash(key));}catch{ /* Copy link remains available in embedded browsers. */ }
+    $('#close-category').focus();
+  }
+  function finishCategoryClose() {
+    if($('#category-viewer').open)return;
+    const key=state.categoryTask;const trigger=state.categoryTrigger;
+    state.categoryTask=null;state.categoryTrigger=null;state.categoryAllModels=false;$('#category-content').replaceChildren();
+    if(!$('#viewer').open&&!$('#prompt-dialog').open){
+      const fallback=[...document.querySelectorAll('#cards [data-expand-task]')].find(button=>button.dataset.expandTask===key);
+      (trigger?.isConnected?trigger:fallback)?.focus({preventScroll:true});
+    }
+  }
+  function closeCategory(updateUrl=true) {
+    if(updateUrl&&$('#category-viewer').open&&location.hash.startsWith('#compare/'))try{history.replaceState(null,'',location.pathname+location.search+(state.view==='gallery'?'':'#'+state.view));}catch{ /* The dialog can still close without browser history access. */ }
+    $('#category-viewer').close();finishCategoryClose();
+  }
   function renderGallery() {
     const rows=matchingRuns();const groups=new Map();
-    for(const row of rows){const key=row.task_id||`unassigned:${row.id}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);}
-    const selectedModel=$('#model-filter').value;
-    const models=[...new Map((state.data?.results||[]).filter(r=>selectedModel==='all'||r.model_key===selectedModel).map(r=>[r.model_key,r])).values()].sort(compareModels);
+    for(const row of rows){const key=groupKey(row);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);}
+    const positions=new Map([...document.querySelectorAll('#cards .prompt-group')].map(group=>[group.dataset.task,comparisonPosition(group).first]));
     const ordered=[...groups.entries()].sort(([keyA,a],[keyB,b])=>{
       const mode=$('#sort').value;
       if(mode==='recent'){const latest=r=>r.reduce((last,x)=>x.modified_at>last?x.modified_at:last,'');const diff=latest(b).localeCompare(latest(a));if(diff)return diff;}
       if(mode==='score'){const max=r=>Math.max(...r.map(x=>x.score??-1));const diff=max(b)-max(a);if(diff)return diff;}
       return keyA.localeCompare(keyB);
     });
-    $('#cards').innerHTML=ordered.map(([key,runs])=>{
-      const first=runs[0];const known=state.data.catalog.find(t=>t.id===key);
-      const lookFor=known?.look_for;
-      const guidance=typeof lookFor==='string'&&lookFor.trim()?`<dl class="prompt-guide"><div><dt>Look for</dt><dd>${escape(lookFor)}</dd></div></dl>`:'';
-      const comparisonModels=known?models:models.filter(model=>runs.some(row=>row.model_key===model.model_key));
-      const columns=comparisonModels.map(model=>{
-        const builds=runs.filter(r=>r.model_key===model.model_key);
-        if(builds.length)return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}">${builds.map(r=>runCard(r,builds.length>1)).join('')}</div>`;
-        const exists=state.data.results.some(r=>(r.task_id||'unassigned')===key&&r.model_key===model.model_key);
-        return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}"><div class="missing-build"><div class="card-model">${modelIdentity(model)}</div><div class="missing-visual"><span aria-hidden="true">/ /</span>${exists?'No matching build':'No build recorded'}</div><div class="missing-foot">${exists?'Hidden by the current filters.':'This model has not submitted this prompt.'}</div></div></div>`;
-      }).join('');
-      return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header${guidance?' has-guidance':''}"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'REAL APPLICATION':'HTML EXPERIENCE'}</div><h3>${escape(first.task_title)}</h3></div></div>${guidance}${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}</header><div class="group-builds ${comparisonModels.length>3?'many-models':''}" style="--columns:${Math.max(1,comparisonModels.length)}">${columns}</div></section>`;
-    }).join('');
+    $('#cards').innerHTML=ordered.map(([key,runs])=>promptGroup(key,runs)).join('');
+    document.querySelectorAll('#cards .prompt-group').forEach(group=>positionComparison(group,positions.get(group.dataset.task)||0));
     $('#result-count').textContent=rows.length;$('#group-count').textContent=ordered.filter(([key])=>state.data.catalog.some(task=>task.id===key)).length;
     $('#empty-results').hidden=rows.length>0;
     if(!rows.length){
@@ -222,7 +309,7 @@
     $('#leaderboard-content').innerHTML=content||'<div class="empty"><h2>No matching runs yet.</h2><p>Import results and attach independent evaluator scores to see model summaries.</p></div>';
   }
   function render() {
-    renderGallery();renderCatalog();renderLeaderboard();
+    renderGallery();renderCatalog();renderLeaderboard();renderCategory();
   }
   async function loadData() {
     if(state.loading)return;state.loading=true;$('#refresh').disabled=true;$('#connection-status').textContent='Scanning…';
@@ -385,7 +472,10 @@
     if(target.dataset.view){event.preventDefault();setView(target.dataset.view);}
     if(target.dataset.openRun)openRun(target.dataset.openRun);
     if(target.dataset.copyRun)copyRunLink(target.dataset.copyRun);
+    if(target.dataset.copyTask)copyCategoryLink(target.dataset.copyTask);
     if(target.dataset.openPrompt)openPrompt(target.dataset.openPrompt);
+    if(target.dataset.expandTask)openCategory(target.dataset.expandTask,target);
+    if(target.dataset.shiftModels)shiftComparison(target.closest('.prompt-group'),Number(target.dataset.shiftModels));
     if(target.dataset.tab){state.tab=target.dataset.tab;renderViewer();}
     if(target.id==='launch-preview')launchPreview();
     if(target.id==='back-to-build'){renderViewer();clearPlayLink();$('#launch-preview')?.focus();}
@@ -400,16 +490,32 @@
   $('#refresh').addEventListener('click',loadData);
   $('#clear-filters').addEventListener('click',()=>{for(const id of filterIDs)$('#'+id).value=id==='search'?'':id==='sort'?'task':'all';render();saveSettings();});
   $('#close-viewer').addEventListener('click',closeViewer);
+  $('#close-category').addEventListener('click',()=>closeCategory());
+  $('#category-viewer').addEventListener('cancel',event=>{event.preventDefault();closeCategory();});
+  $('#category-viewer').addEventListener('close',finishCategoryClose);
   $('#viewer').addEventListener('close',finishViewerClose);
   $('#viewer').addEventListener('cancel',event=>{event.preventDefault();if(!closeLiveInfo())closeViewer();});
   $('#close-prompt').addEventListener('click',()=>$('#prompt-dialog').close());
   $('#prompt-dialog').addEventListener('close',()=>{state.promptToken++;});
   $('#copy-prompt').addEventListener('click',copyPrompt);
   document.addEventListener('keydown',event=>{
+    if(event.target.matches('.group-builds')&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+      event.preventDefault();const group=event.target.closest('.prompt-group');
+      if(event.key==='Home'||event.key==='End')positionComparison(group,event.key==='Home'?0:Infinity);
+      else shiftComparison(group,event.key==='ArrowRight'?1:-1);
+    }
     if(event.key==='Escape'&&$('#viewer').open&&closeLiveInfo()){event.preventDefault();return;}
-    if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}
+    if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#category-viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}
   });
   window.addEventListener('hashchange',()=>followRoute());
+  document.addEventListener('scroll',event=>{
+    if(event.target.matches?.('.group-builds'))updateComparison(event.target.closest('.prompt-group'));
+  },true);
+  let comparisonResize;
+  window.addEventListener('resize',()=>{
+    cancelAnimationFrame(comparisonResize);
+    comparisonResize=requestAnimationFrame(()=>document.querySelectorAll('.prompt-group').forEach(updateComparison));
+  });
   window.addEventListener('blur',()=>{
     if(document.activeElement===$('#artifact-frame')){
       document.querySelectorAll('.live-info[open]').forEach(info=>info.open=false);

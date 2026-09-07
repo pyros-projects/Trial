@@ -6,12 +6,14 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-07 checkout contains 25 submitted HTML builds for nine tasks across three model folders:
+The 2026-09-07 checkout contains 30 submitted HTML builds for nine tasks across five model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
 | `gpt-6_astra` | 9 | 01-09 |
+| `anthropic_opus5` | 2 | 01-02 |
 | `xai_grok4.6` | 8 | 01-08 |
+| `zai_glm5.3_flash` | 3 | 01-03 |
 | `google_gemini3.8_flash` | 8 | 01-08 |
 
 These are submitted artifacts, not verified passes. This snapshot includes no evaluator reports or scores. The gallery reads the files that are present, so its totals change as results are added.
@@ -139,6 +141,12 @@ For a Real Apps submission, review the source and declared commands, start it ma
 The local gallery, a separate port, and an iframe do not provide security isolation. HTML previews share the artifact server's origin, and cookies are not isolated by port. Run unfamiliar submissions in a disposable environment with dedicated browser profiles or contexts. Keep secrets and mutable application data outside the results tree. The source exclusion list is not a comprehensive secret scanner. Use the static export for public hosting rather than exposing the local gallery server.
 
 ## Compare results
+
+Each prompt keeps models in the configured order, with three columns above 1100 pixels, two from 581–1100 pixels, and one at 580 pixels or below. The arrows move one model at a time; the range label shows your position in the full lineup. Native horizontal scrolling and touch swipes work too. Focus the comparison row to use Left/Right or Home/End. Missing submissions retain their labeled place, and repeated attempts stay together in one model column.
+
+Choose **Expand** to focus on one prompt in a full-screen comparison. It starts at the model position you were viewing, and its arrows work independently of the main page. Read the prompt, inspect builds, open live apps, or copy implementation links from there. Closing a nested viewer returns to the comparison; closing the comparison restores the main page's filters, position, and focus. Shared implementation URLs continue to open the selected app directly.
+
+**Copy link** beside a prompt's model arrows shares the whole comparison. The same control is available inside the expanded view. Public links use `/compare/<task-id>/`, with an initial link-preview document and a compact image composed from up to three models' existing screenshots. Opening the link enters `/#compare/<task-id>` and includes all models for that prompt, independent of saved filters. Local links use the hash route directly. Closing the comparison clears that route; closing an app above it returns to the comparison.
 
 The local score view groups by track, averages repeated runs within each task, then averages those task means per model. Repeated attempts therefore do not silently give one task more weight. Different task coverage or budgets still prevent a controlled ranking.
 

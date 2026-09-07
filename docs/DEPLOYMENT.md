@@ -100,6 +100,7 @@ The deployment scripts also accept the Python and screenshot options described a
 | Public prompt catalog, prompt and acceptance Markdown | Prompt fixtures, private evaluator material and extra documents |
 | One top-level HTML result per model/run folder | Raw projects, project archives, dependencies and extra HTML variants |
 | A small share page per implementation, reusing its existing screenshot | Duplicate HTML builds or screenshot copies for link previews |
+| A share page per submitted prompt, plus one compact JPEG comparison preview when Pillow and thumbnails are available | Raw evidence images or additional copies of submitted applications |
 | One screenshot per run: metadata-free WebP up to 1280 pixels with Pillow, or the original selected screenshot otherwise | Extra screenshots, recordings, logs, audio and `evidence/` |
 | Minimal public JSON and CSV | Run `metadata.json`, `report.json`, notes, environments, metrics, manifests and check details |
 | Selected provider, harness, setting, and homepage fields from model-level `model.toml`, in public JSON | Raw TOML files and unrecognized profile fields |
@@ -131,6 +132,10 @@ Public artifact URLs live below `/artifacts/`. Source buttons use the `/sources/
 Set the top-level `siteUrl` in `gallery/static/appsettings.json` to the site's public origin, for example `https://trial-by-pyro.netlify.app`. It supplies absolute canonical and image URLs in share-page metadata. It must be an HTTP(S) origin without credentials, a path, a query, or a fragment. A trailing slash is accepted. If omitted, it defaults to the existing Trial production origin. Draft deploys use that configured production origin in preview metadata; set a different origin before building if the draft itself should be canonical.
 
 A real browser runs a tiny `location.replace` into the existing `/#play/<model>/<run>` viewer. Crawlers receive metadata in the initial HTML without executing JavaScript; there is no HTTP or meta-refresh redirect. A plain link remains available when JavaScript is disabled. The local Python gallery continues to copy `#play` links, and older public `#play` links still work.
+
+**Copy link** beside a prompt shares `/compare/<task-id>/`. Each populated catalog prompt gets its own page with the prompt title, model and build counts, canonical URL, and Open Graph / Twitter metadata. The public data exposes these paths in `comparison_urls`. With Pillow and published screenshots available, the exporter creates one 1200 × 630 JPEG from up to three distinct models' thumbnails in the configured order. Without Pillow, it reuses the first available published screenshot; without screenshots, it emits a text-only summary card.
+
+Comparison pages use the same crawler-friendly HTML pattern and send browsers to `/#compare/<task-id>`. That route opens the expanded category with every model, regardless of saved gallery filters. The local gallery copies this hash route directly. Closing the comparison clears its hash; opening and then closing an app returns to the comparison beneath it. Task IDs keep category links stable when titles or model order change.
 
 Links identify model and run folders, so they survive display-name and sorting changes; renaming or removing those folders invalidates existing links. Shared links omit temporary query parameters and open at full viewport size. The viewer's model picker offers available builds for that same prompt, in the configured model order, independently of gallery filters. Multiple runs from one model include their run labels. Switching replaces the current iframe, updates the link and color, and keeps the selected viewport size. **Look for** overlays the running app without restarting or resizing it.
 

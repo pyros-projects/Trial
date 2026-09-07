@@ -62,19 +62,28 @@ class BrowserEnvironment(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('RUN_BROWSER_TESTS')=='1','Set RUN_BROWSER_TESTS=1 for direct Chromium integration.')
 class BrowserTests(BrowserEnvironment):
-    def test_public_share_page_redirects_to_sandboxed_viewer_and_copies_its_url(self):
+    def comparison_fixture(self):
+        names = ['Astra', 'Opus', 'Grok', 'GLM', 'Gemini']
+        models = [{'key': 'fixture_' + name.lower(), 'label': name + ' fixture', 'color': color}
+                  for name, color in zip(names, ['#88CCAA', '#CCAADD', '#EEAA77', '#CCBB88', '#99BBFF'])]
+        for model in models:
+            run = self.results / model['key'] / '01-fluid-simulation-main'
+            run.mkdir(parents=True)
+            (run / 'index.html').write_text('''<!doctype html><title>Comparison fixture</title>
+<h1 id="build-model">''' + model['key'] + '''</h1><button id="increment">Count: 0</button>
+<script>let n=0;document.querySelector('button').onclick=e=>e.target.textContent='Count: '+(++n);</script>''', encoding='utf-8')
+        self.model_settings(json.dumps({'models': models}))
+        return [model['key'] for model in models]
+
+    def public_export(self):
         from http.server import SimpleHTTPRequestHandler
-        from playwright.sync_api import expect
         from tools import build_site
-        self.fixture()
         root = Path(self.temp.name)
-        (self.results / 'UI fixture - not a model evaluation' / 'model.toml').write_text(
-            'harness = "Public harness fixture"\nsetting = "High Fast"\n', encoding='utf-8')
-        shutil.copytree(ROOT / 'gallery/static', root / 'gallery/static')
+        shutil.copytree(server.STATIC_ROOT, root / 'gallery/static')
         shutil.copytree(ROOT / 'prompts', root / 'prompts')
         output = root / 'dist/site'
         build_site.build_site(root, screenshots='none')
-        data = json.loads((output / 'api/data.json').read_text())
+        data = json.loads((output / 'api/data.json').read_text(encoding='utf-8'))
 
         class PublicHandler(SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):
@@ -91,7 +100,411 @@ class BrowserTests(BrowserEnvironment):
         http = server.QuietThreadingHTTPServer(('127.0.0.1', 0), PublicHandler)
         threading.Thread(target=http.serve_forever, daemon=True).start()
         self.addCleanup(http.server_close);self.addCleanup(http.shutdown)
-        origin = f'http://127.0.0.1:{http.server_address[1]}'
+        return f'http://127.0.0.1:{http.server_address[1]}', data
+
+    def assert_comparison_range(self, group, first, last, total):
+        from playwright.sync_api import expect
+        indicator = group.locator('.comparison-range')
+        expect(indicator).to_have_count(1)
+        self.page.wait_for_function('''({indicator, expected}) => {
+            const numbers=(indicator.textContent.match(/\\d+/g)||[]).map(Number);
+            if(numbers.length===1)numbers.unshift(1,numbers[0]);
+            if(numbers.length===2)numbers.splice(1,0,numbers[0]);
+            return JSON.stringify(numbers)===JSON.stringify(expected);
+        }''', arg={'indicator': indicator.element_handle(), 'expected': [first, last, total]}, timeout=5000)
+        strip = group.locator('.group-builds')
+        self.page.wait_for_function('''({strip, first}) => {
+            const columns=strip.children;
+            const step=columns.length>1?columns[1].offsetLeft-columns[0].offsetLeft:0;
+            const left=Math.min((first-1)*step,strip.scrollWidth-strip.clientWidth);
+            return Math.abs(strip.scrollLeft-left)<2;
+        }''', arg={'strip': strip.element_handle(), 'first': first}, timeout=5000)
+        previous = group.locator('[data-shift-models="-1"]')
+        following = group.locator('[data-shift-models="1"]')
+        (expect(previous).to_be_disabled if first == 1 else expect(previous).to_be_enabled)()
+        (expect(following).to_be_disabled if last == total else expect(following).to_be_enabled)()
+
+    def test_comparison_pages_five_models_one_column_at_responsive_breakpoints(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        self.navigate_direct()
+        group = self.page.locator('#cards .prompt-group[data-task="01-fluid-simulation"]')
+        strip = group.locator('.group-builds')
+        expect(group.locator('.model-column')).to_have_count(5)
+        self.assertEqual(group.locator('.model-column').evaluate_all('nodes=>nodes.map(node=>node.dataset.model)'), keys)
+        for width, visible in [(1440, 3), (1100, 2), (581, 2), (580, 1), (390, 1), (320, 1)]:
+            with self.subTest(width=width):
+                self.page.set_viewport_size({'width': width, 'height': 1000})
+                strip.evaluate("node=>node.scrollTo({left:0,behavior:'instant'})")
+                self.assert_comparison_range(group, 1, visible, 5)
+                geometry = strip.evaluate('''node => {
+                    const area=node.getBoundingClientRect();
+                    const columns=[...node.children].map(child=>child.getBoundingClientRect());
+                    return {visible:columns.filter(r=>r.left>=area.left-1&&r.right<=area.right+1).length,
+                        sameRow:columns.every(r=>Math.abs(r.top-columns[0].top)<1),
+                        scrolling:node.scrollWidth>node.clientWidth};
+                }''')
+                self.assertEqual(geometry['visible'], visible)
+                self.assertTrue(geometry['sameRow'])
+                self.assertTrue(geometry['scrolling'])
+                self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+                for first in range(2, 7-visible):
+                    group.locator('[data-shift-models="1"]').click()
+                    self.assert_comparison_range(group, first, first+visible-1, 5)
+                for first in range(5-visible, 0, -1):
+                    group.locator('[data-shift-models="-1"]').click()
+                    self.assert_comparison_range(group, first, first+visible-1, 5)
+        self.assertEqual(self.errors, [])
+
+    def test_comparison_native_mobile_scroll_updates_ranges_and_expansion_position(self):
+        from playwright.sync_api import expect
+        self.comparison_fixture()
+        self.page.set_viewport_size({'width': 390, 'height': 844})
+        self.navigate_direct()
+        group = self.page.locator('#cards .prompt-group[data-task="01-fluid-simulation"]')
+        strip = group.locator('.group-builds')
+        self.assert_comparison_range(group, 1, 1, 5)
+        strip.focus()
+        self.page.keyboard.press('End')
+        self.assert_comparison_range(group, 5, 5, 5)
+        self.page.keyboard.press('ArrowLeft')
+        self.assert_comparison_range(group, 4, 4, 5)
+        self.page.keyboard.press('Home')
+        self.assert_comparison_range(group, 1, 1, 5)
+        # Move the native scroll container without calling any application paging handler.
+        strip.evaluate("node=>node.scrollTo({left:node.scrollWidth-node.clientWidth,behavior:'instant'})")
+        self.assert_comparison_range(group, 5, 5, 5)
+        strip.evaluate("node=>node.scrollTo({left:node.children[2].offsetLeft-node.children[0].offsetLeft,behavior:'instant'})")
+        self.assert_comparison_range(group, 3, 3, 5)
+        group.locator('[data-expand-task]').click()
+        category = self.page.locator('#category-viewer')
+        expect(category).to_be_visible()
+        expanded = category.locator('.prompt-group')
+        self.assert_comparison_range(expanded, 3, 3, 5)
+        self.assertTrue(category.evaluate('node=>node.scrollWidth<=innerWidth'))
+        expanded.locator('[data-shift-models="1"]').click()
+        self.assert_comparison_range(expanded, 4, 4, 5)
+        self.assert_comparison_range(group, 3, 3, 5)
+        self.page.locator('#close-category').click()
+        expect(category).not_to_be_visible()
+        self.assert_comparison_range(group, 3, 3, 5)
+        self.assertEqual(self.errors, [])
+
+    def test_comparison_expansion_keeps_main_dom_filters_scroll_and_focus(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        other = self.results / keys[0] / self.state.catalog[1]['id']
+        other.mkdir()
+        (other / 'index.html').write_text('<!doctype html><title>Other prompt fixture</title>', encoding='utf-8')
+        self.navigate_direct()
+        self.page.locator('#search').fill('fixture')
+        self.page.locator('#track-filter').select_option('html')
+        expect(self.page.locator('#cards .prompt-group')).to_have_count(2)
+        group = self.page.locator('#cards .prompt-group[data-task="01-fluid-simulation"]')
+        self.assert_comparison_range(group, 1, 3, 5)
+        group.locator('[data-shift-models="1"]').click()
+        self.assert_comparison_range(group, 2, 4, 5)
+        trigger = group.locator('[data-expand-task="01-fluid-simulation"]')
+        trigger.scroll_into_view_if_needed()
+        original_card = group.locator('.run-card').first.element_handle()
+        position = group.locator('.group-builds').evaluate('node=>node.scrollLeft')
+        page_scroll = self.page.evaluate('scrollY')
+        filters = self.page.locator('#search,#track-filter,#model-filter,#task-filter,#status-filter,#sort').evaluate_all('nodes=>nodes.map(node=>[node.id,node.value])')
+        trigger.click()
+        category = self.page.locator('#category-viewer')
+        expect(category).to_be_visible()
+        self.assertTrue(category.evaluate('node=>node instanceof HTMLDialogElement&&node.matches(":modal")'))
+        bounds = category.bounding_box()
+        for actual, expected in zip([bounds['x'], bounds['y'], bounds['width'], bounds['height']], [0, 0, 1440, 1000]):
+            self.assertAlmostEqual(actual, expected, delta=2)
+        expect(self.page.locator('#category-title')).to_have_text(self.state.catalog_by_id['01-fluid-simulation']['title'])
+        expect(category.locator('#category-content .prompt-group')).to_have_count(1)
+        expect(self.page.locator('#cards .prompt-group')).to_have_count(2)
+        self.assertTrue(original_card.evaluate('node=>node.isConnected'))
+        expanded = category.locator('.prompt-group')
+        self.assert_comparison_range(expanded, 2, 4, 5)
+        expanded.locator('[data-shift-models="1"]').click()
+        self.assert_comparison_range(expanded, 3, 5, 5)
+        self.assertAlmostEqual(group.locator('.group-builds').evaluate('node=>node.scrollLeft'), position, delta=2)
+        self.page.locator('#close-category').click()
+        expect(category).not_to_be_visible()
+        expect(trigger).to_be_focused()
+        self.assertTrue(original_card.evaluate('node=>node.isConnected'))
+        self.assertAlmostEqual(self.page.evaluate('scrollY'), page_scroll, delta=2)
+        self.assertEqual(self.page.locator('#search,#track-filter,#model-filter,#task-filter,#status-filter,#sort').evaluate_all('nodes=>nodes.map(node=>[node.id,node.value])'), filters)
+        self.assert_comparison_range(group, 2, 4, 5)
+        self.assertEqual(self.errors, [])
+
+    def test_comparison_nested_prompt_build_live_copy_and_escape_return_to_category(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        self.navigate_direct()
+        self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+        trigger = self.page.locator('#cards [data-expand-task="01-fluid-simulation"]')
+        expect(trigger).to_have_count(1)
+        trigger.click()
+        category = self.page.locator('#category-viewer')
+        category.locator('[data-open-prompt]').click()
+        expect(self.page.locator('#prompt-dialog')).to_be_visible()
+        expect(self.page.locator('#prompt-content')).to_contain_text('from the beginning')
+        self.page.keyboard.press('Escape')
+        expect(self.page.locator('#prompt-dialog')).not_to_be_visible()
+        expect(category).to_be_visible()
+        category.locator('.card-open').first.click()
+        expect(self.page.locator('#viewer')).to_be_visible()
+        self.page.keyboard.press('Escape')
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        expect(category).to_be_visible()
+        category.locator('.card-open').first.click()
+        self.page.locator('#launch-preview').click()
+        frame = self.page.frame_locator('#artifact-frame')
+        expect(frame.locator('#build-model')).to_have_text(keys[0])
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 1')
+        previous_frame = self.page.locator('#artifact-frame').element_handle()
+        selected = keys[1] + '/01-fluid-simulation-main'
+        self.page.locator('#live-model').select_option(selected)
+        expect(frame.locator('#build-model')).to_have_text(keys[1])
+        self.assertFalse(previous_frame.evaluate('node=>node.isConnected'))
+        expect(self.page.locator('#artifact-frame')).to_have_count(1)
+        self.page.locator('.live-bar [data-copy-run]').click()
+        expect(self.page.locator('#viewer #toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), self.base + '/#play/' + selected)
+        self.page.locator('#close-live').focus()
+        self.page.keyboard.press('Escape')
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        expect(category).to_be_visible()
+        category.locator('[data-copy-run]').first.click()
+        expect(self.page.locator('#category-viewer #toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), self.base + '/#play/' + keys[0] + '/01-fluid-simulation-main')
+        self.page.keyboard.press('Escape')
+        expect(category).not_to_be_visible()
+        expect(trigger).to_be_focused()
+        self.assertNotIn('#play/', self.page.url)
+        self.assertEqual(self.errors, [])
+
+    def test_comparison_keeps_missing_duplicate_and_unassigned_groups_and_closes_on_route(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        (self.results / keys[3] / '01-fluid-simulation-main/index.html').unlink()
+        for model, run_id in [(keys[2], '01-fluid-simulation-extra'), (keys[3], self.state.catalog[1]['id']), (keys[0], 'unknown-fixture')]:
+            run = self.results / model / run_id
+            run.mkdir()
+            (run / 'index.html').write_text('<!doctype html><title>Additional comparison fixture</title><h1>Additional comparison fixture</h1>', encoding='utf-8')
+        self.navigate_direct()
+        group = self.page.locator('#cards .prompt-group[data-task="01-fluid-simulation"]')
+        expect(group.locator('.model-column')).to_have_count(5)
+        expect(group.locator('.missing-build')).to_have_count(1)
+        expect(group.locator(f'.model-column[data-model="{keys[2]}"] .run-card')).to_have_count(2)
+        self.assert_comparison_range(group, 1, 3, 5)
+        group.locator('[data-expand-task]').click()
+        category = self.page.locator('#category-viewer')
+        expect(category.locator('.model-column')).to_have_count(5)
+        expect(category.locator('.missing-build')).to_have_count(1)
+        expect(category.locator(f'.model-column[data-model="{keys[2]}"] .run-card')).to_have_count(2)
+        self.page.locator('#close-category').click()
+        self.page.locator('#model-filter').select_option(keys[2])
+        self.assert_comparison_range(group, 1, 1, 1)
+        expect(group.locator('.run-card')).to_have_count(2)
+        self.page.locator('#search').fill('extra')
+        expect(group.locator('.run-card')).to_have_count(1)
+        self.page.locator('#clear-filters').click()
+        unknown = self.page.locator('#cards .prompt-group').filter(has=self.page.locator(f'[data-open-run="{keys[0]}/unknown-fixture"]'))
+        expect(unknown).to_have_count(1)
+        unknown.locator('[data-expand-task]').click()
+        expect(category.locator('.model-column')).to_have_count(1)
+        expect(category.locator('.run-card')).to_have_count(1)
+        self.assert_comparison_range(category.locator('.prompt-group'), 1, 1, 1)
+        self.page.evaluate("location.hash='why'")
+        expect(category).not_to_be_visible()
+        expect(self.page.locator('#view-why')).to_be_visible()
+        self.page.locator('.nav-button[data-view="gallery"]').click()
+        group.locator('[data-expand-task]').click()
+        self.page.evaluate("hash=>location.hash=hash", '#play/' + keys[3] + '/' + self.state.catalog[1]['id'])
+        expect(category).not_to_be_visible()
+        expect(self.page.frame_locator('#artifact-frame').locator('h1')).to_have_text('Additional comparison fixture')
+        self.assertEqual(self.errors, [])
+
+    def test_category_share_copies_normal_and_expanded_local_links(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        task = '01-fluid-simulation'
+        share = self.base + '/#compare/' + quote(task, safe='')
+        self.navigate_direct()
+        self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+        group = self.page.locator(f'#cards .prompt-group[data-task="{task}"]')
+        group.locator(f'[data-copy-task="{task}"]').click()
+        expect(self.page.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        category = self.page.locator('#category-viewer')
+        expect(category).not_to_be_visible()
+        group.locator('[data-expand-task]').click()
+        expect(category).to_be_visible()
+        expect(self.page).to_have_url(share)
+        self.assertEqual(category.locator('.model-column').evaluate_all('nodes=>nodes.map(node=>node.dataset.model)'), keys)
+        category.locator(f'[data-copy-task="{task}"]').click()
+        expect(category.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        self.page.keyboard.press('Escape')
+        expect(category).not_to_be_visible()
+        self.assertEqual(urlsplit(self.page.url).fragment, '')
+        self.page.reload()
+        expect(self.page.locator('#cards .prompt-group')).to_have_count(1)
+        expect(category).not_to_be_visible()
+        self.assertEqual(self.errors, [])
+
+    def test_category_share_nested_app_returns_to_comparison_and_close_survives_reload(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        task = '01-fluid-simulation'
+        share = self.base + '/#compare/' + task
+        self.navigate_direct()
+        self.page.goto(share)
+        category = self.page.locator('#category-viewer')
+        expect(category).to_be_visible()
+        expect(self.page.locator('#category-title')).to_have_text(self.state.catalog_by_id[task]['title'])
+        category.locator('.card-open').first.click()
+        self.page.locator('#launch-preview').click()
+        frame = self.page.frame_locator('#artifact-frame')
+        expect(frame.locator('#build-model')).to_have_text(keys[0])
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 1')
+        expect(category).to_be_visible()
+        self.assertEqual(urlsplit(self.page.url).fragment, 'play/' + keys[0] + '/' + task + '-main')
+        self.page.locator('#close-live').click()
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        expect(category).to_be_visible()
+        expect(self.page).to_have_url(share)
+        self.page.reload()
+        expect(category).to_be_visible()
+        expect(self.page.locator('dialog[open]')).to_have_count(1)
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.page.locator('#close-category').click()
+        expect(category).not_to_be_visible()
+        self.assertEqual(urlsplit(self.page.url).fragment, '')
+        self.page.reload()
+        expect(self.page.locator('#cards .prompt-group')).to_have_count(1)
+        expect(self.page.locator('dialog[open]')).to_have_count(0)
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.assertEqual(self.errors, [])
+
+    def test_category_share_history_and_invalid_routes_clear_stacked_dialogs(self):
+        from playwright.sync_api import expect
+        self.comparison_fixture()
+        task = '01-fluid-simulation'
+        self.navigate_direct()
+        self.page.locator(f'#cards [data-expand-task="{task}"]').click()
+        category = self.page.locator('#category-viewer')
+        expect(category).to_be_visible()
+        self.page.go_back()
+        expect(category).not_to_be_visible()
+        self.page.go_forward()
+        expect(category).to_be_visible()
+        category.locator('.card-open').first.click()
+        self.page.locator('#launch-preview').click()
+        expect(self.page.frame_locator('#artifact-frame').locator('#increment')).to_have_text('Count: 0')
+        self.page.go_back()
+        expect(category).to_be_visible()
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.assertEqual(urlsplit(self.page.url).fragment, 'compare/' + task)
+        self.page.go_forward()
+        expect(self.page.frame_locator('#artifact-frame').locator('#increment')).to_have_text('Count: 0')
+        expect(category).to_be_visible()
+        self.page.evaluate("location.hash='why'")
+        expect(self.page.locator('#view-why')).to_be_visible()
+        expect(self.page.locator('dialog[open]')).to_have_count(0)
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        invalid_ids = ['missing-prompt', self.state.catalog[1]['id'], '%E0%A4%A',
+                       quote('<img src=x onerror=window.__comparisonInjection=1>', safe='')]
+        for invalid in invalid_ids:
+            with self.subTest(route=invalid):
+                self.page.evaluate('hash=>location.hash=hash', '#compare/' + task)
+                expect(category).to_be_visible()
+                category.locator('[data-open-prompt]').click()
+                expect(self.page.locator('#prompt-dialog')).to_be_visible()
+                self.page.evaluate('hash=>location.hash=hash', '#compare/' + invalid)
+                expect(self.page.locator('#link-error')).to_contain_text('shared comparison is unavailable')
+                expect(self.page.locator('#link-error')).to_be_visible()
+                expect(self.page.locator('#view-gallery')).to_be_visible()
+                expect(self.page.locator('dialog[open]')).to_have_count(0)
+                expect(self.page.locator('#artifact-frame')).to_have_count(0)
+                expect(self.page.locator('#link-error img')).to_have_count(0)
+                self.assertTrue(self.page.evaluate('window.__comparisonInjection === undefined'))
+        encoded = ''.join(f'%{value:02X}' for value in task.encode('utf-8'))
+        self.page.evaluate('hash=>location.hash=hash', '#compare/' + encoded)
+        expect(category).to_be_visible()
+        expect(self.page.locator('#link-error')).not_to_be_visible()
+        expect(self.page.locator('#category-title')).to_have_text(self.state.catalog_by_id[task]['title'])
+        expect(self.page.locator('dialog[open]')).to_have_count(1)
+        self.assertEqual(self.errors, [])
+
+    def test_public_category_share_ignores_saved_filters_and_copies_public_url(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        task = '01-fluid-simulation'
+        other_task = self.state.catalog[1]['id']
+        for model, name in [(keys[2], task + '-extra'), (keys[0], other_task)]:
+            run = self.results / model / name
+            run.mkdir()
+            (run / 'index.html').write_text('<!doctype html><title>Additional public fixture</title>', encoding='utf-8')
+        origin, data = self.public_export()
+        self.assertEqual(data['comparison_urls'][task], '/compare/' + quote(task, safe='') + '/')
+        share = origin + data['comparison_urls'][task]
+        document = self.page.request.get(share)
+        self.assertEqual(document.status, 200)
+        self.assertIn('property="og:title"', document.text())
+        self.assertIn('location.replace(', document.text())
+        self.assertNotIn('http-equiv="refresh"', document.text())
+        self.page.goto(origin)
+        self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+        self.page.locator(f'#cards [data-copy-task="{task}"]').click()
+        expect(self.page.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        self.page.locator('#model-filter').select_option(keys[-1])
+        self.page.locator('#task-filter').select_option(other_task)
+        self.page.locator('#track-filter').select_option('real-apps')
+        self.page.locator('#search').fill('no matching fixture')
+        expect(self.page.locator('#cards .run-card')).to_have_count(0)
+        self.page.locator('.nav-button[data-view="why"]').click()
+        expect(self.page.locator('#view-why')).to_be_visible()
+        self.page.goto(share)
+        category = self.page.locator('#category-viewer')
+        expect(category).to_be_visible()
+        expect(self.page).to_have_url(origin + '/#compare/' + task)
+        expect(self.page.locator('#category-title')).to_have_text(self.state.catalog_by_id[task]['title'])
+        expect(category.locator('.model-column')).to_have_count(5)
+        self.assertEqual(category.locator('.model-column').evaluate_all('nodes=>nodes.map(node=>node.dataset.model)'), keys)
+        expect(category.locator('.run-card')).to_have_count(6)
+        expect(category.locator(f'.model-column[data-model="{keys[2]}"] .run-card')).to_have_count(2)
+        expect(category.locator('.missing-build')).to_have_count(0)
+        bounds = category.bounding_box()
+        for actual, expected in zip([bounds['x'], bounds['y'], bounds['width'], bounds['height']], [0, 0, 1440, 1000]):
+            self.assertAlmostEqual(actual, expected, delta=2)
+        expect(self.page.locator('#model-filter')).to_have_value(keys[-1])
+        expect(self.page.locator('#task-filter')).to_have_value(other_task)
+        expect(self.page.locator('#track-filter')).to_have_value('real-apps')
+        expect(self.page.locator('#search')).to_have_value('no matching fixture')
+        category.locator(f'[data-copy-task="{task}"]').click()
+        expect(category.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        self.page.go_back()
+        expect(self.page).to_have_url(origin + '/#why')
+        expect(self.page.locator('#view-why')).to_be_visible()
+        expect(self.page.locator('dialog[open]')).to_have_count(0)
+        self.page.go_forward()
+        expect(category).to_be_visible()
+        expect(category.locator('.run-card')).to_have_count(6)
+        self.assertEqual(self.errors, [])
+
+    def test_public_share_page_redirects_to_sandboxed_viewer_and_copies_its_url(self):
+        from playwright.sync_api import expect
+        self.fixture()
+        (self.results / 'UI fixture - not a model evaluation' / 'model.toml').write_text(
+            'harness = "Public harness fixture"\nsetting = "High Fast"\n', encoding='utf-8')
+        origin, data = self.public_export()
         row = data['results'][0]
         share = origin + row['share_url']
         document = self.page.request.get(share)
@@ -227,7 +640,7 @@ class BrowserTests(BrowserEnvironment):
         for width in (1440, 1024, 768, 390):
             self.page.set_viewport_size({'width': width, 'height': 1000})
             expect(guide).to_be_visible()
-            boxes = group.locator('.prompt-heading, .prompt-guide, .prompt-header > .button').evaluate_all(
+            boxes = group.locator('.prompt-heading, .prompt-guide, .prompt-header-actions').evaluate_all(
                 '(nodes) => nodes.map(n => {const r=n.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};})')
             for a, b in ((boxes[0], boxes[1]), (boxes[1], boxes[2])):
                 self.assertTrue(a['right'] <= b['x'] or b['right'] <= a['x'] or a['bottom'] <= b['y'] or b['bottom'] <= a['y'])
@@ -588,6 +1001,11 @@ setting = 'Max'
         self.fixture();self.page.set_viewport_size({'width':390,'height':844})
         self.navigate_direct()
         expect(self.page.locator('#cards .run-card')).to_have_count(2)
+        expect(self.page.locator('.brand-title')).to_have_text('Trial - a Vibe Benchmark')
+        expect(self.page.locator('.brand-descriptor')).to_have_css('font-style', 'italic')
+        self.assertEqual(self.page.locator('.brand-title').evaluate('node=>getComputedStyle(node).fontSize'),
+                         self.page.locator('.brand-descriptor').evaluate('node=>getComputedStyle(node).fontSize'))
+        expect(self.page.locator('.brand-subtitle,.footer-byline')).to_have_text(['by Pyro', 'by Pyro'])
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.screenshot('gallery-mobile-preview.png')
         self.page.locator('[data-view="catalog"]').first.click()
