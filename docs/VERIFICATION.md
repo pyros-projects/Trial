@@ -2,6 +2,12 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Public repository links: 2026-09-07
+
+Trial by Pyro is publicly accessible on GitHub. The masthead and footer now link to that repository in a separate tab. Browser checks confirmed the correct destination, visible header controls, and no page overflow at 1600, 1024, 800, 768, 390, and 320 pixels. The existing mobile layout test passed. Showcase screenshots and the README comparison were refreshed.
+
+Production deployment `6a9f0e99206f4fccdf71e8a5` publishes **116 files totaling 3,661,854 bytes (3.49 MiB)**. Live verification followed the GitHub link to the public repository and checked the header at 320 pixels; both repository links have the expected URL and new-tab attributes. Anonymous GitHub API access also confirmed the repository is public.
+
 ## Look for only: 2026-09-07
 
 Removed the What it tests copy and catalog field, keeping the practical Look for hints for all 30 prompts. Both focused guidance tests passed, covering browser layout at four widths, HTML escaping, and public export. JavaScript syntax and whitespace checks passed. Desktop and mobile showcase screenshots and the README comparison were refreshed.

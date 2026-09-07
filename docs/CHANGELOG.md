@@ -2,6 +2,7 @@
 
 ## Trial by Pyro: 2026-09-07
 
+- Added GitHub links in the masthead and footer for the public Trial by Pyro repository.
 - Added Copy link controls on cards and in the viewer, with direct links that open a specific build maximized and support reload and browser history.
 - Added practical Look for guidance to all 30 catalog entries, displayed beside showcase prompt titles and stacked below them on small screens.
 - Introduced the A Vibe Benchmark by Pyro subtitle and an explicit, informal scope statement in the README and Why Trial? view: personal exploration, not a scientific model ranking.
