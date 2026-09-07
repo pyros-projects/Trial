@@ -2,6 +2,11 @@
 
 ## Trial by Pyro: 2026-09-07
 
+- Added public appsettings.json configuration for model order, display names, and card colors, with Astra, Grok, and Gemini as the current order.
+- Tinted model cards, missing-build placeholders, and viewer labels consistently, with stable colors for unlisted models.
+- Expanded the project rationale with Pyro's preference for interactive demonstrations that expose behavior beyond a voxel fly-through.
+- Kept model and track filters readable on mobile screens.
+- Preserved exact public source downloads through attachment routes that avoid Netlify's HTML injection without duplicating artifact files.
 - Expanded live previews to the full browser viewport with a compact control bar and explicit device-size presets.
 - Added the Why Trial? reading view and README rationale in Pyro's voice, with the supplied Deep-SWE snapshot.
 - Included seven Gemini 3.8 Flash builds and selected existing evidence screenshots for their gallery previews.

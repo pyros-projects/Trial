@@ -42,6 +42,8 @@ Look at the Deep-SWE snapshot below. GPT-6 Astra [xhigh] and Gemini 3.8 Flash [h
 
 What I keep missing in benchmark tables is the chance to try what the model built. Open the app. Push the controls. Follow a workflow until something breaks. You start to recognize a model's style, its strengths, and the things it consistently neglects. That experience is what Trial by Pyro puts within reach.
 
+I like a good voxel world. Those Twitter fly-throughs can show real visual flair. I prefer demos that let me disturb the physics, make decisions in a playable game, play an instrument, or push an interface until it breaks. That exposes cause and effect, strengths, and failure modes. Voxel apps can do all of that too. A pretty camera orbit just hasn't demonstrated it yet.
+
 I chose tasks with enough complexity to make the agent work for it. A couple of model generations ago, I would have budgeted multiple hours for these jobs. In my own Astra runs so far, each has delivered a build in under an hour. That's what I observed in those runs; correctness still has to earn its own evidence.
 
 The tasks also give you an approachable way to judge the result. Does the physics look plausible? Is the game fun? Does the interface hold together? You can form a useful first impression without being a domain expert. Then use the formal checks to see whether that impression survives the requirements. Both kinds of judgment matter.
@@ -101,6 +103,24 @@ python tools/new_run.py --model "Model Name" --run 01-fluid-simulation-001 --tas
 ```
 
 Then choose **Refresh** in the gallery. Use `--project ../work/project` for a complete application. The [results guide](docs/results.md) covers folder layout, screenshots, model metadata, reports, source hashes, and replacement behavior.
+
+### Customize the gallery
+
+Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set model names, colors, and order. The default configuration is:
+
+```json
+{
+  "models": [
+    {"key": "gpt-6_astra", "label": "GPT-6 Astra", "color": "#8FD7AF"},
+    {"key": "xai_grok4.6", "label": "Grok 4.6", "color": "#E8AD82"},
+    {"key": "google_gemini3.8_flash", "label": "Gemini 3.8 Flash", "color": "#91B5FF"}
+  ]
+}
+```
+
+`key` identifies the model, `label` is its displayed name, and `color` must be a six-digit hex value. Array order controls showcase columns and the model picker. Scores remain sorted by score, with configured order breaking ties. Unlisted models follow the listed models alphabetically and receive stable fallback colors.
+
+This file is public presentation configuration. Choose **Refresh** to reload local settings; redeploy to update the public site.
 
 ### Build a public showcase
 

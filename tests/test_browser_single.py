@@ -61,6 +61,53 @@ class BrowserEnvironment(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('RUN_BROWSER_TESTS')=='1','Set RUN_BROWSER_TESTS=1 for direct Chromium integration.')
 class BrowserTests(BrowserEnvironment):
+    def model_settings(self, content):
+        static=Path(self.temp.name)/'static'
+        if not static.exists():
+            shutil.copytree(ROOT/'gallery/static',static)
+            old=server.STATIC_ROOT
+            self.addCleanup(setattr,server,'STATIC_ROOT',old)
+            server.STATIC_ROOT=static
+        (static/'appsettings.json').write_text(content,encoding='utf-8')
+
+    def test_model_settings_control_order_color_and_refresh(self):
+        from playwright.sync_api import expect
+        settings={'models':[
+            {'key':'gpt-6_astra','label':'Astra custom','color':'#88CCAA'},
+            {'key':'xai_grok4.6','label':'Grok custom','color':'#EEAA77'},
+            {'key':'google_gemini3.8_flash','label':'Gemini custom','color':'#99BBFF'},
+        ]}
+        keys=[m['key'] for m in settings['models']]
+        for key in keys+['Unlisted model']:
+            run=self.results/key/'01-fluid-simulation';run.mkdir(parents=True)
+            (run/'index.html').write_text('<!doctype html><title>Presentation fixture</title>')
+        self.model_settings(json.dumps(settings));self.navigate_direct()
+        expect(self.page.locator('.run-card')).to_have_count(4)
+        columns=self.page.locator('.model-column')
+        self.assertEqual(columns.evaluate_all("els=>els.map(e=>e.dataset.model)"),keys+['Unlisted model'])
+        self.assertEqual(self.page.locator('#model-filter option').evaluate_all("els=>els.slice(1).map(e=>e.value)"),keys+['Unlisted model'])
+        self.assertEqual(columns.locator('.model-name').all_text_contents(),['Astra custom','Grok custom','Gemini custom','Unlisted model'])
+        colors=columns.locator('.run-card').evaluate_all('els=>els.map(e=>getComputedStyle(e).borderTopColor)')
+        self.assertEqual(colors[:3],['rgb(136, 204, 170)','rgb(238, 170, 119)','rgb(153, 187, 255)'])
+        self.assertEqual(len(set(columns.locator('.run-card').evaluate_all('els=>els.map(e=>getComputedStyle(e).backgroundColor)'))),4)
+        settings['models'].reverse();settings['models'][0]['color']='#DD99EE'
+        self.model_settings(json.dumps(settings));self.page.locator('#refresh').click()
+        expect(columns.first).to_have_attribute('data-model',keys[-1])
+        self.assertEqual(columns.evaluate_all("els=>els.map(e=>e.dataset.model)"),list(reversed(keys))+['Unlisted model'])
+        expect(self.page.locator('.model-column').first.locator('.run-card')).to_have_css('border-top-color','rgb(221, 153, 238)')
+        self.assertEqual(columns.last.locator('.run-card').evaluate('e=>getComputedStyle(e).borderTopColor'),colors[-1])
+        self.assertEqual(self.errors,[])
+
+    def test_invalid_model_settings_keep_builds_available(self):
+        from playwright.sync_api import expect
+        self.fixture();self.model_settings('{invalid json');self.navigate_direct()
+        expect(self.page.locator('.run-card')).to_have_count(2)
+        expect(self.page.locator('#error-banner')).to_contain_text('Model settings')
+        self.model_settings(json.dumps({'models':[]}));self.page.locator('#refresh').click()
+        expect(self.page.locator('#error-banner')).not_to_be_visible()
+        expect(self.page.locator('.run-card')).to_have_count(2)
+        self.assertEqual(self.errors,[])
+
     def test_live_preview_fills_viewport_resizes_and_cleans_up(self):
         from playwright.sync_api import expect
         self.fixture();self.navigate_direct()

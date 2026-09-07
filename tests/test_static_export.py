@@ -40,6 +40,9 @@ class StaticExportTests(unittest.TestCase):
         self.reference_snapshot = b"\x89PNG\r\n\x1a\nUser-supplied Deep-SWE reference snapshot."
         (static / "deep-swe-snapshot.png").write_bytes(self.reference_snapshot)
         (static / "unlisted-snapshot.png").write_bytes(b"Unlisted static image")
+        self.model_settings = b'{ "models": [{ "key": "Model One", "label": "Display name", "color": "#ff774f" }] }\n'
+        (static / "appsettings.json").write_bytes(self.model_settings)
+        (static / "private-config.json").write_bytes(b'{"secret":"PRIVATE-CONFIG"}')
         prompt = self.root / "prompts/01-fluid-simulation"
         prompt.mkdir(parents=True)
         (prompt / "prompt.md").write_text("# Build fluid\nPublic task.", encoding="utf-8")
@@ -119,24 +122,50 @@ class StaticExportTests(unittest.TestCase):
         self.assertEqual((self.root / "gallery/static/deep-swe-snapshot.png").read_bytes(), self.reference_snapshot)
         self.assertFalse((self.output / "unlisted-snapshot.png").exists())
 
+    def test_model_presentation_settings_are_copied_exactly(self):
+        self.export(screenshots="none")
+        self.assertEqual((self.output / "appsettings.json").read_bytes(), self.model_settings)
+        self.assertEqual((self.root / "gallery/static/appsettings.json").read_bytes(), self.model_settings)
+        self.assertFalse((self.output / "private-config.json").exists())
+        self.assertFalse((self.output / "debug.json").exists())
+
     def test_public_links_and_netlify_routes_have_targets(self):
         _, data = self.export(screenshots="none")
         row = data["results"][0]
         self.assertIn("Model%20One", row["artifact"]["url"])
         for url in (row["artifact"]["url"], *row["prompts"].values()):
             self.assertTrue(self.resolve_url(url).is_file(), url)
-        self.assertEqual(row["artifact"]["source_url"], row["artifact"]["url"])
-        self.assertTrue(self.resolve_url(row["artifact"]["source_url"]).is_file())
+        source_url = row["artifact"]["source_url"]
+        self.assertTrue(source_url.startswith("/sources/"))
+        self.assertEqual(source_url.replace("/sources/", "/artifacts/", 1), row["artifact"]["url"])
+        self.assertTrue(self.resolve_url(source_url.replace("/sources/", "/artifacts/", 1)).is_file())
         self.assertTrue((self.output / "api/export.csv").is_file())
         self.assertTrue((self.output / "prompts/catalog.json").is_file())
         redirects = (self.output / "_redirects").read_text(encoding="utf-8")
         self.assertIn("/api/data /api/data.json 200", redirects)
+        self.assertIn("/sources/* /artifacts/:splat 200", redirects)
         self.assertNotIn("/downloads/", redirects)
         headers = (self.output / "_headers").read_text(encoding="utf-8")
         self.assertIn("/artifacts/*", headers)
         self.assertIn("Content-Security-Policy: sandbox allow-scripts", headers)
         self.assertNotIn("allow-same-origin", headers)
         self.assertIn("Content-Disposition: attachment", headers)
+
+    def test_source_alias_uses_existing_bytes_and_download_headers(self):
+        _, data = self.export(screenshots="none")
+        artifact = data["results"][0]["artifact"]
+        self.assertEqual(artifact["source_url"], "/sources/Model%20One/01-fluid-simulation/index.html")
+        self.assertEqual(artifact["url"], "/artifacts/Model%20One/01-fluid-simulation/index.html")
+        self.assertFalse((self.output / "sources").exists())
+        self.assertEqual(list((self.output / "artifacts").rglob("*.html")), [self.resolve_url(artifact["url"])])
+        original_bytes = self.resolve_url(artifact["source_url"].replace("/sources/", "/artifacts/", 1)).read_bytes()
+        self.assertEqual(original_bytes, self.html)
+        self.assertEqual(hashlib.sha256(original_bytes).hexdigest(), artifact["sha256"])
+        headers = (self.output / "_headers").read_text(encoding="utf-8")
+        source_headers = headers.split("/sources/*\n", 1)[1].split("\n/", 1)[0]
+        self.assertIn("Content-Type: application/octet-stream", source_headers)
+        self.assertIn("Content-Disposition: attachment", source_headers)
+        self.assertIn("no-transform", source_headers)
 
     def test_non_html_runs_and_extra_artifacts_are_excluded(self):
         (self.run / "result.html").write_text("Do not publish duplicate variants.")

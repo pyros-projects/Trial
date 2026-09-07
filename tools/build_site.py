@@ -19,10 +19,10 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
 from gallery import server
 
-STATIC_FILES = ("index.html", "app.js", "styles.css", "favicon.svg", "logo-mark.svg", "deep-swe-snapshot.png")
+STATIC_FILES = ("index.html", "app.js", "appsettings.json", "styles.css", "favicon.svg", "logo-mark.svg", "deep-swe-snapshot.png")
 CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "track", "artifact_type", "rubric")
 OWNER_MARKER = "public-static-export-v1\n"
-REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n"
+REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n/sources/* /artifacts/:splat 200\n"
 ARTIFACT_SANDBOX = "sandbox allow-scripts allow-downloads allow-modals allow-pointer-lock"
 HEADERS = f"""/*
   X-Content-Type-Options: nosniff
@@ -31,6 +31,12 @@ HEADERS = f"""/*
   Cache-Control: public, max-age=0, must-revalidate
 /artifacts/*
   Content-Security-Policy: {ARTIFACT_SANDBOX}
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/sources/*
+  Content-Type: application/octet-stream
+  Content-Disposition: attachment
+  Content-Security-Policy: {ARTIFACT_SANDBOX}
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
 /api/export.csv
   Content-Disposition: attachment; filename="results.csv"
 """
@@ -118,7 +124,7 @@ class PublicGalleryState(server.GalleryState):
                     "checks": {"pass": 0, "fail": 0, "blocked": 0, "not-run": 0},
                     "artifact": {
                         "exists": True, "kind": "html", "filename": html.name,
-                        "url": f"/artifacts/{encoded}", "source_url": f"/artifacts/{encoded}",
+                        "url": f"/artifacts/{encoded}", "source_url": f"/sources/{encoded}",
                         "screenshot_url": None, "bytes": html.stat().st_size, "file_count": 1,
                         "sha256": server.file_sha256(html), "checks": [],
                     },

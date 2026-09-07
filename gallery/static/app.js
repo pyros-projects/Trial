@@ -5,7 +5,7 @@
   const score = value => value == null ? '—' : Number(value).toFixed(1);
   const bytes = value => value == null ? 'Unknown' : value < 1024 ? `${value} B` : value < 1048576 ? `${(value/1024).toFixed(1)} KiB` : `${(value/1048576).toFixed(1)} MiB`;
   const label = track => track === 'real-apps' ? 'REAL APPLICATION' : 'HTML EXPERIENCE';
-  const state = {data:null, view:'gallery', selected:null, tab:'preview', promptText:'', promptToken:0, loading:false};
+  const state = {data:null, modelSettings:new Map(), view:'gallery', selected:null, tab:'preview', promptText:'', promptToken:0, loading:false};
   const headings = {
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
     catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and real applications. The brief, the checks and the delivery requirements are all here.'],
@@ -16,11 +16,34 @@
   const filterIDs=['search','track-filter','model-filter','task-filter','status-filter','sort'];
   const storageKey='trial-by-pyro-ui-v1';
   const isPublic=()=>state.data?.mode==='public';
-  const modelName=row=>row.model===row.model_key?({'gpt-6_astra':'GPT-6 Astra','xai_grok4.6':'Grok 4.6','google_gemini3.8_flash':'Gemini 3.8 Flash'}[row.model_key]||row.model):row.model;
+  const modelName=row=>state.modelSettings.get(row.model_key)?.label||row.model||row.model_key;
+  function modelColor(row) {
+    const configured=state.modelSettings.get(row.model_key)?.color;if(configured)return configured;
+    let hash=0;for(const char of row.model_key)hash=(Math.imul(hash,31)+char.codePointAt(0))>>>0;
+    return `hsl(${hash%360} 55% 72%)`;
+  }
+  function compareModels(a,b) {
+    const orderA=state.modelSettings.get(a.model_key)?.order??Infinity;
+    const orderB=state.modelSettings.get(b.model_key)?.order??Infinity;
+    return (orderA===orderB?0:orderA-orderB)||modelName(a).localeCompare(modelName(b))||a.model_key.localeCompare(b.model_key);
+  }
+  async function readModelSettings() {
+    const response=await fetch('/appsettings.json',{cache:'no-store'});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const config=await response.json();
+    if(!Array.isArray(config?.models))throw new Error('Expected a models array');
+    const settings=new Map();
+    config.models.forEach((model,order)=>{
+      if(!model||typeof model.key!=='string'||!model.key.trim()||settings.has(model.key)||typeof model.label!=='string'||!model.label.trim()||typeof model.color!=='string'||!/^#[0-9a-f]{6}$/i.test(model.color)){
+        throw new Error('Each model needs a unique key, a label, and a six-digit hex color');
+      }
+      settings.set(model.key,{label:model.label.trim(),color:model.color,order});
+    });
+    return settings;
+  }
   function modelIdentity(row) {
-    const grok=/grok/i.test(row.model_key);const gemini=/gemini/i.test(row.model_key);const name=modelName(row);
-    const initials=/gpt-6/i.test(row.model_key)?'G6':grok?'GR':gemini?'GM':name.replace(/[^a-z0-9]/ig,'').slice(0,2).toUpperCase();
-    return `<div class="model-identity"><span class="model-avatar ${grok?'grok':gemini?'gemini':''}" aria-hidden="true">${escape(initials||'AI')}</span><div><span class="model-name">${escape(name)}</span>${row.model_version?`<span class="model-version">${escape(row.model_version)}</span>`:''}</div></div>`;
+    const name=modelName(row);const initials=name.replace(/[^a-z0-9]/ig,'').slice(0,2).toUpperCase();
+    return `<div class="model-identity"><span class="model-avatar" aria-hidden="true">${escape(initials||'AI')}</span><div><span class="model-name">${escape(name)}</span>${row.model_version?`<span class="model-version">${escape(row.model_version)}</span>`:''}</div></div>`;
   }
   let saved={};
   try {saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};} catch {saved={};}
@@ -69,9 +92,9 @@
     });
     const sortMode=$('#sort').value;
     return rows.sort((a,b)=>{
-      if(sortMode==='score')return (b.score??-1)-(a.score??-1)||a.model.localeCompare(b.model);
-      if(sortMode==='task')return String(a.task_id).localeCompare(String(b.task_id))||a.model.localeCompare(b.model);
-      return b.modified_at.localeCompare(a.modified_at)||a.model.localeCompare(b.model);
+      if(sortMode==='score')return (b.score??-1)-(a.score??-1)||compareModels(a,b);
+      if(sortMode==='task')return String(a.task_id).localeCompare(String(b.task_id))||compareModels(a,b);
+      return b.modified_at.localeCompare(a.modified_at)||compareModels(a,b);
     });
   }
   function checksSummary(row) {
@@ -90,7 +113,7 @@
     const rows=matchingRuns();const groups=new Map();
     for(const row of rows){const key=row.task_id||`unassigned:${row.id}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);}
     const selectedModel=$('#model-filter').value;
-    const models=[...new Map((state.data?.results||[]).filter(r=>selectedModel==='all'||r.model_key===selectedModel).map(r=>[r.model_key,r])).values()].sort((a,b)=>modelName(a).localeCompare(modelName(b)));
+    const models=[...new Map((state.data?.results||[]).filter(r=>selectedModel==='all'||r.model_key===selectedModel).map(r=>[r.model_key,r])).values()].sort(compareModels);
     const ordered=[...groups.entries()].sort(([keyA,a],[keyB,b])=>{
       const mode=$('#sort').value;
       if(mode==='recent'){const latest=r=>r.reduce((last,x)=>x.modified_at>last?x.modified_at:last,'');const diff=latest(b).localeCompare(latest(a));if(diff)return diff;}
@@ -102,9 +125,9 @@
       const comparisonModels=known?models:models.filter(model=>runs.some(row=>row.model_key===model.model_key));
       const columns=comparisonModels.map(model=>{
         const builds=runs.filter(r=>r.model_key===model.model_key);
-        if(builds.length)return `<div class="model-column" data-model="${escape(model.model_key)}">${builds.map(r=>runCard(r,builds.length>1)).join('')}</div>`;
+        if(builds.length)return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}">${builds.map(r=>runCard(r,builds.length>1)).join('')}</div>`;
         const exists=state.data.results.some(r=>(r.task_id||'unassigned')===key&&r.model_key===model.model_key);
-        return `<div class="model-column" data-model="${escape(model.model_key)}"><div class="missing-build"><div class="card-model">${modelIdentity(model)}</div><div class="missing-visual"><span aria-hidden="true">/ /</span>${exists?'No matching build':'No build recorded'}</div><div class="missing-foot">${exists?'Hidden by the current filters.':'This model has not submitted this prompt.'}</div></div></div>`;
+        return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}"><div class="missing-build"><div class="card-model">${modelIdentity(model)}</div><div class="missing-visual"><span aria-hidden="true">/ /</span>${exists?'No matching build':'No build recorded'}</div><div class="missing-foot">${exists?'Hidden by the current filters.':'This model has not submitted this prompt.'}</div></div></div>`;
       }).join('');
       return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'REAL APPLICATION':'HTML EXPERIENCE'}</div><h3>${escape(first.task_title)}</h3>${first.description?`<p class="prompt-description">${escape(first.description)}</p>`:''}</div></div>${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}</header><div class="group-builds ${comparisonModels.length>3?'many-models':''}" style="--columns:${Math.max(1,comparisonModels.length)}">${columns}</div></section>`;
     }).join('');
@@ -132,7 +155,7 @@
       const trackRows=rows.filter(r=>r.track===track);if(!trackRows.length)continue;
       const groups=new Map();
       for(const row of trackRows){
-        if(!groups.has(row.model_key))groups.set(row.model_key,{name:row.model,runs:0,scored:0,tasks:new Map(),scoredTasks:new Map(),stale:0});
+        if(!groups.has(row.model_key))groups.set(row.model_key,{model:row,runs:0,scored:0,tasks:new Map(),scoredTasks:new Map(),stale:0});
         const g=groups.get(row.model_key);g.runs++;g.stale+=Number(row.report_binding==='stale');
         if(row.task_id)g.tasks.set(row.task_id,true);
         if(row.score!=null&&row.task_id&&state.data.catalog.some(t=>t.id===row.task_id)){
@@ -142,8 +165,8 @@
       const entries=[...groups.values()].map(g=>{
         const means=[...g.scoredTasks.values()].map(values=>values.reduce((a,b)=>a+b,0)/values.length);
         return {...g,mean:means.length?means.reduce((a,b)=>a+b,0)/means.length:null};
-      }).sort((a,b)=>(b.mean??-1)-(a.mean??-1)||a.name.localeCompare(b.name));
-      content+=`<h3 class="leader-title">${track==='html'?'HTML experiences':'Real applications'}</h3><div class="table-wrap"><table><thead><tr><th>Model</th><th>Task-weighted score</th><th>Scored tasks</th><th>Scored runs</th><th>Total runs</th><th>Coverage</th></tr></thead><tbody>${entries.map(g=>`<tr><td>${escape(g.name)}${g.stale?`<div class="tiny stale">${g.stale} stale report(s) excluded</div>`:''}</td><td class="table-score">${score(g.mean)}</td><td>${g.scoredTasks.size}</td><td>${g.scored}</td><td>${g.runs}</td><td class="tiny">${[...g.tasks.keys()].sort().map(id=>escape(id.slice(0,2))).join(', ')||'Unassigned'}</td></tr>`).join('')}</tbody></table></div>`;
+      }).sort((a,b)=>(b.mean??-1)-(a.mean??-1)||compareModels(a.model,b.model));
+      content+=`<h3 class="leader-title">${track==='html'?'HTML experiences':'Real applications'}</h3><div class="table-wrap"><table><thead><tr><th>Model</th><th>Task-weighted score</th><th>Scored tasks</th><th>Scored runs</th><th>Total runs</th><th>Coverage</th></tr></thead><tbody>${entries.map(g=>`<tr><td class="score-model" style="--model-color:${modelColor(g.model)}">${escape(modelName(g.model))}${g.stale?`<div class="tiny stale">${g.stale} stale report(s) excluded</div>`:''}</td><td class="table-score">${score(g.mean)}</td><td>${g.scoredTasks.size}</td><td>${g.scored}</td><td>${g.runs}</td><td class="tiny">${[...g.tasks.keys()].sort().map(id=>escape(id.slice(0,2))).join(', ')||'Unassigned'}</td></tr>`).join('')}</tbody></table></div>`;
     }
     $('#leaderboard-content').innerHTML=content||'<div class="empty"><h2>No matching runs yet.</h2><p>Import results and attach independent evaluator scores to see model summaries.</p></div>';
   }
@@ -153,8 +176,13 @@
   async function loadData() {
     if(state.loading)return;state.loading=true;$('#refresh').disabled=true;$('#connection-status').textContent='Scanning…';
     try{
-      const response=await fetch('/api/data',{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);
-      const data=await response.json();if(!Array.isArray(data.results)||!Array.isArray(data.catalog))throw new Error('Invalid gallery response');
+      const [inventory,settings]=await Promise.allSettled([
+        fetch('/api/data',{cache:'no-store'}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}),
+        readModelSettings()
+      ]);
+      if(inventory.status==='rejected')throw inventory.reason;
+      const data=inventory.value;if(!Array.isArray(data.results)||!Array.isArray(data.catalog))throw new Error('Invalid gallery response');
+      state.modelSettings=settings.status==='fulfilled'?settings.value:new Map();
       data.results=data.results.map(row=>({...row,tags:Array.isArray(row.tags)?row.tags:[]}));
       const first=state.data===null;state.data=data;
       document.querySelector('.nav-button[data-view="leaderboard"]').hidden=isPublic();
@@ -162,7 +190,7 @@
       document.querySelector('.status-select').hidden=isPublic();
       $('#stat-scored').parentElement.hidden=isPublic();
       document.querySelector('.stats').classList.toggle('public-stats',isPublic());
-      const models=[...new Map(data.results.map(r=>[r.model_key,modelName(r)])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+      const models=[...new Map(data.results.map(r=>[r.model_key,r])).values()].sort(compareModels).map(row=>[row.model_key,modelName(row)]);
       fillSelect('#model-filter',models,'All models',first?saved['model-filter']:undefined);
       fillSelect('#task-filter',data.catalog.map(t=>[t.id,`${t.id.slice(0,2)} · ${t.title}`]),'All prompts',first?saved['task-filter']:undefined);
       if(first)for(const id of ['search','track-filter','status-filter','sort'])if(saved[id]!==undefined){const el=$('#'+id);el.value=saved[id];if(el.tagName==='SELECT'&&el.selectedIndex<0)el.selectedIndex=0;}
@@ -171,7 +199,9 @@
       $('#stat-models').textContent=data.summary.models;$('#stat-runs').textContent=data.summary.runs;
       $('#stat-tasks').innerHTML=`${data.summary.tasks} <small>/ ${data.catalog.length}</small>`;
       $('#stat-scored').textContent=data.summary.scored_runs;$('#nav-count').textContent=data.summary.runs;
-      $('#error-banner').hidden=true;$('#connection-status').textContent=isPublic()?'● Public snapshot · ready':'● Local · ready';
+      $('#error-banner').hidden=settings.status==='fulfilled';
+      if(settings.status==='rejected')$('#error-banner').textContent=`Model settings could not be loaded: ${settings.reason.message}. Using default names, alphabetical order, and fallback colors. Check appsettings.json and refresh.`;
+      $('#connection-status').textContent=isPublic()?'● Public snapshot · ready':'● Local · ready';
       $('#footer-status').textContent=`${data.results.length} runs · ${data.catalog.length} prompts · refreshed ${new Date(data.generated_at).toLocaleTimeString()}`;
       if(first)setView(location.hash.slice(1)||saved.view||'gallery');else render();
       if(state.selected){const fresh=data.results.find(r=>r.id===state.selected.id);if(fresh){state.selected=fresh;renderViewer();}else $('#viewer').close();}
@@ -197,7 +227,6 @@
   }
   function openRun(id) {
     const row=state.data?.results.find(r=>r.id===id);if(!row)return;state.selected=row;state.tab='preview';
-    $('#viewer-title').textContent=row.task_title;$('#viewer-kicker').textContent=`${modelName(row)} / ${row.run_id}`;
     renderViewer();$('#viewer').showModal();
   }
   function sourceLink(a) {return a.source_url?(isPublic()||a.kind==='project'?a.source_url:a.source_url+'?download=1'):null;}
@@ -220,6 +249,8 @@
   function renderViewer() {
     const row=state.selected;if(!row)return;
     $('#viewer').classList.remove('is-live');
+    $('#viewer').style.setProperty('--model-color',modelColor(row));
+    $('#viewer-title').textContent=row.task_title;$('#viewer-kicker').textContent=`${modelName(row)} / ${row.run_id}`;
     document.querySelectorAll('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===state.tab)));
     const a=row.artifact;
     $('#viewer-actions').innerHTML=`${row.prompts.prompt?`<button class="button quiet" data-open-prompt="${escape(row.task_id)}">Prompt</button>`:''}${a.source_url?`<a class="button quiet" href="${escape(sourceLink(a))}" download>Source ↓</a>`:''}${a.url&&!isPublic()?`<a class="button quiet" href="${escape(a.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:''}`;

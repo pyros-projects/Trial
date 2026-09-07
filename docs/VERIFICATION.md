@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Configurable model presentation: 2026-09-07
+
+The WSL suite with both browser modes enabled passed **all 59 tests, with no skips**. Windows system Python passed **46 tests with 13 expected skips** for opt-in browser modes and unavailable optional dependencies or platform permissions. JavaScript syntax validation passed. A targeted mobile browser check passed after improving the filter layout.
+
+Browser tests use temporary settings files to verify configured labels, column and picker order, exact model border colors, distinct card tints, reordering and recoloring on Refresh, stable colors for unlisted models, and recovery from malformed JSON without hiding submitted builds. The static exporter copies only the explicitly listed presentation settings, byte-for-byte; unlisted configuration files remain excluded.
+
+The actual 22-build collection displays Astra, Grok, and Gemini in that order, with mint, amber, and blue model identity. Desktop and mobile visual inspection covered the tinted cards and the new voxel-demo rationale in the reading view. At 390 pixels, the model and track pickers each have 166 pixels of usable width and the page has no horizontal overflow. Original artifact screenshots retain their colors.
+
+Live HTTP verification found Netlify adding its badge and hosting metadata to HTML responses. The badge is now disabled for this project. Source downloads use an attachment route to the same stored HTML, preventing response rewriting without adding duplicate files. All 22 source downloads matched their recorded SHA-256 values on a real Netlify draft; the browser downloaded `index.html` and still launched the full-viewport preview. Netlify Dev is not sufficient evidence for these rewrite headers.
+
+Production deployment `6a9efca8a8f140bb82b3b115` publishes **116 files totaling 3,645,429 bytes (3.48 MiB)**. Production browser checks confirmed all 22 source hashes, attachment responses, configured order and colors, the voxel rationale, and full-viewport frames at 1600 by 957 and 390 by 801 pixels. Raw metadata, reports, evidence, evaluator files, and unlisted configuration remain excluded.
+
 ## Full viewport, rationale, and Gemini results: 2026-09-07
 
 The full WSL suite with both browser modes enabled passed **55 tests with no skips**. The Windows system-Python run passed **44 tests with 11 expected skips**: eight opt-in browser checks, optional Pillow, IANA timezone data, and symlink permissions. JavaScript syntax validation passed. A subsequent targeted browser check also passed after hardening unknown URL-fragment handling.
