@@ -129,6 +129,22 @@ class StaticExportTests(unittest.TestCase):
         self.assertFalse((self.output / "private-config.json").exists())
         self.assertFalse((self.output / "debug.json").exists())
 
+    def test_prompt_guidance_survives_public_export_without_private_fields(self):
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        guidance = {
+            "what_it_tests": "Fluid that responds to a brush, with working pressure and flow controls.",
+            "look_for": "Drag through the dye. Does it curl around obstacles and settle after you stop?",
+        }
+        catalog[0].update(guidance)
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        _, data = self.export(screenshots="none")
+        published = json.loads((self.output / "prompts/catalog.json").read_text(encoding="utf-8"))
+        for task in (data["catalog"][0], published[0]):
+            for field, value in guidance.items():
+                self.assertEqual(task.get(field), value)
+            self.assertNotIn("internal_note", task)
+
     def test_public_links_and_netlify_routes_have_targets(self):
         _, data = self.export(screenshots="none")
         row = data["results"][0]

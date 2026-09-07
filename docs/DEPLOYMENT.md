@@ -106,6 +106,8 @@ Model keys and run labels come from folder names. Public model display labels, o
 
 The supplied reference image is explicitly included as `/deep-swe-snapshot.png` with its original bytes. It is independent of run screenshots and remains included when `--screenshots none` is selected.
 
+Public catalog entries include `what_it_tests` and `look_for` when present. These short descriptions power the guidance beside each showcase prompt; private catalog fields are still excluded.
+
 Turn off **Project configuration > General > Powered by Netlify badge** for this showcase. Netlify can inject that badge into HTML responses at its edge, including submitted builds, which changes their downloaded hashes. The setting is already off for `trial-by-pyro.netlify.app`; check it when creating a different site. [Netlify documents the per-project setting and edge injection](https://docs.netlify.com/manage/projects/powered-by-netlify-badge/).
 
 Netlify may also add hosting comments and metadata to HTML preview responses. The **Source** button uses `/sources/*`, an internal rewrite to the same stored artifact with `application/octet-stream` and attachment headers. This preserves original download bytes without publishing another copy. The SHA-256 in the public inventory identifies those original bytes. Verify source downloads on a real Netlify draft or production deploy; Netlify Dev may apply rewrite headers differently.
@@ -116,7 +118,9 @@ The public data declares `mode: "public"` and a generation timestamp. Scores are
 
 `/api/data` rewrites to `/api/data.json`; `/api/export.csv` downloads the public inventory. Prompt documents use `/prompts/<task-id>/prompt.md` and `/prompts/<task-id>/acceptance.md`.
 
-Public artifact URLs live below `/artifacts/`. Source buttons download those same files using the HTML `download` attribute, avoiding duplicate payloads and rewrite-dependent attachment headers. The generated `_headers` applies a CSP sandbox to artifact pages, without `allow-same-origin`. The gallery also uses an opaque-origin iframe for public previews. This keeps submitted scripts from accessing the gallery's document, storage or service workers. Browser features that require a normal origin, including local storage, may be unavailable in public previews; download the HTML and run it separately when those features matter.
+Public artifact URLs live below `/artifacts/`. Source buttons use the `/sources/` attachment routes described above. The generated `_headers` applies a CSP sandbox to artifact pages, without `allow-same-origin`. The gallery also uses an opaque-origin iframe for public previews. This keeps submitted scripts from accessing the gallery's document, storage or service workers. Browser features that require a normal origin, including local storage, may be unavailable in public previews; download the HTML and run it separately when those features matter.
+
+**Copy link** creates a URL such as `https://trial-by-pyro.netlify.app/#play/gpt-6_astra/04-deformable-physics`. Opening it launches that known build directly in the maximized viewer, using the same sandbox. Links identify the model and run folders, so they survive display-name and sorting changes; renaming or removing those folders invalidates existing links. Shared links omit temporary query parameters and open at full viewport size. They require no additional server routes or exported files.
 
 No source HTML is rewritten, executed, installed, or bundled by the exporter. Netlify serves the generated files and the explicitly generated `_headers` and `_redirects`. Submitted artifacts cannot supply their own deployment configuration.
 

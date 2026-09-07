@@ -52,14 +52,55 @@
     try {localStorage.setItem(storageKey,JSON.stringify(settings));} catch { /* Browser storage can be disabled. */ }
   }
   function toast(text) {
+    const dialogs=[...document.querySelectorAll('dialog[open]')];
+    (dialogs.at(-1)||document.body).append($('#toast'));
     $('#toast').textContent=text;$('#toast').hidden=false;
     clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').hidden=true,2600);
   }
-  function setView(view) {
+  const playHash=row=>'#play/'+row.id.split('/').map(encodeURIComponent).join('/');
+  function copyLinkButton(row, className='button quiet') {
+    return row.artifact.url?`<button class="${className}" data-copy-run="${escape(row.id)}" aria-label="Copy link to ${escape(modelName(row))}: ${escape(row.task_title)}">Copy link</button>`:'';
+  }
+  async function copyRunLink(id) {
+    const row=state.data?.results.find(r=>r.id===id);if(!row?.artifact.url)return;
+    const url=new URL(location.pathname,location.origin);url.hash=playHash(row);
+    try{await navigator.clipboard.writeText(url.href);toast('Link copied. Opens the app at full size.');}
+    catch{window.prompt('Copy this link to the live app:',url.href);}
+  }
+  function clearPlayLink() {
+    if(location.hash.startsWith('#play/')){
+      try{history.replaceState(null,'',location.pathname+location.search+(state.view==='gallery'?'':'#'+state.view));}catch{ /* Browser history may be unavailable when embedded. */ }
+    }
+  }
+  function finishViewerClose() {
+    if($('#viewer').open)return;
+    state.selected=null;$('#viewer').classList.remove('is-live');$('#viewer-content').replaceChildren();clearPlayLink();
+  }
+  function closeViewer() {$('#viewer').close();finishViewerClose();}
+  function followRoute(fallback='gallery') {
+    if(!state.data)return;
+    $('#prompt-dialog').close();$('#link-error').hidden=true;
+    const route=location.hash.slice(1);
+    if(route.startsWith('play/')){
+      let id;try{id=decodeURIComponent(route.slice(5));}catch{ /* Malformed shared links use the unavailable-build message. */ }
+      const row=state.data.results.find(r=>r.id===id&&r.artifact.url);
+      if(row){
+        setView('gallery',false);
+        if(state.selected?.id===row.id&&$('#viewer').open&&$('#viewer').classList.contains('is-live'))return;
+        openRun(row.id);launchPreview(false);return;
+      }
+      closeViewer();setView('gallery');
+      $('#link-error').hidden=false;
+      return;
+    }
+    closeViewer();setView(route||fallback);
+  }
+  function setView(view, updateUrl=true) {
     if (!Object.hasOwn(headings,view)||(isPublic()&&view==='leaderboard')) view='gallery';
+    $('#link-error').hidden=true;
     if(state.view!==view)window.scrollTo({top:0,behavior:'instant'});
     state.view=view;
-    try{history.replaceState(null,'',view==='gallery'?location.pathname+location.search:'#'+view);}catch{ /* Embedded documents may not expose browser history. */ }
+    if(updateUrl)try{history.replaceState(null,'',view==='gallery'?location.pathname+location.search:'#'+view);}catch{ /* Embedded documents may not expose browser history. */ }
     document.body.dataset.section=view;
     Object.keys(headings).forEach(name=>$('#view-'+name).hidden=name!==view);
     document.querySelectorAll('.nav-button').forEach(button=>{
@@ -107,7 +148,7 @@
     const a=row.artifact;const status=row.score==null?'Not scored':`${score(row.score)} / 100`;
     const image=a.screenshot_url?`<img src="${escape(a.screenshot_url)}" alt="${escape(modelName(row))}: ${escape(row.task_title)}" loading="lazy" decoding="async" width="1280" height="800">`:`<div class="card-placeholder"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><span class="visual-label">${a.kind==='html'?'READY TO EXPLORE':a.exists?'SOURCE AVAILABLE':'NO ARTIFACT'}</span></div>`;
     const footer=repeated?escape(row.run_id):!isPublic()&&row.report_binding!=='none'?checksSummary(row):`${bytes(a.bytes)} · ${a.kind==='html'?'HTML build':'Source project'}`;
-    return `<article class="run-card"><div class="card-model">${modelIdentity(row)}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div><div class="card-bottom"><span class="check-summary">${footer}</span><button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></article>`;
+    return `<article class="run-card"><div class="card-model">${modelIdentity(row)}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div><div class="card-bottom"><span class="check-summary">${footer}</span><div class="card-actions">${copyLinkButton(row,'copy-link')}<button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></div></article>`;
   }
   function renderGallery() {
     const rows=matchingRuns();const groups=new Map();
@@ -121,7 +162,9 @@
       return keyA.localeCompare(keyB);
     });
     $('#cards').innerHTML=ordered.map(([key,runs])=>{
-      const first=runs[0];const known=state.data.catalog.some(t=>t.id===key);
+      const first=runs[0];const known=state.data.catalog.find(t=>t.id===key);
+      const guideFields=[['What it tests',known?.what_it_tests||known?.description],['Look for',known?.look_for]].filter(([,text])=>typeof text==='string'&&text.trim());
+      const guidance=guideFields.length?`<dl class="prompt-guide">${guideFields.map(([title,text])=>`<div><dt>${title}</dt><dd>${escape(text)}</dd></div>`).join('')}</dl>`:'';
       const comparisonModels=known?models:models.filter(model=>runs.some(row=>row.model_key===model.model_key));
       const columns=comparisonModels.map(model=>{
         const builds=runs.filter(r=>r.model_key===model.model_key);
@@ -129,7 +172,7 @@
         const exists=state.data.results.some(r=>(r.task_id||'unassigned')===key&&r.model_key===model.model_key);
         return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}"><div class="missing-build"><div class="card-model">${modelIdentity(model)}</div><div class="missing-visual"><span aria-hidden="true">/ /</span>${exists?'No matching build':'No build recorded'}</div><div class="missing-foot">${exists?'Hidden by the current filters.':'This model has not submitted this prompt.'}</div></div></div>`;
       }).join('');
-      return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'REAL APPLICATION':'HTML EXPERIENCE'}</div><h3>${escape(first.task_title)}</h3>${first.description?`<p class="prompt-description">${escape(first.description)}</p>`:''}</div></div>${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}</header><div class="group-builds ${comparisonModels.length>3?'many-models':''}" style="--columns:${Math.max(1,comparisonModels.length)}">${columns}</div></section>`;
+      return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header${guidance?' has-guidance':''}"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'REAL APPLICATION':'HTML EXPERIENCE'}</div><h3>${escape(first.task_title)}</h3></div></div>${guidance}${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}</header><div class="group-builds ${comparisonModels.length>3?'many-models':''}" style="--columns:${Math.max(1,comparisonModels.length)}">${columns}</div></section>`;
     }).join('');
     $('#result-count').textContent=rows.length;$('#group-count').textContent=ordered.filter(([key])=>state.data.catalog.some(task=>task.id===key)).length;
     $('#empty-results').hidden=rows.length>0;
@@ -175,6 +218,7 @@
   }
   async function loadData() {
     if(state.loading)return;state.loading=true;$('#refresh').disabled=true;$('#connection-status').textContent='Scanning…';
+    $('#link-error').hidden=true;
     try{
       const [inventory,settings]=await Promise.allSettled([
         fetch('/api/data',{cache:'no-store'}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}),
@@ -203,8 +247,11 @@
       if(settings.status==='rejected')$('#error-banner').textContent=`Model settings could not be loaded: ${settings.reason.message}. Using default names, alphabetical order, and fallback colors. Check appsettings.json and refresh.`;
       $('#connection-status').textContent=isPublic()?'● Public snapshot · ready':'● Local · ready';
       $('#footer-status').textContent=`${data.results.length} runs · ${data.catalog.length} prompts · refreshed ${new Date(data.generated_at).toLocaleTimeString()}`;
-      if(first)setView(location.hash.slice(1)||saved.view||'gallery');else render();
-      if(state.selected){const fresh=data.results.find(r=>r.id===state.selected.id);if(fresh){state.selected=fresh;renderViewer();}else $('#viewer').close();}
+      if(first)followRoute(saved.view||'gallery');
+      else{
+        render();
+        if(state.selected){const fresh=data.results.find(r=>r.id===state.selected.id);if(fresh){const live=$('#viewer').classList.contains('is-live');state.selected=fresh;renderViewer();if(live)launchPreview(false);}else closeViewer();}
+      }
     }catch(error){
       $('#error-banner').textContent=`Could not read the gallery: ${error.message}. Start the Python gallery server and retry.`;$('#error-banner').hidden=false;$('#connection-status').textContent='Connection error';
     }finally{state.loading=false;$('#refresh').disabled=false;}
@@ -227,7 +274,8 @@
   }
   function openRun(id) {
     const row=state.data?.results.find(r=>r.id===id);if(!row)return;state.selected=row;state.tab='preview';
-    renderViewer();$('#viewer').showModal();
+    $('#link-error').hidden=true;
+    renderViewer();if(!$('#viewer').open)$('#viewer').showModal();
   }
   function sourceLink(a) {return a.source_url?(isPublic()||a.kind==='project'?a.source_url:a.source_url+'?download=1'):null;}
   function previewContent(row) {
@@ -253,7 +301,7 @@
     $('#viewer-title').textContent=row.task_title;$('#viewer-kicker').textContent=`${modelName(row)} / ${row.run_id}`;
     document.querySelectorAll('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===state.tab)));
     const a=row.artifact;
-    $('#viewer-actions').innerHTML=`${row.prompts.prompt?`<button class="button quiet" data-open-prompt="${escape(row.task_id)}">Prompt</button>`:''}${a.source_url?`<a class="button quiet" href="${escape(sourceLink(a))}" download>Source ↓</a>`:''}${a.url&&!isPublic()?`<a class="button quiet" href="${escape(a.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:''}`;
+    $('#viewer-actions').innerHTML=`${copyLinkButton(row)}${row.prompts.prompt?`<button class="button quiet" data-open-prompt="${escape(row.task_id)}">Prompt</button>`:''}${a.source_url?`<a class="button quiet" href="${escape(sourceLink(a))}" download>Source ↓</a>`:''}${a.url&&!isPublic()?`<a class="button quiet" href="${escape(a.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:''}`;
     $('#viewer-content').innerHTML=state.tab==='preview'?previewContent(row):state.tab==='evidence'?evidenceContent(row):detailsContent(row);
   }
   function resizeFrame() {
@@ -262,11 +310,12 @@
     if(value==='fit'){frame.style.width='100%';frame.style.height='100%';}
     else{const [width,height]=value.split('x');frame.style.width=width+'px';frame.style.height=height+'px';}
   }
-  function launchPreview() {
+  function launchPreview(updateUrl=true) {
     const row=state.selected;if(!row?.artifact.url)return;
+    if(updateUrl&&location.hash!==playHash(row))try{history.pushState(null,'',playHash(row));}catch{ /* The copy button still provides a link when history is unavailable. */ }
     const viewport=$('#viewport-size').value;
     $('#viewer').classList.add('is-live');
-    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button><span class="live-title">${escape(modelName(row))}<span>${escape(row.task_title)}</span></span><label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
+    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button><span class="live-title">${escape(modelName(row))}<span>${escape(row.task_title)}</span></span>${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
     $('#viewport-size').value=viewport;
     const frame=document.createElement('iframe');frame.id='artifact-frame';frame.title=`Live ${row.task_title}`;
     frame.setAttribute('sandbox',isPublic()?'allow-scripts allow-downloads allow-modals allow-pointer-lock':'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-pointer-lock allow-popups');
@@ -277,22 +326,24 @@
     const target=event.target.closest('button,[data-view]');if(!target)return;
     if(target.dataset.view){event.preventDefault();setView(target.dataset.view);}
     if(target.dataset.openRun)openRun(target.dataset.openRun);
+    if(target.dataset.copyRun)copyRunLink(target.dataset.copyRun);
     if(target.dataset.openPrompt)openPrompt(target.dataset.openPrompt);
     if(target.dataset.tab){state.tab=target.dataset.tab;renderViewer();}
     if(target.id==='launch-preview')launchPreview();
-    if(target.id==='back-to-build'){renderViewer();$('#launch-preview')?.focus();}
-    if(target.id==='close-live')$('#viewer').close();
+    if(target.id==='back-to-build'){renderViewer();clearPlayLink();$('#launch-preview')?.focus();}
+    if(target.id==='close-live')closeViewer();
   });
   filterIDs.forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',()=>{render();saveSettings();}));
   document.addEventListener('change',event=>{if(event.target.id==='viewport-size')resizeFrame();});
   $('#refresh').addEventListener('click',loadData);
   $('#clear-filters').addEventListener('click',()=>{for(const id of filterIDs)$('#'+id).value=id==='search'?'':id==='sort'?'task':'all';render();saveSettings();});
-  $('#close-viewer').addEventListener('click',()=>$('#viewer').close());
-  $('#viewer').addEventListener('close',()=>{state.selected=null;$('#viewer').classList.remove('is-live');$('#viewer-content').replaceChildren();});
+  $('#close-viewer').addEventListener('click',closeViewer);
+  $('#viewer').addEventListener('close',finishViewerClose);
+  $('#viewer').addEventListener('cancel',event=>{event.preventDefault();closeViewer();});
   $('#close-prompt').addEventListener('click',()=>$('#prompt-dialog').close());
   $('#prompt-dialog').addEventListener('close',()=>{state.promptToken++;});
   $('#copy-prompt').addEventListener('click',copyPrompt);
   document.addEventListener('keydown',event=>{if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}});
-  window.addEventListener('hashchange',()=>{if(state.data)setView(location.hash.slice(1)||'gallery');});
+  window.addEventListener('hashchange',()=>followRoute());
   loadData();
 })();

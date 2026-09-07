@@ -5,7 +5,7 @@
     <img alt="Trial by Pyro" src=".github/logo-light.svg" width="80" height="80">
   </picture>
   <h1>Trial by Pyro</h1>
-  <p><strong>Show me what it built.</strong><br>Compare coding agents through the apps they actually deliver.</p>
+  <p><strong>A Vibe Benchmark by Pyro.</strong><br>Show me what it built. Then let me try it.</p>
 </div>
 
 <div align="center">
@@ -32,6 +32,8 @@
 
 **A note from Pyro.**
 
+Let's be clear: **this is not scientific.** Trial is a Vibe Benchmark: a personal collection of hand-picked challenges and the builds that came back. Small sample, human judgment, plenty of taste. It cannot establish a reliable model ranking or prove which model is universally better. It can give you something to try, question, and form your own opinion about. That's the point.
+
 Numerical benchmarks matter. Research and training need guardrails, and a score is useful evidence. I use them. But equal scores do not mean equal experiences with the models behind them.
 
 Look at the Deep-SWE snapshot below. GPT-6 Astra [xhigh] and Gemini 3.8 Flash [high] both display **74%**, with different costs, token usage, and step counts. In my hands, these models don't even feel like they're playing the same game. One percentage compresses a lot of very different work.
@@ -52,8 +54,9 @@ Keep the benchmarks. Get your hands on the work.
 
 ## What you can do
 
-- **Compare the same brief.** Browse builds grouped by prompt, with each model's screenshots side by side. Filter by model, task, track, status, or text.
+- **Compare the same brief.** Browse builds grouped by prompt, with each model's screenshots side by side. Each group explains what the task tests and what to look for when trying it. Filter by model, task, track, status, or text.
 - **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Download the source to inspect it yourself.
+- **Share a specific build.** Choose **Copy link** on a card or inside the viewer. The recipient lands directly in that model's maximized app.
 - **Run any of the 30 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
 - **Inspect complete applications locally.** Review project source downloads, declared setup commands, notes, and manually started app previews.
 - **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, per-track score summaries, and CSV export. Missing scores stay missing.

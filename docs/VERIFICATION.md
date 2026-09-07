@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Shared builds, prompt guidance, and Vibe Benchmark scope: 2026-09-07
+
+The complete WSL suite with both browser modes enabled passed **all 64 tests, with no skips**. Windows system Python passed **47 tests with 17 expected skips** for opt-in browser modes, optional Pillow, timezone data, and symlink permissions. JavaScript syntax validation and Git whitespace checks passed.
+
+Direct-link tests cover copying from cards and the maximized viewer, omitting temporary query parameters, opening a known build despite saved filters or a different saved view, reload, browser Back/Forward, and iframe cleanup. Unicode and reserved characters in folder names round-trip correctly. Denied clipboard access offers a manual-copy fallback. Invalid links cannot launch arbitrary URLs; their notice and any open prompt dialog clear when navigating to another view or build. Both route-state issues found during review were reproduced before their fixes and covered by regression checks.
+
+All 30 catalog entries now include practical What it tests and Look for guidance, grounded in their public checks. Original catalog fields, task requirements, fixtures, and submitted results remain unchanged. Browser checks exercise escaped guidance text and non-overlapping controls at 1440, 1024, 768, and 390 pixels. Export tests confirm the guidance reaches both public catalog routes while private fields stay excluded.
+
+Visual inspection of the actual 22-build collection covered the prompt headers, Copy link controls, updated branding, and the explicit non-scientific scope statement on desktop and mobile. The reading view and showcase have no page-level horizontal overflow at 390 pixels. The README, comparison image, and gallery screenshots were refreshed to match the current presentation.
+
+Production deployment `6a9f05839c31141973192913` publishes **116 files totaling 3,670,815 bytes (3.50 MiB)**. Live HTTPS checks confirmed all 30 guidance entries, eight displayed prompt groups, and the new scope statement. Copying the Astra deformable-physics card produced its canonical link without query parameters; opening and reloading it launched the correct app at 1600 by 957 and 390 by 801 pixels beneath the 43-pixel toolbar. All 22 source downloads matched their recorded SHA-256 values and retained attachment and sandbox headers. Representative metadata, evidence, evaluator, and local Netlify-state URLs returned 404.
+
 ## Configurable model presentation: 2026-09-07
 
 The WSL suite with both browser modes enabled passed **all 59 tests, with no skips**. Windows system Python passed **46 tests with 13 expected skips** for opt-in browser modes and unavailable optional dependencies or platform permissions. JavaScript syntax validation passed. A targeted mobile browser check passed after improving the filter layout.

@@ -10,6 +10,7 @@ import unittest
 import urllib.request
 import urllib.error
 import re
+from urllib.parse import quote, urlsplit
 from pathlib import Path
 from test_single_run import server, ROOT
 
@@ -61,6 +62,131 @@ class BrowserEnvironment(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('RUN_BROWSER_TESTS')=='1','Set RUN_BROWSER_TESTS=1 for direct Chromium integration.')
 class BrowserTests(BrowserEnvironment):
+    def test_prompt_guidance_is_readable_and_escaped_across_viewports(self):
+        from playwright.sync_api import expect
+        self.fixture()
+        task = self.state.catalog_by_id['01-fluid-simulation']
+        task['what_it_tests'] = 'Fluid motion <img src=x onerror=alert(1)> & responsive controls.'
+        task['look_for'] = 'Drag through the dye. Does it curl around obstacles?'
+        self.navigate_direct()
+        group = self.page.locator('.prompt-group[data-task="01-fluid-simulation"]')
+        guide = group.locator('.prompt-guide')
+        expect(guide.locator('dt')).to_have_text(['What it tests', 'Look for'])
+        expect(guide.locator('dd')).to_have_text([task['what_it_tests'], task['look_for']])
+        expect(guide.locator('img')).to_have_count(0)
+        for width in (1440, 1024, 768, 390):
+            self.page.set_viewport_size({'width': width, 'height': 1000})
+            expect(guide).to_be_visible()
+            boxes = group.locator('.prompt-heading, .prompt-guide, .prompt-header > .button').evaluate_all(
+                '(nodes) => nodes.map(n => {const r=n.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};})')
+            for a, b in ((boxes[0], boxes[1]), (boxes[1], boxes[2])):
+                self.assertTrue(a['right'] <= b['x'] or b['right'] <= a['x'] or a['bottom'] <= b['y'] or b['bottom'] <= a['y'])
+            self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth <= innerWidth'))
+        group.locator('[data-open-prompt]').click()
+        expect(self.page.locator('#prompt-dialog')).to_be_visible()
+        self.assertEqual(self.errors, [])
+
+    def test_shared_link_copies_and_opens_the_maximized_build(self):
+        from playwright.sync_api import expect
+        self.fixture();self.navigate_direct()
+        self.context.grant_permissions(['clipboard-read','clipboard-write'])
+        self.page.locator('#track-filter').select_option('html')
+        self.page.goto(self.base+'/?v=temporary#gallery')
+        expect(self.page.locator('#cards [data-copy-run]')).to_have_count(1)
+        self.page.locator('#cards [data-copy-run]').click()
+        expect(self.page.locator('#toast')).to_contain_text('Link copied')
+        link=self.page.evaluate('navigator.clipboard.readText()')
+        run_id='UI fixture - not a model evaluation/01-fluid-simulation-001'
+        self.assertEqual(link,self.base+'/#play/'+quote(run_id,safe='/'))
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        self.page.evaluate("localStorage.setItem('trial-by-pyro-ui-v1', JSON.stringify({view:'why',search:'unrelated saved filter'}))")
+        self.page.goto(link)
+        frame=self.page.frame_locator('#artifact-frame')
+        expect(frame.locator('#increment')).to_have_text('Count: 0')
+        expect(self.page.locator('#viewer')).to_have_class(re.compile(r'\bis-live\b'))
+        self.assertEqual(urlsplit(self.page.url).fragment,urlsplit(link).fragment)
+        rectangle=self.page.locator('#artifact-frame').bounding_box()
+        self.assertEqual(rectangle['width'],1440)
+        self.assertGreaterEqual(rectangle['height'],920)
+        self.page.locator('.live-bar [data-copy-run]').click()
+        expect(self.page.locator('#viewer #toast')).to_be_visible()
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'),link)
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 1')
+        self.page.reload()
+        expect(frame.locator('#increment')).to_have_text('Count: 0')
+        self.page.locator('#close-live').click()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.assertNotIn('#play/',self.page.url)
+        self.page.reload()
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        self.assertEqual(self.errors,[])
+
+    def test_shared_link_history_and_invalid_builds(self):
+        from playwright.sync_api import expect
+        self.fixture();self.navigate_direct()
+        self.page.locator('#track-filter').select_option('html')
+        self.page.locator('#cards .card-open').click()
+        self.page.locator('#launch-preview').click()
+        self.assertIn('#play/',self.page.url)
+        self.page.go_back()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.page.go_forward()
+        expect(self.page.locator('#artifact-frame')).to_have_count(1)
+        self.page.evaluate("location.hash='why'")
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        expect(self.page.locator('#view-why')).to_be_visible()
+        for fragment in ['#play/missing/build','#play/%E0%A4%A','#play/https%3A%2F%2Fexample.com']:
+            self.page.evaluate("location.hash='catalog'")
+            self.page.locator('#catalog-grid [data-open-prompt]').first.click()
+            expect(self.page.locator('#prompt-dialog')).to_be_visible()
+            self.page.goto(self.base+'/'+fragment)
+            expect(self.page.locator('#prompt-dialog')).not_to_be_visible()
+            expect(self.page.locator('#link-error')).to_be_visible()
+            expect(self.page.locator('#artifact-frame')).to_have_count(0)
+            expect(self.page.locator('#view-gallery')).to_be_visible()
+        self.page.locator('#refresh').click()
+        expect(self.page.locator('#link-error')).not_to_be_visible()
+        self.page.goto(self.base+'/#play/missing/build')
+        expect(self.page.locator('#link-error')).to_be_visible()
+        self.page.goto(self.base+'/#play/'+quote('UI fixture - not a model evaluation/01-fluid-simulation-001',safe='/'))
+        expect(self.page.locator('#artifact-frame')).to_have_count(1)
+        self.page.locator('#close-live').click()
+        expect(self.page.locator('#link-error')).not_to_be_visible()
+        self.page.goto(self.base+'/#play/missing/build')
+        expect(self.page.locator('#link-error')).to_be_visible()
+        self.page.locator('[data-view="why"]').first.click()
+        expect(self.page.locator('#view-why')).to_be_visible()
+        expect(self.page.locator('#link-error')).not_to_be_visible()
+        self.page.goto(self.base+'/#play/missing/build')
+        expect(self.page.locator('#link-error')).to_be_visible()
+        self.page.locator('#cards .card-open').click()
+        expect(self.page.locator('#viewer')).to_be_visible()
+        expect(self.page.locator('#link-error')).not_to_be_visible()
+        self.assertEqual(self.errors,[])
+
+    def test_shared_link_escapes_names_and_has_clipboard_fallback(self):
+        from playwright.sync_api import expect
+        model='Model + # Ü %';run_name='01-fluid-simulation-001'
+        run=self.results/model/run_name;run.mkdir(parents=True)
+        (run/'index.html').write_text('<!doctype html><title>Escaped build</title><h1>Escaped build</h1>')
+        self.page.add_init_script("Object.defineProperty(navigator,'clipboard',{value:{writeText:async()=>{throw new Error('Clipboard denied')}}})")
+        self.navigate_direct()
+        links=[]
+        def copy_dialog(dialog):
+            links.append(dialog.default_value);dialog.dismiss()
+        self.page.on('dialog',copy_dialog)
+        with self.page.expect_event('dialog'):
+            self.page.locator('#cards [data-copy-run]').click()
+        link=self.base+'/#play/'+quote(model+'/'+run_name,safe='/')
+        self.assertEqual(links,[link])
+        self.page.goto(link)
+        expect(self.page.frame_locator('#artifact-frame').locator('h1')).to_have_text('Escaped build')
+        self.page.keyboard.press('Escape')
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        self.assertNotIn('#play/',self.page.url)
+        self.assertEqual(self.errors,[])
+
     def model_settings(self, content):
         static=Path(self.temp.name)/'static'
         if not static.exists():
