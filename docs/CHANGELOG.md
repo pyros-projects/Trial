@@ -2,6 +2,9 @@
 
 ## Trial by Pyro: 2026-09-07
 
+- Expanded live previews to the full browser viewport with a compact control bar and explicit device-size presets.
+- Added the Why Trial? reading view and README rationale in Pyro's voice, with the supplied Deep-SWE snapshot.
+- Included seven Gemini 3.8 Flash builds and selected existing evidence screenshots for their gallery previews.
 - Adopted the Trial by Pyro name and visual identity.
 - Grouped the showcase by prompt so submitted builds can be compared side by side.
 - Added a focused static export and Netlify scripts for public hosting.

@@ -37,6 +37,9 @@ class StaticExportTests(unittest.TestCase):
             "debug.json": '{"secret":"STATIC-PRIVATE"}',
         }.items():
             (static / name).write_text(body, encoding="utf-8")
+        self.reference_snapshot = b"\x89PNG\r\n\x1a\nUser-supplied Deep-SWE reference snapshot."
+        (static / "deep-swe-snapshot.png").write_bytes(self.reference_snapshot)
+        (static / "unlisted-snapshot.png").write_bytes(b"Unlisted static image")
         prompt = self.root / "prompts/01-fluid-simulation"
         prompt.mkdir(parents=True)
         (prompt / "prompt.md").write_text("# Build fluid\nPublic task.", encoding="utf-8")
@@ -109,6 +112,12 @@ class StaticExportTests(unittest.TestCase):
         self.assertEqual(report["bytes"], sum(p.stat().st_size for p in self.output.rglob("*") if p.is_file()))
         self.assertEqual(data["mode"], "public")
         self.assertTrue(data["generated_at"].endswith("Z"))
+
+    def test_reference_snapshot_is_exported_without_changes(self):
+        self.export(screenshots="none")
+        self.assertEqual((self.output / "deep-swe-snapshot.png").read_bytes(), self.reference_snapshot)
+        self.assertEqual((self.root / "gallery/static/deep-swe-snapshot.png").read_bytes(), self.reference_snapshot)
+        self.assertFalse((self.output / "unlisted-snapshot.png").exists())
 
     def test_public_links_and_netlify_routes_have_targets(self):
         _, data = self.export(screenshots="none")
@@ -183,7 +192,7 @@ class StaticExportTests(unittest.TestCase):
         self.assertEqual(report["source_screenshot_bytes"], len(screenshot))
         self.assertIn("Pillow", report["warnings"][0])
         self.assertIn("pip install Pillow", report["warnings"][0])
-        self.assertEqual([p for p in self.output.rglob("*") if p.suffix in {".png", ".jpg"}], [image])
+        self.assertEqual([p for p in (self.output / "artifacts").rglob("*") if p.suffix in {".png", ".jpg"}], [image])
 
     def test_linked_sources_and_output_are_rejected(self):
         if not hasattr(Path, "is_junction"):

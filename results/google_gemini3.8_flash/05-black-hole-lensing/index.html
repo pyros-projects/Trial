@@ -1,0 +1,2960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Gravitational Lensing & Black Hole Explorer</title>
+  <style>
+    :root {
+      --bg-base: #050608;
+      --bg-panel: rgba(11, 14, 22, 0.90);
+      --bg-panel-border: rgba(255, 255, 255, 0.13);
+      --bg-panel-hover: rgba(26, 32, 48, 0.95);
+      --accent-cyan: #00e5ff;
+      --accent-gold: #ffb300;
+      --accent-magenta: #e040fb;
+      --accent-red: #ff3d00;
+      --accent-blue: #2979ff;
+      --text-main: #f0f4f8;
+      --text-dim: #90a4ae;
+      --text-muted: #546e7a;
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "SF Mono", "Roboto Mono", "Fira Code", Menlo, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-base);
+      font-family: var(--font-ui);
+      color: var(--text-main);
+      font-size: 13px;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    canvas#glcanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    /* Selection reticle on main canvas */
+    #selection-reticle {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border: 1.5px solid var(--accent-cyan);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      display: none;
+      z-index: 2;
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.7);
+      transition: width 0.15s ease, height 0.15s ease;
+    }
+    #selection-reticle::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 4px;
+      height: 4px;
+      background: var(--accent-cyan);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Top Navigation Bar */
+    #top-bar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      height: 46px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      z-index: 10;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      pointer-events: auto;
+    }
+
+    .app-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: #fff;
+    }
+    .app-brand svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: var(--accent-cyan);
+      stroke-width: 2;
+      filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.7));
+    }
+    .app-brand span.title-bold {
+      color: #ffffff;
+      font-size: 14px;
+    }
+    .app-brand span.title-badge {
+      background: rgba(0, 229, 255, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .top-presets-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      overflow-x: auto;
+      max-width: 48%;
+      scrollbar-width: none;
+    }
+    .top-presets-group::-webkit-scrollbar { display: none; }
+
+    .btn-preset {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-preset:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .btn-preset.active {
+      background: rgba(0, 229, 255, 0.18);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .top-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+    .icon-btn.active {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    /* Left Performance HUD */
+    #hud-performance {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      z-index: 10;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
+      min-width: 220px;
+    }
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .hud-label {
+      color: var(--text-dim);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .hud-val {
+      color: #fff;
+      font-weight: 600;
+    }
+    .hud-val.cyan { color: var(--accent-cyan); }
+    .hud-val.gold { color: var(--accent-gold); }
+    .hud-val.green { color: #00e676; }
+
+    /* Right Sidebar Controls */
+    #sidebar-controls {
+      position: absolute;
+      top: 68px;
+      right: 12px;
+      bottom: 16px;
+      width: 350px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 12px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+      pointer-events: auto;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+      overflow: hidden;
+    }
+    #sidebar-controls.collapsed {
+      transform: translateX(calc(100% + 20px));
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--bg-panel-border);
+    }
+    .sidebar-title {
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sidebar-title svg {
+      width: 16px;
+      height: 16px;
+      stroke: var(--accent-cyan);
+      fill: none;
+    }
+
+    .sidebar-tabs {
+      display: flex;
+      background: rgba(0, 0, 0, 0.25);
+      border-bottom: 1px solid var(--bg-panel-border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .sidebar-tabs::-webkit-scrollbar { display: none; }
+    .sidebar-tab-btn {
+      flex: 1;
+      min-width: 70px;
+      padding: 8px 6px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .sidebar-tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .sidebar-tab-btn.active {
+      color: var(--accent-cyan);
+      border-bottom-color: var(--accent-cyan);
+      background: rgba(0, 229, 255, 0.08);
+      font-weight: 600;
+    }
+
+    .sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .sidebar-body::-webkit-scrollbar {
+      width: 4px;
+    }
+    .sidebar-body::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+    }
+
+    .tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .tab-pane.active {
+      display: flex;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .control-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .control-row:last-child {
+      margin-bottom: 0;
+    }
+    .control-label-wrap {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+    }
+    .control-label {
+      color: var(--text-main);
+    }
+    .control-val {
+      font-family: var(--font-mono);
+      color: var(--accent-cyan);
+      font-size: 11px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      outline: none;
+      transition: background 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--accent-cyan);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(0, 229, 255, 0.8);
+      transition: transform 0.1s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+    }
+
+    /* Toggle switches */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .toggle-label {
+      font-size: 12px;
+      color: var(--text-main);
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider-switch {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255, 255, 255, 0.18);
+      transition: .2s;
+      border-radius: 20px;
+    }
+    .slider-switch:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }
+    input:checked + .slider-switch {
+      background-color: var(--accent-cyan);
+    }
+    input:checked + .slider-switch:before {
+      transform: translateX(16px);
+    }
+
+    /* Segmented buttons */
+    .segmented-control {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 3px;
+      border-radius: 6px;
+    }
+    .seg-btn {
+      background: none;
+      border: none;
+      padding: 6px 4px;
+      font-size: 10.5px;
+      color: var(--text-dim);
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+    .seg-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .seg-btn.active {
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 700;
+    }
+
+    /* Viz Mode List */
+    .viz-mode-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .viz-mode-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .viz-mode-item:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .viz-mode-item.active {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--accent-cyan);
+    }
+    .viz-mode-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .viz-mode-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .viz-mode-desc {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .viz-mode-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-dim);
+    }
+    .viz-mode-item.active .viz-mode-badge {
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 700;
+    }
+
+    /* Ray Inspector Panel */
+    #ray-inspector {
+      position: absolute;
+      bottom: 16px;
+      right: 374px;
+      width: 330px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 12px;
+      z-index: 10;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+      pointer-events: auto;
+      overflow: hidden;
+    }
+    #ray-inspector.visible {
+      display: flex;
+    }
+
+    .inspector-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--bg-panel-border);
+      background: rgba(0, 229, 255, 0.06);
+    }
+    .inspector-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .inspector-body {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #diagramCanvas {
+      width: 100%;
+      height: 160px;
+      background: #020306;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: block;
+    }
+    .inspector-metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+    }
+    .metric-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 6px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .metric-lbl {
+      color: var(--text-dim);
+      font-size: 9.5px;
+      text-transform: uppercase;
+    }
+    .metric-val {
+      color: #fff;
+      font-weight: 600;
+      font-size: 10.5px;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+    .inspector-note {
+      font-size: 10.5px;
+      color: var(--text-dim);
+      line-height: 1.4;
+      background: rgba(0, 229, 255, 0.05);
+      border-left: 2px solid var(--accent-cyan);
+      padding: 6px 8px;
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* Modal dialogs */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal-box {
+      background: #0d121c;
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--bg-panel-border);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .modal-content {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 65vh;
+      overflow-y: auto;
+    }
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--bg-panel-border);
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 700;
+    }
+    .btn-primary:hover {
+      background: #33ebff;
+    }
+
+    textarea.code-area {
+      width: 100%;
+      height: 180px;
+      background: #05070a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 10px;
+      resize: vertical;
+    }
+
+    /* WebGL Fallback Banner */
+    #webgl-error-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5, 7, 10, 0.95);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .error-card {
+      background: #151821;
+      border: 1px solid var(--accent-red);
+      border-radius: 12px;
+      max-width: 500px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 16px 48px rgba(255, 61, 0, 0.3);
+    }
+    .error-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent-red);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      #top-bar {
+        height: auto;
+        padding: 8px 10px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .top-presets-group {
+        max-width: 100%;
+        order: 3;
+        width: 100%;
+      }
+      #sidebar-controls {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 60vh;
+        border-radius: 16px 16px 0 0;
+      }
+      #sidebar-controls.collapsed {
+        transform: translateY(100%);
+      }
+      #hud-performance {
+        bottom: 70px;
+        left: 10px;
+        min-width: 160px;
+        font-size: 10px;
+      }
+      #ray-inspector {
+        right: 10px;
+        left: 10px;
+        bottom: 70px;
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen WebGL2 Canvas Container -->
+  <div id="canvas-container">
+    <canvas id="glcanvas"></canvas>
+    <div id="selection-reticle"></div>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <header id="top-bar">
+    <div class="app-brand">
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" fill="none"/>
+        <circle cx="12" cy="12" r="4" fill="currentColor"/>
+        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10" stroke-dasharray="2 2"/>
+      </svg>
+      <span class="title-bold">GRAVITATIONAL LENSING</span>
+      <span class="title-badge">RELATIVISTIC GR</span>
+    </div>
+
+    <!-- Quick Camera Presets -->
+    <div class="top-presets-group" id="top-presets">
+      <button class="btn-preset active" data-preset="gargantua">Interstellar</button>
+      <button class="btn-preset" data-preset="equatorial">Equatorial Rim</button>
+      <button class="btn-preset" data-preset="polar">Polar Top</button>
+      <button class="btn-preset" data-preset="horizon_dive">Deep Dive</button>
+      <button class="btn-preset" data-preset="einstein_ring">Einstein Ring</button>
+      <button class="btn-preset" data-preset="high_spin">Kerr Ergosphere</button>
+    </div>
+
+    <!-- Quick Action Toggles -->
+    <div class="top-actions-group">
+      <button class="icon-btn" id="btn-toggle-play" title="Pause / Resume Simulation">
+        <svg id="icon-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+      <button class="icon-btn active" id="btn-toggle-orbit" title="Auto-Orbit Camera">
+        <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-toggle-audio" title="Toggle Cosmic Acoustic Drone">
+        <svg id="icon-sound-off" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-export-config" title="Export / Import Config">
+        <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-toggle-sidebar" title="Toggle Control Panel">
+        <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Left Bottom Performance HUD -->
+  <aside id="hud-performance">
+    <div class="hud-row">
+      <span class="hud-label">Frame Rate</span>
+      <span class="hud-val green" id="hud-fps">60.0 FPS</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Render Size</span>
+      <span class="hud-val" id="hud-res">1920×1080</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Steps (Avg/Sel)</span>
+      <span class="hud-val cyan" id="hud-steps">128 / --</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Cam Distance</span>
+      <span class="hud-val gold" id="hud-cam-dist">15.0 rs</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Viz Mode</span>
+      <span class="hud-val" id="hud-mode-name">Cinematic Beauty</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Status</span>
+      <span class="hud-val green" id="hud-sim-state">ACTIVE</span>
+    </div>
+  </aside>
+
+  <!-- Interactive Ray Inspector Overlay -->
+  <section id="ray-inspector">
+    <div class="inspector-header">
+      <span class="inspector-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        RAY TRAJECTORY INSPECTOR
+      </span>
+      <button class="icon-btn" id="btn-close-inspector" style="width:24px;height:24px;">✕</button>
+    </div>
+    <div class="inspector-body">
+      <canvas id="diagramCanvas" width="300" height="160"></canvas>
+      <div class="inspector-metrics-grid">
+        <div class="metric-card">
+          <span class="metric-lbl">Screen Pixel</span>
+          <span class="metric-val" id="insp-pixel">(0, 0)</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Impact Param (b)</span>
+          <span class="metric-val cyan" id="insp-impact">0.00 rs</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Periapsis (rmin)</span>
+          <span class="metric-val gold" id="insp-periapsis">0.00 rs</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Deflection (Δθ)</span>
+          <span class="metric-val" id="insp-deflection">0.00 rad</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">RK Steps Taken</span>
+          <span class="metric-val" id="insp-steps">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Final Ray Fate</span>
+          <span class="metric-val cyan" id="insp-fate">Escaped</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Disk Hit Radius</span>
+          <span class="metric-val" id="insp-disk-r">None</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Net Shift (g)</span>
+          <span class="metric-val gold" id="insp-shift">1.000</span>
+        </div>
+      </div>
+      <div class="inspector-note" id="insp-description">
+        Click anywhere on the black hole or disk to inspect the null geodesic path through curved spacetime.
+      </div>
+    </div>
+  </section>
+
+  <!-- Right Collapsible Controls Drawer -->
+  <aside id="sidebar-controls">
+    <div class="sidebar-header">
+      <div class="sidebar-title">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        SIMULATION PARAMETERS
+      </div>
+      <button class="icon-btn" id="btn-close-sidebar" style="width:26px;height:26px;">✕</button>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab-btn active" data-tab="tab-physics">Physics</button>
+      <button class="sidebar-tab-btn" data-tab="tab-disk">Accretion</button>
+      <button class="sidebar-tab-btn" data-tab="tab-optics">Optics</button>
+      <button class="sidebar-tab-btn" data-tab="tab-render">Quality</button>
+      <button class="sidebar-tab-btn" data-tab="tab-viz">Modes</button>
+    </div>
+
+    <div class="sidebar-body">
+
+      <!-- TAB 1: PHYSICS -->
+      <div class="tab-pane active" id="tab-physics">
+        <div class="control-group">
+          <div class="control-group-title">Black Hole Mass & Horizon</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Mass (M / Lensing Strength)</span>
+              <span class="control-val" id="val-mass">1.00</span>
+            </div>
+            <input type="range" id="param-mass" min="0.2" max="3.0" step="0.05" value="1.0">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Event Horizon Radius (rs = 2M)</span>
+              <span class="control-val" id="val-horizon">1.00</span>
+            </div>
+            <input type="range" id="param-horizon" min="0.4" max="2.0" step="0.05" value="1.0">
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-group-title">Spacetime Spin (Kerr Metric)</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Dimensionless Spin (a*)</span>
+              <span class="control-val" id="val-spin">0.85</span>
+            </div>
+            <input type="range" id="param-spin" min="-0.99" max="0.99" step="0.01" value="0.85">
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:2px;">
+            Positive = Prograde rotation (drags disk forward). Negative = Retrograde rotation.
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-group-title">Simulation Dynamics</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Time Evolution Speed</span>
+              <span class="control-val" id="val-sim-speed">1.00x</span>
+            </div>
+            <input type="range" id="param-sim-speed" min="0.0" max="3.0" step="0.05" value="1.0">
+          </div>
+          <div class="toggle-wrap">
+            <span class="toggle-label">Auto-Orbit Camera</span>
+            <label class="switch">
+              <input type="checkbox" id="param-auto-orbit" checked>
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Orbit Speed</span>
+              <span class="control-val" id="val-orbit-speed">0.50</span>
+            </div>
+            <input type="range" id="param-orbit-speed" min="0.05" max="2.0" step="0.05" value="0.5">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: ACCRETION DISK -->
+      <div class="tab-pane" id="tab-disk">
+        <div class="control-group">
+          <div class="control-group-title">Radial Geometry</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Inner Radius (ISCO Bound)</span>
+              <span class="control-val" id="val-disk-in">2.20 rs</span>
+            </div>
+            <input type="range" id="param-disk-in" min="1.0" max="4.5" step="0.05" value="2.2">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Outer Radius</span>
+              <span class="control-val" id="val-disk-out">10.0 rs</span>
+            </div>
+            <input type="range" id="param-disk-out" min="5.0" max="22.0" step="0.5" value="10.0">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Vertical Thickness (H/R)</span>
+              <span class="control-val" id="val-disk-thick">0.08</span>
+            </div>
+            <input type="range" id="param-disk-thick" min="0.01" max="0.35" step="0.01" value="0.08">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Disk Plane Inclination</span>
+              <span class="control-val" id="val-disk-inc">0.0°</span>
+            </div>
+            <input type="range" id="param-disk-inc" min="-45.0" max="45.0" step="1.0" value="0.0">
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-group-title">Emission & Thermodynamics</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Base Temperature (Peak K)</span>
+              <span class="control-val" id="val-disk-temp">7500 K</span>
+            </div>
+            <input type="range" id="param-disk-temp" min="2500" max="18000" step="250" value="7500">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Turbulence / Spiral Waves</span>
+              <span class="control-val" id="val-turbulence">1.00</span>
+            </div>
+            <input type="range" id="param-turbulence" min="0.0" max="2.5" step="0.05" value="1.0">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Disk Opacity / Optical Depth</span>
+              <span class="control-val" id="val-disk-opacity">0.85</span>
+            </div>
+            <input type="range" id="param-disk-opacity" min="0.1" max="1.0" step="0.05" value="0.85">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: RELATIVISTIC OPTICS -->
+      <div class="tab-pane" id="tab-optics">
+        <div class="control-group">
+          <div class="control-group-title">Relativistic Beaming & Redshift</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Doppler Beaming Strength (δ⁴)</span>
+              <span class="control-val" id="val-doppler">1.00</span>
+            </div>
+            <input type="range" id="param-doppler" min="0.0" max="2.0" step="0.05" value="1.0">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Gravitational Redshift Strength</span>
+              <span class="control-val" id="val-redshift">1.00</span>
+            </div>
+            <input type="range" id="param-redshift" min="0.0" max="2.0" step="0.05" value="1.0">
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-group-title">Camera & Exposure</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Sensor Exposure</span>
+              <span class="control-val" id="val-exposure">1.20</span>
+            </div>
+            <input type="range" id="param-exposure" min="0.2" max="4.0" step="0.05" value="1.2">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Contrast</span>
+              <span class="control-val" id="val-contrast">1.10</span>
+            </div>
+            <input type="range" id="param-contrast" min="0.5" max="2.0" step="0.05" value="1.1">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Bloom Glow Intensity</span>
+              <span class="control-val" id="val-bloom">0.80</span>
+            </div>
+            <input type="range" id="param-bloom" min="0.0" max="2.0" step="0.05" value="0.8">
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-group-title">Background Celestial Sphere</div>
+          <div class="toggle-wrap">
+            <span class="toggle-label">Show Celestial Grid Lines</span>
+            <label class="switch">
+              <input type="checkbox" id="param-grid" checked>
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Starfield Density</span>
+              <span class="control-val" id="val-stars">1.00</span>
+            </div>
+            <input type="range" id="param-stars" min="0.1" max="2.5" step="0.1" value="1.0">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Milky Way Nebulae Glow</span>
+              <span class="control-val" id="val-milkyway">1.00</span>
+            </div>
+            <input type="range" id="param-milkyway" min="0.0" max="2.5" step="0.1" value="1.0">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: RENDER & QUALITY -->
+      <div class="tab-pane" id="tab-render">
+        <div class="control-group">
+          <div class="control-group-title">Hardware Quality Presets</div>
+          <div class="segmented-control" id="quality-presets">
+            <button class="seg-btn" data-quality="ultra">Ultra</button>
+            <button class="seg-btn active" data-quality="high">High</button>
+            <button class="seg-btn" data-quality="medium">Med</button>
+            <button class="seg-btn" data-quality="low">Low</button>
+            <button class="seg-btn" data-quality="mobile">Mobile</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-group-title">Geodesic Integrator Precision</div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Max Integration Steps</span>
+              <span class="control-val" id="val-max-steps">160</span>
+            </div>
+            <input type="range" id="param-max-steps" min="32" max="320" step="16" value="160">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Base Step Size (dt)</span>
+              <span class="control-val" id="val-step-size">0.08</span>
+            </div>
+            <input type="range" id="param-step-size" min="0.02" max="0.25" step="0.01" value="0.08">
+          </div>
+          <div class="control-row">
+            <div class="control-label-wrap">
+              <span class="control-label">Internal Resolution Scale</span>
+              <span class="control-val" id="val-res-scale">1.00x</span>
+            </div>
+            <input type="range" id="param-res-scale" min="0.5" max="1.5" step="0.1" value="1.0">
+          </div>
+          <div class="toggle-wrap">
+            <span class="toggle-label">Subpixel Jitter Anti-Aliasing</span>
+            <label class="switch">
+              <input type="checkbox" id="param-taa" checked>
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-group-title">State Management</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <button class="btn btn-secondary" id="btn-reset-defaults">Reset Defaults</button>
+            <button class="btn btn-primary" id="btn-copy-url">Copy Link</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: VIZ MODES -->
+      <div class="tab-pane" id="tab-viz">
+        <div class="viz-mode-list" id="viz-modes-container">
+          <div class="viz-mode-item active" data-mode="0">
+            <div class="viz-mode-info">
+              <span class="viz-mode-name">1. Cinematic Beauty Pass</span>
+              <span class="viz-mode-desc">Full general relativistic ray-tracing, blackbody emission & stars</span>
+            </div>
+            <span class="viz-mode-badge">RGB</span>
+          </div>
+
+          <div class="viz-mode-item" data-mode="1">
+            <div class="viz-mode-info">
+              <span class="viz-mode-name">2. Ray Step Count Heatmap</span>
+              <span class="viz-mode-desc">Computational density: purple = quick escape, red = photon sphere</span>
+            </div>
+            <span class="viz-mode-badge">STEPS</span>
+          </div>
+
+          <div class="viz-mode-item" data-mode="2">
+            <div class="viz-mode-info">
+              <span class="viz-mode-name">3. Deflection Angle (Δθ)</span>
+              <span class="viz-mode-desc">Total angular bending experienced along the curved null geodesic</span>
+            </div>
+            <span class="viz-mode-badge">RAD</span>
+          </div>
+
+          <div class="viz-mode-item" data-mode="3">
+            <div class="viz-mode-info">
+              <span class="viz-mode-name">4. Redshift & Doppler Factor (g)</span>
+              <span class="viz-mode-desc">Blue = blueshifted approaching side, Red = redshifted receding side</span>
+            </div>
+            <span class="viz-mode-badge">SHIFT</span>
+          </div>
+
+          <div class="viz-mode-item" data-mode="4">
+            <div class="viz-mode-info">
+              <span class="viz-mode-name">5. Disk Coordinates (R, φ)</span>
+              <span class="viz-mode-desc">Radial and azimuthal coordinate mapping on the accretion plane</span>
+            </div>
+            <span class="viz-mode-badge">UV</span>
+          </div>
+
+          <div class="viz-mode-item" data-mode="5">
+            <div class="viz-mode-info">
+              <span class="viz-mode-name">6. Periapsis Distance (rmin)</span>
+              <span class="viz-mode-desc">Closest approach to singularity: horizon, photon sphere, and ISCO</span>
+            </div>
+            <span class="viz-mode-badge">DIST</span>
+          </div>
+
+          <div class="viz-mode-item" data-mode="6">
+            <div class="viz-mode-info">
+              <span class="viz-mode-name">7. Fate Classification</span>
+              <span class="viz-mode-desc">Black: captured, Cyan: escaped, Orange: primary disk, Magenta: secondary</span>
+            </div>
+            <span class="viz-mode-badge">CLASS</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- Import / Export Modal -->
+  <div class="modal-backdrop" id="modal-config">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span>Simulation Configuration (JSON)</span>
+        <button class="icon-btn" id="btn-close-modal" style="width:26px;height:26px;">✕</button>
+      </div>
+      <div class="modal-content">
+        <p style="color:var(--text-dim);font-size:11.5px;">
+          Copy this configuration to export your current black hole spacetime setup, or paste a saved configuration to restore it.
+        </p>
+        <textarea class="code-area" id="config-json-area" spellcheck="false"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-download-config">Download .json</button>
+        <button class="btn btn-secondary" id="btn-copy-config">Copy to Clipboard</button>
+        <button class="btn btn-primary" id="btn-apply-config">Apply Configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WebGL2 Error Fallback Modal -->
+  <div id="webgl-error-modal">
+    <div class="error-card">
+      <div class="error-title">WebGL2 Graphics Context Required</div>
+      <p style="color:var(--text-dim);line-height:1.5;">
+        This application performs real-time Runge-Kutta numerical integration of relativistic null geodesics in curved Schwarzschild and Kerr spacetimes.
+      </p>
+      <p style="color:var(--text-dim);line-height:1.5;" id="webgl-error-details">
+        Your browser or hardware environment does not currently have WebGL2 acceleration enabled. Please ensure hardware acceleration is active in your browser settings.
+      </p>
+    </div>
+  </div>
+
+  <!-- Application Logic & Shaders -->
+  <script>
+    "use strict";
+
+    /* =========================================================================
+       DEFAULT SIMULATION PARAMETERS & STATE
+       ========================================================= */
+    const DEFAULT_CONFIG = {
+      // Physics
+      mass: 1.0,
+      spin: 0.85,
+      horizon: 1.0,
+      simSpeed: 1.0,
+      autoOrbit: true,
+      orbitSpeed: 0.5,
+
+      // Accretion Disk
+      diskIn: 2.2,
+      diskOut: 10.0,
+      diskThick: 0.08,
+      diskInc: 0.0,
+      diskTemp: 7800,
+      turbulence: 1.2,
+      diskOpacity: 0.88,
+
+      // Relativistic Optics
+      doppler: 1.2,
+      redshift: 1.0,
+      exposure: 1.25,
+      contrast: 1.15,
+      bloom: 0.85,
+      showGrid: true,
+      stars: 1.2,
+      milkyway: 1.1,
+
+      // Quality & Integrator
+      quality: "high",
+      maxSteps: 160,
+      stepSize: 0.08,
+      resScale: 1.0,
+      taa: true,
+
+      // Visualization Mode (0 = beauty, 1 = steps, 2 = deflection, 3 = doppler, 4 = disk uv, 5 = dist, 6 = classification)
+      vizMode: 0,
+
+      // Camera state
+      camera: {
+        theta: 0.35,
+        phi: 1.32,
+        distance: 14.5,
+        target: [0, 0, 0]
+      }
+    };
+
+    let State = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+
+    const PRESETS = {
+      gargantua: {
+        name: "Interstellar / Gargantua",
+        camera: { theta: 0.25, phi: 1.32, distance: 14.5, target: [0, 0, 0] },
+        mass: 1.0, spin: 0.85, diskIn: 2.2, diskOut: 10.0, diskThick: 0.08,
+        diskInc: 0.0, diskTemp: 7800, turbulence: 1.2, doppler: 1.2, redshift: 1.0,
+        exposure: 1.25, contrast: 1.15, bloom: 0.85, showGrid: true
+      },
+      equatorial: {
+        name: "Equatorial Rim",
+        camera: { theta: 0.05, phi: 1.55, distance: 13.0, target: [0, 0, 0] },
+        mass: 1.0, spin: 0.7, diskIn: 2.3, diskOut: 11.0, diskThick: 0.05,
+        diskInc: 0.0, diskTemp: 8500, turbulence: 1.3, doppler: 1.3, redshift: 1.0,
+        exposure: 1.3, contrast: 1.18, bloom: 0.95, showGrid: false
+      },
+      polar: {
+        name: "Polar Top-Down",
+        camera: { theta: 0.0, phi: 0.05, distance: 16.0, target: [0, 0, 0] },
+        mass: 1.0, spin: 0.5, diskIn: 2.4, diskOut: 9.5, diskThick: 0.09,
+        diskInc: 0.0, diskTemp: 7200, turbulence: 1.2, doppler: 0.4, redshift: 0.9,
+        exposure: 1.15, contrast: 1.05, bloom: 0.75, showGrid: true
+      },
+      horizon_dive: {
+        name: "Deep Horizon Dive",
+        camera: { theta: 0.6, phi: 1.40, distance: 4.8, target: [0, 0, 0] },
+        mass: 1.0, spin: 0.92, diskIn: 1.8, diskOut: 8.0, diskThick: 0.06,
+        diskInc: 0.0, diskTemp: 9800, turbulence: 1.4, doppler: 1.5, redshift: 1.3,
+        exposure: 1.4, contrast: 1.22, bloom: 1.1, showGrid: false
+      },
+      einstein_ring: {
+        name: "Einstein Ring Alignment",
+        camera: { theta: 3.1415, phi: 1.50, distance: 18.0, target: [0, 0, 0] },
+        mass: 1.4, spin: 0.0, diskIn: 3.0, diskOut: 12.0, diskThick: 0.04,
+        diskInc: 0.0, diskTemp: 6200, turbulence: 0.6, doppler: 0.8, redshift: 1.0,
+        exposure: 1.35, contrast: 1.15, bloom: 0.9, showGrid: true
+      },
+      high_spin: {
+        name: "High Spin Ergosphere",
+        camera: { theta: 0.4, phi: 1.35, distance: 8.5, target: [0, 0, 0] },
+        mass: 1.0, spin: 0.98, diskIn: 1.4, diskOut: 7.5, diskThick: 0.07,
+        diskInc: 0.0, diskTemp: 11500, turbulence: 1.5, doppler: 1.7, redshift: 1.4,
+        exposure: 1.4, contrast: 1.2, bloom: 1.0, showGrid: false
+      }
+    };
+
+    const QUALITY_CONFIGS = {
+      ultra:   { maxSteps: 240, stepSize: 0.06, resScale: 1.0,  taa: true },
+      high:    { maxSteps: 160, stepSize: 0.08, resScale: 1.0,  taa: true },
+      medium:  { maxSteps: 100, stepSize: 0.12, resScale: 0.85, taa: false },
+      low:     { maxSteps: 64,  stepSize: 0.16, resScale: 0.70, taa: false },
+      mobile:  { maxSteps: 48,  stepSize: 0.20, resScale: 0.55, taa: false }
+    };
+
+    /* =========================================================================
+       AUDIO SYNTHESIZER (WEB AUDIO API)
+       ========================================================= */
+    let audioCtx = null;
+    let audioGain = null;
+    let audioOsc1 = null;
+    let audioOsc2 = null;
+    let audioFilter = null;
+    let isAudioPlaying = false;
+
+    function initAudio() {
+      if (audioCtx) return;
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+
+        audioGain = audioCtx.createGain();
+        audioGain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+
+        audioFilter = audioCtx.createBiquadFilter();
+        audioFilter.type = "lowpass";
+        audioFilter.frequency.setValueAtTime(120, audioCtx.currentTime);
+        audioFilter.Q.setValueAtTime(4.0, audioCtx.currentTime);
+
+        audioOsc1 = audioCtx.createOscillator();
+        audioOsc1.type = "sawtooth";
+        audioOsc1.frequency.setValueAtTime(48.0, audioCtx.currentTime);
+
+        audioOsc2 = audioCtx.createOscillator();
+        audioOsc2.type = "sine";
+        audioOsc2.frequency.setValueAtTime(24.0, audioCtx.currentTime);
+
+        audioOsc1.connect(audioFilter);
+        audioOsc2.connect(audioFilter);
+        audioFilter.connect(audioGain);
+        audioGain.connect(audioCtx.destination);
+
+        audioOsc1.start();
+        audioOsc2.start();
+      } catch (e) {
+        console.warn("Web Audio not supported:", e);
+      }
+    }
+
+    function toggleAudio() {
+      initAudio();
+      if (!audioCtx) return;
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+      isAudioPlaying = !isAudioPlaying;
+      const targetGain = isAudioPlaying ? 0.08 : 0.0001;
+      audioGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.2);
+
+      const btn = document.getElementById("btn-toggle-audio");
+      btn.classList.toggle("active", isAudioPlaying);
+    }
+
+    function updateAudioModulation() {
+      if (!audioCtx || !isAudioPlaying) return;
+      const dist = State.camera.distance;
+      const mass = State.mass;
+      const baseFreq = Math.max(20, 55 - (15.0 / Math.max(2.0, dist)) * 12.0) * mass;
+      audioOsc1.frequency.setTargetAtTime(baseFreq, audioCtx.currentTime, 0.1);
+      audioOsc2.frequency.setTargetAtTime(baseFreq * 0.5, audioCtx.currentTime, 0.1);
+      audioFilter.frequency.setTargetAtTime(80 + (20.0 / Math.max(2.0, dist)) * 80, audioCtx.currentTime, 0.1);
+    }
+
+    /* =========================================================================
+       WEBGL2 RELATIVISTIC RAY-MARCHING SHADERS
+       ========================================================= */
+    const VS_SOURCE = `#version 300 es
+      in vec2 a_position;
+      out vec2 v_uv;
+      void main() {
+        v_uv = a_position * 0.5 + 0.5;
+        gl_Position = vec4(a_position, 0.0, 1.0);
+      }
+    `;
+
+    const FS_SOURCE = `#version 300 es
+      precision highp float;
+      precision highp int;
+
+      in vec2 v_uv;
+      out vec4 fragColor;
+
+      // Camera Uniforms
+      uniform vec3 u_camPos;
+      uniform vec3 u_camTarget;
+      uniform vec3 u_camUp;
+      uniform vec2 u_resolution;
+      uniform float u_fov;
+      uniform float u_time;
+      uniform vec2 u_subpixelJitter;
+
+      // Physics Parameters
+      uniform float u_mass;
+      uniform float u_spin;
+      uniform float u_horizon;
+
+      // Accretion Disk Parameters
+      uniform float u_diskIn;
+      uniform float u_diskOut;
+      uniform float u_diskThick;
+      uniform float u_diskInc;
+      uniform float u_diskTemp;
+      uniform float u_turbulence;
+      uniform float u_diskOpacity;
+
+      // Optics & Post-processing
+      uniform float u_dopplerStrength;
+      uniform float u_redshiftStrength;
+      uniform float u_exposure;
+      uniform float u_contrast;
+      uniform float u_bloom;
+      uniform float u_starDensity;
+      uniform float u_milkywayGlow;
+      uniform float u_showGrid;
+
+      // Integrator Parameters
+      uniform int u_maxSteps;
+      uniform float u_baseStepSize;
+      uniform int u_vizMode;
+
+      #define PI 3.14159265359
+      #define TWO_PI 6.28318530718
+
+      // High-performance procedural hash
+      float hash(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      float hash3(vec3 p) {
+        p = fract(p * 0.3183099 + 0.1);
+        p *= 17.0;
+        return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+      }
+
+      float noise2D(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      // Multi-octave turbulence for accretion disk
+      float fbm(vec2 p) {
+        float v = 0.0;
+        float a = 0.55;
+        vec2 shift = vec2(100.0);
+        mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.50));
+        for (int i = 0; i < 3; ++i) {
+          v += a * noise2D(p);
+          p = rot * p * 2.1 + shift;
+          a *= 0.48;
+        }
+        return v;
+      }
+
+      // Blackbody Spectrum (Planckian locus polynomial approximation in sRGB)
+      vec3 blackbody(float Temp) {
+        Temp = clamp(Temp, 1000.0, 26000.0) / 100.0;
+        vec3 col;
+        // Red
+        if (Temp <= 66.0) {
+          col.r = 1.0;
+        } else {
+          col.r = clamp(1.292936 * pow(Temp - 60.0, -0.13320476), 0.0, 1.0);
+        }
+        // Green
+        if (Temp <= 66.0) {
+          col.g = clamp(0.3900815 * log(max(1.0, Temp)) - 0.6318414, 0.0, 1.0);
+        } else {
+          col.g = clamp(1.12989 * pow(Temp - 60.0, -0.0755148), 0.0, 1.0);
+        }
+        // Blue
+        if (Temp >= 66.0) {
+          col.b = 1.0;
+        } else if (Temp <= 19.0) {
+          col.b = 0.0;
+        } else {
+          col.b = clamp(0.5432068 * log(max(1.0, Temp - 10.0)) - 1.196254, 0.0, 1.0);
+        }
+        return col;
+      }
+
+      // Scientific Colormap: Turbo (for heatmaps & diagnostics)
+      vec3 turboColormap(float x) {
+        x = clamp(x, 0.0, 1.0);
+        const vec4 kRedVec4 = vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234);
+        const vec4 kGreenVec4 = vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333);
+        const vec4 kBlueVec4 = vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771);
+        const vec2 kRedVec2 = vec2(-152.94239396, 59.28637943);
+        const vec2 kGreenVec2 = vec2(4.27729857, 2.82956604);
+        const vec2 kBlueVec2 = vec2(-89.90310912, 27.34824973);
+
+        vec4 v4 = vec4(1.0, x, x * x, x * x * x);
+        vec2 v2 = v4.zw * v4.z;
+        return vec3(
+          dot(v4, kRedVec4) + dot(v2, kRedVec2),
+          dot(v4, kGreenVec4) + dot(v2, kGreenVec2),
+          dot(v4, kBlueVec4) + dot(v2, kBlueVec2)
+        );
+      }
+
+      // Geodesic Acceleration in Schwarzschild + Kerr frame dragging
+      vec3 get_geodesic_accel(vec3 pos, vec3 vel, float M, float a) {
+        float r2 = dot(pos, pos);
+        float r = sqrt(r2);
+        if (r < 0.001) return vec3(0.0);
+        vec3 L = cross(pos, vel);
+        float L2 = dot(L, L);
+
+        // Exact Schwarzschild spatial null geodesic acceleration: -3 M L^2 / r^5 * r_vec
+        vec3 a_schwarz = (-3.0 * M * L2 / (r2 * r2 * r)) * pos;
+
+        // Kerr frame dragging (Coriolis-like relativistic azimuthal acceleration)
+        vec3 a_kerr = vec3(0.0);
+        if (abs(a) > 0.001) {
+          a_kerr = (4.0 * M * a / (r2 * r)) * cross(vel, vec3(0.0, 1.0, 0.0));
+        }
+
+        return a_schwarz + a_kerr;
+      }
+
+      // Procedural Background Celestial Sphere
+      vec3 sample_celestial_sphere(vec3 dir) {
+        vec3 col = vec3(0.0);
+
+        float theta = acos(clamp(dir.y, -1.0, 1.0));
+        float phi = atan(dir.z, dir.x);
+
+        // Celestial coordinate grid lines
+        if (u_showGrid > 0.5) {
+          float gridLat = abs(fract(theta * (12.0 / PI)) - 0.5);
+          float gridLon = abs(fract(phi * (24.0 / TWO_PI)) - 0.5);
+          float grid = smoothstep(0.025, 0.0, min(gridLat, gridLon));
+          col += vec3(0.09, 0.16, 0.26) * grid * 0.75;
+        }
+
+        // Milky Way galactic plane (inclined at 35 degrees)
+        const float cosInc = 0.819;
+        const float sinInc = 0.573;
+        vec3 galDir = vec3(dir.x, dir.y * cosInc - dir.z * sinInc, dir.y * sinInc + dir.z * cosInc);
+
+        float galLat = abs(galDir.y);
+        float galBand = exp(-galLat * galLat * 20.0);
+        float galBulge = exp(-length(galDir - vec3(0.0, 0.0, -1.0)) * 2.0);
+
+        // Dust lane absorption filaments
+        float dustNoise = fbm(vec2(phi * 3.5, galDir.y * 22.0));
+        float dust = smoothstep(0.25, 0.75, dustNoise) * exp(-galLat * 30.0);
+
+        vec3 mwCol = mix(vec3(1.0, 0.65, 0.4), vec3(0.35, 0.55, 1.0), smoothstep(0.0, 0.35, galLat));
+        vec3 mw = (mwCol * (galBand * 0.5 + galBulge * 1.1) * (1.0 - dust * 0.9)) * u_milkywayGlow;
+        col += mw;
+
+        // Distant background spiral galaxy
+        vec3 testGalaxyDir = normalize(vec3(0.2, 0.05, -0.98));
+        float distToGalaxy = length(dir - testGalaxyDir);
+        if (distToGalaxy < 0.28) {
+          float gCore = exp(-distToGalaxy * 28.0) * 2.5;
+          float gArm = exp(-distToGalaxy * 10.0) * (0.8 + 0.6 * sin(atan(dir.y - testGalaxyDir.y, dir.x - testGalaxyDir.x) * 2.0 + distToGalaxy * 30.0));
+          col += vec3(1.3, 1.0, 0.7) * gCore + vec3(0.4, 0.7, 1.3) * gArm;
+        }
+
+        // Procedural Starfield
+        vec3 starCoord = dir * 150.0 * u_starDensity;
+        vec3 id = floor(starCoord);
+        vec3 f = fract(starCoord) - 0.5;
+
+        float rnd = hash3(id);
+        if (rnd > 0.92) {
+          float starBrightness = pow((rnd - 0.92) / 0.08, 4.0) * 2.2;
+          float starDist = length(f);
+          float starGlow = smoothstep(0.22, 0.0, starDist);
+          // Diffraction spikes for exceptionally bright stars
+          if (rnd > 0.985) {
+            float spike = max(smoothstep(0.04, 0.0, abs(f.x)) * smoothstep(0.4, 0.0, abs(f.y)),
+                              smoothstep(0.04, 0.0, abs(f.y)) * smoothstep(0.4, 0.0, abs(f.x)));
+            starGlow += spike * 1.5;
+          }
+          vec3 starCol = blackbody(mix(3200.0, 15000.0, hash3(id + 13.0)));
+          col += starCol * starGlow * starBrightness;
+        }
+
+        return max(vec3(0.0), col);
+      }
+
+      void main() {
+        vec2 uv = (gl_FragCoord.xy + u_subpixelJitter) / u_resolution;
+        vec2 p = (uv - 0.5) * 2.0;
+        p.x *= u_resolution.x / u_resolution.y;
+
+        // Camera Basis
+        vec3 camForward = normalize(u_camTarget - u_camPos);
+        vec3 camRight = normalize(cross(camForward, u_camUp));
+        vec3 camUp = cross(camRight, camForward);
+
+        float tanFov = tan(radians(u_fov * 0.5));
+        vec3 rayDir = normalize(camForward + (p.x * camRight + p.y * camUp) * tanFov);
+        vec3 rayPos = u_camPos;
+
+        vec3 initialRayDir = rayDir;
+        float minRadius = length(rayPos);
+        int stepsTaken = 0;
+        float totalDeflection = 0.0;
+        bool hitHorizon = false;
+        int diskCrossings = 0;
+        vec2 firstDiskHitUV = vec2(0.0);
+        float dominantDopplerShift = 1.0;
+        float dominantGravRedshift = 1.0;
+        float dominantNetShift = 1.0;
+        vec3 accumulatedDiskColor = vec3(0.0);
+        float accumulatedAlpha = 0.0;
+        int escapeClassification = 0;
+
+        float incRad = radians(u_diskInc);
+        vec3 diskNormal = normalize(vec3(0.0, cos(incRad), sin(incRad)));
+
+        float rs = u_horizon;
+        float rEscape = 35.0;
+
+        // Relativistic RK2 Numerical Geodesic Ray-Marching Loop
+        for (int i = 0; i < 320; i++) {
+          if (i >= u_maxSteps) break;
+          stepsTaken++;
+
+          float r = length(rayPos);
+          if (r < minRadius) minRadius = r;
+
+          // Event Horizon Capture Check
+          if (r <= rs) {
+            hitHorizon = true;
+            escapeClassification = 0;
+            break;
+          }
+
+          // Escape to Infinity Check
+          if (r >= rEscape && dot(rayPos, rayDir) > 0.0) {
+            if (diskCrossings == 0) {
+              escapeClassification = 1;
+            }
+            break;
+          }
+
+          // Adaptive Step Size
+          float h = u_baseStepSize * max(0.04, min(1.6, (r - 0.85 * rs) / rs));
+
+          // Runge-Kutta 2 (Midpoint) Step
+          vec3 k1_vel = rayDir;
+          vec3 k1_acc = get_geodesic_accel(rayPos, rayDir, u_mass, u_spin);
+
+          vec3 p_mid = rayPos + 0.5 * h * k1_vel;
+          vec3 v_mid = normalize(rayDir + 0.5 * h * k1_acc);
+          vec3 k2_acc = get_geodesic_accel(p_mid, v_mid, u_mass, u_spin);
+
+          vec3 nextPos = rayPos + h * v_mid;
+          vec3 nextDir = normalize(rayDir + h * k2_acc);
+
+          // Accretion Disk Plane Intersection
+          float distPrev = dot(rayPos, diskNormal);
+          float distNext = dot(nextPos, diskNormal);
+
+          if (distPrev * distNext <= 0.0 && abs(distPrev - distNext) > 0.00001) {
+            float tHit = -distPrev / (distNext - distPrev);
+            vec3 hitPos = rayPos + tHit * (nextPos - rayPos);
+            float rHit = length(hitPos);
+
+            if (rHit >= u_diskIn && rHit <= u_diskOut) {
+              diskCrossings++;
+
+              vec3 uAxis = normalize(cross(diskNormal, vec3(0.0, 0.0, 1.0)));
+              if (length(uAxis) < 0.1) uAxis = normalize(cross(diskNormal, vec3(1.0, 0.0, 0.0)));
+              vec3 vAxis = cross(diskNormal, uAxis);
+              float uCoord = dot(hitPos, uAxis);
+              float vCoord = dot(hitPos, vAxis);
+              float phiHit = atan(vCoord, uCoord);
+
+              if (diskCrossings == 1) {
+                firstDiskHitUV = vec2(rHit, phiHit);
+                escapeClassification = 2;
+              } else if (diskCrossings == 2) {
+                escapeClassification = 3;
+              } else {
+                escapeClassification = 4;
+              }
+
+              // Novikov-Thorne Temperature Profile
+              float rRel = u_diskIn / rHit;
+              float tempProfile = u_diskTemp * pow(rRel, 0.75) * pow(max(0.001, 1.0 - sqrt(rRel)), 0.25) * 1.85;
+
+              // Keplerian Orbital Velocity
+              float beta = sqrt(clamp((0.5 * rs) / rHit, 0.0, 0.90));
+              float gamma = 1.0 / sqrt(max(0.01, 1.0 - beta * beta));
+
+              // Velocity vector in disk plane
+              vec3 orbitTangent = normalize(-uCoord * vAxis + vCoord * uAxis);
+              if (u_spin < 0.0) orbitTangent = -orbitTangent;
+
+              // Relativistic Doppler Beaming Factor
+              vec3 emitDir = -rayDir;
+              float cosTheta = dot(orbitTangent, emitDir);
+              float dopplerFactor = 1.0 / (gamma * max(0.05, 1.0 - beta * cosTheta));
+
+              // Gravitational Redshift Factor
+              float gravRedshift = sqrt(max(0.01, 1.0 - rs / rHit));
+
+              // Combined Net Frequency Shift g
+              float netShift = pow(dopplerFactor, u_dopplerStrength) * pow(gravRedshift, u_redshiftStrength);
+
+              if (diskCrossings == 1) {
+                dominantDopplerShift = dopplerFactor;
+                dominantGravRedshift = gravRedshift;
+                dominantNetShift = netShift;
+              }
+
+              // Observed Effective Temperature & Blackbody Color
+              float obsTemp = tempProfile * netShift;
+              vec3 baseColor = blackbody(obsTemp);
+
+              // Relativistic Beaming Intensity Boost I_obs = g^4 * I_emit
+              float beamingIntensity = pow(netShift, 4.0);
+
+              // Multi-scale procedural turbulence & Keplerian shear
+              float orbitalPhase = phiHit - (3.5 * sqrt(1.0 / (rHit * rHit * rHit))) * u_time;
+              float spiral1 = 0.5 + 0.5 * sin(2.0 * orbitalPhase + 3.2 * log(rHit / u_diskIn));
+              float spiral2 = 0.5 + 0.5 * sin(4.0 * orbitalPhase + 5.0 * log(rHit / u_diskIn));
+              float turb = fbm(vec2(orbitalPhase * 6.0, rHit * 3.5));
+              float density = mix(1.0, (spiral1 * 0.4 + spiral2 * 0.25 + turb * 0.35), u_turbulence);
+
+              float innerEdge = smoothstep(u_diskIn, u_diskIn * 1.15, rHit);
+              float outerEdge = smoothstep(u_diskOut, u_diskOut * 0.85, rHit);
+              density *= innerEdge * outerEdge;
+
+              // Vertical Optical Depth
+              float cosIncidence = max(0.12, abs(dot(rayDir, diskNormal)));
+              float opticalDepth = (density * u_diskOpacity * u_diskThick * 9.0) / cosIncidence;
+              float alpha = clamp(1.0 - exp(-opticalDepth), 0.0, 1.0);
+
+              vec3 emission = baseColor * beamingIntensity * density * 3.2;
+
+              accumulatedDiskColor += (1.0 - accumulatedAlpha) * emission * alpha;
+              accumulatedAlpha += (1.0 - accumulatedAlpha) * alpha;
+
+              if (accumulatedAlpha > 0.97) {
+                break;
+              }
+            }
+          }
+
+          rayPos = nextPos;
+          rayDir = nextDir;
+        }
+
+        totalDeflection = acos(clamp(dot(initialRayDir, rayDir), -1.0, 1.0));
+
+        vec3 finalBg = vec3(0.0);
+        if (!hitHorizon) {
+          finalBg = sample_celestial_sphere(rayDir);
+        }
+
+        // =====================================================================
+        // VISUALIZATION MODES
+        // =====================================================================
+        vec3 finalOutput = vec3(0.0);
+
+        if (u_vizMode == 0) {
+          // MODE 0: FINAL CINEMATIC BEAUTY PASS
+          vec3 composite = accumulatedDiskColor + (1.0 - accumulatedAlpha) * finalBg;
+
+          // Bloom Approximation
+          float bloomThreshold = 1.0;
+          vec3 bloomCol = max(vec3(0.0), composite - bloomThreshold) * u_bloom * 0.65;
+          composite += bloomCol;
+
+          // Exposure
+          composite *= u_exposure;
+
+          // ACES Filmic Tone Mapping Curve
+          const float a = 2.51;
+          const float b = 0.03;
+          const float c = 2.43;
+          const float d = 0.59;
+          const float e = 0.14;
+          composite = clamp((composite * (a * composite + b)) / (composite * (c * composite + d) + e), 0.0, 1.0);
+
+          // Contrast & Saturation
+          composite = pow(composite, vec3(u_contrast));
+
+          finalOutput = composite;
+        }
+        else if (u_vizMode == 1) {
+          // MODE 1: RAY STEP COUNT HEATMAP
+          float stepRatio = float(stepsTaken) / float(u_maxSteps);
+          finalOutput = turboColormap(stepRatio);
+          if (hitHorizon) finalOutput = mix(finalOutput, vec3(1.0, 0.0, 0.0), 0.4);
+        }
+        else if (u_vizMode == 2) {
+          // MODE 2: TOTAL ANGULAR DEFLECTION MAGNITUDE (Radians)
+          if (hitHorizon) {
+            finalOutput = vec3(0.03, 0.03, 0.06);
+          } else {
+            float defRatio = totalDeflection / (PI);
+            finalOutput = turboColormap(clamp(defRatio, 0.0, 1.0));
+          }
+        }
+        else if (u_vizMode == 3) {
+          // MODE 3: REDSHIFT & DOPPLER FACTOR (g = nu_obs / nu_emit)
+          if (diskCrossings > 0) {
+            float g = dominantNetShift;
+            if (g < 1.0) {
+              float t = clamp((1.0 - g) / 0.8, 0.0, 1.0);
+              finalOutput = mix(vec3(0.95, 0.95, 0.95), vec3(0.9, 0.05, 0.02), t);
+            } else {
+              float t = clamp((g - 1.0) / 1.5, 0.0, 1.0);
+              finalOutput = mix(vec3(0.95, 0.95, 0.95), vec3(0.02, 0.45, 1.0), t);
+            }
+          } else if (hitHorizon) {
+            finalOutput = vec3(0.02, 0.02, 0.04);
+          } else {
+            float gGrav = sqrt(max(0.01, 1.0 - rs / minRadius));
+            finalOutput = vec3(0.2, 0.25, 0.3) * gGrav;
+          }
+        }
+        else if (u_vizMode == 4) {
+          // MODE 4: DISK INTERSECTION COORDINATES (R, phi)
+          if (diskCrossings > 0) {
+            float normR = (firstDiskHitUV.x - u_diskIn) / (u_diskOut - u_diskIn);
+            float normPhi = (firstDiskHitUV.y + PI) / TWO_PI;
+            float ringOrder = float(diskCrossings) * 0.3;
+            finalOutput = vec3(normR, normPhi, ringOrder);
+          } else if (hitHorizon) {
+            finalOutput = vec3(0.0);
+          } else {
+            finalOutput = vec3(0.05, 0.08, 0.12);
+          }
+        }
+        else if (u_vizMode == 5) {
+          // MODE 5: PERIAPSIS DISTANCE TO BLACK HOLE (rmin / rs)
+          float normDist = (minRadius - rs) / (6.0 * rs);
+          if (hitHorizon) {
+            finalOutput = vec3(0.0);
+          } else if (minRadius <= 1.5 * rs) {
+            finalOutput = vec3(1.0, 0.1, 0.2);
+          } else if (minRadius <= 3.0 * rs) {
+            finalOutput = vec3(1.0, 0.75, 0.1);
+          } else {
+            finalOutput = turboColormap(clamp(normDist, 0.0, 1.0));
+          }
+        }
+        else if (u_vizMode == 6) {
+          // MODE 6: ESCAPE & INTERACTION CLASSIFICATION
+          if (escapeClassification == 0) {
+            finalOutput = vec3(0.02, 0.02, 0.04); // Captured: Black
+          } else if (escapeClassification == 1) {
+            finalOutput = vec3(0.05, 0.4, 0.8);  // Direct Escape: Blue
+          } else if (escapeClassification == 2) {
+            finalOutput = vec3(1.0, 0.55, 0.0);  // Primary Disk: Amber
+          } else if (escapeClassification == 3) {
+            finalOutput = vec3(0.9, 0.1, 0.85); // Secondary Lensed Disk: Magenta
+          } else {
+            finalOutput = vec3(0.0, 1.0, 0.6);  // High Order Ring: Cyan/Lime
+          }
+        }
+
+        fragColor = vec4(finalOutput, 1.0);
+      }
+    `;
+
+    /* =========================================================================
+       APPLICATION CONTROLLER & RENDER PIPELINE
+       ========================================================= */
+    class BlackHoleApp {
+      constructor() {
+        this.canvas = document.getElementById("glcanvas");
+        this.gl = null;
+        this.program = null;
+        this.uniformLocations = {};
+
+        this.quadVBO = null;
+        this.quadVAO = null;
+
+        this.isPointerDown = false;
+        this.pointerMode = "orbit";
+        this.lastPointerX = 0;
+        this.lastPointerY = 0;
+        this.targetCamera = JSON.parse(JSON.stringify(State.camera));
+        this.simTime = 0;
+        this.isPaused = false;
+        this.lastFrameTime = performance.now();
+        this.frameCount = 0;
+        this.fpsAvg = 60.0;
+        this.fpsUpdateTimer = 0;
+
+        this.jitterIndex = 0;
+        this.jitterSamples = [
+          [0.0, 0.0],
+          [-0.25, 0.25],
+          [0.25, -0.25],
+          [0.35, 0.35],
+          [-0.35, -0.35],
+          [-0.15, 0.4],
+          [0.4, -0.15],
+          [0.15, 0.15]
+        ];
+
+        this.selectedPixel = null;
+        this.diagramCanvas = document.getElementById("diagramCanvas");
+        this.diagramCtx = this.diagramCanvas ? this.diagramCanvas.getContext("2d") : null;
+        this.cachedTrajectory = null;
+        this.photonAnimProgress = 0.0;
+
+        this.urlSyncDebounce = null;
+      }
+
+      init() {
+        this.gl = this.canvas.getContext("webgl2", {
+          powerPreference: "high-performance",
+          antialias: false,
+          depth: false,
+          stencil: false,
+          alpha: false,
+          preserveDrawingBuffer: true
+        });
+
+        if (!this.gl) {
+          document.getElementById("webgl-error-modal").style.display = "flex";
+          return false;
+        }
+
+        if (!this.initShaders()) {
+          return false;
+        }
+
+        this.initGeometry();
+        this.bindEvents();
+        this.restoreStateFromURL();
+        this.updateQuality(State.quality);
+        this.resize();
+        this.syncUIFromState();
+        this.selectRay(window.innerWidth * 0.45, window.innerHeight * 0.48);
+
+        requestAnimationFrame((t) => this.renderLoop(t));
+        return true;
+      }
+
+      initShaders() {
+        const gl = this.gl;
+
+        const vs = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vs, VS_SOURCE);
+        gl.compileShader(vs);
+        if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+          console.error("Vertex Shader Error:", gl.getShaderInfoLog(vs));
+          return false;
+        }
+
+        const fs = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fs, FS_SOURCE);
+        gl.compileShader(fs);
+        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+          const err = gl.getShaderInfoLog(fs);
+          console.error("Fragment Shader Error:", err);
+          document.getElementById("webgl-error-details").textContent = "Shader compilation failed: " + err;
+          document.getElementById("webgl-error-modal").style.display = "flex";
+          return false;
+        }
+
+        this.program = gl.createProgram();
+        gl.attachShader(this.program, vs);
+        gl.attachShader(this.program, fs);
+        gl.linkProgram(this.program);
+
+        if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+          console.error("Program Link Error:", gl.getProgramInfoLog(this.program));
+          return false;
+        }
+
+        gl.useProgram(this.program);
+
+        const uniformNames = [
+          "u_camPos", "u_camTarget", "u_camUp", "u_resolution", "u_fov", "u_time", "u_subpixelJitter",
+          "u_mass", "u_spin", "u_horizon",
+          "u_diskIn", "u_diskOut", "u_diskThick", "u_diskInc", "u_diskTemp", "u_turbulence", "u_diskOpacity",
+          "u_dopplerStrength", "u_redshiftStrength", "u_exposure", "u_contrast", "u_bloom",
+          "u_starDensity", "u_milkywayGlow", "u_showGrid",
+          "u_maxSteps", "u_baseStepSize", "u_vizMode"
+        ];
+        for (const name of uniformNames) {
+          this.uniformLocations[name] = gl.getUniformLocation(this.program, name);
+        }
+
+        return true;
+      }
+
+      initGeometry() {
+        const gl = this.gl;
+        const positions = new Float32Array([
+          -1.0, -1.0,
+           1.0, -1.0,
+          -1.0,  1.0,
+          -1.0,  1.0,
+           1.0, -1.0,
+           1.0,  1.0
+        ]);
+
+        this.quadVAO = gl.createVertexArray();
+        gl.bindVertexArray(this.quadVAO);
+
+        this.quadVBO = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVBO);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+        const aPos = gl.getAttribLocation(this.program, "a_position");
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindVertexArray(null);
+      }
+
+      resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2.0);
+        const w = Math.floor(window.innerWidth * dpr * State.resScale);
+        const h = Math.floor(window.innerHeight * dpr * State.resScale);
+
+        if (this.canvas.width !== w || this.canvas.height !== h) {
+          this.canvas.width = w;
+          this.canvas.height = h;
+          this.gl.viewport(0, 0, w, h);
+          document.getElementById("hud-res").textContent = `${w}×${h} (${State.resScale}x)`;
+        }
+      }
+
+      bindEvents() {
+        window.addEventListener("resize", () => this.resize());
+
+        const canvas = this.canvas;
+        canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+        canvas.addEventListener("pointerdown", (e) => {
+          this.isPointerDown = true;
+          this.lastPointerX = e.clientX;
+          this.lastPointerY = e.clientY;
+          this.pointerMode = (e.button === 2 || e.shiftKey) ? "pan" : "orbit";
+          canvas.setPointerCapture(e.pointerId);
+          this.selectRay(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener("pointermove", (e) => {
+          if (!this.isPointerDown) return;
+          const dx = e.clientX - this.lastPointerX;
+          const dy = e.clientY - this.lastPointerY;
+          this.lastPointerX = e.clientX;
+          this.lastPointerY = e.clientY;
+
+          if (this.pointerMode === "orbit") {
+            this.targetCamera.theta -= dx * 0.005;
+            this.targetCamera.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this.targetCamera.phi + dy * 0.005));
+          } else if (this.pointerMode === "pan") {
+            const cam = this.getCameraVectors();
+            const panSpeed = this.targetCamera.distance * 0.001;
+            this.targetCamera.target[0] -= (cam.right[0] * dx - cam.up[0] * dy) * panSpeed;
+            this.targetCamera.target[1] -= (cam.right[1] * dx - cam.up[1] * dy) * panSpeed;
+            this.targetCamera.target[2] -= (cam.right[2] * dx - cam.up[2] * dy) * panSpeed;
+          }
+        });
+
+        const endPointer = (e) => {
+          this.isPointerDown = false;
+          try { canvas.releasePointerCapture(e.pointerId); } catch(_) {}
+        };
+        canvas.addEventListener("pointerup", endPointer);
+        canvas.addEventListener("pointercancel", endPointer);
+
+        canvas.addEventListener("wheel", (e) => {
+          e.preventDefault();
+          const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
+          this.targetCamera.distance = Math.max(2.2, Math.min(35.0, this.targetCamera.distance * zoomFactor));
+        }, { passive: false });
+
+        let initialPinchDist = null;
+        canvas.addEventListener("touchstart", (e) => {
+          if (e.touches.length === 2) {
+            initialPinchDist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+          }
+        }, { passive: true });
+
+        canvas.addEventListener("touchmove", (e) => {
+          if (e.touches.length === 2 && initialPinchDist) {
+            const currentDist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+            const ratio = initialPinchDist / currentDist;
+            this.targetCamera.distance = Math.max(2.2, Math.min(35.0, this.targetCamera.distance * (ratio > 1 ? 1.04 : 0.96)));
+            initialPinchDist = currentDist;
+          }
+        }, { passive: true });
+
+        document.querySelectorAll(".btn-preset").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            const pKey = e.currentTarget.dataset.preset;
+            this.applyPreset(pKey);
+          });
+        });
+
+        document.getElementById("btn-toggle-play").addEventListener("click", () => this.togglePause());
+        document.getElementById("btn-toggle-orbit").addEventListener("click", () => {
+          State.autoOrbit = !State.autoOrbit;
+          document.getElementById("param-auto-orbit").checked = State.autoOrbit;
+          document.getElementById("btn-toggle-orbit").classList.toggle("active", State.autoOrbit);
+        });
+        document.getElementById("btn-toggle-audio").addEventListener("click", () => toggleAudio());
+
+        const sidebar = document.getElementById("sidebar-controls");
+        document.getElementById("btn-toggle-sidebar").addEventListener("click", () => {
+          sidebar.classList.toggle("collapsed");
+        });
+        document.getElementById("btn-close-sidebar").addEventListener("click", () => {
+          sidebar.classList.add("collapsed");
+        });
+
+        document.querySelectorAll(".sidebar-tab-btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            document.querySelectorAll(".sidebar-tab-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+            e.currentTarget.classList.add("active");
+            document.getElementById(e.currentTarget.dataset.tab).classList.add("active");
+          });
+        });
+
+        document.querySelectorAll("#quality-presets .seg-btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            const qKey = e.currentTarget.dataset.quality;
+            this.updateQuality(qKey);
+          });
+        });
+
+        document.querySelectorAll(".viz-mode-item").forEach(item => {
+          item.addEventListener("click", (e) => {
+            const mode = parseInt(e.currentTarget.dataset.mode);
+            this.setVizMode(mode);
+          });
+        });
+
+        this.bindSlider("param-mass", "val-mass", (v) => State.mass = v, 2);
+        this.bindSlider("param-horizon", "val-horizon", (v) => State.horizon = v, 2);
+        this.bindSlider("param-spin", "val-spin", (v) => State.spin = v, 2);
+        this.bindSlider("param-sim-speed", "val-sim-speed", (v) => State.simSpeed = v, 2, "x");
+        this.bindSlider("param-orbit-speed", "val-orbit-speed", (v) => State.orbitSpeed = v, 2);
+
+        this.bindSlider("param-disk-in", "val-disk-in", (v) => State.diskIn = v, 2, " rs");
+        this.bindSlider("param-disk-out", "val-disk-out", (v) => State.diskOut = v, 1, " rs");
+        this.bindSlider("param-disk-thick", "val-disk-thick", (v) => State.diskThick = v, 2);
+        this.bindSlider("param-disk-inc", "val-disk-inc", (v) => State.diskInc = v, 1, "°");
+        this.bindSlider("param-disk-temp", "val-disk-temp", (v) => State.diskTemp = v, 0, " K");
+        this.bindSlider("param-turbulence", "val-turbulence", (v) => State.turbulence = v, 2);
+        this.bindSlider("param-disk-opacity", "val-disk-opacity", (v) => State.diskOpacity = v, 2);
+
+        this.bindSlider("param-doppler", "val-doppler", (v) => State.doppler = v, 2);
+        this.bindSlider("param-redshift", "val-redshift", (v) => State.redshift = v, 2);
+        this.bindSlider("param-exposure", "val-exposure", (v) => State.exposure = v, 2);
+        this.bindSlider("param-contrast", "val-contrast", (v) => State.contrast = v, 2);
+        this.bindSlider("param-bloom", "val-bloom", (v) => State.bloom = v, 2);
+        this.bindSlider("param-stars", "val-stars", (v) => State.stars = v, 2);
+        this.bindSlider("param-milkyway", "val-milkyway", (v) => State.milkyway = v, 2);
+
+        this.bindSlider("param-max-steps", "val-max-steps", (v) => State.maxSteps = Math.round(v), 0);
+        this.bindSlider("param-step-size", "val-step-size", (v) => State.stepSize = v, 2);
+        this.bindSlider("param-res-scale", "val-res-scale", (v) => {
+          State.resScale = v;
+          this.resize();
+        }, 2, "x");
+
+        document.getElementById("param-auto-orbit").addEventListener("change", (e) => {
+          State.autoOrbit = e.target.checked;
+          document.getElementById("btn-toggle-orbit").classList.toggle("active", State.autoOrbit);
+          this.queueURLSync();
+        });
+        document.getElementById("param-grid").addEventListener("change", (e) => {
+          State.showGrid = e.target.checked;
+          this.queueURLSync();
+        });
+        document.getElementById("param-taa").addEventListener("change", (e) => {
+          State.taa = e.target.checked;
+          this.queueURLSync();
+        });
+
+        const modal = document.getElementById("modal-config");
+        document.getElementById("btn-export-config").addEventListener("click", () => {
+          document.getElementById("config-json-area").value = JSON.stringify(State, null, 2);
+          modal.classList.add("open");
+        });
+        document.getElementById("btn-close-modal").addEventListener("click", () => modal.classList.remove("open"));
+        modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("open"); });
+
+        document.getElementById("btn-copy-config").addEventListener("click", () => {
+          const area = document.getElementById("config-json-area");
+          navigator.clipboard.writeText(area.value).then(() => alert("Configuration copied to clipboard!"));
+        });
+        document.getElementById("btn-download-config").addEventListener("click", () => {
+          const area = document.getElementById("config-json-area");
+          const blob = new Blob([area.value], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "black-hole-config.json";
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+        document.getElementById("btn-apply-config").addEventListener("click", () => {
+          try {
+            const parsed = JSON.parse(document.getElementById("config-json-area").value);
+            Object.assign(State, parsed);
+            this.syncUIFromState();
+            this.resize();
+            modal.classList.remove("open");
+            alert("Configuration applied successfully!");
+          } catch (err) {
+            alert("JSON Syntax Error: " + err.message);
+          }
+        });
+
+        document.getElementById("btn-reset-defaults").addEventListener("click", () => {
+          State = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+          this.targetCamera = JSON.parse(JSON.stringify(State.camera));
+          this.syncUIFromState();
+          this.updateQuality(State.quality);
+          this.resize();
+          this.queueURLSync();
+        });
+
+        document.getElementById("btn-copy-url").addEventListener("click", () => {
+          const url = window.location.href;
+          navigator.clipboard.writeText(url).then(() => alert("Shareable link copied to clipboard!"));
+        });
+
+        document.getElementById("btn-close-inspector").addEventListener("click", () => {
+          document.getElementById("ray-inspector").classList.remove("visible");
+          document.getElementById("selection-reticle").style.display = "none";
+        });
+      }
+
+      bindSlider(sliderId, valId, setter, precision = 2, unit = "") {
+        const slider = document.getElementById(sliderId);
+        const valSpan = document.getElementById(valId);
+        slider.addEventListener("input", (e) => {
+          const val = parseFloat(e.target.value);
+          setter(val);
+          valSpan.textContent = val.toFixed(precision) + unit;
+          this.queueURLSync();
+        });
+      }
+
+      syncUIFromState() {
+        const setVal = (id, val, prec = 2, unit = "") => {
+          const el = document.getElementById(id);
+          if (el) el.value = val;
+          const valEl = document.getElementById(id.replace("param-", "val-"));
+          if (valEl) valEl.textContent = Number(val).toFixed(prec) + unit;
+        };
+
+        setVal("param-mass", State.mass, 2);
+        setVal("param-horizon", State.horizon, 2);
+        setVal("param-spin", State.spin, 2);
+        setVal("param-sim-speed", State.simSpeed, 2, "x");
+        setVal("param-orbit-speed", State.orbitSpeed, 2);
+
+        setVal("param-disk-in", State.diskIn, 2, " rs");
+        setVal("param-disk-out", State.diskOut, 1, " rs");
+        setVal("param-disk-thick", State.diskThick, 2);
+        setVal("param-disk-inc", State.diskInc, 1, "°");
+        setVal("param-disk-temp", State.diskTemp, 0, " K");
+        setVal("param-turbulence", State.turbulence, 2);
+        setVal("param-disk-opacity", State.diskOpacity, 2);
+
+        setVal("param-doppler", State.doppler, 2);
+        setVal("param-redshift", State.redshift, 2);
+        setVal("param-exposure", State.exposure, 2);
+        setVal("param-contrast", State.contrast, 2);
+        setVal("param-bloom", State.bloom, 2);
+        setVal("param-stars", State.stars, 2);
+        setVal("param-milkyway", State.milkyway, 2);
+
+        setVal("param-max-steps", State.maxSteps, 0);
+        setVal("param-step-size", State.stepSize, 2);
+        setVal("param-res-scale", State.resScale, 2, "x");
+
+        document.getElementById("param-auto-orbit").checked = State.autoOrbit;
+        document.getElementById("btn-toggle-orbit").classList.toggle("active", State.autoOrbit);
+        document.getElementById("param-grid").checked = State.showGrid;
+        document.getElementById("param-taa").checked = State.taa;
+
+        document.querySelectorAll("#quality-presets .seg-btn").forEach(btn => {
+          btn.classList.toggle("active", btn.dataset.quality === State.quality);
+        });
+
+        this.setVizMode(State.vizMode, false);
+      }
+
+      applyPreset(key) {
+        const p = PRESETS[key];
+        if (!p) return;
+        const targetCopy = (p.camera && p.camera.target) ? [...p.camera.target] : [0, 0, 0];
+        Object.assign(State, JSON.parse(JSON.stringify(p)));
+        State.camera.target = targetCopy;
+        this.targetCamera = JSON.parse(JSON.stringify(State.camera));
+
+        document.querySelectorAll(".btn-preset").forEach(b => {
+          b.classList.toggle("active", b.dataset.preset === key);
+        });
+
+        this.syncUIFromState();
+        this.queueURLSync();
+      }
+
+      updateQuality(qualityKey) {
+        const q = QUALITY_CONFIGS[qualityKey];
+        if (!q) return;
+        State.quality = qualityKey;
+        Object.assign(State, q);
+
+        document.querySelectorAll("#quality-presets .seg-btn").forEach(b => {
+          b.classList.toggle("active", b.dataset.quality === qualityKey);
+        });
+
+        this.syncUIFromState();
+        this.resize();
+        this.queueURLSync();
+      }
+
+      setVizMode(mode, triggerURLSync = true) {
+        State.vizMode = mode;
+        const modeItems = document.querySelectorAll(".viz-mode-item");
+        modeItems.forEach(item => {
+          item.classList.toggle("active", parseInt(item.dataset.mode) === mode);
+        });
+
+        const modeNames = [
+          "Cinematic Beauty", "Step Heatmap", "Deflection (Δθ)", "Doppler / Redshift",
+          "Disk UV (R,φ)", "Distance (rmin)", "Classification"
+        ];
+        document.getElementById("hud-mode-name").textContent = modeNames[mode] || "Cinematic Beauty";
+
+        if (triggerURLSync) this.queueURLSync();
+      }
+
+      togglePause() {
+        this.isPaused = !this.isPaused;
+        const btn = document.getElementById("btn-toggle-play");
+        btn.classList.toggle("active", this.isPaused);
+        document.getElementById("hud-sim-state").textContent = this.isPaused ? "PAUSED" : "ACTIVE";
+        document.getElementById("hud-sim-state").className = "hud-val " + (this.isPaused ? "gold" : "green");
+
+        const icon = document.getElementById("icon-pause");
+        if (this.isPaused) {
+          icon.innerHTML = "<path d=\"M8 5v14l11-7z\"/>";
+        } else {
+          icon.innerHTML = "<path d=\"M6 19h4V5H6v14zm8-14v14h4V5h-4z\"/>";
+        }
+      }
+
+      getCameraVectors() {
+        const cam = State.camera;
+        const phi = Math.max(0.001, Math.min(Math.PI - 0.001, cam.phi));
+        const theta = cam.theta;
+        const r = cam.distance;
+
+        const posX = cam.target[0] + r * Math.sin(phi) * Math.sin(theta);
+        const posY = cam.target[1] + r * Math.cos(phi);
+        const posZ = cam.target[2] + r * Math.sin(phi) * Math.cos(theta);
+
+        const pos = [posX, posY, posZ];
+        const forward = [
+          cam.target[0] - posX,
+          cam.target[1] - posY,
+          cam.target[2] - posZ
+        ];
+        const lenF = Math.hypot(...forward);
+        const fNorm = [forward[0] / lenF, forward[1] / lenF, forward[2] / lenF];
+
+        let right = [
+          fNorm[2],
+          0,
+          -fNorm[0]
+        ];
+        const lenR = Math.hypot(...right);
+        if (lenR < 0.001) {
+          right = [1, 0, 0];
+        } else {
+          right = [right[0] / lenR, right[1] / lenR, right[2] / lenR];
+        }
+
+        const up = [
+          right[1] * fNorm[2] - right[2] * fNorm[1],
+          right[2] * fNorm[0] - right[0] * fNorm[2],
+          right[0] * fNorm[1] - right[1] * fNorm[0]
+        ];
+
+        return { pos, target: cam.target, forward: fNorm, right, up };
+      }
+
+      selectRay(clientX, clientY) {
+        this.selectedPixel = { x: clientX, y: clientY };
+
+        const reticle = document.getElementById("selection-reticle");
+        reticle.style.left = `${clientX}px`;
+        reticle.style.top = `${clientY}px`;
+        reticle.style.display = "block";
+
+        const ndcX = (clientX / window.innerWidth) * 2.0 - 1.0;
+        const ndcY = 1.0 - (clientY / window.innerHeight) * 2.0;
+        const aspect = window.innerWidth / window.innerHeight;
+
+        const cam = this.getCameraVectors();
+        const fovRad = 45.0 * Math.PI / 180.0;
+        const tanFov = Math.tan(fovRad * 0.5);
+
+        const rayDir = [
+          cam.forward[0] + (ndcX * aspect * cam.right[0] + ndcY * cam.up[0]) * tanFov,
+          cam.forward[1] + (ndcX * aspect * cam.right[1] + ndcY * cam.up[1]) * tanFov,
+          cam.forward[2] + (ndcX * aspect * cam.right[2] + ndcY * cam.up[2]) * tanFov
+        ];
+        const lenD = Math.hypot(...rayDir);
+        const normDir = [rayDir[0] / lenD, rayDir[1] / lenD, rayDir[2] / lenD];
+
+        this.cachedTrajectory = this.simulateRayGeodesic(cam.pos, normDir);
+        this.updateInspectorUI(this.cachedTrajectory, clientX, clientY);
+        this.renderTrajectoryDiagram();
+      }
+
+      simulateRayGeodesic(pos0, dir0) {
+        let pos = [...pos0];
+        let vel = [...dir0];
+        const initialDir = [...dir0];
+        const points = [{ x: pos[0], y: pos[1], z: pos[2], r: Math.hypot(...pos) }];
+
+        const M = State.mass;
+        const a = State.spin;
+        const rs = State.horizon;
+        const rEscape = 35.0;
+
+        let minR = Math.hypot(...pos);
+        let steps = 0;
+        let fate = "Escaped to Infinity";
+        let diskHitR = null;
+        let dominantShift = 1.0;
+
+        const L0 = [
+          pos[1] * vel[2] - pos[2] * vel[1],
+          pos[2] * vel[0] - pos[0] * vel[2],
+          pos[0] * vel[1] - pos[1] * vel[0]
+        ];
+        const impactParam = Math.hypot(...L0);
+
+        const incRad = (State.diskInc * Math.PI) / 180.0;
+        const diskNormal = [0.0, Math.cos(incRad), Math.sin(incRad)];
+
+        for (let i = 0; i < 280; i++) {
+          steps++;
+          const r = Math.hypot(...pos);
+          if (r < minR) minR = r;
+
+          if (r <= rs) {
+            fate = "Captured by Event Horizon";
+            points.push({ x: pos[0], y: pos[1], z: pos[2], r });
+            break;
+          }
+
+          if (r >= rEscape && (pos[0]*vel[0] + pos[1]*vel[1] + pos[2]*vel[2]) > 0.0) {
+            fate = "Escaped to Infinity";
+            points.push({ x: pos[0], y: pos[1], z: pos[2], r });
+            break;
+          }
+
+          const h = State.stepSize * Math.max(0.04, Math.min(1.6, (r - 0.85 * rs) / rs));
+
+          const getAccel = (p, v) => {
+            const r2 = p[0]*p[0] + p[1]*p[1] + p[2]*p[2];
+            const rad = Math.sqrt(r2);
+            if (rad < 0.001) return [0, 0, 0];
+            const L = [
+              p[1]*v[2] - p[2]*v[1],
+              p[2]*v[0] - p[0]*v[2],
+              p[0]*v[1] - p[1]*v[0]
+            ];
+            const L2 = L[0]*L[0] + L[1]*L[1] + L[2]*L[2];
+            const sCoeff = -3.0 * M * L2 / (r2 * r2 * rad);
+            let ax = sCoeff * p[0];
+            let ay = sCoeff * p[1];
+            let az = sCoeff * p[2];
+
+            if (Math.abs(a) > 0.001) {
+              const kCoeff = 4.0 * M * a / (r2 * rad);
+              ax += kCoeff * v[2];
+              az += kCoeff * (-v[0]);
+            }
+            return [ax, ay, az];
+          };
+
+          const a0 = getAccel(pos, vel);
+          const pMid = [pos[0] + 0.5 * h * vel[0], pos[1] + 0.5 * h * vel[1], pos[2] + 0.5 * h * vel[2]];
+          const vMid = [vel[0] + 0.5 * h * a0[0], vel[1] + 0.5 * h * a0[1], vel[2] + 0.5 * h * a0[2]];
+          const lenVM = Math.hypot(...vMid);
+          const vMidNorm = [vMid[0]/lenVM, vMid[1]/lenVM, vMid[2]/lenVM];
+
+          const aMid = getAccel(pMid, vMidNorm);
+          const nextPos = [pos[0] + h * vMidNorm[0], pos[1] + h * vMidNorm[1], pos[2] + h * vMidNorm[2]];
+          const nextVel = [vel[0] + h * aMid[0], vel[1] + h * aMid[1], vel[2] + h * aMid[2]];
+          const lenNV = Math.hypot(...nextVel);
+          const nextVelNorm = [nextVel[0]/lenNV, nextVel[1]/lenNV, nextVel[2]/lenNV];
+
+          const d0 = pos[0]*diskNormal[0] + pos[1]*diskNormal[1] + pos[2]*diskNormal[2];
+          const d1 = nextPos[0]*diskNormal[0] + nextPos[1]*diskNormal[1] + nextPos[2]*diskNormal[2];
+
+          if (d0 * d1 <= 0.0 && Math.abs(d0 - d1) > 0.00001) {
+            const t = -d0 / (d1 - d0);
+            const pHit = [pos[0] + t*(nextPos[0]-pos[0]), pos[1] + t*(nextPos[1]-pos[1]), pos[2] + t*(nextPos[2]-pos[2])];
+            const rH = Math.hypot(...pHit);
+            if (rH >= State.diskIn && rH <= State.diskOut) {
+              if (!diskHitR) {
+                diskHitR = rH;
+                fate = "Hit Accretion Disk";
+                const beta = Math.sqrt(Math.min(0.9, (0.5 * rs) / rH));
+                const gamma = 1.0 / Math.sqrt(1.0 - beta * beta);
+                dominantShift = Math.sqrt(Math.max(0.01, 1.0 - rs / rH)) * (1.0 / gamma);
+              }
+            }
+          }
+
+          pos = nextPos;
+          vel = nextVelNorm;
+          points.push({ x: pos[0], y: pos[1], z: pos[2], r: Math.hypot(...pos) });
+        }
+
+        const dotInitFinal = Math.max(-1.0, Math.min(1.0, initialDir[0]*vel[0] + initialDir[1]*vel[1] + initialDir[2]*vel[2]));
+        const totalDeflection = Math.acos(dotInitFinal);
+
+        return {
+          points,
+          impactParam,
+          minRadius: minR,
+          totalDeflection,
+          steps,
+          fate,
+          diskHitR,
+          dominantShift
+        };
+      }
+
+      updateInspectorUI(traj, px, py) {
+        document.getElementById("ray-inspector").classList.add("visible");
+        document.getElementById("insp-pixel").textContent = `(${Math.round(px)}, ${Math.round(py)})`;
+        document.getElementById("insp-impact").textContent = `${traj.impactParam.toFixed(2)} rs`;
+        document.getElementById("insp-periapsis").textContent = `${traj.minRadius.toFixed(2)} rs`;
+        document.getElementById("insp-deflection").textContent = `${traj.totalDeflection.toFixed(2)} rad (${(traj.totalDeflection * 180 / Math.PI).toFixed(1)}°)`;
+        document.getElementById("insp-steps").textContent = traj.steps;
+        document.getElementById("insp-fate").textContent = traj.fate;
+        document.getElementById("insp-disk-r").textContent = traj.diskHitR ? `${traj.diskHitR.toFixed(2)} rs` : "None";
+        document.getElementById("insp-shift").textContent = traj.dominantShift.toFixed(3);
+
+        const note = document.getElementById("insp-description");
+        const bCrit = 2.60 * State.mass;
+        if (traj.impactParam <= bCrit) {
+          note.textContent = `Impact parameter b = ${traj.impactParam.toFixed(2)} rs is below critical capture b_c ≈ ${bCrit.toFixed(2)} rs. Geodesic plunges across the Event Horizon.`;
+        } else if (traj.impactParam < bCrit * 1.25) {
+          note.textContent = `Impact parameter b = ${traj.impactParam.toFixed(2)} rs closely skirts the Photon Sphere at r ≈ 1.5 rs. High angular deflection (Δθ = ${(traj.totalDeflection * 180 / Math.PI).toFixed(1)}°) forms multiple lensed Einstein rings.`;
+        } else {
+          note.textContent = `Impact parameter b = ${traj.impactParam.toFixed(2)} rs is in the weak-field deflection regime (Einstein deflection angle Δθ ≈ 4M/b).`;
+        }
+
+        document.getElementById("hud-steps").textContent = `${State.maxSteps} / ${traj.steps}`;
+      }
+
+      renderTrajectoryDiagram() {
+        if (!this.diagramCtx || !this.cachedTrajectory) return;
+        const ctx = this.diagramCtx;
+        const w = this.diagramCanvas.width;
+        const h = this.diagramCanvas.height;
+        const cx = w * 0.5;
+        const cy = h * 0.58;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const scale = (Math.min(w, h) * 0.44) / 13.0;
+        const rs = State.horizon * scale;
+        const rPh = 1.5 * State.horizon * scale;
+        const rIsco = 3.0 * State.horizon * scale;
+
+        // Top Legend Bar
+        ctx.font = "8.5px SF Mono, monospace";
+        ctx.fillStyle = "rgba(255, 61, 0, 0.9)";
+        ctx.fillRect(10, 8, 8, 8);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+        ctx.fillText("Horizon", 22, 15);
+
+        ctx.strokeStyle = "rgba(0, 229, 255, 0.85)";
+        ctx.beginPath(); ctx.moveTo(76, 12); ctx.lineTo(88, 12); ctx.stroke();
+        ctx.fillText("Photon (1.5r)", 92, 15);
+
+        ctx.strokeStyle = "rgba(255, 179, 0, 0.85)";
+        ctx.beginPath(); ctx.moveTo(170, 12); ctx.lineTo(182, 12); ctx.stroke();
+        ctx.fillText("ISCO (3.0r)", 186, 15);
+
+        ctx.fillStyle = "rgba(255, 152, 0, 0.5)";
+        ctx.fillRect(245, 8, 12, 8);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+        ctx.fillText("Disk", 262, 15);
+
+        // Distance Range Rings
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5.0 * scale, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 10.0 * scale, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Accretion Disk cross-section line
+        const rIn = State.diskIn * scale;
+        const rOut = State.diskOut * scale;
+        ctx.strokeStyle = "rgba(255, 179, 0, 0.35)";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(cx - rOut, cy); ctx.lineTo(cx - rIn, cy);
+        ctx.moveTo(cx + rIn, cy); ctx.lineTo(cx + rOut, cy);
+        ctx.stroke();
+
+        // ISCO Circle (dashed amber)
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "rgba(255, 179, 0, 0.65)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rIsco, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Photon Sphere (dashed cyan)
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(0, 229, 255, 0.75)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, rPh, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Event Horizon (solid black + glowing crimson border)
+        ctx.fillStyle = "#030407";
+        ctx.beginPath();
+        ctx.arc(cx, cy, rs, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 30, 60, 0.9)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Kerr Ergosphere if spin != 0
+        if (Math.abs(State.spin) > 0.05) {
+          ctx.strokeStyle = "rgba(224, 64, 251, 0.5)";
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rs * (1.0 + 0.35 * Math.abs(State.spin)), rs, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Plot 3D trajectory points onto 2D plane
+        const pts = this.cachedTrajectory.points;
+        if (pts.length > 1) {
+          ctx.strokeStyle = "rgba(0, 229, 255, 0.95)";
+          ctx.lineWidth = 2;
+          ctx.shadowColor = "rgba(0, 229, 255, 0.85)";
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+
+          for (let i = 0; i < pts.length; i++) {
+            const px = cx + pts[i].x * scale;
+            const py = cy + pts[i].z * scale;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+
+          // Animated photon packet along trajectory
+          this.photonAnimProgress = (this.photonAnimProgress + 0.016) % 1.0;
+          const idxFloat = this.photonAnimProgress * (pts.length - 1);
+          const i0 = Math.floor(idxFloat);
+          const i1 = Math.min(pts.length - 1, i0 + 1);
+          const frac = idxFloat - i0;
+
+          const animX = cx + (pts[i0].x + frac * (pts[i1].x - pts[i0].x)) * scale;
+          const animY = cy + (pts[i0].z + frac * (pts[i1].z - pts[i0].z)) * scale;
+
+          ctx.fillStyle = "#ffffff";
+          ctx.shadowColor = "#00e5ff";
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(animX, animY, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      queueURLSync() {
+        if (this.urlSyncDebounce) clearTimeout(this.urlSyncDebounce);
+        this.urlSyncDebounce = setTimeout(() => {
+          try {
+            const compact = {
+              m: State.mass,
+              s: State.spin,
+              di: State.diskIn,
+              do: State.diskOut,
+              dt: State.diskTemp,
+              dp: State.doppler,
+              rs: State.redshift,
+              vm: State.vizMode,
+              ct: parseFloat(State.camera.theta.toFixed(2)),
+              cp: parseFloat(State.camera.phi.toFixed(2)),
+              cd: parseFloat(State.camera.distance.toFixed(1))
+            };
+            const hash = "#" + encodeURIComponent(JSON.stringify(compact));
+            window.history.replaceState(null, "", hash);
+          } catch (_) {}
+        }, 500);
+      }
+
+      restoreStateFromURL() {
+        try {
+          if (window.location.hash && window.location.hash.length > 2) {
+            const jsonStr = decodeURIComponent(window.location.hash.substring(1));
+            const compact = JSON.parse(jsonStr);
+            if (compact.m !== undefined) State.mass = compact.m;
+            if (compact.s !== undefined) State.spin = compact.s;
+            if (compact.di !== undefined) State.diskIn = compact.di;
+            if (compact.do !== undefined) State.diskOut = compact.do;
+            if (compact.dt !== undefined) State.diskTemp = compact.dt;
+            if (compact.dp !== undefined) State.doppler = compact.dp;
+            if (compact.rs !== undefined) State.redshift = compact.rs;
+            if (compact.vm !== undefined) State.vizMode = compact.vm;
+            if (compact.ct !== undefined) State.camera.theta = compact.ct;
+            if (compact.cp !== undefined) State.camera.phi = compact.cp;
+            if (compact.cd !== undefined) State.camera.distance = compact.cd;
+            this.targetCamera = JSON.parse(JSON.stringify(State.camera));
+          }
+        } catch (_) {}
+      }
+
+      renderLoop(timestamp) {
+        const dt = Math.min((timestamp - this.lastFrameTime) * 0.001, 0.1);
+        this.lastFrameTime = timestamp;
+
+        const lerpFactor = 0.12;
+        State.camera.theta += (this.targetCamera.theta - State.camera.theta) * lerpFactor;
+        State.camera.phi += (this.targetCamera.phi - State.camera.phi) * lerpFactor;
+        State.camera.distance += (this.targetCamera.distance - State.camera.distance) * lerpFactor;
+        if (this.targetCamera.target && State.camera.target) {
+          for (let i = 0; i < 3; i++) {
+            State.camera.target[i] += (this.targetCamera.target[i] - State.camera.target[i]) * lerpFactor;
+          }
+        }
+
+        if (State.autoOrbit && !this.isPointerDown && !this.isPaused) {
+          this.targetCamera.theta += State.orbitSpeed * dt * 0.25;
+        }
+
+        if (!this.isPaused) {
+          this.simTime += dt * State.simSpeed;
+        }
+
+        const cam = this.getCameraVectors();
+
+        updateAudioModulation();
+
+        this.frameCount++;
+        this.fpsUpdateTimer += dt;
+        if (this.fpsUpdateTimer >= 0.5) {
+          this.fpsAvg = this.frameCount / this.fpsUpdateTimer;
+          this.frameCount = 0;
+          this.fpsUpdateTimer = 0;
+          document.getElementById("hud-fps").textContent = `${this.fpsAvg.toFixed(1)} FPS`;
+          document.getElementById("hud-cam-dist").textContent = `${State.camera.distance.toFixed(1)} rs`;
+        }
+
+        let jitter = [0.0, 0.0];
+        if (State.taa) {
+          this.jitterIndex = (this.jitterIndex + 1) % this.jitterSamples.length;
+          jitter = this.jitterSamples[this.jitterIndex];
+        }
+
+        const gl = this.gl;
+        gl.useProgram(this.program);
+
+        gl.uniform3fv(this.uniformLocations.u_camPos, cam.pos);
+        gl.uniform3fv(this.uniformLocations.u_camTarget, cam.target);
+        gl.uniform3fv(this.uniformLocations.u_camUp, cam.up);
+        gl.uniform2f(this.uniformLocations.u_resolution, this.canvas.width, this.canvas.height);
+        gl.uniform1f(this.uniformLocations.u_fov, 45.0);
+        gl.uniform1f(this.uniformLocations.u_time, this.simTime);
+        gl.uniform2f(this.uniformLocations.u_subpixelJitter, jitter[0], jitter[1]);
+
+        gl.uniform1f(this.uniformLocations.u_mass, State.mass);
+        gl.uniform1f(this.uniformLocations.u_spin, State.spin);
+        gl.uniform1f(this.uniformLocations.u_horizon, State.horizon);
+
+        gl.uniform1f(this.uniformLocations.u_diskIn, State.diskIn);
+        gl.uniform1f(this.uniformLocations.u_diskOut, State.diskOut);
+        gl.uniform1f(this.uniformLocations.u_diskThick, State.diskThick);
+        gl.uniform1f(this.uniformLocations.u_diskInc, State.diskInc);
+        gl.uniform1f(this.uniformLocations.u_diskTemp, State.diskTemp);
+        gl.uniform1f(this.uniformLocations.u_turbulence, State.turbulence);
+        gl.uniform1f(this.uniformLocations.u_diskOpacity, State.diskOpacity);
+
+        gl.uniform1f(this.uniformLocations.u_dopplerStrength, State.doppler);
+        gl.uniform1f(this.uniformLocations.u_redshiftStrength, State.redshift);
+        gl.uniform1f(this.uniformLocations.u_exposure, State.exposure);
+        gl.uniform1f(this.uniformLocations.u_contrast, State.contrast);
+        gl.uniform1f(this.uniformLocations.u_bloom, State.bloom);
+        gl.uniform1f(this.uniformLocations.u_starDensity, State.stars);
+        gl.uniform1f(this.uniformLocations.u_milkywayGlow, State.milkyway);
+        gl.uniform1f(this.uniformLocations.u_showGrid, State.showGrid ? 1.0 : 0.0);
+
+        gl.uniform1i(this.uniformLocations.u_maxSteps, State.maxSteps);
+        gl.uniform1f(this.uniformLocations.u_baseStepSize, State.stepSize);
+        gl.uniform1i(this.uniformLocations.u_vizMode, State.vizMode);
+
+        gl.bindVertexArray(this.quadVAO);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.bindVertexArray(null);
+
+        if (this.cachedTrajectory && document.getElementById("ray-inspector").classList.contains("visible")) {
+          this.renderTrajectoryDiagram();
+        }
+
+        requestAnimationFrame((t) => this.renderLoop(t));
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      window.app = new BlackHoleApp();
+      window.app.init();
+    });
+  </script>
+</body>
+</html>

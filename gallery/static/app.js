@@ -10,16 +10,17 @@
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
     catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and real applications. The brief, the checks and the delivery requirements are all here.'],
     leaderboard:['THE EVALUATIONS','Bring the<br><em>receipts.</em>','Independent checks on the finished artifact. Keep the tasks, tools and budgets comparable.'],
-    guide:['THE FIELD GUIDE','From prompt<br>to <em>proof.</em>','Choose a challenge. Let the agent build and test. Keep the result. Take a closer look.']
+    guide:['THE FIELD GUIDE','From prompt<br>to <em>proof.</em>','Choose a challenge. Let the agent build and test. Keep the result. Take a closer look.'],
+    why:['WHY THIS PROJECT?','You can’t play<br>a <em>percentage.</em>','A note from Pyro on scores, model judgment, and getting your hands on the work.']
   };
   const filterIDs=['search','track-filter','model-filter','task-filter','status-filter','sort'];
   const storageKey='trial-by-pyro-ui-v1';
   const isPublic=()=>state.data?.mode==='public';
-  const modelName=row=>row.model===row.model_key?({'gpt-6_astra':'GPT-6 Astra','xai_grok4.6':'Grok 4.6'}[row.model_key]||row.model):row.model;
+  const modelName=row=>row.model===row.model_key?({'gpt-6_astra':'GPT-6 Astra','xai_grok4.6':'Grok 4.6','google_gemini3.8_flash':'Gemini 3.8 Flash'}[row.model_key]||row.model):row.model;
   function modelIdentity(row) {
-    const grok=/grok/i.test(row.model_key);const name=modelName(row);
-    const initials=/gpt-6/i.test(row.model_key)?'G6':grok?'GR':name.replace(/[^a-z0-9]/ig,'').slice(0,2).toUpperCase();
-    return `<div class="model-identity"><span class="model-avatar ${grok?'grok':''}" aria-hidden="true">${escape(initials||'AI')}</span><div><span class="model-name">${escape(name)}</span>${row.model_version?`<span class="model-version">${escape(row.model_version)}</span>`:''}</div></div>`;
+    const grok=/grok/i.test(row.model_key);const gemini=/gemini/i.test(row.model_key);const name=modelName(row);
+    const initials=/gpt-6/i.test(row.model_key)?'G6':grok?'GR':gemini?'GM':name.replace(/[^a-z0-9]/ig,'').slice(0,2).toUpperCase();
+    return `<div class="model-identity"><span class="model-avatar ${grok?'grok':gemini?'gemini':''}" aria-hidden="true">${escape(initials||'AI')}</span><div><span class="model-name">${escape(name)}</span>${row.model_version?`<span class="model-version">${escape(row.model_version)}</span>`:''}</div></div>`;
   }
   let saved={};
   try {saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};} catch {saved={};}
@@ -32,7 +33,10 @@
     clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').hidden=true,2600);
   }
   function setView(view) {
-    if (!headings[view]||(isPublic()&&view==='leaderboard')) view='gallery';state.view=view;
+    if (!Object.hasOwn(headings,view)||(isPublic()&&view==='leaderboard')) view='gallery';
+    if(state.view!==view)window.scrollTo({top:0,behavior:'instant'});
+    state.view=view;
+    try{history.replaceState(null,'',view==='gallery'?location.pathname+location.search:'#'+view);}catch{ /* Embedded documents may not expose browser history. */ }
     document.body.dataset.section=view;
     Object.keys(headings).forEach(name=>$('#view-'+name).hidden=name!==view);
     document.querySelectorAll('.nav-button').forEach(button=>{
@@ -40,7 +44,8 @@
       if(active) button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
     });
     $('#current-section').textContent=headings[view][0];$('#hero-title').innerHTML=headings[view][1];$('#hero-description').textContent=headings[view][2];
-    $('#filters').hidden=view==='guide';$('#run-filters').hidden=view==='catalog';
+    $('#filters').hidden=view==='guide'||view==='why';$('#run-filters').hidden=view==='catalog';
+    $('.stats').hidden=view==='why';$('.workspace-tools').hidden=view==='why';
     render();saveSettings();
   }
   function fillSelect(id, entries, firstLabel, desired) {
@@ -168,7 +173,7 @@
       $('#stat-scored').textContent=data.summary.scored_runs;$('#nav-count').textContent=data.summary.runs;
       $('#error-banner').hidden=true;$('#connection-status').textContent=isPublic()?'● Public snapshot · ready':'● Local · ready';
       $('#footer-status').textContent=`${data.results.length} runs · ${data.catalog.length} prompts · refreshed ${new Date(data.generated_at).toLocaleTimeString()}`;
-      if(first)setView(saved.view||'gallery');else render();
+      if(first)setView(location.hash.slice(1)||saved.view||'gallery');else render();
       if(state.selected){const fresh=data.results.find(r=>r.id===state.selected.id);if(fresh){state.selected=fresh;renderViewer();}else $('#viewer').close();}
     }catch(error){
       $('#error-banner').textContent=`Could not read the gallery: ${error.message}. Start the Python gallery server and retry.`;$('#error-banner').hidden=false;$('#connection-status').textContent='Connection error';
@@ -199,7 +204,7 @@
   function previewContent(row) {
     const a=row.artifact;
     const start=a.url?`<button id="launch-preview" class="button primary">Launch live preview ↗</button>`:'';
-    return `<div class="preview-controls"><span>${escape(a.kind==='html'?'Self-contained HTML':a.kind==='project'?'Multi-file source project':a.kind==='archive'?'Source archive':'No artifact supplied')} · ${bytes(a.bytes)}</span><div><label for="viewport-size">Viewport</label><select id="viewport-size"><option value="fit">Fit panel</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></div></div>${a.warning?`<div class="notice">${escape(a.warning)}</div>`:''}<div id="preview-area" class="preview-area">${a.screenshot_url?`<div><img class="preview-image" src="${escape(a.screenshot_url)}" alt="Submitted screenshot"><div class="preview-prompt">${start}<p>Submitted screenshot. Launch the live artifact to inspect behavior.</p></div></div>`:`<div class="preview-prompt"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><h3>${a.url?'Ready when you are.':a.exists?'Source is ready to inspect.':'No artifact was recorded.'}</h3><p>${a.url?'Live previews run only when you explicitly open them. Inspect the controls, interactions and actual application state.':'No application is launched automatically. Review the source and its startup instructions, launch it manually in a disposable environment, then provide its loopback URL in metadata.json.'}</p>${start}${!a.url&&a.source_url?`<a class="button" href="${escape(sourceLink(a))}" download>Download source ↓</a>`:''}</div>`}</div><p class="viewer-note">${isPublic()?'Public previews have restricted browser storage. Download the HTML to test persistence and file-based workflows locally.':'Inspect the actual interactions. For persistence or authentication checks, use Open app in a separate browser context.'}</p>`;
+    return `<div class="preview-controls"><span>${escape(a.kind==='html'?'Self-contained HTML':a.kind==='project'?'Multi-file source project':a.kind==='archive'?'Source archive':'No artifact supplied')} · ${bytes(a.bytes)}</span><div><label for="viewport-size">Viewport</label><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></div></div>${a.warning?`<div class="notice">${escape(a.warning)}</div>`:''}<div id="preview-area" class="preview-area">${a.screenshot_url?`<div><img class="preview-image" src="${escape(a.screenshot_url)}" alt="Submitted screenshot"><div class="preview-prompt">${start}<p>Submitted screenshot. Launch the live artifact to inspect behavior.</p></div></div>`:`<div class="preview-prompt"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><h3>${a.url?'Ready when you are.':a.exists?'Source is ready to inspect.':'No artifact was recorded.'}</h3><p>${a.url?'Live previews run only when you explicitly open them. Inspect the controls, interactions and actual application state.':'No application is launched automatically. Review the source and its startup instructions, launch it manually in a disposable environment, then provide its loopback URL in metadata.json.'}</p>${start}${!a.url&&a.source_url?`<a class="button" href="${escape(sourceLink(a))}" download>Download source ↓</a>`:''}</div>`}</div><p class="viewer-note">${isPublic()?'Public previews have restricted browser storage. Download the HTML to test persistence and file-based workflows locally.':'Inspect the actual interactions. For persistence or authentication checks, use Open app in a separate browser context.'}</p>`;
   }
   function evidenceContent(row) {
     const a=row.artifact;const c=row.checks;
@@ -214,6 +219,7 @@
   }
   function renderViewer() {
     const row=state.selected;if(!row)return;
+    $('#viewer').classList.remove('is-live');
     document.querySelectorAll('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===state.tab)));
     const a=row.artifact;
     $('#viewer-actions').innerHTML=`${row.prompts.prompt?`<button class="button quiet" data-open-prompt="${escape(row.task_id)}">Prompt</button>`:''}${a.source_url?`<a class="button quiet" href="${escape(sourceLink(a))}" download>Source ↓</a>`:''}${a.url&&!isPublic()?`<a class="button quiet" href="${escape(a.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:''}`;
@@ -222,33 +228,40 @@
   function resizeFrame() {
     const frame=$('#artifact-frame');if(!frame)return;
     const value=$('#viewport-size').value;
-    if(value==='fit'){frame.style.width='100%';frame.style.height='560px';}
+    if(value==='fit'){frame.style.width='100%';frame.style.height='100%';}
     else{const [width,height]=value.split('x');frame.style.width=width+'px';frame.style.height=height+'px';}
   }
   function launchPreview() {
     const row=state.selected;if(!row?.artifact.url)return;
+    const viewport=$('#viewport-size').value;
+    $('#viewer').classList.add('is-live');
+    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button><span class="live-title">${escape(modelName(row))}<span>${escape(row.task_title)}</span></span><label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
+    $('#viewport-size').value=viewport;
     const frame=document.createElement('iframe');frame.id='artifact-frame';frame.title=`Live ${row.task_title}`;
     frame.setAttribute('sandbox',isPublic()?'allow-scripts allow-downloads allow-modals allow-pointer-lock':'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-pointer-lock allow-popups');
     frame.allow='autoplay; fullscreen';frame.referrerPolicy='no-referrer';frame.src=row.artifact.url;
-    $('#preview-area').replaceChildren(frame);resizeFrame();
+    $('#preview-area').replaceChildren(frame);resizeFrame();$('#back-to-build').focus();
   }
   document.addEventListener('click',event=>{
     const target=event.target.closest('button,[data-view]');if(!target)return;
-    if(target.dataset.view)setView(target.dataset.view);
+    if(target.dataset.view){event.preventDefault();setView(target.dataset.view);}
     if(target.dataset.openRun)openRun(target.dataset.openRun);
     if(target.dataset.openPrompt)openPrompt(target.dataset.openPrompt);
     if(target.dataset.tab){state.tab=target.dataset.tab;renderViewer();}
     if(target.id==='launch-preview')launchPreview();
+    if(target.id==='back-to-build'){renderViewer();$('#launch-preview')?.focus();}
+    if(target.id==='close-live')$('#viewer').close();
   });
   filterIDs.forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',()=>{render();saveSettings();}));
   document.addEventListener('change',event=>{if(event.target.id==='viewport-size')resizeFrame();});
   $('#refresh').addEventListener('click',loadData);
   $('#clear-filters').addEventListener('click',()=>{for(const id of filterIDs)$('#'+id).value=id==='search'?'':id==='sort'?'task':'all';render();saveSettings();});
   $('#close-viewer').addEventListener('click',()=>$('#viewer').close());
-  $('#viewer').addEventListener('close',()=>{state.selected=null;$('#viewer-content').replaceChildren();});
+  $('#viewer').addEventListener('close',()=>{state.selected=null;$('#viewer').classList.remove('is-live');$('#viewer-content').replaceChildren();});
   $('#close-prompt').addEventListener('click',()=>$('#prompt-dialog').close());
   $('#prompt-dialog').addEventListener('close',()=>{state.promptToken++;});
   $('#copy-prompt').addEventListener('click',copyPrompt);
   document.addEventListener('keydown',event=>{if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}});
+  window.addEventListener('hashchange',()=>{if(state.data)setView(location.hash.slice(1)||'gallery');});
   loadData();
 })();

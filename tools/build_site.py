@@ -19,7 +19,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
 from gallery import server
 
-STATIC_FILES = ("index.html", "app.js", "styles.css", "favicon.svg", "logo-mark.svg")
+STATIC_FILES = ("index.html", "app.js", "styles.css", "favicon.svg", "logo-mark.svg", "deep-swe-snapshot.png")
 CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "track", "artifact_type", "rubric")
 OWNER_MARKER = "public-static-export-v1\n"
 REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n"

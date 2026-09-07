@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Full viewport, rationale, and Gemini results: 2026-09-07
+
+The full WSL suite with both browser modes enabled passed **55 tests with no skips**. The Windows system-Python run passed **44 tests with 11 expected skips**: eight opt-in browser checks, optional Pillow, IANA timezone data, and symlink permissions. JavaScript syntax validation passed. A subsequent targeted browser check also passed after hardening unknown URL-fragment handling.
+
+Live previews now fill the browser viewport below a 43-pixel control bar. Real browser measurements were 1920 by 1037 pixels in a 1920 by 1080 viewport and 390 by 801 in a 390 by 844 viewport. Tests exercise resizing without restarting the running app, exact fixed device sizes, returning to build inspection, and removing the iframe when closed. The public sandbox restrictions remain intact.
+
+The gallery now includes **22 submitted HTML builds from three models**, grouped into eight prompts. Seven Gemini 3.8 Flash runs were added for tasks 01-07. Their top-level screenshots are exact copies of visually inspected evidence images; the supplied HTML and evidence remain unchanged. Model search resolves the displayed Gemini name.
+
+The new [Why Trial? view](https://trial-by-pyro.netlify.app/#why) and README distinguish benchmark measurements from Pyro's experience using models. Runtime observations are attributed to Pyro's own runs. The user-supplied Deep-SWE image is included unchanged and labeled as a snapshot with different effort settings. No current-ranking or controlled model-performance claims were inferred from it.
+
+Desktop and mobile visual checks covered the reading view, the expanded live app, and the three-model gallery. See the [live app](live-preview.png), [project rationale](why-project-preview.png), and [mobile rationale](why-project-mobile.png). Public-mode interaction was checked with Netlify Dev; the export continues to omit raw metadata, reports, evaluator files, and development evidence.
+
 ## Production deployment: 2026-09-07
 
 Published [Trial by Pyro](https://trial-by-pyro.netlify.app/) through the authenticated Netlify CLI using the repository's PowerShell deployment script with production enabled and Pillow available. Deployment `6a9ee49ec0f4f7387924fa13` uploaded the 100-file, 2.27 MiB public export. No raw metadata, reports, evidence, or private evaluator files were uploaded.

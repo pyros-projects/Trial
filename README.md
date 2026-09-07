@@ -28,14 +28,30 @@
 
 ![Trial by Pyro gallery comparing submitted builds for the same prompt](docs/gallery-results-preview.png)
 
-## Why this exists
+## Why this project?
 
-A finished app tells you more than a confident summary. Trial by Pyro puts each prompt beside the builds it produced, so you can compare the results, open the app, and inspect the source. Bring your curiosity. There is plenty to click, break, and learn from.
+**A note from Pyro.**
+
+Numerical benchmarks matter. Research and training need guardrails, and a score is useful evidence. I use them. But equal scores do not mean equal experiences with the models behind them.
+
+Look at the Deep-SWE snapshot below. GPT-6 Astra [xhigh] and Gemini 3.8 Flash [high] both display **74%**, with different costs, token usage, and step counts. In my hands, these models don't even feel like they're playing the same game. One percentage compresses a lot of very different work.
+
+![User-supplied Deep-SWE snapshot showing GPT-6 Astra at xhigh and Gemini 3.8 Flash at high both displaying 74%](gallery/static/deep-swe-snapshot.png)
+
+*Deep-SWE snapshot supplied by Pyro. Different effort settings; captured values, not a live ranking.*
+
+What I keep missing in benchmark tables is the chance to try what the model built. Open the app. Push the controls. Follow a workflow until something breaks. You start to recognize a model's style, its strengths, and the things it consistently neglects. That experience is what Trial by Pyro puts within reach.
+
+I chose tasks with enough complexity to make the agent work for it. A couple of model generations ago, I would have budgeted multiple hours for these jobs. In my own Astra runs so far, each has delivered a build in under an hour. That's what I observed in those runs; correctness still has to earn its own evidence.
+
+The tasks also give you an approachable way to judge the result. Does the physics look plausible? Is the game fun? Does the interface hold together? You can form a useful first impression without being a domain expert. Then use the formal checks to see whether that impression survives the requirements. Both kinds of judgment matter.
+
+Keep the benchmarks. Get your hands on the work.
 
 ## What you can do
 
 - **Compare the same brief.** Browse builds grouped by prompt, with each model's screenshots side by side. Filter by model, task, track, status, or text.
-- **Try the output.** Open live HTML builds and check desktop, tablet, and mobile layouts. Download the source to inspect it yourself.
+- **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Download the source to inspect it yourself.
 - **Run any of the 30 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
 - **Inspect complete applications locally.** Review project source downloads, declared setup commands, notes, and manually started app previews.
 - **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, per-track score summaries, and CSV export. Missing scores stay missing.

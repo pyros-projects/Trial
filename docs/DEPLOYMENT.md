@@ -96,13 +96,15 @@ The deployment scripts also accept the Python and screenshot options described a
 
 | Included | Excluded |
 | --- | --- |
-| Gallery HTML, CSS, JavaScript, favicon and logo | Source code for the gallery server and build scripts |
+| Gallery HTML, CSS, JavaScript, favicon, logo and supplied Deep-SWE reference snapshot | Source code for the gallery server and build scripts |
 | Public prompt catalog, prompt and acceptance Markdown | Prompt fixtures, private evaluator material and extra documents |
 | One top-level HTML result per model/run folder | Raw projects, project archives, dependencies and extra HTML variants |
 | One screenshot per run: metadata-free WebP up to 1280 pixels with Pillow, or the original selected screenshot otherwise | Extra screenshots, recordings, logs, audio and `evidence/` |
 | Minimal public JSON and CSV | Run `metadata.json`, `report.json`, notes, environments, metrics, manifests and check details |
 
 Model and run labels come from folder names. Tasks are inferred from catalog IDs in run-folder names. Only runs with `index.html`, `result.html`, or `app.html` appear, using that precedence. HTML bytes are copied unchanged; the public SHA-256 identifies the exact published bytes.
+
+The supplied reference image is explicitly included as `/deep-swe-snapshot.png` with its original bytes. It is independent of run screenshots and remains included when `--screenshots none` is selected.
 
 The public data declares `mode: "public"` and a generation timestamp. Scores are `null`, check lists are empty, and check counts are zero because evaluation data is omitted. This does not turn missing evidence into a passing result. The local gallery continues to read full results with its existing behavior.
 

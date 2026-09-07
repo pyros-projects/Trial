@@ -61,6 +61,57 @@ class BrowserEnvironment(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('RUN_BROWSER_TESTS')=='1','Set RUN_BROWSER_TESTS=1 for direct Chromium integration.')
 class BrowserTests(BrowserEnvironment):
+    def test_live_preview_fills_viewport_resizes_and_cleans_up(self):
+        from playwright.sync_api import expect
+        self.fixture();self.navigate_direct()
+        self.page.locator('#track-filter').select_option('html')
+        self.page.locator('#cards .card-open').click()
+        self.page.locator('#launch-preview').click()
+        frame=self.page.frame_locator('#artifact-frame')
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 1')
+        for width,height in [(1440,1000),(1920,1080),(390,844)]:
+            self.page.set_viewport_size({'width':width,'height':height})
+            self.page.wait_for_function('''() => {
+                const r=document.querySelector('#artifact-frame').getBoundingClientRect();
+                return Math.abs(r.width-innerWidth)<2 && Math.abs(r.bottom-innerHeight)<2;
+            }''')
+            rectangle=self.page.locator('#artifact-frame').bounding_box()
+            self.assertGreaterEqual(rectangle['height'],height-80)
+            self.assertEqual(frame.locator('body').evaluate('() => innerWidth'),width)
+            expect(frame.locator('#increment')).to_have_text('Count: 1')
+        self.page.locator('#viewport-size').select_option('768x1024')
+        self.page.wait_for_function("document.querySelector('#artifact-frame').getBoundingClientRect().width===768")
+        self.assertEqual(frame.locator('body').evaluate('() => [innerWidth,innerHeight]'),[768,1024])
+        self.page.locator('#viewport-size').select_option('fit')
+        self.page.locator('#back-to-build').click()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        expect(self.page.locator('#launch-preview')).to_be_visible()
+        self.page.locator('#launch-preview').click()
+        self.page.locator('#close-live').click()
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.assertEqual(self.errors,[])
+
+    def test_why_view_can_be_linked_and_returns_to_builds(self):
+        from playwright.sync_api import expect
+        self.fixture()
+        self.page.goto(self.base+'/#why')
+        expect(self.page.locator('#view-why')).to_be_visible()
+        expect(self.page.locator('#filters')).not_to_be_visible()
+        expect(self.page.locator('.stats')).not_to_be_visible()
+        image=self.page.locator('#view-why img')
+        expect(image).to_be_visible()
+        self.page.wait_for_function("document.querySelector('#view-why img').naturalWidth===1021")
+        self.page.set_viewport_size({'width':390,'height':844})
+        self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
+        self.page.locator('#view-why [data-view="gallery"]').click()
+        expect(self.page.locator('#view-gallery')).to_be_visible()
+        expect(self.page.locator('#cards .run-card')).to_have_count(2)
+        self.page.goto(self.base+'/#constructor')
+        expect(self.page.locator('#view-gallery')).to_be_visible()
+        self.assertEqual(self.errors,[])
+
     def test_unassigned_builds_are_not_compared_as_one_prompt(self):
         from playwright.sync_api import expect
         for model, name in [('Model A','unknown-one'),('Model B','unknown-two')]:
@@ -118,6 +169,7 @@ class BrowserTests(BrowserEnvironment):
         frame=self.page.frame_locator('#artifact-frame')
         frame.locator('#increment').click()
         expect(frame.locator('#increment')).to_have_text('Count: 1')
+        self.page.locator('#back-to-build').click()
         self.page.locator('[data-tab="evidence"]').click()
         expect(self.page.locator('#viewer-content')).to_contain_text('Actual counter interaction')
         self.page.locator('#close-viewer').click()
