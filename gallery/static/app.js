@@ -231,16 +231,15 @@
     if(!$('#category-viewer').open)return;
     const runs=(state.categoryAllModels?state.data.results:matchingRuns()).filter(row=>groupKey(row)===state.categoryTask);
     if(!runs.length){closeCategory();return;}
-    const previous=$('#category-content .prompt-group');const index=previous?comparisonPosition(previous).first:0;
+    const scrollTop=$('#category-content').scrollTop;
     $('#category-content').innerHTML=promptGroup(state.categoryTask,runs,true,state.categoryAllModels);
-    positionComparison($('#category-content .prompt-group'),index);
+    updateComparison($('#category-content .prompt-group'));$('#category-content').scrollTop=scrollTop;
   }
   function openCategory(key,trigger=null,allModels=false,updateUrl=true) {
     const runs=(allModels?state.data.results:matchingRuns()).filter(row=>groupKey(row)===key);if(!runs.length)return;
-    const index=trigger?comparisonPosition(trigger.closest('.prompt-group')).first:0;
     state.categoryTask=key;state.categoryTrigger=trigger;state.categoryAllModels=allModels;
     $('#category-content').innerHTML=promptGroup(key,runs,true,allModels);
-    $('#category-viewer').showModal();positionComparison($('#category-content .prompt-group'),index);
+    $('#category-viewer').showModal();$('#category-content').scrollTop=0;updateComparison($('#category-content .prompt-group'));
     if(updateUrl&&state.data.catalog.some(task=>task.id===key)&&location.hash!==comparisonHash(key))try{history.pushState(null,'',comparisonHash(key));}catch{ /* Copy link remains available in embedded browsers. */ }
     $('#close-category').focus();
   }
@@ -499,7 +498,7 @@
   $('#prompt-dialog').addEventListener('close',()=>{state.promptToken++;});
   $('#copy-prompt').addEventListener('click',copyPrompt);
   document.addEventListener('keydown',event=>{
-    if(event.target.matches('.group-builds')&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+    if(event.target.matches('#cards .group-builds')&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
       event.preventDefault();const group=event.target.closest('.prompt-group');
       if(event.key==='Home'||event.key==='End')positionComparison(group,event.key==='Home'?0:Infinity);
       else shiftComparison(group,event.key==='ArrowRight'?1:-1);

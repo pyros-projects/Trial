@@ -2,6 +2,14 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Expanded category grid: 2026-09-07
+
+Expanded categories now show every model entry in a wrapping grid: three columns above 1100 pixels, two from 581–1100, and one at 580 or below. Later models occupy additional rows reached by vertical scrolling. The expanded view shows a total model count and Copy link; the main showcase retains horizontal paging. Opening an expanded category starts at the top, and closing it preserves the main gallery's filters, carousel position, and focus.
+
+All **28 browser checks passed**: 26 core checks and the two bridge presentation checks, enabled in separate runs. Updated assertions verify row geometry and no horizontal scrolling at six widths, native End navigation to the final mobile entry, opening an app from the second row, and unchanged nested-viewer and sharing behavior. JavaScript syntax and whitespace checks passed. The [desktop](prompt-comparison-preview.png) and [mobile](prompt-comparison-mobile.png) comparison images show the new layout.
+
+Production deployment **`6a9f305139b5a6cbb1fe169b`** publishes **180 files totaling 5,613,113 bytes (5.35 MiB)**. Published JavaScript and CSS match the verified build byte-for-byte. Live browser checks confirm the hydraulic-erosion category displays five models as **3 + 2** on desktop and five vertically scrollable entries on mobile, with no horizontal overflow and the correct Copy link URL.
+
 ## Five-model comparisons and category sharing: 2026-09-07
 
 The collection now contains **30 HTML builds across nine prompts and five models**, ordered **GPT-6 Astra, Opus 5, Grok 4.6, GLM 5.3 Flash, Gemini 3.8 Flash**. The new profiles record **Claude Code / Max** for Opus and **Pi / High** for GLM. Their five top-level screenshots are exact copies of supplied final evidence images; the original HTML and evidence files remain unchanged. The masthead and README now give *a Vibe Benchmark* the same font size as Trial, with a smaller **by Pyro** line and no parentheses.

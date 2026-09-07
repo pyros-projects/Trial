@@ -124,6 +124,27 @@ class BrowserTests(BrowserEnvironment):
         (expect(previous).to_be_disabled if first == 1 else expect(previous).to_be_enabled)()
         (expect(following).to_be_disabled if last == total else expect(following).to_be_enabled)()
 
+    def assert_comparison_grid(self, group, columns, total):
+        from playwright.sync_api import expect
+        expect(group.locator('.comparison-range')).to_have_text(f"{total} {'model' if total == 1 else 'models'}")
+        expect(group.locator('.model-navigation')).to_be_hidden()
+        geometry = group.locator('.group-builds').evaluate('''node => {
+            const area=node.getBoundingClientRect();
+            const cards=[...node.children].map(child=>child.getBoundingClientRect());
+            const rows=[];
+            for(const card of cards){
+                const row=rows.find(row=>Math.abs(row.top-card.top)<2);
+                if(row)row.count++;else rows.push({top:card.top,count:1});
+            }
+            return {rows:rows.map(row=>row.count),
+                contained:cards.every(card=>card.left>=area.left-1&&card.right<=area.right+1),
+                scrolling:node.scrollWidth>node.clientWidth+1, left:node.scrollLeft};
+        }''')
+        self.assertEqual(geometry['rows'], [min(columns, total-start) for start in range(0, total, columns)])
+        self.assertTrue(geometry['contained'])
+        self.assertFalse(geometry['scrolling'])
+        self.assertEqual(geometry['left'], 0)
+
     def test_comparison_pages_five_models_one_column_at_responsive_breakpoints(self):
         from playwright.sync_api import expect
         keys = self.comparison_fixture()
@@ -148,6 +169,9 @@ class BrowserTests(BrowserEnvironment):
                 self.assertTrue(geometry['sameRow'])
                 self.assertTrue(geometry['scrolling'])
                 self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+                group.locator('[data-expand-task]').click()
+                self.assert_comparison_grid(self.page.locator('#category-content .prompt-group'), visible, 5)
+                self.page.locator('#close-category').click()
                 for first in range(2, 7-visible):
                     group.locator('[data-shift-models="1"]').click()
                     self.assert_comparison_range(group, first, first+visible-1, 5)
@@ -156,7 +180,7 @@ class BrowserTests(BrowserEnvironment):
                     self.assert_comparison_range(group, first, first+visible-1, 5)
         self.assertEqual(self.errors, [])
 
-    def test_comparison_native_mobile_scroll_updates_ranges_and_expansion_position(self):
+    def test_comparison_mobile_carousel_expands_to_a_vertical_grid(self):
         from playwright.sync_api import expect
         self.comparison_fixture()
         self.page.set_viewport_size({'width': 390, 'height': 844})
@@ -180,10 +204,13 @@ class BrowserTests(BrowserEnvironment):
         category = self.page.locator('#category-viewer')
         expect(category).to_be_visible()
         expanded = category.locator('.prompt-group')
-        self.assert_comparison_range(expanded, 3, 3, 5)
+        self.assert_comparison_grid(expanded, 1, 5)
         self.assertTrue(category.evaluate('node=>node.scrollWidth<=innerWidth'))
-        expanded.locator('[data-shift-models="1"]').click()
-        self.assert_comparison_range(expanded, 4, 4, 5)
+        expanded.locator('.group-builds').focus()
+        self.page.keyboard.press('End')
+        expect(expanded.locator('.model-column').last).to_be_in_viewport()
+        self.assertGreater(self.page.locator('#category-content').evaluate('node=>node.scrollTop'), 0)
+        self.assert_comparison_grid(expanded, 1, 5)
         self.assert_comparison_range(group, 3, 3, 5)
         self.page.locator('#close-category').click()
         expect(category).not_to_be_visible()
@@ -222,9 +249,8 @@ class BrowserTests(BrowserEnvironment):
         expect(self.page.locator('#cards .prompt-group')).to_have_count(2)
         self.assertTrue(original_card.evaluate('node=>node.isConnected'))
         expanded = category.locator('.prompt-group')
-        self.assert_comparison_range(expanded, 2, 4, 5)
-        expanded.locator('[data-shift-models="1"]').click()
-        self.assert_comparison_range(expanded, 3, 5, 5)
+        self.assert_comparison_grid(expanded, 3, 5)
+        expanded.locator('.model-column').last.scroll_into_view_if_needed()
         self.assertAlmostEqual(group.locator('.group-builds').evaluate('node=>node.scrollLeft'), position, delta=2)
         self.page.locator('#close-category').click()
         expect(category).not_to_be_visible()
@@ -255,10 +281,10 @@ class BrowserTests(BrowserEnvironment):
         self.page.keyboard.press('Escape')
         expect(self.page.locator('#viewer')).not_to_be_visible()
         expect(category).to_be_visible()
-        category.locator('.card-open').first.click()
+        category.locator('.card-open').last.click()
         self.page.locator('#launch-preview').click()
         frame = self.page.frame_locator('#artifact-frame')
-        expect(frame.locator('#build-model')).to_have_text(keys[0])
+        expect(frame.locator('#build-model')).to_have_text(keys[-1])
         frame.locator('#increment').click()
         expect(frame.locator('#increment')).to_have_text('Count: 1')
         previous_frame = self.page.locator('#artifact-frame').element_handle()
@@ -315,7 +341,7 @@ class BrowserTests(BrowserEnvironment):
         unknown.locator('[data-expand-task]').click()
         expect(category.locator('.model-column')).to_have_count(1)
         expect(category.locator('.run-card')).to_have_count(1)
-        self.assert_comparison_range(category.locator('.prompt-group'), 1, 1, 1)
+        self.assert_comparison_grid(category.locator('.prompt-group'), 3, 1)
         self.page.evaluate("location.hash='why'")
         expect(category).not_to_be_visible()
         expect(self.page.locator('#view-why')).to_be_visible()
