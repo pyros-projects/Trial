@@ -3,6 +3,7 @@
 
 results/<model>/<run>/{index.html | project/ | project.zip}
 Optional: metadata.json, report.json, screenshot.*, notes.md, evidence/.
+Optional public setup profile: results/<model>/model.toml.
 Never installs, launches or extracts submitted code.
 """
 from __future__ import annotations
@@ -13,8 +14,12 @@ import io
 import json
 import math
 import mimetypes
+import stat
 import threading
+import tomllib
+import unicodedata
 import webbrowser
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -35,6 +40,8 @@ CATALOG_PATH = PROMPTS_ROOT / 'catalog.json'
 HTML_NAMES = ('index.html', 'result.html', 'app.html')
 SCREENSHOT_NAMES = tuple(f'{name}{ext}' for name in ('screenshot', 'preview') for ext in ('.png','.webp','.jpg','.jpeg'))
 PUBLIC_FILES = set(HTML_NAMES + SCREENSHOT_NAMES + ('project.zip','report.json'))
+MODEL_PROFILE_MAX_BYTES = 16 * 1024
+MODEL_PROFILE_FIELDS = {'provider': 200, 'provider_url': 2048, 'harness': 200, 'harness_url': 2048, 'setting': 500}
 
 
 def utc_iso(timestamp: float | None = None) -> str:
@@ -49,6 +56,55 @@ def load_json(path: Path | None, default: Any) -> Any:
         return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError, UnicodeError, RecursionError):
         return default
+
+
+def load_model_profiles(results_root: Path, model_keys: Iterable[str]) -> dict[str, dict[str, str]]:
+    """Read only allowlisted model-level setup notes for models in this inventory."""
+    profiles = {}
+    for key in sorted(set(model_keys)):
+        if not key or key.startswith('.') or Path(key).name != key or '\\' in key:
+            continue
+        model = results_root / key
+        path = model / 'model.toml'
+        try:
+            # lstat exposes Windows reparse points even on Python 3.11, before is_junction existed.
+            if any(candidate.is_symlink() or (hasattr(candidate, 'is_junction') and candidate.is_junction())
+                   or getattr(candidate.lstat(), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                   for candidate in (results_root, model, path)):
+                continue
+            if not results_root.is_dir() or not model.is_dir() or not path.is_file() or path.stat().st_size > MODEL_PROFILE_MAX_BYTES:
+                continue
+            with path.open('rb') as handle:
+                raw = handle.read(MODEL_PROFILE_MAX_BYTES + 1)
+            if len(raw) > MODEL_PROFILE_MAX_BYTES:
+                continue
+            settings = tomllib.loads(raw.decode('utf-8'))
+        except (OSError, ValueError, UnicodeError, RecursionError):
+            continue
+        profile = {}
+        for field, limit in MODEL_PROFILE_FIELDS.items():
+            value = settings.get(field)
+            if isinstance(value, str) and 0 < len(value) <= limit and value.strip() and not any(unicodedata.category(char).startswith('C') for char in value):
+                profile[field] = value.strip()
+        for label in ('provider', 'harness'):
+            field = label + '_url'
+            url = profile.get(field)
+            if not url:
+                continue
+            try:
+                parsed = urlparse(url)
+                # Accessing port also validates its syntax and range.
+                parsed.port
+                safe = (label in profile and parsed.scheme in {'http', 'https'} and parsed.hostname
+                        and parsed.username is None and parsed.password is None and '\\' not in url
+                        and not any(char.isspace() for char in url))
+            except ValueError:
+                safe = False
+            if not safe:
+                del profile[field]
+        if profile:
+            profiles[key] = profile
+    return profiles
 
 
 def file_sha256(path: Path | None) -> str | None:
@@ -237,7 +293,8 @@ class GalleryState:
     def data(self) -> dict:
         results=self.scan()
         return {'generated_at':utc_iso(),'artifact_origin':self.artifact_origin,'catalog':self.catalog,
-                'summary':self.summary(results),'results':results}
+                'summary':self.summary(results),'results':results,
+                'model_profiles':load_model_profiles(RESULTS_ROOT, (row['model_key'] for row in results))}
 
 
 class QuietThreadingHTTPServer(ThreadingHTTPServer):

@@ -1,0 +1,27 @@
+const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/strict');
+const html=fs.existsSync('index.html')?fs.readFileSync('index.html','utf8'):'';
+const match=html.match(/<script id="simulation-engine">([\s\S]*?)<\/script>/);
+assert.ok(match,'Delivered HTML must contain the real simulation engine');
+const sandbox={console,Uint8Array,Uint16Array,Uint32Array,Int16Array,Float32Array,ArrayBuffer,DataView,Math,JSON,Number,Error,Object,Array,Set,Map,btoa:s=>Buffer.from(s,'binary').toString('base64'),atob:s=>Buffer.from(s,'base64').toString('binary')};
+vm.createContext(sandbox);vm.runInContext(match[1]+'\nthis.Engine=AlchemyEngine;this.M=M;',sandbox);
+const {Engine,M}=sandbox;let passed=0;
+function test(name,fn){try{fn();console.log('PASS',name);passed++;}catch(e){console.error('FAIL',name,e.message);process.exitCode=1;}}
+const fresh=()=>new Engine(64,48,1234);
+const steps=(e,n)=>{for(let i=0;i<n;i++)e.step();};
+test('sand falls and water is displaced by denser grains',()=>{let e=fresh();e.set(20,5,M.SAND);steps(e,12);assert.equal(e.id[5*64+20],0);assert.equal(e.stats().counts.Sand,1);e=fresh();for(let y=35;y<48;y++)for(let x=0;x<64;x++)e.set(x,y,M.WATER);e.set(20,34,M.SAND);steps(e,30);let i=e.id.indexOf(M.SAND);assert.ok(Math.floor(i/64)>35);});
+test('heating and freezing produce persistent new material state',()=>{let e=fresh();e.set(20,20,M.WATER,160);e.step();assert.ok(e.stats().counts.Steam>0);e=fresh();e.set(20,20,M.WATER,-30);e.step();assert.ok(e.stats().counts.Ice>0);});
+test('lava and water react into steam and cooled stone',()=>{let e=fresh();for(let y=25;y<35;y++)for(let x=20;x<30;x++)e.set(x,y,M.LAVA);for(let y=15;y<25;y++)for(let x=20;x<30;x++)e.set(x,y,M.WATER);steps(e,10);const c=e.stats().counts;assert.ok(c.Steam>0);assert.ok(c.Stone>0);});
+test('combustion consumes fuel and creates fire or smoke',()=>{let e=fresh();for(let y=25;y<40;y++)for(let x=20;x<35;x++)e.set(x,y,M.WOOD);e.set(25,26,M.FIRE);const fuel=e.fuel.reduce((a,b)=>a+b,0);steps(e,100);const c=e.stats().counts;assert.ok(e.fuel.reduce((a,b)=>a+b,0)<fuel);assert.ok(e.reactions>0);assert.ok(c.Fire+c.Smoke>0);});
+test('salt dissolves into saline water',()=>{let e=fresh();for(let y=15;y<48;y++)for(let x=0;x<64;x++)e.set(x,y,M.WATER);for(let x=20;x<30;x++)e.set(x,14,M.SALT);steps(e,120);assert.ok(e.stats().counts.Salt<10);assert.ok(e.salt.some(v=>v>0));});
+test('electrical charge travels along a metal conductor',()=>{let e=fresh();for(let x=8;x<45;x++)e.set(x,20,M.METAL);e.set(7,20,M.ELECTRICITY);steps(e,8);assert.ok(e.charge[20*64+17]>0);});
+test('acid corrodes wood more readily than stone',()=>{let e=fresh();for(let x=0;x<64;x++){e.set(x,46,M.WOOD);e.set(x,47,M.STONE);for(let y=35;y<46;y++)e.set(x,y,M.ACID);}steps(e,180);assert.ok(e.stats().counts.Wood<64);assert.equal(e.stats().counts.Stone,64);});
+test('plant grows with nearby water',()=>{let e=fresh();for(let x=16;x<40;x++){e.set(x,40,M.PLANT);for(let y=41;y<48;y++)e.set(x,y,M.WATER);}steps(e,150);assert.ok(e.stats().counts.Plant>24);});
+test('explosion imparts velocity and transforms explosive fuel',()=>{let e=fresh();for(let y=15;y<25;y++)for(let x=15;x<25;x++)e.set(x,y,M.EXPLOSIVE);e.set(20,20,M.FIRE);steps(e,3);assert.ok(e.stats().counts.Explosive<100);assert.ok(e.vx.some(v=>Math.abs(v)>1)||e.vy.some(v=>Math.abs(v)>1));});
+test('same seed and steps reproduce full simulation exactly',()=>{let a=fresh(),b=fresh();for(let y=10;y<18;y++)for(let x=10;x<25;x++){a.set(x,y,M.SAND);b.set(x,y,M.SAND);}steps(a,20);steps(b,20);assert.equal(a.serialize({}),b.serialize({}));});
+test('snapshot round trip preserves all cells, state and RNG',()=>{let a=fresh();a.set(4,5,M.METAL,750);a.set(5,5,M.ELECTRICITY);steps(a,3);let state=a.serialize({speed:1.5});let b=fresh();b.load(state);assert.equal(b.serialize({speed:1.5}),state);});
+test('invalid snapshot is rejected without altering current world',()=>{let e=fresh();e.set(3,3,M.SAND);const old=e.serialize({});assert.throws(()=>e.load('{"format":"alchemy","version":1,"width":-1}'));assert.equal(e.serialize({}),old);});
+test('negative explosion radius is rejected before replacing a world',()=>{let e=fresh();e.set(4,4,M.SAND);const before=e.serialize({}),bad=JSON.parse(before);bad.events=[{x:1,y:1,r:-100,tick:0}];assert.throws(()=>e.load(bad));assert.equal(e.serialize({}),before);});
+test('unknown physics keys are rejected before replacing a world',()=>{let e=fresh();e.set(4,4,M.SAND);const before=e.serialize({}),bad=JSON.parse(before);bad.physics[']']=1;assert.throws(()=>e.load(bad));assert.equal(e.serialize({}),before);});
+test('update order follows moving particles',()=>{let e=fresh();for(let x=10;x<18;x++)e.set(x,10,M.SAND);e.step();const orders=[];for(let i=0;i<e.length;i++)if(e.id[i]===M.SAND)orders.push(e.order[i]);assert.equal(new Set(orders).size,8);});
+test('unknown event properties cannot survive import validation',()=>{let e=fresh();const before=e.serialize({}),bad=JSON.parse(before);bad.events=[{x:1,y:1,r:5,tick:0,extra:[[[1]]]}];assert.throws(()=>e.load(bad));assert.equal(e.serialize({}),before);});
+console.log(`${passed}/16 engine checks passed`);

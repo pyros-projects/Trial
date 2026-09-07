@@ -68,6 +68,8 @@ class BrowserTests(BrowserEnvironment):
         from tools import build_site
         self.fixture()
         root = Path(self.temp.name)
+        (self.results / 'UI fixture - not a model evaluation' / 'model.toml').write_text(
+            'harness = "Public harness fixture"\nsetting = "High Fast"\n', encoding='utf-8')
         shutil.copytree(ROOT / 'gallery/static', root / 'gallery/static')
         shutil.copytree(ROOT / 'prompts', root / 'prompts')
         output = root / 'dist/site'
@@ -102,6 +104,10 @@ class BrowserTests(BrowserEnvironment):
         expect(self.page.locator('#viewer')).to_have_class(re.compile(r'\bis-live\b'))
         sandbox = self.page.locator('#artifact-frame').get_attribute('sandbox').split()
         self.assertNotIn('allow-same-origin', sandbox)
+        self.page.locator('.live-setup summary').click()
+        expect(self.page.locator('.live-setup-panel')).to_contain_text('Public harness fixture')
+        expect(self.page.locator('.live-setup-panel')).to_contain_text('High Fast')
+        self.page.locator('#close-live-setup').click()
         self.assertEqual(urlsplit(self.page.url).fragment, 'play/' + quote(row['id'], safe='/'))
         self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
         self.page.locator('.live-bar [data-copy-run]').click()
@@ -377,6 +383,81 @@ class BrowserTests(BrowserEnvironment):
         expect(self.page.locator('#error-banner')).not_to_be_visible()
         expect(self.page.locator('.run-card')).to_have_count(2)
         self.assertEqual(self.errors,[])
+
+    def test_model_profiles_display_refresh_and_follow_live_model_without_restarting_app(self):
+        from playwright.sync_api import expect
+        self.fixture()
+        model = 'UI fixture - not a model evaluation'
+        profile = self.results / model / 'model.toml'
+        profile.write_text('''provider = 'Provider <img src=x onerror=alert(1)>'
+provider_url = 'https://example.com/provider'
+harness = 'Test CLI'
+harness_url = 'https://example.com/harness'
+setting = 'Max'
+''', encoding='utf-8')
+        other = self.results / 'grok' / '01-fluid-simulation'
+        other.mkdir(parents=True)
+        (other / 'index.html').write_text('<!doctype html><title>Grok fixture</title><h1>Second build</h1>')
+        (other.parent / 'model.toml').write_text('harness = "Cursor Desktop"\nsetting = "High Fast"\n', encoding='utf-8')
+        self.navigate_direct()
+        self.page.locator('#track-filter').select_option('html')
+        self.page.locator('#model-filter').select_option(model)
+        expect(self.page.locator('.model-setup')).to_have_text('Test CLI · Max')
+        self.page.locator('#cards .card-open').click()
+        self.page.locator('[data-tab="details"]').click()
+        expect(self.page.locator('.model-setup-details')).to_contain_text('Shared setup for this model')
+        expect(self.page.locator('.model-setup-details img')).to_have_count(0)
+        self.page.locator('[data-tab="preview"]').click()
+        self.page.locator('#launch-preview').click()
+        frame = self.page.frame_locator('#artifact-frame')
+        frame.locator('#increment').click()
+        for width in (1440, 768, 390, 320):
+            self.page.set_viewport_size({'width': width, 'height': 844})
+            before = self.page.locator('#artifact-frame').bounding_box()
+            self.page.locator('.live-setup summary').click()
+            panel = self.page.locator('.live-setup-panel')
+            expect(panel).to_contain_text('Provider <img src=x onerror=alert(1)>')
+            expect(panel).to_contain_text('Test CLI')
+            expect(panel).to_contain_text('Max')
+            expect(panel.locator('img')).to_have_count(0)
+            expect(panel.get_by_role('link', name='Test CLI')).to_have_attribute('href', 'https://example.com/harness')
+            expect(panel.get_by_role('link', name='Test CLI')).to_have_attribute('rel', 'noopener noreferrer')
+            self.assertEqual(before, self.page.locator('#artifact-frame').bounding_box())
+            expect(frame.locator('#increment')).to_have_text('Count: 1')
+            bounds = panel.bounding_box()
+            self.assertGreaterEqual(bounds['x'], 0)
+            self.assertLessEqual(bounds['x'] + bounds['width'], width)
+            self.assertTrue(self.page.locator('.live-bar').evaluate('node => node.scrollWidth <= node.clientWidth'))
+            self.page.keyboard.press('Escape')
+            expect(panel).not_to_be_visible()
+            expect(self.page.locator('#viewer')).to_be_visible()
+        self.page.locator('.live-setup summary').click()
+        self.page.locator('.live-guide summary').click()
+        expect(self.page.locator('.live-setup-panel')).not_to_be_visible()
+        self.page.locator('.live-setup summary').click()
+        expect(self.page.locator('.live-guide-panel')).not_to_be_visible()
+        bounds = self.page.locator('#artifact-frame').bounding_box()
+        self.page.mouse.click(bounds['x'] + 10, bounds['y'] + bounds['height'] - 20)
+        expect(self.page.locator('.live-setup-panel')).not_to_be_visible()
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 2')
+        self.page.locator('#live-model').select_option('grok/01-fluid-simulation')
+        self.page.locator('.live-setup summary').click()
+        expect(self.page.locator('.live-setup-panel')).to_contain_text('Cursor Desktop')
+        expect(self.page.locator('.live-setup-panel')).to_contain_text('High Fast')
+        expect(self.page.locator('.live-setup-panel')).not_to_contain_text('Test CLI')
+        self.page.locator('#close-live').click()
+        profile.write_text('harness = "Test CLI"\nsetting = "Low"\n', encoding='utf-8')
+        self.page.locator('#refresh').click()
+        expect(self.page.locator('.model-setup')).to_have_text('Test CLI · Low')
+        profile.write_text('invalid = [', encoding='utf-8')
+        self.page.locator('#refresh').click()
+        expect(self.page.locator('.model-setup')).to_have_count(0)
+        self.page.locator('#cards .card-open').click()
+        self.page.locator('#launch-preview').click()
+        expect(self.page.locator('.live-setup')).to_have_count(0)
+        expect(frame.locator('#increment')).to_have_text('Count: 0')
+        self.assertEqual(self.errors, [])
 
     def test_live_preview_fills_viewport_resizes_and_cleans_up(self):
         from playwright.sync_api import expect

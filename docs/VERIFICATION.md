@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Shared model setups and Astra task 09: 2026-09-07
+
+Each model now has an optional `results/<model>/model.toml` containing its reported provider, harness, setting, and homepage links. The current profiles record **Codex CLI / Max**, **Cursor Desktop / High Fast**, and **Antigravity CLI / High**. Cards show the harness and setting; **Setup** in the maximized viewer and the build-details tab show the profile and external links. The copy identifies this as shared collection context, rather than equivalent budgets or a complete per-run record. Model order and colors remain in `appsettings.json`.
+
+The complete WSL suite with both browser modes enabled passed **81 tests with no skips**. After adding the Windows Python 3.11 reparse-point fallback, all **seven focused profile tests** passed again. Coverage includes local/public profile parity, unknown-field exclusion, bounded input, malformed TOML, unsafe URLs, linked paths, refresh, escaped text, public share entry, and profile updates when switching models. No raw TOML or run metadata is copied into the public export.
+
+Chromium checks confirm Setup and Look for dismiss each other, close on Escape or app interaction, and leave the running app's dimensions and state intact. Visual checks across 320–1600 pixel widths found no toolbar overflow. The app still fills the viewport below the 43-pixel desktop bar or 79-pixel mobile bar. See the [desktop setup](model-setup-preview.png), [mobile setup](model-setup-mobile.png), and refreshed gallery and README images.
+
+Astra's **Falling-Sand Alchemy Sandbox** brings the collection to **25 HTML builds across nine prompts**. Its top-level screenshot is an exact copy of the supplied final desktop evidence image. Its live canvas opens in the public sandbox without a page error; this is a gallery smoke check, not a verification of the simulation's full requirements. All original submitted HTML and evidence files remain unchanged.
+
+Production deployment **`6a9f21119c3114c0bb192941`** publishes **147 files totaling 4,206,020 bytes (4.01 MiB)**. Live HTTPS checks passed for all 25 share pages, thumbnails, source hashes, and attachment/sandbox headers, plus the three allowlisted profiles. Nine representative private routes, including raw model TOML and the new run's evidence, returned 404. Production browser checks confirmed the three setup values follow model selection and retain the full mobile app area.
+
 ## Trial name and complete model coverage: 2026-09-07
 
 The existing public repository was renamed to [pyros-projects/Trial](https://github.com/pyros-projects/Trial), preserving its repository ID and commit history. Website and README branding now reads **Trial - a Vibe Benchmark**, with **(by Pyro)** on a smaller line below. The masthead, footer, page title, source documentation, and share metadata use the new name. The existing Netlify origin and model/run link paths continue to serve the same builds.

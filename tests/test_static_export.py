@@ -148,6 +148,55 @@ class StaticExportTests(unittest.TestCase):
         self.assertFalse((self.output / "private-config.json").exists())
         self.assertFalse((self.output / "debug.json").exists())
 
+    def test_model_profiles_match_local_allowlist_without_reading_run_files(self):
+        profile = self.run.parent / "model.toml"
+        profile.write_text('''provider = "Provider"
+provider_url = "https://provider.example/"
+harness = "Harness"
+harness_url = "https://harness.example/"
+setting = "High reasoning"
+label = "PRIVATE-LABEL"
+color = "PRIVATE-COLOR"
+notes = "PRIVATE-NOTE"
+[credentials]
+token = "PRIVATE-TOKEN"
+''', encoding="utf-8")
+        (self.run / "model.toml").write_text('provider = "PRIVATE-RUN-PROFILE"', encoding="utf-8")
+        (self.run / "metadata.json").write_text('{"provider":"PRIVATE-RUN-PROVIDER"}', encoding="utf-8")
+        with mock.patch.object(build_site.server, "RESULTS_ROOT", self.root / "results"):
+            local = build_site.server.GalleryState("http://127.0.0.1:8766").data()
+        original_open = Path.open
+
+        def checked_open(path, *args, **kwargs):
+            if path.is_relative_to(self.run) and path.name != "index.html":
+                raise AssertionError(f"Private run file was opened: {path}")
+            return original_open(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "open", checked_open):
+            _, public = self.export(screenshots="none")
+        expected = {"Model One": {"provider": "Provider", "provider_url": "https://provider.example/",
+                                  "harness": "Harness", "harness_url": "https://harness.example/", "setting": "High reasoning"}}
+        self.assertEqual(local["model_profiles"], expected)
+        self.assertEqual(public["model_profiles"], expected)
+        self.assertFalse(list(self.output.rglob("*.toml")))
+        for path in self.output.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(b"PRIVATE", path.read_bytes(), path)
+
+    def test_model_profiles_missing_invalid_and_unpublished_models_do_not_break_export(self):
+        extra = self.root / "results/Unpublished model"
+        extra.mkdir()
+        (extra / "model.toml").write_text('provider = "PRIVATE-UNPUBLISHED"', encoding="utf-8")
+        profile = self.run.parent / "model.toml"
+        for content in (None, 'provider = "unterminated', 'provider_url = "javascript:alert(1)"'):
+            with self.subTest(content=content):
+                if content is not None:
+                    profile.write_text(content, encoding="utf-8")
+                _, data = self.export(screenshots="none")
+                self.assertEqual(data["model_profiles"], {})
+                self.assertEqual(len(data["results"]), 1)
+                self.assertFalse(list(self.output.rglob("*.toml")))
+
     def test_prompt_guidance_survives_public_export_without_private_fields(self):
         catalog_path = self.root / "prompts/catalog.json"
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))

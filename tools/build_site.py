@@ -353,7 +353,8 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
             page.parent.mkdir(parents=True, exist_ok=True)
             page.write_text(share_page(row, site_origin, model_labels.get(row["model_key"], row["model"])), encoding="utf-8")
         data = {"mode": "public", "generated_at": server.utc_iso(), "artifact_origin": "/artifacts",
-                "catalog": catalog, "summary": state.summary(rows), "results": rows}
+                "catalog": catalog, "summary": state.summary(rows), "results": rows,
+                "model_profiles": server.load_model_profiles(state.results_root, (row["model_key"] for row in rows))}
         write_json(stage / "api/data.json", data)
         (stage / "api/export.csv").write_bytes(export_csv(rows))
         (stage / "_redirects").write_text(REDIRECTS, encoding="utf-8")

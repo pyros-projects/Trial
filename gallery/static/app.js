@@ -41,9 +41,15 @@
     });
     return settings;
   }
+  function modelProfile(row) {
+    const profile=state.data?.model_profiles?.[row.model_key];
+    return profile&&typeof profile==='object'&&!Array.isArray(profile)?profile:{};
+  }
+  const profileText=value=>typeof value==='string'?value.trim():'';
   function modelIdentity(row) {
     const name=modelName(row);const initials=name.replace(/[^a-z0-9]/ig,'').slice(0,2).toUpperCase();
-    return `<div class="model-identity"><span class="model-avatar" aria-hidden="true">${escape(initials||'AI')}</span><div><span class="model-name">${escape(name)}</span>${row.model_version?`<span class="model-version">${escape(row.model_version)}</span>`:''}</div></div>`;
+    const profile=modelProfile(row);const setup=[profile.harness,profile.setting].map(profileText).filter(Boolean).join(' · ');
+    return `<div class="model-identity"><span class="model-avatar" aria-hidden="true">${escape(initials||'AI')}</span><div><span class="model-name">${escape(name)}</span>${setup?`<span class="model-setup">${escape(setup)}</span>`:''}${row.model_version?`<span class="model-version">${escape(row.model_version)}</span>`:''}</div></div>`;
   }
   let saved={};
   try {saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};} catch {saved={};}
@@ -291,10 +297,25 @@
     return `<div class="notice ${row.report_binding==='stale'?'danger':''}">${escape(binding)}</div><div class="evidence-counts"><span class="pass">${c.pass} passed</span><span class="fail">${c.fail} failed</span><span class="blocked">${c.blocked} blocked</span><span>${c['not-run']} not run</span></div>${a.checks.length?`<div class="table-wrap"><table><thead><tr><th>Check</th><th>Status</th><th>Observed evidence</th></tr></thead><tbody>${a.checks.map(check=>`<tr><td><code>${escape(check.id)}</code><span class="check-title">${escape(check.label||'')}</span></td><td class="${escape(check.status)}">${escape(check.status)}</td><td class="check-evidence">${escape(check.evidence||check.notes||'No evidence supplied.')}${check.evidence&&check.notes?'<br>'+escape(check.notes):''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="notice">No check outcomes recorded. Add evaluator observations in report.json; absence of errors or a screenshot alone does not prove a pass.</div>'}<div class="detail-section"><h3>Run notes</h3><pre>${escape(row.notes||'No notes supplied.')}</pre></div><p class="viewer-note">Agent-authored logs remain in evidence/ on disk and are separate from evaluator-owned reports.</p>`;
   }
   function detailSection(title,value,wide=false){return `<section class="detail-section${wide?' wide':''}"><h3>${escape(title)}</h3><pre>${escape(typeof value==='string'?value:JSON.stringify(value??{},null,2))}</pre></section>`;}
+  function profileLink(label,url) {
+    const text=escape(label);
+    try {
+      const link=new URL(url);
+      if(['http:','https:'].includes(link.protocol)&&!link.username&&!link.password&&!/[\s\\]/.test(url))return `<a href="${escape(link.href)}" target="_blank" rel="noopener noreferrer">${text} <span aria-hidden="true">↗</span></a>`;
+    } catch { /* Optional homepages may be absent. */ }
+    return text;
+  }
+  function modelSetupContent(row) {
+    const profile=modelProfile(row);
+    const fields=[['Provider','provider'],['Harness','harness'],['Setting','setting']].filter(([,key])=>profileText(profile[key]));
+    if(!fields.length)return '';
+    return `<dl class="setup-facts">${fields.map(([label,key])=>`<div><dt>${label}</dt><dd>${profileLink(profileText(profile[key]),profile[key+'_url'])}</dd></div>`).join('')}</dl><p class="setup-note">Shared setup for this model’s current collection, as I ran it. These labels aren’t equivalent budgets across tools or a complete record of every run.</p>`;
+  }
   function detailsContent(row) {
-    const a=row.artifact;
-    if(isPublic())return detailSection('Build identity',{model:modelName(row),prompt:row.task_title,file:a.filename,bytes:a.bytes,sha256:a.sha256})+'<p class="viewer-note">The public showcase contains HTML builds and thumbnails. Evaluation records and development evidence are excluded from this website export.</p>';
-    return `<div class="detail-grid">${detailSection('Artifact identity',{file:a.filename,kind:a.kind,bytes:a.bytes,authored_files:a.file_count,sha256:a.sha256,digest_version:a.digest_version||'SHA-256 of file bytes'})}${detailSection('Score & rubric',{score:row.score,reported_score:row.reported_score,rubric:row.rubric,report_binding:row.report_binding,dimensions:row.score_details})}${a.manifest?detailSection('Declared project manifest — display only, never executed',a.manifest,true):''}${detailSection('Execution metrics',row.metrics)}${detailSection('Environment & parameters',{environment:row.environment,parameters:row.parameters})}${detailSection('Metadata',row.metadata,true)}</div><p class="viewer-note">Project downloads omit known dependency, runtime, database and secret-file patterns. This is not a complete secret scanner; inspect all source before sharing it.</p>`;
+    const a=row.artifact;const setup=modelSetupContent(row);
+    const profile=setup?`<section class="detail-section model-setup-details"><h3>Model setup</h3>${setup}</section>`:'';
+    if(isPublic())return profile+detailSection('Build identity',{model:modelName(row),prompt:row.task_title,file:a.filename,bytes:a.bytes,sha256:a.sha256})+'<p class="viewer-note">The public showcase contains HTML builds, thumbnails, and any reported model setup. Evaluation records and development evidence are excluded from this website export.</p>';
+    return `${profile}<div class="detail-grid">${detailSection('Artifact identity',{file:a.filename,kind:a.kind,bytes:a.bytes,authored_files:a.file_count,sha256:a.sha256,digest_version:a.digest_version||'SHA-256 of file bytes'})}${detailSection('Score & rubric',{score:row.score,reported_score:row.reported_score,rubric:row.rubric,report_binding:row.report_binding,dimensions:row.score_details})}${a.manifest?detailSection('Declared project manifest — display only, never executed',a.manifest,true):''}${detailSection('Execution metrics',row.metrics)}${detailSection('Environment & parameters',{environment:row.environment,parameters:row.parameters})}${detailSection('Metadata',row.metadata,true)}</div><p class="viewer-note">Project downloads omit known dependency, runtime, database and secret-file patterns. This is not a complete secret scanner; inspect all source before sharing it.</p>`;
   }
   function renderViewer() {
     const row=state.selected;if(!row)return;
@@ -328,11 +349,15 @@
   function liveGuidance(row) {
     const hint=state.data.catalog.find(task=>task.id===row.task_id)?.look_for;
     if(typeof hint!=='string'||!hint.trim())return '';
-    return `<details class="live-guide"><summary class="button">Look for</summary><div class="live-guide-panel"><div class="live-guide-heading"><strong>${escape(row.task_title)}</strong><button id="close-live-guide" class="icon-button" aria-label="Close Look for">×</button></div><p>${escape(hint)}</p></div></details>`;
+    return `<details class="live-info live-guide"><summary class="button">Look for</summary><div class="live-info-panel live-guide-panel"><div class="live-info-heading"><strong>${escape(row.task_title)}</strong><button id="close-live-guide" class="icon-button" aria-label="Close Look for">×</button></div><p>${escape(hint)}</p></div></details>`;
   }
-  function closeLiveGuide() {
-    const guide=$('.live-guide');if(!guide?.open)return false;
-    guide.open=false;guide.querySelector('summary').focus();return true;
+  function liveSetup(row) {
+    const setup=modelSetupContent(row);if(!setup)return '';
+    return `<details class="live-info live-setup"><summary class="button">Setup</summary><div class="live-info-panel live-setup-panel"><div class="live-info-heading"><strong>${escape(modelName(row))} · Setup</strong><button id="close-live-setup" class="icon-button" aria-label="Close setup">×</button></div>${setup}</div></details>`;
+  }
+  function closeLiveInfo() {
+    const info=$('.live-info[open]');if(!info)return false;
+    info.open=false;info.querySelector('summary').focus();return true;
   }
   function switchLiveModel(id) {
     if(!state.selected||!$('#viewer').classList.contains('is-live'))return;
@@ -347,7 +372,7 @@
     $('#viewer').classList.add('is-live');
     $('#viewer').style.setProperty('--model-color',modelColor(row));
     $('#viewer-title').textContent=`${row.task_title} · ${modelName(row)}`;
-    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button>${liveModelControl(row)}<span class="live-title">${escape(row.task_title)}</span><div class="live-tools">${liveGuidance(row)}${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label></div><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
+    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button>${liveModelControl(row)}<span class="live-title">${escape(row.task_title)}</span><div class="live-tools">${liveSetup(row)}${liveGuidance(row)}${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label></div><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
     $('#viewport-size').value=viewport;
     const frame=document.createElement('iframe');frame.id='artifact-frame';frame.title=`Live ${row.task_title}`;
     frame.setAttribute('sandbox',isPublic()?'allow-scripts allow-downloads allow-modals allow-pointer-lock':'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-pointer-lock allow-popups');
@@ -355,7 +380,7 @@
     $('#preview-area').replaceChildren(frame);resizeFrame();$('#'+focusTarget).focus();
   }
   document.addEventListener('click',event=>{
-    const guide=$('.live-guide');if(guide?.open&&!guide.contains(event.target))guide.open=false;
+    document.querySelectorAll('.live-info[open]').forEach(info=>{if(!info.contains(event.target))info.open=false;});
     const target=event.target.closest('button,[data-view]');if(!target)return;
     if(target.dataset.view){event.preventDefault();setView(target.dataset.view);}
     if(target.dataset.openRun)openRun(target.dataset.openRun);
@@ -365,7 +390,7 @@
     if(target.id==='launch-preview')launchPreview();
     if(target.id==='back-to-build'){renderViewer();clearPlayLink();$('#launch-preview')?.focus();}
     if(target.id==='close-live')closeViewer();
-    if(target.id==='close-live-guide')closeLiveGuide();
+    if(target.id==='close-live-guide'||target.id==='close-live-setup')closeLiveInfo();
   });
   filterIDs.forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',()=>{render();saveSettings();}));
   document.addEventListener('change',event=>{
@@ -376,18 +401,18 @@
   $('#clear-filters').addEventListener('click',()=>{for(const id of filterIDs)$('#'+id).value=id==='search'?'':id==='sort'?'task':'all';render();saveSettings();});
   $('#close-viewer').addEventListener('click',closeViewer);
   $('#viewer').addEventListener('close',finishViewerClose);
-  $('#viewer').addEventListener('cancel',event=>{event.preventDefault();if(!closeLiveGuide())closeViewer();});
+  $('#viewer').addEventListener('cancel',event=>{event.preventDefault();if(!closeLiveInfo())closeViewer();});
   $('#close-prompt').addEventListener('click',()=>$('#prompt-dialog').close());
   $('#prompt-dialog').addEventListener('close',()=>{state.promptToken++;});
   $('#copy-prompt').addEventListener('click',copyPrompt);
   document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'&&$('#viewer').open&&closeLiveGuide()){event.preventDefault();return;}
+    if(event.key==='Escape'&&$('#viewer').open&&closeLiveInfo()){event.preventDefault();return;}
     if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}
   });
   window.addEventListener('hashchange',()=>followRoute());
   window.addEventListener('blur',()=>{
     if(document.activeElement===$('#artifact-frame')){
-      const guide=$('.live-guide');if(guide)guide.open=false;
+      document.querySelectorAll('.live-info[open]').forEach(info=>info.open=false);
     }
   });
   loadData();

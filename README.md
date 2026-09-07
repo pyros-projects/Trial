@@ -125,6 +125,16 @@ Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set
 
 `siteUrl` supplies the public origin for link-preview images and canonical share URLs. Set it to your own domain when hosting a copy. This file is public presentation configuration. Choose **Refresh** to reload local settings; redeploy to update the public site.
 
+Record the shared harness and setting in `results/<model>/model.toml`. Cards show the setup beneath the model name; **Setup** in the maximized viewer adds provider and harness links. The current collection uses:
+
+| Model | Harness | Setting |
+|---|---|---|
+| GPT-6 Astra | [Codex CLI](https://developers.openai.com/codex/cli) | Max |
+| Grok 4.6 | [Cursor Desktop](https://cursor.com/) | High Fast |
+| Gemini 3.8 Flash | [Antigravity CLI](https://antigravity.google/) | High |
+
+These are the settings I used, with their original labels. They describe this collection; they aren't equivalent budgets or a complete record of each run. See the [model setup format](docs/results.md#shared-model-setup) to edit them. Selected setup fields are public; raw run metadata and evidence stay out of the website export.
+
 ### Build a public showcase
 
 ```powershell

@@ -1,0 +1,5 @@
+const cp=require('child_process'),fs=require('fs'),assert=require('assert/strict');let log=[];
+function cmd(...a){const out=cp.execFileSync('agent-browser',['--session','alchemia',...a],{encoding:'utf8'});log.push(a.join(' ')+'\n'+out);return out;}
+function read(s){return JSON.parse(cmd('eval',s));}
+let result;
+try{if(!read('window.alchemy.inspect().paused'))cmd('click','#pause-btn');cmd('find','role','tab','click','--name','World','--exact');cmd('scrollintoview','#autosave');cmd('uncheck','#autosave');cmd('check','#autosave');const before=read('window.alchemy.fingerprint()');cmd('screenshot','evidence/screenshots/13-autosave-retest-before.png');cmd('record','start','evidence/autosave-reload-retest.webm');cmd('reload');cmd('wait','300');cmd('screenshot','evidence/screenshots/14-autosave-retest-reloaded.png');cmd('record','stop');const after=read('window.alchemy.fingerprint()');assert.equal(after,before);result='PASS autosave reload preserves complete paused world';}catch(e){result='FAIL '+e.message;}log.push(result);fs.writeFileSync('evidence/logs/autosave-retest.txt',log.join('\n'));console.log(result);

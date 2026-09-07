@@ -2,15 +2,15 @@
 
 Trial reads one artifact per run from a results directory. The local gallery lets you compare builds for the same prompt, inspect the source, and review optional evaluation records. It does not generate implementations, start submitted projects, or automatically judge their correctness.
 
-The public static export contains a smaller set: the gallery, public prompt text, standalone HTML builds, thumbnails, and small share pages with link-preview metadata. Metadata, evaluator reports, notes, evidence, project source, and archives are excluded. These exclusions apply to the static website: files committed to a public Git repository are still public. See [Hosting](DEPLOYMENT.md) for the export and deployment commands.
+The public static export contains a smaller set: the gallery, public prompt text, standalone HTML builds, thumbnails, selected shared model setup fields, and small share pages with link-preview metadata. Raw run metadata, evaluator reports, notes, evidence, project source, and archives are excluded. These exclusions apply to the static website: files committed to a public Git repository are still public. See [Hosting](DEPLOYMENT.md) for the export and deployment commands.
 
 ## Included results
 
-The 2026-09-07 checkout contains 24 submitted HTML builds for eight tasks across three model folders:
+The 2026-09-07 checkout contains 25 submitted HTML builds for nine tasks across three model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
-| `gpt-6_astra` | 8 | 01-08 |
+| `gpt-6_astra` | 9 | 01-09 |
 | `xai_grok4.6` | 8 | 01-08 |
 | `google_gemini3.8_flash` | 8 | 01-08 |
 
@@ -35,6 +35,7 @@ Example directory structure:
 ```text
 results/
   model_name/
+    model.toml
     fluid-001/
       index.html
       metadata.json
@@ -74,7 +75,28 @@ Optional flags include `--score 85`, `--report ../work/report.json`, `--screensh
 
 Existing runs are not overwritten unless `--force` is explicit. Replacing a source clears its old scores, reports, screenshots, preview URL, and evidence before adding supplied replacements. Use a new run ID for another independent attempt.
 
-## Metadata
+## Shared model setup
+
+Place an optional `model.toml` directly inside each model folder. It records the shared setup used for that model's current collection, separately from individual run records:
+
+```toml
+# results/gpt-6_astra/model.toml
+provider = "OpenAI"
+provider_url = "https://openai.com/"
+harness = "Codex CLI"
+harness_url = "https://developers.openai.com/codex/cli"
+setting = "Max"
+```
+
+The supported fields are `provider`, `provider_url`, `harness`, `harness_url`, and `setting`. All are optional strings. Keep setting labels as reported by the tool, such as `High Fast`; the gallery does not translate them into comparable budgets. Provider and harness URLs must be absolute HTTP(S) links without credentials. Model names, colors, and sorting remain in [`appsettings.json`](../gallery/static/appsettings.json).
+
+Cards show the harness and setting. The viewer's **Setup** panel and **Build details** show the full selected profile, with external links. Opening Setup leaves the live app running; switching models updates the profile. Local **Refresh** reloads these files. Rebuild and redeploy to update the public snapshot.
+
+The local and public inventories expose these selected fields once per model in `model_profiles`. Unknown fields are ignored, and raw TOML files are not copied to the website. Missing, malformed, oversized, or linked files leave builds available without a profile. This is intentionally public configuration: do not put secrets or private notes here.
+
+These profiles are collection-level context, not exact historical provenance for every run. Keep per-run versions, tool access, budgets, and differences in the run's own records. If future runs use different setups, do not relabel older builds by treating this shared profile as their execution record.
+
+## Run metadata
 
 Example metadata for a manually started Real Apps submission:
 
