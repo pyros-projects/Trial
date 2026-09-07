@@ -154,6 +154,8 @@ Use a matched task subset, comparable tools and budgets, and the same rubric. Pu
 
 ## Run contract
 
+For Real Apps, retain the generated `project/gallery/index.html` inside the submitted project. The public exporter publishes only this self-contained demo, with no backend or persistent store. Name the run folder with its full task ID, for example `21-import-studio-001`. A project without that demo stays available for local source inspection but is omitted from the public gallery. The local viewer uses the demo when no explicit `preview_url` is set; a declared loopback URL still opens the full app. See [Gallery demos](GALLERY_DEMOS.md) for the lifetime and validation rules.
+
 Give the tested agent only the selected `prompt.md` and its public fixtures in a separate workspace. `acceptance.md` duplicates public checks for convenience; it is not a second task. Keep `evaluator/` outside that workspace.
 
 Every prompt permits planning, file creation, dependencies, execution, inspection, testing, and improvements from the start, within the assigned tools and budget. The preferred browser workflow is the installed `agent-browser` skill; a documented real-browser fallback is allowed if it is unavailable. Record missing checks as blocked rather than passed.

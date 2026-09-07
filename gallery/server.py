@@ -29,8 +29,10 @@ from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 try:
     from .projects import project_summary, project_zip, validate_preview_url
+    from .demos import DEMO_PATH, DEMO_CSP, demo_file
 except ImportError:
     from projects import project_summary, project_zip, validate_preview_url
+    from demos import DEMO_PATH, DEMO_CSP, demo_file
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 STATIC_ROOT = PACKAGE_ROOT / 'gallery/static'
@@ -222,6 +224,8 @@ class GalleryState:
                 result['url']=validate_preview_url(metadata['preview_url'])
             except ValueError as error:
                 warnings.append(str(error))
+        elif result['kind'] == 'project' and (demo := demo_file(run)):
+            result.update(url=self.artifact_url(demo), demo=True)
         checks=report.get('checks',[])
         if isinstance(checks,list):
             result['checks']=[c for c in checks[:1000] if isinstance(c,dict) and isinstance(c.get('id'),str) and c.get('status') in {'pass','fail','blocked','not-run'}]
@@ -348,11 +352,16 @@ def make_artifact_handler() -> type[CommonHandler]:
             parsed=urlparse(self.path)
             if parsed.path=='/health':self.send_json({'status':'ok'});return
             parts=unquote(parsed.path).strip('/').split('/')
-            if len(parts)!=3 or parts[-1].lower() not in PUBLIC_FILES:
+            is_demo=len(parts)==5 and parts[2:]==list(DEMO_PATH.parts)
+            if not is_demo and (len(parts)!=3 or parts[-1].lower() not in PUBLIC_FILES):
                 self.send_error(404);return
             path=safe_relative_file(RESULTS_ROOT,parsed.path)
             if path is None:self.send_error(404);return
             headers={'Cross-Origin-Resource-Policy':'cross-origin','Referrer-Policy':'no-referrer'}
+            if is_demo:
+                if demo_file(RESULTS_ROOT / parts[0] / parts[1]) != path:
+                    self.send_error(404);return
+                headers['Content-Security-Policy']=DEMO_CSP
             if parse_qs(parsed.query).get('download')==['1']:
                 headers['Content-Disposition']=f'attachment; filename="{path.name}"'
             self.send_file(path,headers=headers)

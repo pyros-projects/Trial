@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Disposable Real Apps demos: 2026-09-08
+
+All ten Real Apps prompts now require a generated `project/gallery/index.html` alongside the complete local application. Every prompt embeds the same static-demo contract and adds task-specific in-memory workflows. Canonical application/runtime blocks, all original acceptance documents, and public fixtures retain their existing hashes. Demo-only actor, device, transport, and recovery simulations are explicitly separated from genuine backend acceptance checks.
+
+The full WSL suite passed **109 tests with no skips**, including both browser modes. New coverage verifies fixed-path discovery for all ten Real Apps tasks, omission without a demo, exact source bytes and hashes, source/config/evidence exclusions, link/reparse rejection, atomic build failure, Netlify Forms opt-in rejection across all submitted HTML, local demo fallback, and explicit full-app preview precedence. Browser checks verify opaque storage and parent isolation, blocked request/resource/form attempts, real JSON import and Blob download, frame reset during pending work, reload, independent direct visits, and a usable mobile toolbar. A source-encoding compatibility check was added after review; the final focused exporter checks also passed.
+
+Netlify draft **`6a9f39afac84dc39abe6b08f`** hosted a clearly labeled integration fixture from a temporary package, separate from the benchmark collection. Live Chromium and HTTPS checks passed for direct and framed response policies, source download hashes and attachment headers, blocked connections/resources, storage isolation, import/export, reset with a pending timer, independent instances, reload, and the mobile toolbar. The showcase's Netlify settings report `ignore_html_forms: true` and zero registered forms.
+
+No submitted Real Apps implementations exist in this verified collection yet. These checks establish the prompt/delivery contract and gallery hosting boundary, not that ten future applications satisfy their domain requirements or that arbitrary submitted code is harmless. A concurrently appearing Astra task-10 folder was excluded from this publication snapshot.
+
+Production deployment **`6a9f3aedd38bd24bf1552ef7`** publishes **185 files totaling 5,843,916 bytes (5.57 MiB)** and retains the 31 reviewed builds. The live viewer JavaScript matches the verified source hash, and all ten published Real Apps prompts include their new gallery contract. The final focused checks passed all **12 demo/export contract tests** and **31 existing static-export/deployment tests** after the encoding compatibility fix.
+
 ## Grok task 11 and skipped prompts: 2026-09-07
 
 Grok's **Factory Automation and Logistics Game** brings the collection to **31 HTML builds across ten prompts**. Discovery correctly assigns `11-factory-automation` by its complete task ID despite Grok's missing tasks 09 and 10. Browser checks confirmed Grok's missing-build card remains in task 09, task 10 with no submissions creates no showcase group, and task 11 contains one Grok build plus the other four models' placeholders in the configured order. No gallery code changes were needed.

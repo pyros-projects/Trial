@@ -1,5 +1,7 @@
 # Prompt library
 
+Real Apps prompts 21–30 also require a generated `project/gallery/index.html`: a disposable static demo for the public showcase, alongside the complete local application. Each prompt includes the full [gallery contract](../docs/GALLERY_DEMOS.md) and task-specific guidance. Original backend acceptance checks remain separate from simulated demo checks.
+
 30 tasks, 30 complete agentic prompts. Open one task's `prompt.md` and give its entire contents to your coding agent. Every prompt contains the product requirements, tool-enabled development workflow, browser validation, domain checks, and delivery contract. No additional protocol prompt is needed.
 
 Tasks 01–20 deliver `index.html`. Tasks 21–30 deliver `project/`. Each run may plan, execute, test and improve from the start. Keep screenshots and agent-authored validation notes in `evidence/` alongside the artifact. Supply `fixtures/` for a Real Apps task read-only when available; expected behavior is stated in the prompt itself.

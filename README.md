@@ -68,7 +68,9 @@ Use Trial when you want to inspect what a coding model can build, choose challen
 | Track | Tasks | What the agent delivers |
 |---|---|---|
 | Standalone HTML | 01-20 | One self-contained `index.html`: simulations, games, audio tools, and editors |
-| Real Apps | 21-30 | A runnable `project/`: source, tests, a README, and a runtime manifest |
+| Real Apps | 21-30 | A runnable `project/` plus a generated, disposable `project/gallery/index.html` |
+
+Real Apps have a full local version for backend checks and a static gallery demo for trying the workflow. Demo changes live in memory and disappear on reset or reload. The public deployment includes no application database or write service. Transport, actor, and device simulations are labeled; they do not prove backend durability or security. See the [gallery contract](docs/GALLERY_DEMOS.md).
 
 ## Quick Start
 

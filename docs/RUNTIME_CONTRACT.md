@@ -1,5 +1,7 @@
 # Real Apps runtime contract
 
+This contract governs the **full local application**. Prompts 21–30 also require a generated `project/gallery/index.html` with session-only state for static hosting. Its storage and transport exceptions are defined in [Public gallery delivery](GALLERY_DEMOS.md#public-gallery-delivery) and embedded in every prompt. The demo does not replace the full application or its original acceptance checks.
+
 ## Runtime, delivery, and engineering contract
 
 This is the Real Apps track. Build a small, genuinely usable multi-file application, not a single-file visual demo. A frontend, a real local backend, and durable embedded storage such as SQLite are allowed and expected. Use a stack runnable with Python 3.11+ and/or Node.js 22+; declare the actual supported versions and dependencies. Frameworks are permitted, but no paid services, API keys, cloud accounts, CDNs, externally hosted fonts, or runtime internet dependencies may be required. Dependency installation is an explicit setup step, separate from ordinary startup. Pin direct dependency versions; do not invent a lockfile or claim a build was verified when it was not.

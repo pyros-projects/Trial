@@ -24,6 +24,8 @@ Verify that opening the delivered file directly works as required, and that it d
 
 ### Real application delivery and runtime checks
 
+These checks govern the full local application. Also deliver the generated `project/gallery/index.html` described in [Public gallery delivery](GALLERY_DEMOS.md#public-gallery-delivery), with a reproducible build command and separately recorded demo validation. Every Real Apps prompt embeds that complete contract plus task-specific demo guidance. Simulated gallery behavior cannot establish a pass for an original backend acceptance check.
+
 Deliver the complete runnable project in `project/`, with `benchmark.json` and README at its root. Keep `evidence/` beside `project/`. Install the declared dependencies when permitted, generate genuine lockfiles with the actual package manager where applicable, build, start the application, and run meaningful automated tests. Do not substitute test doubles or precomputed UI outcomes for business logic.
 
 Use a fresh run-specific `DATA_DIR` outside the source tree. Exercise browser flows against the real local backend. Supplement browser checks with actual HTTP requests, backend logs, and data inspection for concurrency, idempotency, permissions, and persistence. Use genuinely overlapping requests where specified. For independently authenticated users or devices, use separate top-level browser contexts with isolated storage. Reload after committed changes, then stop and restart the backend against the same `DATA_DIR` and verify durable state.

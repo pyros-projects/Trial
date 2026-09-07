@@ -77,6 +77,7 @@ class BrowserTests(BrowserEnvironment):
 
     def public_export(self):
         from http.server import SimpleHTTPRequestHandler
+        from fnmatch import fnmatch
         from tools import build_site
         root = Path(self.temp.name)
         shutil.copytree(server.STATIC_ROOT, root / 'gallery/static')
@@ -84,15 +85,35 @@ class BrowserTests(BrowserEnvironment):
         output = root / 'dist/site'
         build_site.build_site(root, screenshots='none')
         data = json.loads((output / 'api/data.json').read_text(encoding='utf-8'))
+        self.public_requests = requests = []
+        rules = []
+        for line in (output / '_headers').read_text(encoding='utf-8').splitlines():
+            if line.startswith('/'):
+                rules.append((line, []))
+            elif line.strip():
+                name, value = line.strip().split(':', 1)
+                rules[-1][1].append((name, value.strip()))
 
         class PublicHandler(SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, directory=str(output), **kwargs)
 
             def do_GET(self):
+                requests.append(('GET', urlsplit(self.path).path))
                 if urlsplit(self.path).path == '/api/data':
                     self.path = '/api/data.json'
                 super().do_GET()
+
+            def do_POST(self):
+                requests.append(('POST', urlsplit(self.path).path))
+                self.send_error(405)
+
+            def end_headers(self):
+                for pattern, headers in rules:
+                    if fnmatch(urlsplit(self.path).path, pattern):
+                        for name, value in headers:
+                            self.send_header(name, value)
+                super().end_headers()
 
             def log_message(self, *args):
                 pass
@@ -101,6 +122,91 @@ class BrowserTests(BrowserEnvironment):
         threading.Thread(target=http.serve_forever, daemon=True).start()
         self.addCleanup(http.server_close);self.addCleanup(http.shutdown)
         return f'http://127.0.0.1:{http.server_address[1]}', data
+
+    def demo_fixture(self):
+        run = self.results / 'Demo isolation fixture' / '21-import-studio'
+        demo = run / 'project/gallery/index.html'
+        demo.parent.mkdir(parents=True)
+        (run / 'project/benchmark.json').write_text(json.dumps({'task_id': '21-import-studio'}))
+        (run.parent / 'model.toml').write_text('harness = "Test harness"\nsetting = "Test setting"\n')
+        demo.write_text('''<!doctype html><html><meta charset="utf-8"><title>Demo isolation fixture</title>
+<h1>Integration fixture, not a model result</h1><p>Demo changes disappear on reset or reload.</p>
+<output id="count">0</output><button id="increment">Add record</button>
+<button id="pending">Add later</button><input type="file" id="upload" aria-label="Import JSON">
+<button id="export">Export JSON</button><button id="app-reset">Reset demo</button>
+<script>
+let records=[];const render=()=>document.querySelector('#count').textContent=records.length;
+document.querySelector('#increment').onclick=()=>{records.push({value:records.length});render()};
+document.querySelector('#pending').onclick=()=>setTimeout(()=>{records.push({late:true});render()},400);
+document.querySelector('#upload').onchange=async e=>{const next=JSON.parse(await e.target.files[0].text());if(Array.isArray(next)){records=next;render()}};
+document.querySelector('#export').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(records)],{type:'application/json'}));a.download='demo.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),0)};
+document.querySelector('#app-reset').onclick=()=>location.reload();
+window.violations=[];document.addEventListener('securitypolicyviolation',e=>violations.push(e.effectiveDirective));
+window.probe=async origin=>{
+ const outcomes={};for(const key of ['localStorage','sessionStorage']){try{window[key].setItem('probe','x');outcomes[key]='allowed'}catch{outcomes[key]='blocked'}}
+ try{await new Promise((resolve,reject)=>{const r=indexedDB.open('probe');r.onsuccess=resolve;r.onerror=reject});outcomes.indexedDB='allowed'}catch{outcomes.indexedDB='blocked'}
+ try{await caches.open('probe');outcomes.cache='allowed'}catch{outcomes.cache='blocked'}
+ try{await navigator.serviceWorker.register(origin+'/probe/sw.js');outcomes.serviceWorker='allowed'}catch{outcomes.serviceWorker='blocked'}
+ try{parent.document.body.dataset.probe='x';outcomes.parent='allowed'}catch{outcomes.parent='blocked'}
+ await fetch(origin+'/probe/fetch',{method:'POST',body:'x'}).catch(()=>{});
+ navigator.sendBeacon(origin+'/probe/beacon','x');
+ const image=new Image();image.src=origin+'/probe/image';document.body.append(image);
+ const script=document.createElement('script');script.src=origin+'/probe/script';document.body.append(script);
+ const form=document.createElement('form');form.action=origin+'/probe/form';form.method='post';document.body.append(form);form.submit();
+ return outcomes;
+};
+</script></html>''', encoding='utf-8')
+        return run
+
+    def test_gallery_demo_isolation_reset_import_export_and_direct_response_policy(self):
+        from playwright.sync_api import expect
+        self.demo_fixture()
+        origin, data = self.public_export()
+        row = data['results'][0]
+        self.assertTrue(row['artifact']['demo'])
+        self.page.goto(origin + row['share_url'])
+        frame = self.page.frame_locator('#artifact-frame')
+        expect(frame.locator('#count')).to_have_text('0')
+        self.page.locator('#artifact-frame').element_handle().content_frame().wait_for_load_state()
+        expect(self.page.locator('#artifact-frame')).to_have_attribute('sandbox', 'allow-scripts allow-downloads')
+        frame.locator('#increment').click()
+        expect(frame.locator('#count')).to_have_text('1')
+        outcomes = frame.locator('body').evaluate('(body, origin)=>window.probe(origin)', origin)
+        self.assertEqual(set(outcomes.values()), {'blocked'})
+        self.page.wait_for_function("document.querySelector('#artifact-frame') !== null")
+        self.assertFalse([request for request in self.public_requests if request[1].startswith('/probe/')])
+        frame.locator('#upload').set_input_files({'name': 'records.json', 'mimeType': 'application/json', 'buffer': b'[{"a":1},{"a":2}]'})
+        expect(frame.locator('#count')).to_have_text('2')
+        with self.page.expect_download() as download:
+            frame.locator('#export').click()
+        self.assertEqual(json.loads(Path(download.value.path()).read_text()), [{'a': 1}, {'a': 2}])
+        frame.locator('#pending').click()
+        self.page.locator('#reset-demo').click()
+        expect(frame.locator('#count')).to_have_text('0')
+        self.page.wait_for_timeout(550)
+        expect(frame.locator('#count')).to_have_text('0')
+        frame.locator('#increment').click()
+        self.page.reload()
+        expect(frame.locator('#count')).to_have_text('0')
+        for width, height in [(1280, 800), (390, 844)]:
+            self.page.set_viewport_size({'width': width, 'height': height})
+            reset = self.page.locator('#reset-demo').bounding_box()
+            self.assertGreaterEqual(reset['x'], 0)
+            self.assertLessEqual(reset['x'] + reset['width'], width)
+            self.assertTrue(self.page.locator('.live-bar').evaluate('(bar)=>bar.scrollWidth<=bar.clientWidth'))
+            self.assertLessEqual(self.page.locator('#artifact-frame').bounding_box()['y'], 90)
+        direct = self.context.new_page()
+        self.addCleanup(direct.close)
+        response = direct.goto(origin + row['artifact']['url'])
+        self.assertIn("connect-src 'none'", response.headers['content-security-policy'])
+        expect(direct.locator('#count')).to_have_text('0')
+        direct.locator('#increment').click()
+        expect(frame.locator('#count')).to_have_text('0')
+        storage = direct.evaluate("()=>{try{localStorage.setItem('direct','x');return 'allowed'}catch{return 'blocked'}}")
+        self.assertEqual(storage, 'blocked')
+        direct.reload()
+        expect(direct.locator('#count')).to_have_text('0')
+        self.assertEqual(self.errors, [])
 
     def assert_comparison_range(self, group, first, last, total):
         from playwright.sync_api import expect

@@ -20,13 +20,14 @@ from urllib.parse import quote, unquote, urlsplit
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
 from gallery import server
+from gallery.demos import DEMO_PATH, DEMO_CSP, demo_file, validate_static_html
 
 STATIC_FILES = ("index.html", "app.js", "appsettings.json", "styles.css", "favicon.svg", "logo-mark.svg", "deep-swe-snapshot.png")
 CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "look_for", "track", "artifact_type", "rubric")
 # Existing settings without siteUrl keep using the established public origin.
 DEFAULT_SITE_URL = "https://trial-by-pyro.netlify.app"
 OWNER_MARKER = "public-static-export-v1\n"
-REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n/sources/* /artifacts/:splat 200\n"
+REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n/sources/* /artifacts/:splat 200\n/demo-sources/* /demos/:splat 200\n"
 ARTIFACT_SANDBOX = "sandbox allow-scripts allow-downloads allow-modals allow-pointer-lock"
 HEADERS = f"""/*
   X-Content-Type-Options: nosniff
@@ -40,6 +41,14 @@ HEADERS = f"""/*
   Content-Type: application/octet-stream
   Content-Disposition: attachment
   Content-Security-Policy: {ARTIFACT_SANDBOX}
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/demos/*
+  Content-Security-Policy: {DEMO_CSP}
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/demo-sources/*
+  Content-Type: application/octet-stream
+  Content-Disposition: attachment
+  Content-Security-Policy: {DEMO_CSP}
   Cache-Control: public, max-age=0, must-revalidate, no-transform
 /api/export.csv
   Content-Disposition: attachment; filename="results.csv"
@@ -199,11 +208,15 @@ class PublicGalleryState(server.GalleryState):
                 if not directory(run) or run.name.startswith("."):
                     continue
                 files = {path.name.lower(): path for path in run.iterdir() if path.is_file() and not linked(path)}
-                html = server.find_named(files, server.HTML_NAMES)
-                if html is None:
-                    continue
                 task_id = self.infer_task_id({}, run.name)
                 task = self.catalog_by_id.get(task_id, {})
+                is_demo = task.get('track') == 'real-apps'
+                html = demo_file(run) if is_demo else server.find_named(files, server.HTML_NAMES)
+                if html is None:
+                    continue
+                validate_static_html(html.read_bytes())
+                route = 'demos' if is_demo else 'artifacts'
+                source_route = 'demo-sources' if is_demo else 'sources'
                 encoded = "/".join(quote(part, safe="") for part in (model.name, run.name, html.name))
                 # Explicit fields only. Metadata and evaluator output never enter these rows.
                 rows.append({
@@ -217,7 +230,8 @@ class PublicGalleryState(server.GalleryState):
                     "checks": {"pass": 0, "fail": 0, "blocked": 0, "not-run": 0},
                     "artifact": {
                         "exists": True, "kind": "html", "filename": html.name,
-                        "url": f"/artifacts/{encoded}", "source_url": f"/sources/{encoded}",
+                        "url": f"/{route}/{encoded}", "source_url": f"/{source_route}/{encoded}",
+                        **({'demo': True} if is_demo else {}),
                         "screenshot_url": None, "bytes": html.stat().st_size, "file_count": 1,
                         "sha256": server.file_sha256(html), "checks": [],
                     },
@@ -426,12 +440,15 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
         for row in rows:
             run = state.results_root / row["model_key"] / row["run_key"]
             relative = Path(row["model_key"]) / row["run_key"] / row["artifact"]["filename"]
-            source = regular_file(state.results_root, relative.as_posix())
+            source_relative = relative.parent / DEMO_PATH if row['artifact'].get('demo') else relative
+            source = regular_file(state.results_root, source_relative.as_posix())
             if source is None:
                 raise ValueError("A source HTML artifact changed or became a link during export.")
-            target = stage / "artifacts" / relative
+            route = 'demos' if row['artifact'].get('demo') else 'artifacts'
+            target = stage / route / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
+            validate_static_html(target.read_bytes())
             row["artifact"].update(bytes=target.stat().st_size, sha256=server.file_sha256(target))
             if screenshots == "none":
                 continue
@@ -454,7 +471,7 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
                     thumb.unlink(missing_ok=True)
                     report["warnings"].append(f"Skipped unreadable screenshot for {row['id']}: {type(error).__name__}.")
                     continue
-            row["artifact"]["screenshot_url"] = "/artifacts/" + "/".join(quote(part, safe="") for part in (*relative.parts[:-1], thumb.name))
+            row["artifact"]["screenshot_url"] = f"/{route}/" + "/".join(quote(part, safe="") for part in (*relative.parts[:-1], thumb.name))
             report["screenshots"] += 1
             report["screenshot_bytes"] += thumb.stat().st_size
         for row in rows:

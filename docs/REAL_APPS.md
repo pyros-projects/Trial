@@ -2,6 +2,8 @@
 
 ## Scope and delivery
 
+Every Real Apps submission includes a second target: `project/gallery/index.html`, a generated static demo with all mutable state in memory. It uses the full app's interface and domain rules with explicitly simulated storage, transport, actors, or devices where needed. See the [gallery delivery contract](GALLERY_DEMOS.md) for the exact requirements and validation boundary. Retain this generated file when preparing a submission; it is the only project artifact published on Netlify.
+
 Tasks 21–30 are multi-file applications with explicit domain invariants. Every task has one complete `prompt.md`, six public scenarios and portable fixtures. The model builds and tests throughout the same run, delivering `project/` and a sibling `evidence/` directory. The required `benchmark.json` describes concrete setup/start/test/reset commands; the gallery displays it but never executes it.
 
 ## Runtime and data
