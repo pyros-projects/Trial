@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="icon" href="data:," />
+  <title>CADENCE — Rhythm Bullet Hell</title>
+  <style>
+    :root {
+      --bg: #07060c;
+      --ink: #d7f7ef;
+      --dim: #8aa8a1;
+      --line: #1c2a28;
+      --lime: #c8ff3d;
+      --mag: #ff2d78;
+      --ice: #6ee7ff;
+      --amber: #ffb020;
+      --danger: #ff5a4a;
+      --panel: rgba(8, 12, 14, 0.92);
+      --panel2: rgba(14, 22, 24, 0.88);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+      font: 13px/1.35 ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+      overflow: hidden; user-select: none; -webkit-user-select: none;
+    }
+    body.contrast { --bg: #000; --ink: #fff; --dim: #cde; --line: #445; }
+    #app {
+      position: relative; width: 100%; height: 100%;
+      display: grid; place-items: center; background:
+        radial-gradient(1200px 800px at 50% 10%, #12201c 0%, var(--bg) 55%);
+    }
+    #stage {
+      position: relative; width: min(100vw, calc(100vh * 0.78));
+      height: min(100vh, calc(100vw / 0.78));
+      max-width: 100%; max-height: 100%;
+    }
+    canvas#game {
+      display: block; width: 100%; height: 100%;
+      background: #05040a; touch-action: none; cursor: crosshair;
+    }
+    .hud, .status, .screen, #touch-bar, #diag, #viz-wrap {
+      position: absolute; pointer-events: none;
+    }
+    .hud {
+      inset: 10px 10px auto 10px; display: flex; justify-content: space-between;
+      gap: 8px; z-index: 3; text-shadow: 0 1px 0 #000;
+    }
+    .hud b { color: var(--lime); }
+    .hud .right { text-align: right; }
+    .boss-meta { position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 3; text-align: center; pointer-events: none; letter-spacing: 0.18em;
+      font-size: 10px; color: var(--ice); }
+    #boss-bar {
+      position: absolute; top: 28px; left: 12%; right: 12%; height: 8px; z-index: 3;
+      border: 1px solid #3a2228; background: #14080c; pointer-events: none;
+    }
+    #boss-bar > i { display: block; height: 100%; width: 100%;
+      background: linear-gradient(90deg, #ff2d78, #ffb020); transform-origin: left; }
+    .status {
+      left: 10px; bottom: 42px; z-index: 4; font-size: 11px; color: var(--dim);
+      background: var(--panel); border: 1px solid var(--line); padding: 6px 8px;
+      min-width: 220px; line-height: 1.45;
+    }
+    .status span { color: var(--ink); }
+    .status .ok { color: var(--lime); }
+    .status .bad { color: var(--danger); }
+    .status .warn { color: var(--amber); }
+    #viz-wrap {
+      left: 10px; right: 10px; bottom: 8px; height: 28px; z-index: 4;
+      border: 1px solid var(--line); background: #05070a;
+    }
+    #viz { width: 100%; height: 100%; display: block; }
+    #touch-bar {
+      display: flex; right: 10px; bottom: 44px; z-index: 6; gap: 6px; pointer-events: auto;
+    }
+    @media (min-width: 721px) {
+      #touch-focus, #touch-dash, #touch-bomb { display: none; }
+    }
+    #touch-bar button {
+      min-width: 64px; min-height: 44px; background: var(--panel2); color: var(--ink);
+      border: 1px solid #355; font: inherit; letter-spacing: 0.08em;
+    }
+    .screen {
+      inset: 0; z-index: 8; display: none; pointer-events: auto;
+      background: rgba(4, 6, 8, 0.78); overflow: auto;
+      padding: 24px 16px 80px;
+    }
+    .screen.active { display: grid; place-items: center; }
+    .panel {
+      width: min(640px, 100%); background: var(--panel); border: 1px solid #2a3d38;
+      padding: 22px 20px 18px; box-shadow: 0 20px 80px #000a;
+    }
+    .panel.wide { width: min(860px, 100%); }
+    h1 {
+      margin: 0 0 6px; font-size: clamp(28px, 7vw, 54px); letter-spacing: 0.22em;
+      color: var(--lime); font-weight: 700;
+    }
+    .tag { color: var(--ice); letter-spacing: 0.28em; font-size: 11px; margin-bottom: 14px; }
+    h2 { margin: 0 0 10px; font-size: 16px; letter-spacing: 0.16em; color: var(--amber); }
+    p { color: var(--dim); margin: 0 0 12px; }
+    .row, .actions, .grid-2, .grid-3 { display: flex; flex-wrap: wrap; gap: 8px; }
+    .actions { margin-top: 14px; }
+    button, select, input[type="number"], input[type="text"], textarea {
+      font: inherit; color: var(--ink); background: #10181a; border: 1px solid #35554c;
+      padding: 8px 10px; pointer-events: auto;
+    }
+    button {
+      letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
+      background: #14241f; color: var(--lime); border-color: #3d6;
+    }
+    button:hover, button:focus-visible { background: #1d3a30; outline: 1px solid var(--lime); }
+    button.ghost { color: var(--ice); border-color: #367; background: #0c181c; }
+    button.danger { color: var(--mag); border-color: #a35; }
+    button[aria-pressed="true"] { background: #c8ff3d; color: #111; }
+    label { display: flex; flex-direction: column; gap: 4px; color: var(--dim); font-size: 11px; letter-spacing: 0.08em; min-width: 140px; flex: 1; }
+    label.inline { flex-direction: row; align-items: center; min-width: auto; }
+    input[type="range"] { width: 100%; }
+    .kbd { display: inline-block; border: 1px solid #466; padding: 0 5px; color: var(--ice); }
+    .steps { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; margin: 8px 0 12px; }
+    .steps button { padding: 10px 0; min-width: 0; font-size: 10px; color: var(--dim); }
+    .howto kbd, .howto .kbd { margin-right: 4px; }
+    #toast {
+      position: absolute; top: 48px; left: 50%; transform: translateX(-50%);
+      z-index: 12; pointer-events: none; background: #111c; border: 1px solid var(--amber);
+      color: var(--amber); padding: 6px 12px; letter-spacing: 0.14em; display: none;
+    }
+    #rating {
+      position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%);
+      z-index: 5; pointer-events: none; font-size: 22px; letter-spacing: 0.2em;
+      color: var(--amber); opacity: 0; text-shadow: 0 0 18px #ffb02088;
+    }
+    #diag {
+      right: 10px; top: 86px; z-index: 7; display: none; pointer-events: none;
+      background: var(--panel); border: 1px solid #345; padding: 8px; font-size: 10px;
+      color: #9fd; max-width: 280px; white-space: pre; line-height: 1.4;
+    }
+    body.show-diag #diag { display: block; }
+    .banner {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 20; background: #3a1020;
+      color: #fcc; padding: 6px 10px; display: none; pointer-events: none;
+    }
+    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    @media (max-width: 720px) {
+      .status { font-size: 10px; min-width: 0; max-width: 70%; bottom: 86px; }
+      #touch-bar { bottom: 86px; }
+      #touch-focus, #touch-dash, #touch-bomb { display: flex; }
+      .steps { grid-template-columns: repeat(8, 1fr); }
+      .panel { padding: 16px 12px; }
+      h1 { letter-spacing: 0.12em; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="noscript-audio" class="banner" role="status"></div>
+  <div id="app">
+    <div id="stage">
+      <canvas id="game" width="480" height="640" aria-label="Game playfield"></canvas>
+      <div class="boss-meta" id="boss-meta">OSCI · THE CONDUCTOR</div>
+      <div id="boss-bar" aria-hidden="true"><i id="boss-hp"></i></div>
+      <div class="hud">
+        <div>
+          HP <b id="hud-hp">5</b> · BOMB <b id="hud-bomb">3</b><br />
+          GRAZE <b id="hud-graze">0</b>
+        </div>
+        <div class="right">
+          SCORE <b id="hud-score">0</b><br />
+          COMBO <b id="hud-combo">0</b> · BEST <b id="hud-best">0</b>
+        </div>
+      </div>
+      <div id="rating" aria-live="polite"></div>
+      <div class="status" id="status" aria-live="off">
+        FPS <span id="st-fps">0</span>
+        · BPM <span id="st-bpm">132</span>
+        · <span id="st-beat">1:1</span>
+        · AUD <span id="st-audio">off</span>
+        · AHD <span id="st-ahead">0</span>s
+        · BLT <span id="st-bullets">0</span>
+        · PH <span id="st-phase">—</span>
+        · SC <span id="st-score">0</span>
+        · CB <span id="st-combo">0</span>
+        · OFF <span id="st-offset">0</span>ms
+        · <span id="st-pause">run</span>
+      </div>
+      <div id="viz-wrap"><canvas id="viz" width="640" height="56" aria-label="Audio output visualizer"></canvas></div>
+      <div id="touch-bar" aria-label="Touch abilities">
+        <button type="button" id="touch-focus" aria-pressed="false">Focus</button>
+        <button type="button" id="touch-dash">Dash</button>
+        <button type="button" id="touch-bomb">Bomb</button>
+        <button type="button" id="touch-pause">Pause</button>
+      </div>
+      <div id="lab-live" class="status" style="display:none;left:auto;right:10px;top:86px;bottom:auto;min-width:180px;pointer-events:auto;z-index:6">
+        <label>Live pattern
+          <select id="lab-live-pattern" aria-label="Live pattern type">
+            <option value="radial">Radial</option>
+            <option value="aimed">Aimed</option>
+            <option value="spiral">Spiral</option>
+            <option value="wall">Wall</option>
+            <option value="lane">Lanes</option>
+            <option value="accel">Accel</option>
+            <option value="curve">Curve</option>
+            <option value="orbit">Orbit</option>
+            <option value="mix">Mix</option>
+          </select>
+        </label>
+        <label>Live density <input id="lab-live-dens" type="range" min="1" max="16" value="6" aria-label="Live density" /></label>
+        <label>Live speed <input id="lab-live-spd" type="range" min="40" max="280" value="110" aria-label="Live speed" /></label>
+      </div>
+      <pre id="diag" aria-label="Diagnostics"></pre>
+      <div id="toast" role="status"></div>
+
+      <section class="screen active" id="screen-title" aria-label="Title">
+        <div class="panel">
+          <div class="tag">ARCADE SYNTH · ONE FILE</div>
+          <h1>CADENCE</h1>
+          <p>Dodge the conductor. Stay on the grid. The song is the spawn clock.</p>
+          <div class="actions">
+            <button type="button" id="btn-start" aria-label="Enable audio and play">Enable Audio &amp; Play</button>
+            <button type="button" class="ghost" id="btn-practice" aria-label="Open practice laboratory">Practice Lab</button>
+            <button type="button" class="ghost" id="btn-howto" aria-label="Open instructions">Instructions</button>
+            <button type="button" class="ghost" id="btn-settings" aria-label="Open settings">Settings</button>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <label>Seed <input id="seed-input" type="number" value="" placeholder="random" aria-label="Run seed" /></label>
+            <label>Import replay
+              <textarea id="replay-in" rows="2" placeholder="paste replay JSON" aria-label="Replay JSON import"></textarea>
+            </label>
+          </div>
+          <div class="actions">
+            <button type="button" class="ghost" id="btn-import" aria-label="Import and play replay">Play Replay</button>
+            <button type="button" class="ghost" id="btn-calibrate" aria-label="Open latency calibration">Calibrate Latency</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-howto" aria-label="Instructions">
+        <div class="panel">
+          <h2>HOW TO PLAY</h2>
+          <p>Move with <span class="kbd">WASD</span> / <span class="kbd">Arrows</span>. Hold <span class="kbd">Shift</span> for focus (slow + visible hitbox). <span class="kbd">Z</span>/<span class="kbd">Space</span> dash. <span class="kbd">X</span> bomb. <span class="kbd">P</span>/<span class="kbd">Esc</span> pause. Pointer/touch drag to steer. Gamepad: left stick, A dash, B bomb, LB focus.</p>
+          <p>Bullets fire on the musical transport. Grazing, dashing, or bombing near a beat scores <b>PERFECT</b> / <b>GOOD</b> windows. You can ignore the rhythm and still clear — timing multiplies score and dash i-frames.</p>
+          <p>Defeat OSCI through four phases. A bomb clears nearby shots. Getting hit grants brief invulnerability and breaks combo.</p>
+          <div class="actions">
+            <button type="button" id="btn-howto-back" class="ghost">Back</button>
+            <button type="button" id="btn-howto-play">Enable Audio &amp; Play</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-settings" aria-label="Settings">
+        <div class="panel wide">
+          <h2>SETTINGS</h2>
+          <div class="grid-2 row">
+            <label>Tempo BPM <input id="set-bpm" type="range" min="90" max="180" value="132" /><span id="set-bpm-v">132</span></label>
+            <label>Visual offset ms <input id="set-offset" type="range" min="-120" max="120" value="0" /><span id="set-offset-v">0</span></label>
+            <label>Difficulty
+              <select id="set-diff" aria-label="Difficulty">
+                <option value="0">Easy</option>
+                <option value="1" selected>Normal</option>
+                <option value="2">Hard</option>
+                <option value="3">Lunatic</option>
+              </select>
+            </label>
+            <label>Musical preset
+              <select id="set-preset" aria-label="Musical preset">
+                <option value="pulse">Pulse Pentatonic</option>
+                <option value="neon">Neon Minor</option>
+                <option value="phrygian">Phrygian Fire</option>
+                <option value="ionian">Ionian Dawn</option>
+                <option value="storm">Chromatic Storm</option>
+              </select>
+            </label>
+            <label>Master volume <input id="set-master" type="range" min="0" max="100" value="70" /></label>
+            <label>Drums <input id="set-drums" type="range" min="0" max="100" value="80" /></label>
+            <label>Bass <input id="set-bass" type="range" min="0" max="100" value="70" /></label>
+            <label>Melody <input id="set-melody" type="range" min="0" max="100" value="55" /></label>
+            <label>Atmosphere <input id="set-atmos" type="range" min="0" max="100" value="40" /></label>
+            <label>Particle density <input id="set-particles" type="range" min="0" max="100" value="70" /></label>
+            <label>Render quality
+              <select id="set-quality" aria-label="Render quality">
+                <option value="low">Low</option>
+                <option value="med" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <label class="inline"><input type="checkbox" id="set-shake" checked /> Screen shake</label>
+            <label class="inline"><input type="checkbox" id="set-motion" /> Reduced motion</label>
+            <label class="inline"><input type="checkbox" id="set-flash" /> Reduced flash</label>
+            <label class="inline"><input type="checkbox" id="set-contrast" /> High contrast</label>
+            <label class="inline"><input type="checkbox" id="set-diag" /> Diagnostics</label>
+            <label class="inline"><input type="checkbox" id="set-mute-drums" /> Mute drums</label>
+            <label class="inline"><input type="checkbox" id="set-mute-bass" /> Mute bass</label>
+            <label class="inline"><input type="checkbox" id="set-mute-melody" /> Mute melody</label>
+            <label class="inline"><input type="checkbox" id="set-mute-atmos" /> Mute atmosphere</label>
+          </div>
+          <p style="margin-top:12px">Controls: WASD/Arrows move · Shift focus · Z/Space dash · X bomb · P/Esc pause · F1 diagnostics · Pointer drag to move. Gamepad stick + A/B/LB.</p>
+          <div class="actions">
+            <button type="button" id="btn-settings-back" class="ghost">Back</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-practice" aria-label="Practice laboratory">
+        <div class="panel wide">
+          <h2>PATTERN LABORATORY</h2>
+          <p>Edits write the live spawn schedule. Grid steps fire the selected form on that sixteenth.</p>
+          <div class="row">
+            <label>Pattern
+              <select id="lab-pattern" aria-label="Pattern type">
+                <option value="radial">Radial burst</option>
+                <option value="aimed">Aimed shots</option>
+                <option value="spiral">Spiral</option>
+                <option value="wall">Sweeping wall</option>
+                <option value="lane">Lanes</option>
+                <option value="accel">Accelerating</option>
+                <option value="curve">Curved</option>
+                <option value="orbit">Orbiting</option>
+                <option value="mix">Phase mix</option>
+              </select>
+            </label>
+            <label>Tempo <input id="lab-bpm" type="range" min="80" max="200" value="132" /><span id="lab-bpm-v">132</span></label>
+            <label>Subdivision
+              <select id="lab-sub" aria-label="Subdivision">
+                <option value="1">Whole</option>
+                <option value="2">Half</option>
+                <option value="4" selected>Quarter</option>
+                <option value="8">Eighth</option>
+                <option value="12">Triplet</option>
+                <option value="16">Sixteenth</option>
+              </select>
+            </label>
+            <label>Density <input id="lab-dens" type="range" min="1" max="16" value="6" /><span id="lab-dens-v">6</span></label>
+            <label>Speed <input id="lab-spd" type="range" min="40" max="280" value="110" /><span id="lab-spd-v">110</span></label>
+            <label>Seed <input id="lab-seed" type="number" value="1" aria-label="Pattern seed" /></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button type="button" class="ghost" data-preset="gentle">Preset: Gentle</button>
+            <button type="button" class="ghost" data-preset="overture">Preset: Overture</button>
+            <button type="button" class="ghost" data-preset="garden">Preset: Spiral Garden</button>
+            <button type="button" class="ghost" data-preset="walls">Preset: Wall Ride</button>
+            <button type="button" class="ghost" data-preset="storm">Preset: Storm</button>
+            <button type="button" class="ghost" data-preset="chaos">Preset: Chaos Seed</button>
+          </div>
+          <div class="steps" id="lab-steps" aria-label="Pattern step grid"></div>
+          <div class="actions">
+            <button type="button" id="btn-lab-run">Enable Audio &amp; Test</button>
+            <button type="button" id="btn-lab-back" class="ghost">Back</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-countdown" aria-label="Countdown">
+        <div class="panel" style="text-align:center">
+          <h2>COUNT IN</h2>
+          <p id="count-num" style="font-size:64px;color:var(--lime);margin:10px">4</p>
+          <p>Audio armed. Transport starting on the downbeat.</p>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-pause" aria-label="Paused">
+        <div class="panel">
+          <h2>PAUSED</h2>
+          <p>Transport suspended. Resume continues the same musical time — no bullet backlog.</p>
+          <div class="actions">
+            <button type="button" id="btn-resume">Resume</button>
+            <button type="button" class="ghost" id="btn-pause-settings">Settings</button>
+            <button type="button" class="ghost" id="btn-restart">Restart</button>
+            <button type="button" class="danger" id="btn-quit">Title</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-fail" aria-label="Failure">
+        <div class="panel">
+          <h2>BREAK</h2>
+          <p id="fail-stats"></p>
+          <label>Replay JSON <textarea id="replay-out-fail" rows="3" readonly aria-label="Exported replay"></textarea></label>
+          <div class="actions">
+            <button type="button" id="btn-fail-retry">Restart</button>
+            <button type="button" class="ghost" id="btn-fail-copy">Copy Replay</button>
+            <button type="button" class="ghost" id="btn-fail-title">Title</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-win" aria-label="Victory">
+        <div class="panel">
+          <h2>CADENCE CLEAR</h2>
+          <p id="win-stats"></p>
+          <label>Replay JSON <textarea id="replay-out-win" rows="3" readonly aria-label="Victory replay"></textarea></label>
+          <div class="actions">
+            <button type="button" id="btn-win-retry">Restart</button>
+            <button type="button" class="ghost" id="btn-win-copy">Copy Replay</button>
+            <button type="button" class="ghost" id="btn-win-title">Title</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-calibrate" aria-label="Latency calibration">
+        <div class="panel">
+          <h2>LATENCY</h2>
+          <p>After audio starts, tap <span class="kbd">Space</span> or the button on 8 downbeats. We average your offset.</p>
+          <p>Beats sampled: <b id="cal-n">0</b> / 8 · Last error <b id="cal-err">—</b> ms</p>
+          <div class="actions">
+            <button type="button" id="btn-cal-start">Enable Audio &amp; Tap</button>
+            <button type="button" id="btn-cal-tap">Tap Beat</button>
+            <button type="button" class="ghost" id="btn-cal-back">Back</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script>
+  (function () {
+    'use strict';
+
+    const errors = [];
+    window.addEventListener('error', (e) => { errors.push(String(e.message || e)); });
+    window.addEventListener('unhandledrejection', (e) => { errors.push('rejection ' + String(e.reason)); });
+    const FW = 480, FH = 640, STEP = 1 / 120;
+    const UP = 1, DN = 2, LT = 4, RT = 8, FOC = 16, DASH = 32, BOMB = 64, FIRE = 128;
+    const SCALES = {
+      pulse: [0, 3, 5, 7, 10],
+      neon: [0, 2, 3, 5, 7, 8, 10],
+      phrygian: [0, 1, 3, 5, 7, 8, 10],
+      ionian: [0, 2, 4, 5, 7, 9, 11],
+      storm: [0, 1, 4, 5, 7, 8, 11]
+    };
+    const PHASES = ['OVERTURE', 'COUNTERPOINT', 'CRESCENDO', 'CADENZA'];
+    const DIFF = [
+      { name: 'Easy', spd: 0.82, dens: 0.75, hp: 7, boss: 1600 },
+      { name: 'Normal', spd: 1, dens: 1, hp: 5, boss: 2200 },
+      { name: 'Hard', spd: 1.18, dens: 1.2, hp: 4, boss: 2600 },
+      { name: 'Lunatic', spd: 1.38, dens: 1.45, hp: 3, boss: 3000 }
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const ang = (x, y) => Math.atan2(y, x);
+    const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
+
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    const canvas = $('game');
+    const ctx2 = canvas.getContext('2d', { alpha: false });
+    const viz = $('viz');
+    const vctx = viz.getContext('2d');
+    const off = document.createElement('canvas');
+    const octx = off.getContext('2d');
+
+    const settings = {
+      bpm: 132, offsetMs: 0, diff: 1, preset: 'pulse',
+      master: 0.7, drums: 0.8, bass: 0.7, melody: 0.55, atmos: 0.4,
+      mute: { drums: false, bass: false, melody: false, atmos: false },
+      particles: 0.7, shake: true, reducedMotion: false, reducedFlash: false,
+      contrast: false, quality: 'med', diag: false
+    };
+
+    const audio = {
+      ctx: null, master: null, drums: null, bass: null, melody: null, atmos: null,
+      analyser: null, noise: null, pad: null, padGain: null, filter: null,
+      running: false, lookahead: 0.12, scheduleAhead: 0.25, nextNote: 0,
+      step: 0, timer: 0, scheduled: [], lastKick: 0, lastVisPeak: 0,
+      supported: !!(window.AudioContext || window.webkitAudioContext)
+    };
+
+    const input = {
+      keys: Object.create(null), mask: 0, prev: 0, ptr: false, px: FW / 2, py: FH * 0.72,
+      dashEdge: false, bombEdge: false, focusTouch: false, gpPrev: 0
+    };
+
+    const lab = {
+      pattern: 'radial', bpm: 132, sub: 4, dens: 6, spd: 110, seed: 1,
+      steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+    };
+
+    const S = {
+      mode: 'title', runKind: 'story', paused: false, seed: 1, rng: null,
+      origin: 0, sim: 0, acc: 0, lastNow: 0, beatPulse: 0, measureFlash: 0,
+      player: null, boss: null, bullets: [], pshots: [], particles: [],
+      hp: 5, bombs: 3, score: 0, combo: 0, maxCombo: 0, graze: 0,
+      hits: 0, perfects: 0, goods: 0, misses: 0, shots: 0, shotHits: 0,
+      invuln: 0, dashCd: 0, dashT: 0, bombCd: 0, shake: 0, flash: 0,
+      lastRate: '', lastRateT: 0, lastErr: 0, timingSum: 0, timingN: 0,
+      frames: 0, fps: 0, fpsT: 0, drops: 0, lastFrame: 0,
+      replay: [], recMask: -1, playingReplay: false, replayI: 0, replayData: null,
+      pending: [], lastSpawnStep: -1, attractT: 0, cal: [], calOn: false,
+      best: 0, phase: 0
+    };
+
+    let stars = [];
+    function resetStars() {
+      stars = [];
+      const r = mulberry32(7);
+      for (let i = 0; i < 90; i++) stars.push({ x: r() * FW, y: r() * FH, z: 0.3 + r() * 1.2, p: r() });
+    }
+    resetStars();
+
+    try { S.best = parseInt(localStorage.getItem('cadence_best') || '0', 10) || 0; } catch (e) {}
+    try {
+      const saved = JSON.parse(localStorage.getItem('cadence_settings') || 'null');
+      if (saved && typeof saved === 'object') Object.assign(settings, saved);
+    } catch (e) {}
+
+    function saveSettings() {
+      try { localStorage.setItem('cadence_settings', JSON.stringify(settings)); } catch (e) {}
+    }
+    function saveBest() {
+      if (S.score > S.best) {
+        S.best = S.score;
+        try { localStorage.setItem('cadence_best', String(S.best)); } catch (e) {}
+      }
+    }
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach((el) => el.classList.toggle('active', el.id === id));
+    }
+
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg; t.style.display = 'block';
+      clearTimeout(toast._h);
+      toast._h = setTimeout(() => { t.style.display = 'none'; }, 1400);
+    }
+
+    const clock = { paused: true, t0: 0, wall0: 0, freezeT: 0 };
+
+    function now() {
+      if (clock.paused) return clock.freezeT;
+      return clock.t0 + (performance.now() * 0.001 - clock.wall0);
+    }
+    function clockStart(t) {
+      clock.t0 = t || 0;
+      clock.wall0 = performance.now() * 0.001;
+      clock.freezeT = clock.t0;
+      clock.paused = false;
+    }
+    function clockPause() {
+      clock.freezeT = now();
+      clock.paused = true;
+    }
+    function clockResume() {
+      clock.t0 = clock.freezeT;
+      clock.wall0 = performance.now() * 0.001;
+      clock.paused = false;
+    }
+    function audioWhen(transT) {
+      if (!audio.ctx) return transT;
+      return audio.ctx.currentTime + Math.max(0, transT - now());
+    }
+    function audioNow() {
+      return audio.ctx ? audio.ctx.currentTime : now();
+    }
+
+    function spb() { return 60 / settings.bpm; }
+    function tickDur() { return spb() / 4; }
+
+    function ensureAudio() {
+      if (!audio.supported) return false;
+      if (audio.ctx) return true;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AC();
+      audio.ctx = ctx;
+      audio.master = ctx.createGain();
+      audio.drums = ctx.createGain();
+      audio.bass = ctx.createGain();
+      audio.melody = ctx.createGain();
+      audio.atmos = ctx.createGain();
+      audio.filter = ctx.createBiquadFilter();
+      audio.filter.type = 'lowpass';
+      audio.filter.frequency.value = 1800;
+      audio.analyser = ctx.createAnalyser();
+      audio.analyser.fftSize = 256;
+      audio.analyser.smoothingTimeConstant = 0.72;
+      audio.master.connect(audio.filter);
+      audio.filter.connect(audio.analyser);
+      audio.analyser.connect(ctx.destination);
+      audio.drums.connect(audio.master);
+      audio.bass.connect(audio.master);
+      audio.melody.connect(audio.master);
+      audio.atmos.connect(audio.master);
+      const n = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = n.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      audio.noise = n;
+      applyGains();
+      startPad();
+      return true;
+    }
+
+    function applyGains() {
+      if (!audio.ctx) return;
+      audio.master.gain.value = settings.master;
+      audio.drums.gain.value = settings.mute.drums ? 0 : settings.drums;
+      audio.bass.gain.value = settings.mute.bass ? 0 : settings.bass;
+      audio.melody.gain.value = settings.mute.melody ? 0 : settings.melody;
+      audio.atmos.gain.value = settings.mute.atmos ? 0 : settings.atmos;
+    }
+
+    function envGain(node, t, a, peak, dur) {
+      node.gain.setValueAtTime(0.0001, t);
+      node.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a);
+      node.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    }
+
+    function playKick(t) {
+      if (!audio.ctx) return;
+      const o = audio.ctx.createOscillator();
+      const g = audio.ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(38, t + 0.11);
+      envGain(g, t, 0.004, 0.95, 0.16);
+      o.connect(g); g.connect(audio.drums);
+      o.start(t); o.stop(t + 0.18);
+      o.onended = () => { try { o.disconnect(); g.disconnect(); } catch (e) {} };
+      audio.lastKick = t;
+    }
+    function playSnare(t) {
+      if (!audio.ctx) return;
+      const src = audio.ctx.createBufferSource();
+      src.buffer = audio.noise;
+      const bp = audio.ctx.createBiquadFilter();
+      bp.type = 'highpass'; bp.frequency.value = 1200;
+      const g = audio.ctx.createGain();
+      envGain(g, t, 0.003, 0.45, 0.12);
+      src.connect(bp); bp.connect(g); g.connect(audio.drums);
+      src.start(t); src.stop(t + 0.14);
+      const o = audio.ctx.createOscillator();
+      const g2 = audio.ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = 180;
+      envGain(g2, t, 0.002, 0.22, 0.1);
+      o.connect(g2); g2.connect(audio.drums);
+      o.start(t); o.stop(t + 0.12);
+    }
+    function playHat(t, open) {
+      if (!audio.ctx) return;
+      const src = audio.ctx.createBufferSource();
+      src.buffer = audio.noise;
+      const hp = audio.ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 7000;
+      const g = audio.ctx.createGain();
+      envGain(g, t, 0.001, open ? 0.16 : 0.1, open ? 0.08 : 0.03);
+      src.connect(hp); hp.connect(g); g.connect(audio.drums);
+      src.start(t); src.stop(t + (open ? 0.1 : 0.04));
+    }
+    function midiToHz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+    function scaleNote(deg, oct) {
+      const sc = SCALES[settings.preset] || SCALES.pulse;
+      const i = ((deg % sc.length) + sc.length) % sc.length;
+      const wrap = Math.floor(deg / sc.length);
+      return 57 + sc[i] + 12 * (oct + wrap);
+    }
+    function playBass(t, step) {
+      if (!audio.ctx) return;
+      const deg = [0, 0, 4, 2, 0, 3, 4, 0][(step >> 1) % 8];
+      const o = audio.ctx.createOscillator();
+      const g = audio.ctx.createGain();
+      const f = audio.ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = 420 + S.phase * 90;
+      o.type = 'sawtooth';
+      o.frequency.value = midiToHz(scaleNote(deg, -1));
+      envGain(g, t, 0.01, 0.22, 0.22);
+      o.connect(f); f.connect(g); g.connect(audio.bass);
+      o.start(t); o.stop(t + 0.24);
+    }
+    function playMelody(t, step) {
+      if (!audio.ctx) return;
+      const bar = Math.floor(step / 16);
+      const deg = (bar * 3 + (step % 16) * 2 + (S.phase > 1 ? 2 : 0)) % 11;
+      const o = audio.ctx.createOscillator();
+      const g = audio.ctx.createGain();
+      o.type = S.phase >= 3 ? 'square' : 'triangle';
+      o.frequency.value = midiToHz(scaleNote(deg, 1));
+      envGain(g, t, 0.01, 0.12 + S.phase * 0.02, 0.18);
+      o.connect(g); g.connect(audio.melody);
+      o.start(t); o.stop(t + 0.2);
+    }
+    function startPad() {
+      if (!audio.ctx || audio.pad) return;
+      const o1 = audio.ctx.createOscillator();
+      const o2 = audio.ctx.createOscillator();
+      const g = audio.ctx.createGain();
+      o1.type = 'sine'; o2.type = 'sine';
+      o1.frequency.value = midiToHz(57);
+      o2.frequency.value = midiToHz(64);
+      g.gain.value = 0.05;
+      o1.connect(g); o2.connect(g); g.connect(audio.atmos);
+      o1.start(); o2.start();
+      audio.pad = [o1, o2]; audio.padGain = g;
+    }
+    function updatePad() {
+      if (!audio.pad) return;
+      const root = midiToHz(scaleNote(0, 0));
+      audio.pad[0].frequency.setTargetAtTime(root, audioNow(), 0.2);
+      audio.pad[1].frequency.setTargetAtTime(root * (S.phase >= 2 ? 1.498 : 1.5), audioNow(), 0.2);
+    }
+
+    function schedKind(step) {
+      const s = step % 16;
+      const list = [];
+      if (s === 0 || s === 8) list.push('kick');
+      if (s === 4 || s === 12) list.push('snare');
+      if (s % 2 === 0) list.push('hat');
+      if (S.phase >= 2 && s === 6) list.push('hat-open');
+      if (s % 4 === 0) list.push('bass');
+      if (S.phase >= 1 && (s % 4 === 2)) list.push('melody');
+      if (S.phase >= 3 && s % 2 === 1) list.push('hat');
+      return list;
+    }
+
+    function scheduleAt(step, t) {
+      const at = audioWhen(t);
+      const kinds = schedKind(step);
+      for (let i = 0; i < kinds.length; i++) {
+        const k = kinds[i];
+        if (k === 'kick') playKick(at);
+        else if (k === 'snare') playSnare(at);
+        else if (k === 'hat') playHat(at, false);
+        else if (k === 'hat-open') playHat(at, true);
+        else if (k === 'bass') playBass(at, step);
+        else if (k === 'melody') playMelody(at, step);
+      }
+      S.pending.push({ step, t, kinds });
+      if (S.pending.length > 64) S.pending.splice(0, S.pending.length - 64);
+      audio.scheduled.push({ step, t, at, kinds });
+      if (audio.scheduled.length > 48) audio.scheduled.splice(0, audio.scheduled.length - 48);
+    }
+
+    function scheduler() {
+      if (!audio.running || S.paused || clock.paused) return;
+      const ctxT = now();
+      const ahead = audio.scheduleAhead;
+      while (audio.nextNote < ctxT + ahead) {
+        scheduleAt(audio.step, audio.nextNote);
+        audio.step += 1;
+        audio.nextNote += tickDur();
+      }
+    }
+
+    function startTransport(fromStep) {
+      audio.running = true;
+      audio.step = fromStep || 0;
+      audio.nextNote = now() + 0.05;
+      audio.scheduled.length = 0;
+      if (audio.timer) clearInterval(audio.timer);
+      scheduler();
+      audio.timer = setInterval(scheduler, audio.lookahead * 1000);
+    }
+
+    function stopTransport() {
+      audio.running = false;
+      if (audio.timer) { clearInterval(audio.timer); audio.timer = 0; }
+    }
+
+    async function resumeAudio() {
+      ensureAudio();
+      if (audio.ctx && audio.ctx.state !== 'running') {
+        try {
+          await Promise.race([
+            audio.ctx.resume(),
+            new Promise((r) => setTimeout(r, 400))
+          ]);
+        } catch (e) {}
+      }
+      applyGains();
+      return !!(audio.ctx && audio.ctx.state === 'running') || !audio.supported;
+    }
+
+    async function suspendAudio() {
+      if (audio.ctx && audio.ctx.state === 'running') {
+        try { await audio.ctx.suspend(); } catch (e) {}
+      }
+    }
+
+    function poolSpawn(list, proto, max) {
+      if (list.length >= max) {
+        let worst = 0;
+        for (let i = 1; i < list.length; i++) if (list[i].life < list[worst].life) worst = i;
+        list[worst] = proto;
+        return proto;
+      }
+      list.push(proto);
+      return proto;
+    }
+
+    function spawnBullet(b) {
+      b.alive = true;
+      b.life = b.life || 8;
+      b.r = b.r || 5;
+      b.grazed = false;
+      b.tr = b.tr || [];
+      return poolSpawn(S.bullets, b, 900);
+    }
+
+    function burst(x, y, n, col) {
+      const dens = settings.particles;
+      const c = Math.floor(n * dens);
+      for (let i = 0; i < c; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = 20 + Math.random() * 80;
+        S.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.35 + Math.random() * 0.3, col, r: 1.5 + Math.random() * 2 });
+      }
+      if (S.particles.length > 500) S.particles.splice(0, S.particles.length - 500);
+    }
+
+    function playerBase() {
+      return {
+        x: FW / 2, y: FH * 0.78, vx: 0, vy: 0,
+        r: 4, vis: 13, speed: 210, focus: false,
+        facing: -Math.PI / 2, shotT: 0
+      };
+    }
+
+    function bossBase() {
+      return { x: FW / 2, y: 108, r: 28, hp: DIFF[settings.diff].boss, max: DIFF[settings.diff].boss, t: 0, name: 'OSCI' };
+    }
+
+    function clearWorld() {
+      S.bullets.length = 0; S.pshots.length = 0; S.particles.length = 0; S.pending.length = 0;
+    }
+
+    function startRun(kind, seed, replay) {
+      S.runKind = kind;
+      S.playingReplay = !!replay;
+      S.replayData = replay || null;
+      S.replayI = 0;
+      S.seed = seed >>> 0 || (Math.floor(Math.random() * 0xffffffff) || 1);
+      S.rng = mulberry32(S.seed);
+      S.player = playerBase();
+      S.boss = bossBase();
+      if (kind === 'lab') S.boss.hp = 1e9;
+      S.hp = DIFF[settings.diff].hp;
+      S.bombs = 3; S.score = 0; S.combo = 0; S.maxCombo = 0; S.graze = 0;
+      S.hits = 0; S.perfects = 0; S.goods = 0; S.misses = 0; S.shots = 0; S.shotHits = 0;
+      S.invuln = 2.4; S.dashCd = 0; S.dashT = 0; S.bombCd = 0; S.shake = 0; S.flash = 0;
+      S.lastRate = ''; S.lastErr = 0; S.timingSum = 0; S.timingN = 0;
+      S.replay = []; S.recMask = -1; S.lastSpawnStep = -1; S.phase = 0;
+      S.paused = false; S.acc = 0; S.sim = 0; S.drops = 0;
+      clearWorld();
+      clockStart(0);
+      S.origin = 0;
+      S.lastNow = 0;
+      S.lastFrame = performance.now();
+      startTransport(0);
+      showScreen('');
+      S.mode = kind === 'lab' ? 'lab' : (replay ? 'replay' : 'play');
+      $('lab-live').style.display = kind === 'lab' ? 'block' : 'none';
+      if (kind === 'lab') {
+        $('lab-live-pattern').value = lab.pattern;
+        $('lab-live-dens').value = lab.dens;
+        $('lab-live-spd').value = lab.spd;
+      }
+    }
+
+    function beatWindow(t) {
+      const td = tickDur() * 4;
+      const gt = t - S.origin + settings.offsetMs * 0.001;
+      const b = gt / td;
+      const frac = b - Math.floor(b);
+      const err = (frac > 0.5 ? frac - 1 : frac) * td;
+      return err;
+    }
+
+    function rateTiming(err) {
+      const ms = Math.abs(err) * 1000;
+      S.lastErr = err * 1000;
+      S.timingSum += ms; S.timingN += 1;
+      let rate = 'MISS', add = 0, mul = 1;
+      if (ms <= 42) { rate = 'PERFECT'; add = 250; mul = 1; S.perfects++; }
+      else if (ms <= 95) { rate = 'GOOD'; add = 100; mul = 0.6; S.goods++; }
+      else { S.misses++; S.combo = 0; }
+      if (rate !== 'MISS') {
+        S.combo += 1;
+        if (S.combo > S.maxCombo) S.maxCombo = S.combo;
+        S.score += Math.floor(add * (1 + S.combo * 0.08) * mul);
+      }
+      S.lastRate = rate; S.lastRateT = 0.45;
+      const el = $('rating');
+      el.textContent = rate;
+      el.style.opacity = '1';
+      el.style.color = rate === 'PERFECT' ? '#ffb020' : rate === 'GOOD' ? '#6ee7ff' : '#ff2d78';
+      return rate;
+    }
+
+    function nCount(base) {
+      const d = DIFF[settings.diff];
+      let n = Math.max(1, Math.round(base * d.dens * (lab && S.mode === 'lab' ? lab.dens / 6 : 1)));
+      if (S.hp <= 2 && S.mode !== 'lab') n = Math.max(1, Math.round(n * 0.88));
+      if (S.combo >= 20 && S.mode !== 'lab') n += 1;
+      return n;
+    }
+    function spd(base) {
+      const d = DIFF[settings.diff].spd;
+      const labM = S.mode === 'lab' ? lab.spd / 110 : 1;
+      return base * d * labM;
+    }
+
+    function aimedAngle() {
+      const p = S.player;
+      const b = S.boss;
+      return ang(p.x - b.x, p.y - b.y);
+    }
+
+    function colorFor(kind) {
+      if (settings.contrast) {
+        return kind === 'aim' ? '#fff' : kind === 'wall' ? '#ff6' : '#6ef';
+      }
+      const map = { rad: '#6ee7ff', aim: '#ff2d78', spy: '#c8ff3d', wall: '#ffb020', lane: '#d27dff', acc: '#ff7a45', crv: '#7dffc3', orb: '#f0e6ff' };
+      return map[kind] || '#9cf';
+    }
+
+    function fireRadial(x, y, n, speed, rot, kind) {
+      n = nCount(n);
+      speed = spd(speed);
+      for (let i = 0; i < n; i++) {
+        const a = rot + i * Math.PI * 2 / n;
+        spawnBullet({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, kind, col: colorFor(kind), r: 5 });
+      }
+    }
+    function fireAimed(x, y, n, speed, spread) {
+      n = nCount(n);
+      speed = spd(speed);
+      const a0 = aimedAngle();
+      const start = a0 - spread * (n - 1) / 2;
+      for (let i = 0; i < n; i++) {
+        const a = start + spread * i;
+        spawnBullet({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, kind: 'aim', col: colorFor('aim'), r: 5.5 });
+      }
+    }
+    function fireSpiral(x, y, n, speed, rot) {
+      n = Math.max(1, nCount(n) / 2);
+      speed = spd(speed);
+      for (let i = 0; i < n; i++) {
+        const a = rot + i * 0.46;
+        spawnBullet({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, kind: 'spy', col: colorFor('spy'), r: 4.5 });
+      }
+    }
+    function fireWall(gapX, speed, horiz) {
+      speed = spd(speed);
+      const n = nCount(18);
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1 || 1);
+        if (horiz) {
+          const x = 16 + t * (FW - 32);
+          if (Math.abs(x - gapX) < 36) continue;
+          spawnBullet({ x, y: 8, vx: 0, vy: speed, kind: 'wall', col: colorFor('wall'), r: 4.5 });
+        } else {
+          const y = 40 + t * (FH - 80);
+          spawnBullet({ x: 8, y, vx: speed, vy: 0, kind: 'wall', col: colorFor('wall'), r: 4.5 });
+        }
+      }
+    }
+    function fireLanes(speed) {
+      speed = spd(speed);
+      const lanes = Math.max(3, nCount(5));
+      for (let i = 0; i < lanes; i++) {
+        const x = 40 + i * ((FW - 80) / (lanes - 1 || 1));
+        spawnBullet({ x, y: 12, vx: 0, vy: speed, kind: 'lane', col: colorFor('lane'), r: 5, acc: 0 });
+      }
+    }
+    function fireAccel(x, y, n, speed) {
+      n = nCount(n);
+      speed = spd(speed);
+      const a0 = aimedAngle();
+      for (let i = 0; i < n; i++) {
+        const a = a0 + (i - (n - 1) / 2) * 0.18;
+        spawnBullet({ x, y, vx: Math.cos(a) * speed * 0.35, vy: Math.sin(a) * speed * 0.35, spd: speed * 0.35, acc: 90, ang0: a, kind: 'acc', col: colorFor('acc'), r: 5 });
+      }
+    }
+    function fireCurve(x, y, n, speed, turn) {
+      n = nCount(n);
+      speed = spd(speed);
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI + 0.2;
+        spawnBullet({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, spd: speed, turn: turn * (i % 2 ? 1 : -1), ang0: a, kind: 'crv', col: colorFor('crv'), r: 4.8 });
+      }
+    }
+    function fireOrbit(x, y, n, rad, w) {
+      n = nCount(n);
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI * 2;
+        spawnBullet({ x: x + Math.cos(a) * rad, y: y + Math.sin(a) * rad, ox: x, oy: y, oa: a, or: rad, ow: w, kind: 'orb', col: colorFor('orb'), r: 5, vx: 0, vy: 0 });
+      }
+    }
+
+    function firePattern(type, step) {
+      const b = S.boss || { x: FW / 2, y: 110 };
+      const rng = S.rng || Math.random;
+      const rot = step * 0.31 + rng() * 0.05;
+      switch (type) {
+        case 'radial': fireRadial(b.x, b.y, 10, 95, rot, 'rad'); break;
+        case 'aimed': fireAimed(b.x, b.y, 3, 150, 0.12); break;
+        case 'spiral': fireSpiral(b.x, b.y, 6, 100, step * 0.42); break;
+        case 'wall': fireWall(80 + (step * 37) % (FW - 160), 80, true); break;
+        case 'lane': fireLanes(88); break;
+        case 'accel': fireAccel(b.x, b.y, 5, 70); break;
+        case 'curve': fireCurve(b.x, b.y, 8, 90, 1.6); break;
+        case 'orbit': fireOrbit(b.x, b.y + 20, 10, 48 + (step % 5) * 6, 1.4); break;
+        default: {
+          fireRadial(b.x, b.y, 8, 90, rot, 'rad');
+          if (step % 8 === 0) fireAimed(b.x, b.y, 1, 140, 0);
+        }
+      }
+    }
+
+    function storyPattern(step) {
+      const bar = Math.floor(step / 16);
+      const s = step % 16;
+      const ph = S.phase;
+      const rng = S.rng;
+      if (ph === 0) {
+        if (s === 0) fireRadial(S.boss.x, S.boss.y, 8, 72, bar * 0.2, 'rad');
+        if (s === 8) fireAimed(S.boss.x, S.boss.y, 2, 110, 0.34);
+        if (s === 12 && bar % 2 === 1) fireSpiral(S.boss.x, S.boss.y, 3, 80, step * 0.3);
+      } else if (ph === 1) {
+        if (s % 4 === 0) fireSpiral(S.boss.x, S.boss.y, 4, 96, step * 0.38);
+        if (s === 4) fireAimed(S.boss.x, S.boss.y, 2, 140, 0.1);
+        if (s === 10) fireLanes(70);
+      } else if (ph === 2) {
+        if (s === 0) fireWall(60 + (bar * 50) % 360, 86, true);
+        if (s === 6) fireCurve(S.boss.x, S.boss.y, 7, 100, 1.8);
+        if (s === 8) fireAccel(S.boss.x, S.boss.y, 4, 64);
+        if (s === 12) fireAimed(S.boss.x, S.boss.y, 3, 150, 0.14);
+      } else {
+        if (s % 2 === 0) fireSpiral(S.boss.x, S.boss.y, 5, 110, step * 0.5);
+        if (s === 0) fireRadial(S.boss.x, S.boss.y, 14, 100, rng(), 'rad');
+        if (s === 4) fireOrbit(S.boss.x, S.boss.y + 10, 12, 70, 1.8);
+        if (s === 8) fireWall(FW / 2 + Math.sin(bar) * 80, 96, true);
+        if (s === 12) fireAccel(S.boss.x, S.boss.y, 6, 72);
+      }
+    }
+
+    function labShouldFire(step) {
+      const idx = ((step % 16) + 16) % 16;
+      if (!lab.steps[idx]) return false;
+      const sub = lab.sub | 0;
+      const period = Math.max(1, 16 / Math.min(16, Math.max(1, sub)));
+      return (idx % period) < 1 || sub >= 16;
+    }
+
+    function consumeMusicEvents(t) {
+      const visT = t + settings.offsetMs * 0.001;
+      for (let i = 0; i < S.pending.length; i++) {
+        const ev = S.pending[i];
+        if (ev.used) continue;
+        if (ev.t <= visT + 0.0005) {
+          ev.used = true;
+          if (S.lastSpawnStep === ev.step) continue;
+          S.lastSpawnStep = ev.step;
+          S.beatPulse = 1;
+          if (ev.step % 16 === 0) S.measureFlash = 1;
+          if (S.mode === 'lab') {
+            if (labShouldFire(ev.step)) firePattern(lab.pattern, ev.step);
+          } else if (S.mode === 'play' || S.mode === 'replay') {
+            storyPattern(ev.step);
+          }
+        }
+      }
+    }
+
+    function applyMask(dt) {
+      const p = S.player;
+      let mx = 0, my = 0;
+      const m = input.mask;
+      if (m & LT) mx -= 1;
+      if (m & RT) mx += 1;
+      if (m & UP) my -= 1;
+      if (m & DN) my += 1;
+      if (input.ptr && !S.playingReplay) {
+        const dx = input.px - p.x, dy = input.py - p.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 4) { mx = dx / d; my = dy / d; }
+        else { mx = 0; my = 0; }
+      }
+      if (S.playingReplay && S._rx != null) {
+        const dx = S._rx - p.x, dy = S._ry - p.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 3) { mx = dx / d; my = dy / d; }
+      }
+      const len = Math.hypot(mx, my) || 1;
+      const focus = !!(m & FOC) || input.focusTouch;
+      p.focus = focus;
+      let sp = p.speed * (focus ? 0.42 : 1);
+      if (S.dashT > 0) sp *= 2.6;
+      p.vx = (mx / len) * sp;
+      p.vy = (my / len) * sp;
+      p.x = clamp(p.x + p.vx * dt, 10, FW - 10);
+      p.y = clamp(p.y + p.vy * dt, 18, FH - 18);
+      if (mx || my) p.facing = ang(mx, my);
+
+      if (input.dashEdge && S.dashCd <= 0) {
+        S.dashT = 0.14; S.dashCd = 1.35;
+        const err = beatWindow(now());
+        const rate = rateTiming(err);
+        if (rate === 'PERFECT') { S.dashT = 0.2; S.invuln = Math.max(S.invuln, 0.28); }
+        burst(p.x, p.y, 12, '#c8ff3d');
+        input.dashEdge = false;
+      }
+      if (input.bombEdge && S.bombCd <= 0 && S.bombs > 0) {
+        S.bombs -= 1; S.bombCd = 2.4;
+        const err = beatWindow(now());
+        const rate = rateTiming(err);
+        const rad = rate === 'PERFECT' ? 210 : rate === 'GOOD' ? 170 : 130;
+        for (let i = S.bullets.length - 1; i >= 0; i--) {
+          const b = S.bullets[i];
+          if (dist2(b.x, b.y, p.x, p.y) < rad * rad) {
+            burst(b.x, b.y, 3, b.col);
+            S.bullets.splice(i, 1);
+            S.score += 5;
+          }
+        }
+        S.flash = settings.reducedFlash ? 0.08 : 0.2;
+        S.shake = settings.shake ? 7 : 0;
+        input.bombEdge = false;
+      } else input.bombEdge = false;
+
+      p.shotT -= dt;
+      if ((m & FIRE) || true) {
+        if (p.shotT <= 0 && (S.mode === 'play' || S.mode === 'replay' || S.mode === 'lab')) {
+          p.shotT = 0.12;
+          S.pshots.push({ x: p.x, y: p.y - 10, vy: -420, r: 3, dmg: 1.2 });
+          S.shots++;
+        }
+      }
+    }
+
+    function hitPlayer() {
+      if (S.invuln > 0 || S.dashT > 0) return;
+      S.hp -= 1; S.hits += 1; S.combo = 0; S.invuln = 2.0;
+      S.shake = settings.shake ? 10 : 0;
+      S.flash = settings.reducedFlash ? 0.1 : 0.35;
+      burst(S.player.x, S.player.y, 18, '#ff2d78');
+      if (S.hp <= 0) endRun(false);
+    }
+
+    function updateBullets(dt) {
+      const p = S.player;
+      for (let i = S.bullets.length - 1; i >= 0; i--) {
+        const b = S.bullets[i];
+        b.life -= dt;
+        if (b.kind === 'orb') {
+          b.oa += b.ow * dt;
+          b.or += 12 * dt;
+          b.x = b.ox + Math.cos(b.oa) * b.or;
+          b.y = b.oy + Math.sin(b.oa) * b.or;
+        } else {
+          if (b.turn) {
+            b.ang0 += b.turn * dt;
+            b.vx = Math.cos(b.ang0) * b.spd;
+            b.vy = Math.sin(b.ang0) * b.spd;
+          }
+          if (b.acc) {
+            b.spd = (b.spd || Math.hypot(b.vx, b.vy)) + b.acc * dt;
+            const a = b.ang0 != null ? b.ang0 : ang(b.vx, b.vy);
+            b.vx = Math.cos(a) * b.spd;
+            b.vy = Math.sin(a) * b.spd;
+          }
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+        }
+        if (settings.quality !== 'low') {
+          b.tr.push(b.x, b.y);
+          if (b.tr.length > 10) b.tr.splice(0, 2);
+        }
+        if (b.life < 0 || b.x < -50 || b.x > FW + 50 || b.y < -50 || b.y > FH + 50) {
+          S.bullets.splice(i, 1); continue;
+        }
+        const d2 = dist2(b.x, b.y, p.x, p.y);
+        const gr = 16 + b.r;
+        if (!b.grazed && d2 < gr * gr && d2 > (p.r + b.r) * (p.r + b.r)) {
+          b.grazed = true; S.graze += 1; S.score += 20;
+          const err = beatWindow(now());
+          if (Math.abs(err) < 0.1) rateTiming(err);
+          else { S.combo += 1; S.score += 15; }
+        }
+        if (d2 < (p.r + b.r) * (p.r + b.r)) {
+          S.bullets.splice(i, 1);
+          burst(p.x, p.y, 8, '#fff');
+          hitPlayer();
+        }
+      }
+      for (let i = S.pshots.length - 1; i >= 0; i--) {
+        const s = S.pshots[i];
+        s.y += s.vy * dt;
+        if (s.y < -10) { S.pshots.splice(i, 1); continue; }
+        const b = S.boss;
+        if (b && dist2(s.x, s.y, b.x, b.y) < (b.r + s.r) * (b.r + s.r)) {
+          let dmg = s.dmg;
+          const err = Math.abs(beatWindow(now()));
+          if (err < 0.045) dmg *= 1.6;
+          b.hp -= dmg; S.shotHits++; S.score += 4;
+          S.pshots.splice(i, 1);
+          burst(s.x, s.y, 4, '#c8ff3d');
+          if (b.hp <= 0 && S.mode !== 'lab') endRun(true);
+        }
+      }
+    }
+
+    function updateBoss(dt) {
+      const b = S.boss;
+      if (!b) return;
+      b.t += dt;
+      const wob = settings.reducedMotion ? 8 : 26;
+      b.x = FW / 2 + Math.sin(b.t * 0.7) * wob + Math.sin(b.t * 0.21) * 10;
+      b.y = 100 + Math.cos(b.t * 0.5) * 8;
+      const frac = clamp(b.hp / b.max, 0, 1);
+      S.phase = frac > 0.7 ? 0 : frac > 0.4 ? 1 : frac > 0.15 ? 2 : 3;
+      if (audio.filter) audio.filter.frequency.setTargetAtTime(1400 + S.phase * 500, audioNow(), 0.15);
+      updatePad();
+    }
+
+    function updateParticles(dt) {
+      for (let i = S.particles.length - 1; i >= 0; i--) {
+        const p = S.particles[i];
+        p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vx *= 0.98; p.vy *= 0.98;
+        if (p.life <= 0) S.particles.splice(i, 1);
+      }
+    }
+
+    function recordReplay(t) {
+      if (S.playingReplay) return;
+      const m = input.mask;
+      const px = input.ptr ? input.px : -1;
+      const py = input.ptr ? input.py : -1;
+      if (m !== S.recMask || (input.ptr && S.replay.length % 8 === 0)) {
+        S.replay.push([+(t - S.origin).toFixed(4), m, px, py]);
+        S.recMask = m;
+      }
+    }
+
+    function applyReplay(t) {
+      const log = S.replayData && S.replayData.inputs;
+      if (!log) return;
+      const gt = t - S.origin;
+      while (S.replayI < log.length && log[S.replayI][0] <= gt) {
+        const e = log[S.replayI++];
+        const next = e[1] | 0;
+        const rise = next & ~input.mask;
+        if (rise & DASH) input.dashEdge = true;
+        if (rise & BOMB) input.bombEdge = true;
+        input.mask = next;
+        if (e[2] >= 0) { S._rx = e[2]; S._ry = e[3]; }
+        else { S._rx = S._ry = null; }
+      }
+    }
+
+    function exportReplay() {
+      return JSON.stringify({
+        v: 1, seed: S.seed, bpm: settings.bpm, diff: settings.diff, preset: settings.preset,
+        offset: settings.offsetMs, kind: S.runKind, lab: S.runKind === 'lab' ? lab : undefined,
+        inputs: S.replay
+      });
+    }
+
+    function endRun(win) {
+      stopTransport();
+      clockPause();
+      saveBest();
+      S.mode = win ? 'win' : 'fail';
+      S.paused = true;
+      $('lab-live').style.display = 'none';
+      const acc = S.perfects + S.goods + S.misses;
+      const pct = acc ? Math.round(100 * (S.perfects + S.goods * 0.5) / acc) : 0;
+      const msg = 'Score ' + S.score + ' · Combo ' + S.maxCombo + ' · Graze ' + S.graze +
+        ' · Accuracy ' + pct + '% · Perfect ' + S.perfects + ' · Seed ' + S.seed;
+      if (win) { $('win-stats').textContent = msg; $('replay-out-win').value = exportReplay(); showScreen('screen-win'); }
+      else { $('fail-stats').textContent = msg; $('replay-out-fail').value = exportReplay(); showScreen('screen-fail'); }
+    }
+
+    function skipSchedulerCatchup() {
+      const t = now();
+      for (let i = 0; i < S.pending.length; i++) {
+        if (!S.pending[i].used && S.pending[i].t < t - 0.03) S.pending[i].used = true;
+      }
+      if (audio.nextNote < t) {
+        const td = tickDur();
+        if (td > 0) audio.step += Math.max(0, Math.floor((t - audio.nextNote) / td));
+        audio.nextNote = t + 0.03;
+      }
+      S.lastNow = t;
+      S.acc = 0;
+    }
+
+    function pauseGame() {
+      if (S.mode !== 'play' && S.mode !== 'lab' && S.mode !== 'replay') return;
+      S.paused = true;
+      S.modePause = S.mode;
+      S.mode = 'pause';
+      clockPause();
+      showScreen('screen-pause');
+      suspendAudio();
+    }
+    async function resumeGame() {
+      clockResume();
+      S.paused = false;
+      S.mode = S.modePause || 'play';
+      showScreen('');
+      audio.running = true;
+      if (!audio.timer) audio.timer = setInterval(scheduler, audio.lookahead * 1000);
+      await resumeAudio();
+      skipSchedulerCatchup();
+      scheduler();
+    }
+
+    function gatherInput() {
+      if (S.playingReplay) return;
+      let m = 0;
+      const k = input.keys;
+      if (k.ArrowUp || k.KeyW) m |= UP;
+      if (k.ArrowDown || k.KeyS) m |= DN;
+      if (k.ArrowLeft || k.KeyA) m |= LT;
+      if (k.ArrowRight || k.KeyD) m |= RT;
+      if (k.ShiftLeft || k.ShiftRight) m |= FOC;
+      if (k.KeyZ || k.Space) m |= DASH;
+      if (k.KeyX) m |= BOMB;
+      if (k.KeyC) m |= FIRE;
+      if (input.focusTouch) m |= FOC;
+      if (navigator.getGamepads) {
+        const gps = navigator.getGamepads();
+        for (let i = 0; i < gps.length; i++) {
+          const gp = gps[i]; if (!gp) continue;
+          const dz = 0.25;
+          if (gp.axes[1] < -dz || gp.buttons[12] && gp.buttons[12].pressed) m |= UP;
+          if (gp.axes[1] > dz || gp.buttons[13] && gp.buttons[13].pressed) m |= DN;
+          if (gp.axes[0] < -dz || gp.buttons[14] && gp.buttons[14].pressed) m |= LT;
+          if (gp.axes[0] > dz || gp.buttons[15] && gp.buttons[15].pressed) m |= RT;
+          if ((gp.buttons[4] && gp.buttons[4].pressed) || (gp.buttons[6] && gp.buttons[6].pressed)) m |= FOC;
+          if (gp.buttons[0] && gp.buttons[0].pressed) m |= DASH;
+          if (gp.buttons[1] && gp.buttons[1].pressed) m |= BOMB;
+          const rising = m & ~input.gpPrev;
+          if (gp.buttons[9] && gp.buttons[9].pressed && !(input.gpPrev & 512)) pauseGame();
+          if (rising & DASH) input.dashEdge = true;
+          if (rising & BOMB) input.bombEdge = true;
+          input.gpPrev = m | (gp.buttons[9] && gp.buttons[9].pressed ? 512 : 0);
+        }
+      }
+      const rise = m & ~input.mask;
+      if (rise & DASH) input.dashEdge = true;
+      if (rise & BOMB) input.bombEdge = true;
+      input.mask = m;
+    }
+
+    function clearInput() {
+      input.keys = Object.create(null);
+      input.mask = 0; input.ptr = false; input.dashEdge = false; input.bombEdge = false;
+      input.focusTouch = false;
+      $('touch-focus').setAttribute('aria-pressed', 'false');
+    }
+
+    function simulate(dt) {
+      if (S.invuln > 0) S.invuln -= dt;
+      if (S.dashCd > 0) S.dashCd -= dt;
+      if (S.dashT > 0) S.dashT -= dt;
+      if (S.bombCd > 0) S.bombCd -= dt;
+      if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 18);
+      if (S.flash > 0) S.flash = Math.max(0, S.flash - dt * 2);
+      S.beatPulse = Math.max(0, S.beatPulse - dt * 3.2);
+      S.measureFlash = Math.max(0, S.measureFlash - dt * 2.2);
+      if (S.lastRateT > 0) {
+        S.lastRateT -= dt;
+        $('rating').style.opacity = String(Math.max(0, S.lastRateT * 2));
+      }
+      gatherInput();
+      const t = now();
+      if (S.playingReplay) applyReplay(t);
+      else recordReplay(t);
+      consumeMusicEvents(t);
+      applyMask(dt);
+      updateBoss(dt);
+      updateBullets(dt);
+      updateParticles(dt);
+    }
+
+    function fieldToCanvas(w, h) {
+      const s = Math.min(w / FW, h / FH);
+      const dw = FW * s, dh = FH * s;
+      return { s, ox: (w - dw) / 2, oy: (h - dh) / 2, dw, dh };
+    }
+
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width * canvas.width;
+      const y = (e.clientY - r.top) / r.height * canvas.height;
+      const f = fieldToCanvas(canvas.width, canvas.height);
+      return { x: (x - f.ox) / f.s, y: (y - f.oy) / f.s };
+    }
+
+    function drawBullet(g, b) {
+      if (b.tr && b.tr.length > 2 && settings.quality !== 'low') {
+        g.beginPath();
+        g.strokeStyle = b.col; g.globalAlpha = 0.25; g.lineWidth = b.r;
+        g.moveTo(b.tr[0], b.tr[1]);
+        for (let i = 2; i < b.tr.length; i += 2) g.lineTo(b.tr[i], b.tr[i + 1]);
+        g.stroke(); g.globalAlpha = 1;
+      }
+      g.beginPath();
+      g.fillStyle = b.col;
+      g.strokeStyle = '#07060c';
+      g.lineWidth = 2;
+      g.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      g.fill(); g.stroke();
+      g.beginPath();
+      g.fillStyle = '#fff';
+      g.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.28, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    function render() {
+      const dpr = Math.min(window.devicePixelRatio || 1, settings.quality === 'high' ? 2 : settings.quality === 'low' ? 1 : 1.5);
+      const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+      const tw = Math.max(1, Math.floor(cssW * dpr)), th = Math.max(1, Math.floor(cssH * dpr));
+      if (canvas.width !== tw || canvas.height !== th) { canvas.width = tw; canvas.height = th; }
+      if (off.width !== FW || off.height !== FH) { off.width = FW; off.height = FH; }
+      const g = octx;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.fillStyle = settings.contrast ? '#000' : '#07060f';
+      g.fillRect(0, 0, FW, FH);
+      const pulse = S.beatPulse;
+      g.fillStyle = '#0c1218';
+      for (let i = 0; i < stars.length; i++) {
+        const s = stars[i];
+        s.y += s.z * 8 * (STEP * 8);
+        if (s.y > FH) s.y = 0;
+        g.globalAlpha = 0.35 + pulse * 0.4;
+        g.fillRect(s.x, s.y, s.z, s.z);
+      }
+      g.globalAlpha = 1;
+      g.strokeStyle = 'rgba(110,231,255,' + (0.08 + pulse * 0.12) + ')';
+      g.lineWidth = 1;
+      for (let y = 40; y < FH; y += 40) { g.beginPath(); g.moveTo(0, y); g.lineTo(FW, y); g.stroke(); }
+      if (S.measureFlash > 0) {
+        g.fillStyle = 'rgba(200,255,61,' + (S.measureFlash * 0.06) + ')';
+        g.fillRect(0, 0, FW, FH);
+      }
+      const beat = audio.step;
+      const td = tickDur() * 4;
+      const gt = Math.max(0, now() - S.origin);
+      const beatIn = td ? (gt / td) : 0;
+      g.save();
+      g.translate(FW / 2, 108);
+      g.strokeStyle = '#6ee7ff';
+      g.globalAlpha = 0.35 + pulse * 0.5;
+      g.lineWidth = 2;
+      g.beginPath(); g.arc(0, 0, 38 + pulse * 10, 0, Math.PI * 2); g.stroke();
+      g.rotate((beatIn % 1) * Math.PI * 2);
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -34); g.stroke();
+      g.restore();
+      g.globalAlpha = 1;
+
+      if (S.boss && S.mode !== 'title') {
+        const b = S.boss;
+        g.save();
+        g.translate(b.x, b.y);
+        g.fillStyle = '#1a0810';
+        g.strokeStyle = '#ff2d78';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(0, -26); g.lineTo(22, 10); g.lineTo(0, 20); g.lineTo(-22, 10); g.closePath();
+        g.fill(); g.stroke();
+        g.fillStyle = '#6ee7ff';
+        g.beginPath(); g.arc(0, 0, 5, 0, Math.PI * 2); g.fill();
+        g.restore();
+      }
+
+      for (let i = 0; i < S.pshots.length; i++) {
+        const s = S.pshots[i];
+        g.fillStyle = '#c8ff3d';
+        g.fillRect(s.x - 1.5, s.y - 6, 3, 10);
+      }
+      for (let i = 0; i < S.bullets.length; i++) drawBullet(g, S.bullets[i]);
+      for (let i = 0; i < S.particles.length; i++) {
+        const p = S.particles[i];
+        g.globalAlpha = Math.max(0, p.life * 2);
+        g.fillStyle = p.col; g.fillRect(p.x, p.y, p.r, p.r);
+      }
+      g.globalAlpha = 1;
+
+      if (S.player && S.mode !== 'title' && S.mode !== 'howto') {
+        const p = S.player;
+        const blink = S.invuln > 0 && ((Math.floor(S.invuln * 12) % 2) === 0);
+        if (!blink) {
+          g.save();
+          g.translate(p.x, p.y);
+          g.rotate(p.facing + Math.PI / 2);
+          g.fillStyle = '#c8ff3d';
+          g.strokeStyle = '#0b2410';
+          g.lineWidth = 2;
+          g.beginPath(); g.moveTo(0, -16); g.lineTo(11, 12); g.lineTo(0, 7); g.lineTo(-11, 12); g.closePath();
+          g.fill(); g.stroke();
+          g.restore();
+        }
+        g.fillStyle = p.focus ? '#fff' : '#c8ff3d';
+        g.strokeStyle = '#000';
+        g.lineWidth = 2;
+        g.beginPath(); g.arc(p.x, p.y, p.focus ? p.r : 3, 0, Math.PI * 2); g.fill(); g.stroke();
+        if (S.dashT > 0) {
+          g.strokeStyle = 'rgba(200,255,61,0.5)';
+          g.beginPath(); g.arc(p.x, p.y, 18, 0, Math.PI * 2); g.stroke();
+        }
+      }
+
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      g.fillRect(0, 0, FW, 8); g.fillRect(0, FH - 8, FW, 8);
+      if (S.flash > 0 && !settings.reducedFlash) {
+        g.fillStyle = 'rgba(255,80,90,' + (S.flash * 0.35) + ')';
+        g.fillRect(0, 0, FW, FH);
+      } else if (S.flash > 0) {
+        g.strokeStyle = 'rgba(255,80,90,' + S.flash + ')';
+        g.lineWidth = 6; g.strokeRect(3, 3, FW - 6, FH - 6);
+      }
+
+      const f = fieldToCanvas(canvas.width, canvas.height);
+      ctx2.setTransform(1, 0, 0, 1, 0, 0);
+      ctx2.fillStyle = '#05040a';
+      ctx2.fillRect(0, 0, canvas.width, canvas.height);
+      let sx = 0, sy = 0;
+      if (S.shake > 0 && settings.shake && !settings.reducedMotion) {
+        sx = (Math.random() - 0.5) * S.shake * f.s;
+        sy = (Math.random() - 0.5) * S.shake * f.s;
+      }
+      if (settings.quality === 'high') {
+        ctx2.save();
+        ctx2.globalCompositeOperation = 'lighter';
+        ctx2.globalAlpha = 0.22;
+        ctx2.drawImage(off, f.ox + sx - 2, f.oy + sy - 2, f.dw + 4, f.dh + 4);
+        ctx2.restore();
+      }
+      ctx2.drawImage(off, f.ox + sx, f.oy + sy, f.dw, f.dh);
+
+      if (S.mode === 'title') {
+        attract(0.016);
+      }
+    }
+
+    function attract(dt) {
+      S.attractT += dt;
+      if (S.bullets.length < 40 && (S.frames % 20 === 0)) {
+        fireSpiral(FW / 2, 120, 4, 60, S.attractT * 2);
+      }
+      for (let i = S.bullets.length - 1; i >= 0; i--) {
+        const b = S.bullets[i];
+        b.x += b.vx * dt; b.y += b.vy * dt; b.life = (b.life || 6) - dt;
+        if (b.y > FH + 20 || b.life < 0) S.bullets.splice(i, 1);
+      }
+    }
+
+    function drawViz() {
+      const w = viz.width, h = viz.height;
+      vctx.fillStyle = '#05070a';
+      vctx.fillRect(0, 0, w, h);
+      if (!audio.analyser) {
+        vctx.strokeStyle = '#234';
+        vctx.beginPath(); vctx.moveTo(0, h / 2); vctx.lineTo(w, h / 2); vctx.stroke();
+        return;
+      }
+      const n = audio.analyser.frequencyBinCount;
+      const spec = new Uint8Array(n);
+      const wave = new Uint8Array(n);
+      audio.analyser.getByteFrequencyData(spec);
+      audio.analyser.getByteTimeDomainData(wave);
+      let peak = 0;
+      vctx.fillStyle = '#c8ff3d';
+      const bw = w / n;
+      for (let i = 0; i < n; i++) {
+        const v = spec[i] / 255;
+        peak = Math.max(peak, v);
+        vctx.globalAlpha = 0.35;
+        vctx.fillRect(i * bw, h - v * h, Math.max(1, bw - 0.5), v * h);
+      }
+      vctx.globalAlpha = 1;
+      vctx.strokeStyle = '#6ee7ff';
+      vctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const y = (wave[i] / 255) * h;
+        if (i === 0) vctx.moveTo(i * bw, y); else vctx.lineTo(i * bw, y);
+      }
+      vctx.stroke();
+      audio.lastVisPeak = peak;
+    }
+
+    function transportReadout() {
+      const gt = Math.max(0, now() - S.origin);
+      const beatF = gt / spb();
+      const measure = Math.floor(beatF / 4) + 1;
+      const beat = Math.floor(beatF % 4) + 1;
+      return { measure, beat, beatF, gt };
+    }
+
+    function updateHud() {
+      const tr = transportReadout();
+      $('hud-hp').textContent = Math.max(0, S.hp);
+      $('hud-bomb').textContent = S.bombs;
+      $('hud-graze').textContent = S.graze;
+      $('hud-score').textContent = S.score;
+      $('hud-combo').textContent = S.combo;
+      $('hud-best').textContent = S.best;
+      const frac = S.boss ? clamp(S.boss.hp / S.boss.max, 0, 1) : 0;
+      $('boss-hp').style.transform = 'scaleX(' + frac + ')';
+      $('boss-meta').textContent = (S.mode === 'lab' ? 'LAB · ' + lab.pattern : 'OSCI · ' + (PHASES[S.phase] || '')) + ' · ' + tr.measure + ':' + tr.beat;
+      $('st-fps').textContent = String(S.fps);
+      $('st-bpm').textContent = String(settings.bpm);
+      $('st-beat').textContent = tr.measure + ':' + tr.beat;
+      const astate = !audio.supported ? 'none' : (!audio.ctx ? 'off' : audio.ctx.state);
+      const ae = $('st-audio');
+      ae.textContent = astate;
+      ae.className = astate === 'running' ? 'ok' : astate === 'suspended' ? 'warn' : 'bad';
+      $('st-ahead').textContent = audio.scheduleAhead.toFixed(2);
+      $('st-bullets').textContent = String(S.bullets.length);
+      $('st-phase').textContent = S.mode === 'lab' ? 'lab' : String(S.phase + 1);
+      $('st-score').textContent = String(S.score);
+      $('st-combo').textContent = String(S.combo);
+      $('st-offset').textContent = String(settings.offsetMs | 0);
+      $('st-pause').textContent = S.paused ? 'pause' : 'run';
+      $('st-pause').className = S.paused ? 'warn' : 'ok';
+      if (settings.diag) {
+        const p = S.player;
+        $('diag').textContent =
+          'ctxTime    ' + audioNow().toFixed(3) + '\n' +
+          'gameTime   ' + tr.gt.toFixed(3) + '\n' +
+          'step       ' + audio.step + '\n' +
+          'nextNote   ' + (audio.nextNote || 0).toFixed(3) + '\n' +
+          'horizon    ' + audio.scheduleAhead + '\n' +
+          'lookahead  ' + audio.lookahead + '\n' +
+          'queued     ' + S.pending.filter((e) => !e.used).length + '\n' +
+          'bullets    ' + S.bullets.length + '\n' +
+          'hitbox     ' + (p ? p.x.toFixed(1) + ',' + p.y.toFixed(1) + ' r' + p.r : '-') + '\n' +
+          'timingErr  ' + S.lastErr.toFixed(1) + 'ms\n' +
+          'drops      ' + S.drops + '\n' +
+          'seed       ' + S.seed;
+      }
+    }
+
+    function getDiagnostics() {
+      const tr = transportReadout();
+      return {
+        fps: S.fps, bpm: settings.bpm, beat: tr.beat, measure: tr.measure,
+        audioState: audio.ctx ? audio.ctx.state : (audio.supported ? 'off' : 'unsupported'),
+        schedulerLookahead: audio.lookahead, scheduleAhead: audio.scheduleAhead,
+        audioTime: audioNow(), transportStep: audio.step, transportBeat: tr.beatF,
+        scheduled: audio.scheduled.slice(), pending: S.pending.filter((e) => !e.used).length,
+        gameplayTime: tr.gt, bullets: S.bullets.length, phase: S.phase,
+        score: S.score, combo: S.combo, graze: S.graze, hp: S.hp, bombs: S.bombs,
+        offsetMs: settings.offsetMs, paused: S.paused, mode: S.mode, seed: S.seed,
+        timingErrorMs: S.lastErr, droppedFrames: S.drops,
+        hitbox: S.player ? { x: S.player.x, y: S.player.y, r: S.player.r } : null,
+        analyserPeak: audio.lastVisPeak, lastKick: audio.lastKick,
+        perfects: S.perfects, goods: S.goods, misses: S.misses, maxCombo: S.maxCombo
+      };
+    }
+
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      const realDt = (ts - S.lastFrame) / 1000;
+      S.lastFrame = ts;
+      if (realDt > 0.05) S.drops++;
+      S.frames++;
+      S.fpsT += realDt;
+      if (S.fpsT >= 0.4) { S.fps = Math.round(S.frames / S.fpsT); S.frames = 0; S.fpsT = 0; }
+      if (audio.ctx && audio.ctx.state !== 'running' && !S.paused &&
+          (S.mode === 'play' || S.mode === 'lab' || S.mode === 'replay' || S.mode === 'countdown' || S.mode === 'pause')) {
+        if (S.mode !== 'pause') audio.ctx.resume().catch(() => {});
+      }
+
+      if (!S.paused && (S.mode === 'play' || S.mode === 'lab' || S.mode === 'replay' || S.mode === 'countdown')) {
+        const t = now();
+        let dt = t - S.lastNow;
+        S.lastNow = t;
+        if (dt > 0.3) { S.lastNow = t; dt = 0; }
+        S.acc += Math.max(0, dt);
+        let steps = 0;
+        while (S.acc >= STEP && steps < 10) {
+          if (S.mode !== 'countdown') simulate(STEP);
+          else gatherInput();
+          S.acc -= STEP; S.sim += STEP; steps++;
+        }
+      }
+      render();
+      drawViz();
+      updateHud();
+    }
+
+    function bindSettingsUI() {
+      $('set-bpm').value = settings.bpm; $('set-bpm-v').textContent = settings.bpm;
+      $('set-offset').value = settings.offsetMs; $('set-offset-v').textContent = settings.offsetMs;
+      $('set-diff').value = String(settings.diff);
+      $('set-preset').value = settings.preset;
+      $('set-master').value = settings.master * 100;
+      $('set-drums').value = settings.drums * 100;
+      $('set-bass').value = settings.bass * 100;
+      $('set-melody').value = settings.melody * 100;
+      $('set-atmos').value = settings.atmos * 100;
+      $('set-particles').value = settings.particles * 100;
+      $('set-quality').value = settings.quality;
+      $('set-shake').checked = settings.shake;
+      $('set-motion').checked = settings.reducedMotion;
+      $('set-flash').checked = settings.reducedFlash;
+      $('set-contrast').checked = settings.contrast;
+      $('set-diag').checked = settings.diag;
+      $('set-mute-drums').checked = settings.mute.drums;
+      $('set-mute-bass').checked = settings.mute.bass;
+      $('set-mute-melody').checked = settings.mute.melody;
+      $('set-mute-atmos').checked = settings.mute.atmos;
+      $('set-bpm').oninput = () => { settings.bpm = +$('set-bpm').value; $('set-bpm-v').textContent = settings.bpm; saveSettings(); };
+      $('set-offset').oninput = () => { settings.offsetMs = +$('set-offset').value; $('set-offset-v').textContent = settings.offsetMs; saveSettings(); };
+      $('set-diff').onchange = () => { settings.diff = +$('set-diff').value; saveSettings(); };
+      $('set-preset').onchange = () => { settings.preset = $('set-preset').value; saveSettings(); updatePad(); };
+      $('set-master').oninput = () => { settings.master = +$('set-master').value / 100; applyGains(); saveSettings(); };
+      $('set-drums').oninput = () => { settings.drums = +$('set-drums').value / 100; applyGains(); saveSettings(); };
+      $('set-bass').oninput = () => { settings.bass = +$('set-bass').value / 100; applyGains(); saveSettings(); };
+      $('set-melody').oninput = () => { settings.melody = +$('set-melody').value / 100; applyGains(); saveSettings(); };
+      $('set-atmos').oninput = () => { settings.atmos = +$('set-atmos').value / 100; applyGains(); saveSettings(); };
+      $('set-particles').oninput = () => { settings.particles = +$('set-particles').value / 100; saveSettings(); };
+      $('set-quality').onchange = () => { settings.quality = $('set-quality').value; saveSettings(); };
+      $('set-shake').onchange = () => { settings.shake = $('set-shake').checked; saveSettings(); };
+      $('set-motion').onchange = () => { settings.reducedMotion = $('set-motion').checked; saveSettings(); };
+      $('set-flash').onchange = () => { settings.reducedFlash = $('set-flash').checked; saveSettings(); };
+      $('set-contrast').onchange = () => { settings.contrast = $('set-contrast').checked; document.body.classList.toggle('contrast', settings.contrast); saveSettings(); };
+      $('set-diag').onchange = () => { settings.diag = $('set-diag').checked; document.body.classList.toggle('show-diag', settings.diag); saveSettings(); };
+      $('set-mute-drums').onchange = () => { settings.mute.drums = $('set-mute-drums').checked; applyGains(); saveSettings(); };
+      $('set-mute-bass').onchange = () => { settings.mute.bass = $('set-mute-bass').checked; applyGains(); saveSettings(); };
+      $('set-mute-melody').onchange = () => { settings.mute.melody = $('set-mute-melody').checked; applyGains(); saveSettings(); };
+      $('set-mute-atmos').onchange = () => { settings.mute.atmos = $('set-mute-atmos').checked; applyGains(); saveSettings(); };
+      document.body.classList.toggle('contrast', settings.contrast);
+      document.body.classList.toggle('show-diag', settings.diag);
+    }
+
+    function buildSteps() {
+      const root = $('lab-steps');
+      root.innerHTML = '';
+      for (let i = 0; i < 16; i++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = String(i + 1);
+        b.setAttribute('aria-label', 'Step ' + (i + 1));
+        b.setAttribute('aria-pressed', lab.steps[i] ? 'true' : 'false');
+        b.addEventListener('click', () => {
+          lab.steps[i] = lab.steps[i] ? 0 : 1;
+          b.setAttribute('aria-pressed', lab.steps[i] ? 'true' : 'false');
+        });
+        root.appendChild(b);
+      }
+    }
+    function refreshSteps() {
+      const btns = $('lab-steps').children;
+      for (let i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', lab.steps[i] ? 'true' : 'false');
+    }
+
+    const LAB_PRESETS = {
+      gentle: { pattern: 'radial', bpm: 108, sub: 4, dens: 4, spd: 80, seed: 3, steps: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+      overture: { pattern: 'aimed', bpm: 132, sub: 4, dens: 3, spd: 120, seed: 1, steps: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
+      garden: { pattern: 'spiral', bpm: 140, sub: 8, dens: 6, spd: 100, seed: 9, steps: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+      walls: { pattern: 'wall', bpm: 124, sub: 4, dens: 8, spd: 90, seed: 12, steps: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+      storm: { pattern: 'accel', bpm: 150, sub: 8, dens: 8, spd: 140, seed: 21, steps: [1,0,1,0,1,0,1,0,1,1,0,1,0,1,0,1] },
+      chaos: { pattern: 'mix', bpm: 168, sub: 16, dens: 12, spd: 180, seed: 99, steps: [1,1,0,1,1,0,1,1,1,0,1,1,0,1,1,1] }
+    };
+
+    function applyLabPreset(name) {
+      const p = LAB_PRESETS[name]; if (!p) return;
+      Object.assign(lab, JSON.parse(JSON.stringify(p)));
+      $('lab-pattern').value = lab.pattern;
+      $('lab-bpm').value = lab.bpm; $('lab-bpm-v').textContent = lab.bpm;
+      $('lab-sub').value = String(lab.sub);
+      $('lab-dens').value = lab.dens; $('lab-dens-v').textContent = lab.dens;
+      $('lab-spd').value = lab.spd; $('lab-spd-v').textContent = lab.spd;
+      $('lab-seed').value = lab.seed;
+      refreshSteps();
+    }
+
+    async function countdownThen(kind, seed, replay) {
+      if (countdownThen._iv) { clearInterval(countdownThen._iv); countdownThen._iv = 0; }
+      await resumeAudio();
+      if (kind === 'lab') settings.bpm = lab.bpm;
+      else settings.bpm = +$('set-bpm').value || settings.bpm;
+      clearWorld();
+      S.mode = 'countdown';
+      S.paused = false;
+      clockStart(0);
+      S.origin = 0;
+      showScreen('screen-countdown');
+      startTransport(0);
+      const start = 0;
+      const tick = () => {
+        const elapsed = now() - start;
+        const remain = Math.max(1, 4 - Math.floor(elapsed / spb()));
+        $('count-num').textContent = String(remain);
+        if (elapsed >= 4 * spb() - 0.02) {
+          clearInterval(countdownThen._iv);
+          countdownThen._iv = 0;
+          stopTransport();
+          startRun(kind, seed, replay);
+        }
+      };
+      tick();
+      countdownThen._iv = setInterval(tick, 40);
+    }
+
+    function quitToTitle() {
+      stopTransport();
+      clockPause();
+      S.mode = 'title';
+      S.paused = false;
+      clearWorld();
+      $('lab-live').style.display = 'none';
+      showScreen('screen-title');
+      $('hud-best').textContent = S.best;
+    }
+
+    function onKey(e, down) {
+      if (e.code === 'Space') e.preventDefault();
+      if (down) input.keys[e.code] = true; else delete input.keys[e.code];
+      if (down && (e.code === 'Escape' || e.code === 'KeyP')) {
+        if (S.mode === 'pause') resumeGame();
+        else pauseGame();
+      }
+      if (down && e.code === 'F1') {
+        e.preventDefault();
+        settings.diag = !settings.diag;
+        $('set-diag').checked = settings.diag;
+        document.body.classList.toggle('show-diag', settings.diag);
+      }
+      if (down && S.calOn && e.code === 'Space') tapCal();
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      input.ptr = true;
+      const f = pointerToField(e); input.px = f.x; input.py = f.y;
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!input.ptr) return;
+      const f = pointerToField(e); input.px = f.x; input.py = f.y;
+    });
+    canvas.addEventListener('pointerup', () => { input.ptr = false; });
+    canvas.addEventListener('pointercancel', () => { input.ptr = false; });
+
+    window.addEventListener('keydown', (e) => onKey(e, true));
+    window.addEventListener('keyup', (e) => onKey(e, false));
+    window.addEventListener('blur', clearInput);
+    document.addEventListener('visibilitychange', () => {
+      clearInput();
+      if (document.hidden && (S.mode === 'play' || S.mode === 'lab' || S.mode === 'replay')) pauseGame();
+    });
+
+    $('touch-focus').addEventListener('pointerdown', () => {
+      input.focusTouch = true; $('touch-focus').setAttribute('aria-pressed', 'true');
+    });
+    $('touch-focus').addEventListener('pointerup', () => {
+      input.focusTouch = false; $('touch-focus').setAttribute('aria-pressed', 'false');
+    });
+    $('touch-dash').addEventListener('click', () => { input.dashEdge = true; input.mask |= DASH; });
+    $('touch-bomb').addEventListener('click', () => { input.bombEdge = true; });
+    $('touch-pause').addEventListener('click', () => {
+      if (S.mode === 'pause') resumeGame();
+      else pauseGame();
+    });
+    $('lab-live-pattern').onchange = () => { lab.pattern = $('lab-live-pattern').value; $('lab-pattern').value = lab.pattern; };
+    $('lab-live-dens').oninput = () => { lab.dens = +$('lab-live-dens').value; $('lab-dens').value = lab.dens; $('lab-dens-v').textContent = lab.dens; };
+    $('lab-live-spd').oninput = () => { lab.spd = +$('lab-live-spd').value; $('lab-spd').value = lab.spd; $('lab-spd-v').textContent = lab.spd; };
+
+    $('btn-start').onclick = () => countdownThen('story', parseInt($('seed-input').value, 10) || 0);
+    $('btn-howto-play').onclick = () => countdownThen('story', parseInt($('seed-input').value, 10) || 0);
+    $('btn-practice').onclick = () => { showScreen('screen-practice'); S.mode = 'title'; };
+    $('btn-howto').onclick = () => showScreen('screen-howto');
+    $('btn-howto-back').onclick = () => showScreen('screen-title');
+    $('btn-settings').onclick = () => showScreen('screen-settings');
+    $('btn-settings-back').onclick = () => showScreen(S.mode === 'pause' ? 'screen-pause' : 'screen-title');
+    $('btn-lab-back').onclick = () => showScreen('screen-title');
+    $('btn-lab-run').onclick = () => {
+      lab.pattern = $('lab-pattern').value;
+      lab.bpm = +$('lab-bpm').value;
+      lab.sub = +$('lab-sub').value;
+      lab.dens = +$('lab-dens').value;
+      lab.spd = +$('lab-spd').value;
+      lab.seed = +$('lab-seed').value || 1;
+      settings.bpm = lab.bpm;
+      countdownThen('lab', lab.seed);
+    };
+    $('lab-bpm').oninput = () => { lab.bpm = +$('lab-bpm').value; $('lab-bpm-v').textContent = lab.bpm; };
+    $('lab-dens').oninput = () => { lab.dens = +$('lab-dens').value; $('lab-dens-v').textContent = lab.dens; };
+    $('lab-spd').oninput = () => { lab.spd = +$('lab-spd').value; $('lab-spd-v').textContent = lab.spd; };
+    $('lab-pattern').onchange = () => { lab.pattern = $('lab-pattern').value; };
+    $('lab-sub').onchange = () => { lab.sub = +$('lab-sub').value; };
+    $('lab-seed').onchange = () => { lab.seed = +$('lab-seed').value || 1; };
+    document.querySelectorAll('[data-preset]').forEach((b) => b.onclick = () => applyLabPreset(b.getAttribute('data-preset')));
+
+    $('btn-resume').onclick = () => resumeGame();
+    $('btn-pause-settings').onclick = () => showScreen('screen-settings');
+    $('btn-restart').onclick = () => countdownThen(S.runKind === 'lab' ? 'lab' : 'story', S.seed);
+    $('btn-quit').onclick = quitToTitle;
+    $('btn-fail-retry').onclick = () => countdownThen(S.runKind === 'lab' ? 'lab' : 'story', S.seed);
+    $('btn-win-retry').onclick = () => countdownThen('story', 0);
+    $('btn-fail-title').onclick = quitToTitle;
+    $('btn-win-title').onclick = quitToTitle;
+    $('btn-fail-copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText($('replay-out-fail').value); toast('REPLAY COPIED'); };
+    $('btn-win-copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText($('replay-out-win').value); toast('REPLAY COPIED'); };
+
+    $('btn-import').onclick = () => {
+      try {
+        const data = JSON.parse($('replay-in').value);
+        if (!data || !data.inputs) throw new Error('bad');
+        if (data.bpm) settings.bpm = data.bpm;
+        if (data.diff != null) settings.diff = data.diff;
+        if (data.preset) settings.preset = data.preset;
+        if (data.offset != null) settings.offsetMs = data.offset;
+        if (data.lab) Object.assign(lab, data.lab);
+        bindSettingsUI();
+        countdownThen(data.kind === 'lab' ? 'lab' : 'story', data.seed, data);
+      } catch (err) { toast('INVALID REPLAY'); }
+    };
+
+    function tapCal() {
+      if (!S.calOn) return;
+      const err = beatWindow(now()) * 1000;
+      S.cal.push(err);
+      $('cal-n').textContent = String(S.cal.length);
+      $('cal-err').textContent = err.toFixed(1);
+      if (S.cal.length >= 8) {
+        const avg = S.cal.reduce((a, b) => a + b, 0) / S.cal.length;
+        settings.offsetMs = clamp(Math.round(settings.offsetMs - avg), -120, 120);
+        $('set-offset').value = settings.offsetMs;
+        $('set-offset-v').textContent = settings.offsetMs;
+        saveSettings();
+        S.calOn = false;
+        stopTransport();
+        toast('OFFSET ' + settings.offsetMs + 'ms');
+      }
+    }
+    $('btn-calibrate').onclick = () => showScreen('screen-calibrate');
+    $('btn-cal-back').onclick = () => { S.calOn = false; stopTransport(); showScreen('screen-title'); };
+    $('btn-cal-start').onclick = async () => {
+      await resumeAudio();
+      S.cal = []; S.calOn = true;
+      $('cal-n').textContent = '0';
+      clockStart(0);
+      S.origin = 0;
+      startTransport(0);
+    };
+    $('btn-cal-tap').onclick = tapCal;
+
+    if (!audio.supported) {
+      const b = $('noscript-audio');
+      b.style.display = 'block';
+      b.textContent = 'Web Audio is unavailable. Visual transport will use a fallback clock.';
+    }
+
+    window.__CADENCE = {
+      getDiagnostics, getState: getDiagnostics, exportReplay,
+      importReplay(json) { $('replay-in').value = typeof json === 'string' ? json : JSON.stringify(json); $('btn-import').click(); },
+      settings, lab, S, audio, input,
+      firePattern, startRun, pauseGame, resumeGame, hitPlayer, clearInput,
+      now, clockPause, clockResume, audioNow, errors
+    };
+
+    bindSettingsUI();
+    buildSteps();
+    $('hud-best').textContent = S.best;
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>

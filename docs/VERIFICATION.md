@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Thirteen new builds: 2026-09-08
+
+The collection contains **56 HTML builds across fifteen prompts and six models**: Astra 14, Opus 7, Grok 14, GLM 6, Gemini 11, and Qwen 4. This batch adds Qwen 04; Opus 06/07; Gemini 09/10/11; Astra 13/14; Grok 09/12/13/15; and GLM 06. Drone racing, the evolutionary ecosystem, and the digital logic lab now have their first submissions. Prompt IDs still group skipped submissions correctly, including Grok's task 15 without task 14.
+
+All **432 original files totaling 145,234,578 bytes** remain unchanged. Twelve thumbnails are byte-for-byte copies of individually inspected supplied screenshots. Gemini's stealth-game thumbnail is a fresh **1280 × 800** capture of the delivered HTML after starting its default mission: the supplied active desktop captures showed an older diagnostic-overlay position.
+
+All **thirteen new builds** launched in Chromium through the actual Netlify Dev public sandbox, with rendered canvases, no uncaught JavaScript errors, and no external requests during the smoke checks. Desktop previews occupied the full area beneath the 43-pixel bar; mobile previews measured **390 × 765** beneath the 79-pixel bar. Closing each viewer removed its iframe. The expanded sand, drone, ecosystem, and logic comparisons showed four, two, one, and one recorded builds respectively, with empty columns hidden by default. These are gallery integration and launch checks, not complete domain evaluations or model scores.
+
+The bounded privacy review scanned all **127 text files**, including the complete 59,090,464-byte Astra ecosystem log, and metadata of all **305 original PNGs**. No confirmed real credentials, private-identity linkage, or private endpoints were found. Pseudonymous local paths remain in raw GitHub evidence; that evidence is excluded from the website. Selected thumbnail pixels were reviewed, but the remaining evidence screenshots were not exhaustively inspected.
+
+Production deployment **`6aa00772ea058d91f5c3db8a`** publishes **270 files totaling 10,241,867 bytes (9.77 MiB)**. Live HTTPS checks passed for all **56** implementation share pages, source hashes, thumbnails and attachment/sandbox headers, plus all **15** comparison pages and preview images. All six model profiles remain intact; thirty-three representative private routes returned 404. Four focused production browser checks also passed for Gemini stealth, Astra drone racing and ecosystem, and Grok logic, together with the updated comparison groups and default visibility filter.
+
 ## Recorded builds only: 2026-09-08
 
 The showcase and expanded comparison now share a **Recorded builds only** checkbox, enabled by default. It removes empty model columns before layout, including both missing submissions and placeholders caused by other filters. Existing builds, repeated attempts, and configured model order remain intact. The preference is saved in the existing browser settings; older settings default to enabled, and Reset restores that default. Shared comparisons honor the preference while retaining their independent model and search selection.

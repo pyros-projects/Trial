@@ -1,0 +1,27 @@
+import importlib.util, time
+sp=importlib.util.spec_from_file_location('checks','evidence/browser-checks.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)
+ab,ev,click,check,snap=m.ab,m.ev,m.click,m.check,m.snap
+ab('set','viewport',1280,800);ab('network','route','https://*','--abort');ab('network','route','http://*','--abort');ab('set','offline','on')
+ab('open',m.ROOT.joinpath('index.html').as_uri());ab('wait','--fn','!!window.ecoLab')
+if not ev('ecoLab.view.paused'):click('Pause')
+ab('select','#presetSelect','balanced')
+if not ev('ecoLab.view.paused'):click('Pause')
+ab('select','#worldSize','medium');ab('fill','#seedInput','042');click('Apply');click('1×');click('Follow');click('Resume')
+ab('wait','--fn','ecoLab.state.tick>20');click('Pause');time.sleep(.4)
+tracking=ev('(()=>{const v=ecoLab.view,o=ecoLab.state.byId.get(v.selected);return {following:v.following,id:o.id,tick:ecoLab.state.tick,age:o.age,camera:v.camera,organism:{x:o.x,y:o.y},distance:Math.hypot(v.camera.x-o.x,v.camera.y-o.y)}})()')
+check('follow_moving_organism',tracking['following'] and tracking['distance']<5,tracking)
+click('Diagnostic overlays');ab('check','[data-overlay=grid]');ab('check','[data-overlay=trails]');click('Diagnostic overlays');click('Resume');ab('wait','--fn','ecoLab.state.tick>50');click('Pause');snap('grid-and-trails');check('grid_and_trails',ev('ecoLab.view.overlays.grid && ecoLab.view.overlays.trails'),ev('ecoLab.view.overlays'))
+m.load('evolved-browser-save.json');click('Lineage');parent=ev('ecoLab.state.lineage[ecoLab.view.selected].parent');ab('click',f'[data-ancestor="{parent}"]');ab('click','#inspectAncestor');check('inspect_ancestor',ev('ecoLab.view.selected')==parent,ev('({selected:ecoLab.view.selected,archived:!ecoLab.state.byId.has(ecoLab.view.selected),record:ecoLab.state.lineage[ecoLab.view.selected]})'))
+click('Lineage');root=ev('ecoLab.state.lineage[ecoLab.view.selected].root');click('Highlight this lineage');check('highlight_lineage',ev('ecoLab.view.highlight.root')==root,ev('ecoLab.view.highlight'))
+click('Reset');click('Remove entities and barriers');time.sleep(.3)
+point=ev('(()=>{const s=ecoLab.state,v=ecoLab.view,r=document.getElementById("world").getBoundingClientRect(),scale=Math.max(r.width/s.width,r.height/s.height)*1.01*v.camera.zoom;const o=s.organisms.find(o=>Math.abs(o.x-v.camera.x)<150&&Math.abs(o.y-v.camera.y)<70);return{id:o.id,x:Math.round(r.x+r.width/2+(o.x-v.camera.x)*scale),y:Math.round(r.y+r.height/2+(o.y-v.camera.y)*scale)}})()')
+before=ev('ecoLab.state.organisms.length');ab('mouse','move',point['x'],point['y']);ab('mouse','down','left');ab('mouse','up','left');check('remove_organism',not ev(f'ecoLab.state.byId.has({point["id"]})') and ev('ecoLab.state.organisms.length')<before,{'removed_id':point['id'],'before':before,'after':ev('ecoLab.state.organisms.length')})
+click('Reset');click('Select organism');click('5×');click('Resume');ab('wait','--fn','ecoLab.state.tick>=260');click('Pause');click('1×');click('Fit world');click('Zoom in');ab('find','role','tab','click','--name','Genome','--exact')
+for key in ['sensors','targets','vectors','decisions','trails','grid']:
+ if ev(f'ecoLab.view.overlays.{key}'):
+  click('Diagnostic overlays');ab('uncheck',f'[data-overlay={key}]');click('Diagnostic overlays')
+ab('scroll','up',3000,'--selector','#controls');ab('scroll','up',10000);time.sleep(3.3)
+snap('desktop-final');ab('screenshot','--full','evidence/desktop-full.png');ab('set','viewport',1440,900);snap('desktop-wide')
+check('final_desktop_layout',ev('document.documentElement.scrollWidth===innerWidth'),ev('({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth})'))
+check('final_desktop_errors',not ab('errors').get('errors'),ab('errors').get('errors'))
+ab('console');requests=ab('network','requests').get('requests',[]);check('final_offline_requests',not any(r['url'].startswith(('http://','https://')) for r in requests),[r['url'] for r in requests])

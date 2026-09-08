@@ -1,0 +1,3231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Soft-Body, Cloth & Constraint Playground</title>
+<style>
+:root{
+  --bg:#0b111b; --bg2:#121c2b; --panel:rgba(17,26,40,.86); --line:rgba(120,170,220,.16);
+  --ink:#dce8f5; --dim:#8ea6c0; --accent:#5fe3d0; --accent2:#6fb4ff; --warn:#ff7a8c;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans);
+  overflow:hidden; -webkit-text-size-adjust:100%;
+}
+#app{display:flex; flex-direction:column; height:100%; width:100%}
+
+/* ---------------------------------------------------------------- top bar */
+header{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:8px 10px; background:linear-gradient(180deg,#16233a,#101a29);
+  border-bottom:1px solid var(--line); z-index:5;
+}
+.brand{display:flex; flex-direction:column; gap:1px; min-width:0}
+.brand b{font-size:12.5px; letter-spacing:.14em; color:var(--accent); font-weight:650; white-space:nowrap}
+.brand span{font-size:10.5px; color:var(--dim); max-width:44vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.spacer{flex:1 1 8px}
+select,button{
+  font-family:var(--sans); font-size:12px; color:var(--ink);
+  background:#1b293f; border:1px solid var(--line); border-radius:7px;
+  padding:6px 9px; cursor:pointer; transition:background .12s,border-color .12s;
+}
+select{padding:6px 6px}
+button:hover,select:hover{background:#233450; border-color:rgba(140,200,255,.4)}
+button:active{transform:translateY(1px)}
+button.on{background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:650}
+button.warn.on{background:var(--warn); color:#2b0710; border-color:var(--warn)}
+.tools{display:flex; gap:4px; overflow-x:auto; padding-bottom:2px; max-width:100%}
+.tool{display:flex; flex-direction:column; align-items:center; gap:2px; min-width:62px; padding:5px 6px}
+.tool small{font-size:9px; opacity:.6; letter-spacing:.06em}
+.tool.active{background:#2b4a6b; border-color:var(--accent2); color:#eaf6ff}
+.tool.active small{opacity:.85}
+
+/* ------------------------------------------------------------------ stage */
+.stage{position:relative; flex:1 1 auto; min-height:0; overflow:hidden}
+canvas#sim{
+  display:block; width:100%; height:100%; touch-action:none; cursor:crosshair;
+  background:#0b111b;
+}
+#hud{
+  position:absolute; left:10px; top:10px; pointer-events:none;
+  background:rgba(9,15,24,.72); border:1px solid var(--line); border-radius:9px;
+  padding:8px 10px; font-family:var(--mono); font-size:10.5px; line-height:1.5;
+  color:#cfe3f7; backdrop-filter:blur(3px); max-width:min(62vw,430px);
+  white-space:pre; text-shadow:0 1px 1px rgba(0,0,0,.6);
+}
+#hud b{color:var(--accent); font-weight:600}
+#hud .bad{color:var(--warn)}
+#spark{display:block; margin-top:4px; opacity:.85}
+#hint{
+  position:absolute; left:10px; bottom:10px; right:10px; pointer-events:none;
+  font-family:var(--mono); font-size:10px; color:#9fb6cf;
+  background:rgba(9,15,24,.6); border:1px solid var(--line); border-radius:8px;
+  padding:6px 9px; line-height:1.55;
+}
+#hint kbd{
+  background:#22334c; border:1px solid var(--line); border-radius:4px;
+  padding:0 4px; font-family:var(--mono); font-size:9.5px; color:#cfe3f7;
+}
+#toast{
+  position:absolute; left:50%; top:14px; transform:translateX(-50%);
+  display:flex; flex-direction:column; gap:5px; align-items:center; pointer-events:none;
+}
+.toast{
+  font-family:var(--mono); font-size:11px; padding:6px 12px; border-radius:20px;
+  background:rgba(20,34,52,.94); border:1px solid rgba(120,200,255,.35); color:#dceefc;
+  animation:pop .18s ease-out; box-shadow:0 4px 18px rgba(0,0,0,.4);
+}
+.toast.err{background:rgba(58,20,28,.95); border-color:rgba(255,122,140,.5); color:#ffd7dd}
+@keyframes pop{from{opacity:0;transform:translateY(-6px)}to{opacity:1}}
+
+/* ------------------------------------------------------------------- panel */
+#panel{
+  position:absolute; right:8px; top:8px; bottom:8px; width:286px;
+  background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  padding:8px; overflow-y:auto; overscroll-behavior:contain;
+  backdrop-filter:blur(6px); box-shadow:0 6px 26px rgba(0,0,0,.35);
+  transition:transform .2s ease, opacity .2s ease;
+}
+#panel.hidden{transform:translateX(112%); opacity:.0; pointer-events:none}
+.grp{margin-bottom:10px}
+.grp>h4{
+  margin:0 0 6px; font-size:9.5px; letter-spacing:.18em; color:var(--accent);
+  font-weight:650; border-bottom:1px solid var(--line); padding-bottom:3px;
+}
+.ctl{display:flex; align-items:center; gap:6px; margin:0 0 5px}
+.ctl label{flex:0 0 96px; font-size:10.5px; color:var(--dim)}
+.ctl input[type=range]{flex:1 1 auto; min-width:0; height:16px; accent-color:var(--accent)}
+.ctl output{
+  flex:0 0 52px; text-align:right; font-family:var(--mono); font-size:10px;
+  color:#cfe3f7; background:#16233a; border-radius:4px; padding:2px 4px;
+}
+.ctl.chk label{flex:1 1 auto; color:var(--ink)}
+.ctl.chk input{accent-color:var(--accent); width:15px; height:15px}
+.row{display:flex; gap:5px; flex-wrap:wrap}
+.row button{flex:1 1 auto; font-size:11px; padding:6px 7px}
+#keys{font-family:var(--mono); font-size:9.5px; color:#93aabf; line-height:1.7}
+#keys b{color:var(--accent2)}
+#fab{
+  position:absolute; right:10px; bottom:10px; z-index:6; display:none;
+  background:var(--accent); color:#06231f; border:0; border-radius:20px;
+  padding:9px 13px; font-size:12px; font-weight:650; box-shadow:0 4px 16px rgba(0,0,0,.45);
+}
+
+/* --------------------------------------------------------------- narrow UI */
+@media (max-width:820px){
+  header{padding:6px}
+  .brand{width:100%}
+  .brand span{max-width:80vw}
+  #panel{
+    left:6px; right:6px; top:auto; bottom:6px; width:auto; height:52%;
+    max-height:52%;
+  }
+  #panel.hidden{transform:translateY(115%)}
+  #fab{display:block; bottom:auto; top:8px; right:10px}
+  #hud{font-size:9px; max-width:82vw; left:6px; top:6px; padding:6px 7px}
+  #hint{display:none}
+  .stage{padding-bottom:0}
+}
+@media (max-width:390px){
+  #hud{font-size:8.2px; line-height:1.4}
+  .ctl label{flex-basis:82px; font-size:9.8px}
+  .ctl output{flex-basis:44px; font-size:9.4px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <b>SOFT-BODY · CLOTH · CONSTRAINT PLAYGROUND</b>
+      <span id="blurb">XPBD constraint solver · drag, pin, cut, tear</span>
+    </div>
+    <div class="spacer"></div>
+    <select id="scenario" title="Scenario" aria-label="Scenario"></select>
+    <select id="mode" title="Visualisation mode" aria-label="Visualisation mode"></select>
+    <button id="btnPause" title="Pause / resume (Space)">⏸ Pause</button>
+    <button id="btnStep" title="Single step (N)">⏭ Step</button>
+    <button id="btnReset" title="Reset scenario (R)">↺ Reset</button>
+    <button id="btnClear" title="Delete all objects (X)">✕ Clear</button>
+    <div class="tools" id="tools" role="toolbar" aria-label="Tools"></div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="sim" aria-label="Physics simulation canvas"></canvas>
+    <div id="hud" aria-hidden="true"></div>
+    <div id="toast" aria-live="polite"></div>
+    <div id="hint"></div>
+    <button id="fab" aria-expanded="true">Controls</button>
+    <aside id="panel" aria-label="Controls">
+      <div class="grp">
+        <h4>WORLD</h4>
+        <div class="ctl"><label for="s-gravity">Gravity</label><input id="s-gravity" type="range" min="0" max="2600" step="10" data-s="gravity" data-fmt="int"><output></output></div>
+        <div class="ctl"><label for="s-gravDir">Gravity dir °</label><input id="s-gravDir" type="range" min="0" max="360" step="1" data-s="gravDir" data-fmt="int"><output></output></div>
+        <div class="ctl"><label for="s-wind">Wind</label><input id="s-wind" type="range" min="0" max="1400" step="10" data-s="wind" data-fmt="int"><output></output></div>
+        <div class="ctl"><label for="s-windDir">Wind dir °</label><input id="s-windDir" type="range" min="0" max="360" step="1" data-s="windDir" data-fmt="int"><output></output></div>
+        <div class="ctl"><label for="s-windTurb">Turbulence</label><input id="s-windTurb" type="range" min="0" max="1" step="0.01" data-s="windTurb" data-fmt="f2"><output></output></div>
+      </div>
+      <div class="grp">
+        <h4>MATERIAL</h4>
+        <div class="ctl"><label for="s-kStruct">Structural k</label><input id="s-kStruct" type="range" min="0.02" max="1" step="0.01" data-s="kStruct" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-kShear">Shear k</label><input id="s-kShear" type="range" min="0" max="1" step="0.01" data-s="kShear" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-kBend">Bending k</label><input id="s-kBend" type="range" min="0" max="1" step="0.01" data-s="kBend" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-pressure">Pressure</label><input id="s-pressure" type="range" min="0" max="1" step="0.01" data-s="pressure" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-tear">Tear threshold</label><input id="s-tear" type="range" min="0.04" max="2" step="0.01" data-s="tear" data-fmt="f2"><output></output></div>
+        <div class="ctl chk"><label for="s-tearOn">Tearing enabled</label><input id="s-tearOn" type="checkbox" data-c="tearOn"></div>
+        <div class="ctl"><label for="s-density">Object density</label><input id="s-density" type="range" min="0.2" max="6" step="0.1" data-s="density" data-fmt="f1"><output></output></div>
+      </div>
+      <div class="grp">
+        <h4>SOLVER</h4>
+        <div class="ctl"><label for="s-iters">Iterations</label><input id="s-iters" type="range" min="1" max="24" step="1" data-s="iters" data-fmt="int"><output></output></div>
+        <div class="ctl"><label for="s-substeps">Substeps</label><input id="s-substeps" type="range" min="1" max="8" step="1" data-s="substeps" data-fmt="int"><output></output></div>
+        <div class="ctl"><label for="s-dtScale">Timestep ×</label><input id="s-dtScale" type="range" min="0.1" max="1.6" step="0.05" data-s="dtScale" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-damping">Damping</label><input id="s-damping" type="range" min="0" max="4" step="0.05" data-s="damping" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-restitution">Restitution</label><input id="s-restitution" type="range" min="0" max="0.95" step="0.01" data-s="restitution" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-friction">Friction</label><input id="s-friction" type="range" min="0" max="1" step="0.01" data-s="friction" data-fmt="f2"><output></output></div>
+        <div class="ctl"><label for="s-thick">Collision skin</label><input id="s-thick" type="range" min="1" max="16" step="0.5" data-s="thick" data-fmt="f1"><output></output></div>
+        <div class="ctl chk"><label for="s-selfCollide">Self-collision</label><input id="s-selfCollide" type="checkbox" data-c="selfCollide"></div>
+        <div class="ctl chk"><label for="s-pairCollide">Object↔object + obstacles</label><input id="s-pairCollide" type="checkbox" data-c="pairCollide"></div>
+      </div>
+      <div class="grp">
+        <h4>INTERACTION</h4>
+        <div class="ctl"><label for="s-grabRadius">Radius</label><input id="s-grabRadius" type="range" min="6" max="160" step="1" data-s="grabRadius" data-fmt="int"><output></output></div>
+        <div class="ctl"><label for="s-grabK">Strength</label><input id="s-grabK" type="range" min="0.02" max="1" step="0.01" data-s="grabK" data-fmt="f2"><output></output></div>
+        <div class="row">
+          <select id="spawnType" title="Object to spawn" aria-label="Object to spawn"></select>
+          <button id="btnDrop" title="Drop one at the top centre">Drop</button>
+        </div>
+      </div>
+      <div class="grp">
+        <h4>VIEW</h4>
+        <div class="ctl chk"><label for="s-hud">Show diagnostics overlay</label><input id="s-hud" type="checkbox" data-c="hud"></div>
+        <div class="ctl chk"><label for="s-spark">FPS sparkline</label><input id="s-spark" type="checkbox" data-c="spark"></div>
+        <canvas id="spark" width="252" height="30" style="width:100%;height:30px;background:#0d1826;border-radius:6px;border:1px solid var(--line)"></canvas>
+      </div>
+      <div class="grp">
+        <h4>SESSION</h4>
+        <div class="row">
+          <button id="btnSave">Save world .json</button>
+          <button id="btnLoad">Load world .json</button>
+        </div>
+        <div class="row" style="margin-top:5px">
+          <button id="btnDefaults">Reset all settings</button>
+          <button id="btnCentre">Recentre view</button>
+        </div>
+        <input id="fileImport" type="file" accept="application/json,.json" hidden>
+      </div>
+      <div class="grp">
+        <h4>SHORTCUTS</h4>
+        <div id="keys"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+
+/* ===== 00-core.js ===== */
+/* ============================================================================
+ * PHYSICS CORE BEGIN  (DOM-free; extracted verbatim from the built index.html
+ * by dev/test-physics.mjs, so the *delivered artifact* is what gets tested)
+ * ----------------------------------------------------------------------------
+ * Solver: position-based / XPBD-flavoured constraint projection.
+ *  - semi-implicit Euler + per-substep constraint projection
+ *  - substep-compensated stiffness  k_sub = 1-(1-k)^(1/substeps)
+ *  - constraint families: structural / shear / bending / attachment (pair),
+ *    polygon area + gas pressure (multi-particle), pin, world+shape contacts
+ *  - dense uniform-grid broad phase (counting sort), narrow phase point/point
+ *    (self + inter-body) and point/shape (circle, OBB, capsule)
+ *  - strain tracked per constraint drives stress visualisation and tearing;
+ *    torn constraints are removed from the graph permanently
+ * ==========================================================================*/
+/*==CORE-BEGIN==*/
+const WORLD_W = 1600;
+const WORLD_H = 1000;
+
+const CL_STRUCT = 1;   /* structural distance */
+const CL_SHEAR = 2;    /* shear diagonal      */
+const CL_BEND = 3;     /* bending (skip-one)  */
+const CL_ATTACH = 4;   /* attachment / weld   */
+
+const BK_CLOTH = 1;
+const BK_ROPE = 2;
+const BK_BLOB = 3;
+const BK_JELLY = 4;
+
+const MAX_SPEED = 3000;
+const TEAR_FACTOR = [1, 1, 1.3, 1.6, 0.9, 1];
+
+function makeWorld(cfg) {
+  cfg = cfg || {};
+  const CAP = cfg.cap || 14000;
+  const PCAP = cfg.pcap || 140000;
+  const ACAP = cfg.acap || 6000;
+  const POLY = cfg.poly || 90000;
+  const CCAP = cfg.ccap || 40000;
+  const W = {
+    W: WORLD_W, H: WORLD_H,
+    n: 0, cap: CAP,
+    x: new Float64Array(CAP), y: new Float64Array(CAP),
+    vx: new Float64Array(CAP), vy: new Float64Array(CAP),
+    ox: new Float64Array(CAP), oy: new Float64Array(CAP),
+    im: new Float64Array(CAP), imBase: new Float64Array(CAP),
+    cr: new Float64Array(CAP),
+    pin: new Uint8Array(CAP), act: new Uint8Array(CAP),
+    body: new Int32Array(CAP),
+    ta: new Int16Array(CAP), tb: new Int16Array(CAP), tmode: new Uint8Array(CAP),
+    nx: new Float64Array(CAP), ny: new Float64Array(CAP), aero: new Uint8Array(CAP),
+    px: new Float64Array(CAP), py: new Float64Array(CAP),
+    pc: 0, pcap: PCAP,
+    pa: new Int32Array(PCAP), pb: new Int32Array(PCAP),
+    prest: new Float64Array(PCAP), pstr: new Float64Array(PCAP),
+    palive: new Uint8Array(PCAP), pcls: new Uint8Array(PCAP),
+    ac: 0, acap: ACAP,
+    aOff: new Int32Array(ACAP), aCnt: new Int32Array(ACAP),
+    aRest: new Float64Array(ACAP), aK: new Float64Array(ACAP),
+    aStr: new Float64Array(ACAP), aAlive: new Uint8Array(ACAP),
+    poly: new Int32Array(POLY), polyN: 0, polyCap: POLY,
+    bodies: [], shapes: [],
+    /* contact journal, rebuilt every collision pass: i, j, nx, ny, kind, cx, cy */
+    cI: new Int32Array(CCAP), cJ: new Int32Array(CCAP),
+    cNX: new Float64Array(CCAP), cNY: new Float64Array(CCAP),
+    cK: new Uint8Array(CCAP), cX: new Float64Array(CCAP), cY: new Float64Array(CCAP),
+    cc: 0, ccCap: CCAP,
+    maxCr: 4,
+    grid: null,
+    t: 0,
+    grab: null,
+    gust: null,
+    stats: {
+      fps: 0, parts: 0, cons: 0, pairsTested: 0, contacts: 0, consTested: 0,
+      maxErr: 0, maxStrain: 0, tears: 0, iters: 6, subs: 3,
+      solveMs: 0, collideMs: 0, renderMs: 0
+    },
+    gbuf: new Float64Array(512)
+  };
+  for (let i = 0; i < CAP; i++) W.body[i] = -1;
+  return W;
+}
+
+/* --------------------------------------------------------------- builders */
+
+function addBody(W, spec) {
+  const b = {
+    id: W.bodies.length, dead: false, kind: BK_CLOTH, cols: 0, rows: 0,
+    p0: W.n, pn: 0, closed: false, aero: false, col: '#7fd4c8',
+    dampMul: 1, self: true, name: 'body',
+    hsl: { h: 190, s: 45, l: 40 }, thick: 5, ring: 0, hull: null, rad: 0,
+    sp: 20, c0: W.pc, c1: 0, ropeCol: null
+  };
+  for (const k in spec) b[k] = spec[k];
+  W.bodies.push(b);
+  return b;
+}
+
+function addP(W, x, y, im, r, b, ta, tb, tmode, aero) {
+  if (W.n >= W.cap) return -1;
+  const i = W.n++;
+  W.x[i] = x; W.y[i] = y;
+  W.vx[i] = 0; W.vy[i] = 0;
+  W.ox[i] = x; W.oy[i] = y;
+  W.im[i] = (im === undefined ? 1 : im);
+  W.imBase[i] = W.im[i];
+  W.cr[i] = (r === undefined ? 3 : r);
+  if (W.cr[i] > W.maxCr) W.maxCr = W.cr[i];
+  W.act[i] = 1; W.pin[i] = 0;
+  W.body[i] = (b === undefined ? -1 : b.id);
+  W.ta[i] = ta || 0; W.tb[i] = tb || 0; W.tmode[i] = tmode || 0;
+  W.aero[i] = aero ? 1 : 0;
+  W.nx[i] = 0; W.ny[i] = -1;
+  return i;
+}
+
+function addPair(W, a, b, rest, cls, stiff) {
+  if (W.pc >= W.pcap || a === b) return;
+  const k = W.pc++;
+  W.pa[k] = a; W.pb[k] = b;
+  if (rest === undefined) {
+    const dx = W.x[b] - W.x[a], dy = W.y[b] - W.y[a];
+    rest = Math.sqrt(dx * dx + dy * dy) || 1;
+  }
+  W.prest[k] = rest;
+  W.pcls[k] = cls;
+  W.pstr[k] = 0;
+  W.palive[k] = 1;
+  void stiff;
+}
+
+/* closed polygon area / pressure constraint over a list of particle ids */
+function addArea(W, idx, n, k) {
+  if (W.ac >= W.acap || W.polyN + n > W.polyCap) return;
+  const c = W.ac++;
+  W.aOff[c] = W.polyN;
+  W.aCnt[c] = n;
+  for (let i = 0; i < n; i++) W.poly[W.polyN++] = idx[i];
+  let A = 0;
+  for (let i = 0; i < n; i++) {
+    const a = idx[i], b = idx[(i + 1) % n];
+    A += W.x[a] * W.y[b] - W.y[a] * W.x[b];
+  }
+  W.aRest[c] = Math.abs(A) * 0.5;
+  W.aK[c] = k;
+  W.aStr[c] = 0;
+  W.aAlive[c] = 1;
+}
+
+function addShape(W, s) {
+  s.alive = true;
+  s.friction = (s.friction === undefined ? 0.55 : s.friction);
+  s.restitution = (s.restitution === undefined ? 0.15 : s.restitution);
+  s.kind = s.kind || 'circle';
+  s.angle = s.angle || 0;      /* must be numeric: NaN silently kills OBB contacts */
+  s.vx = 0; s.vy = 0; s.omg = 0;
+  W.shapes.push(s);
+  return s;
+}
+
+function pinP(W, i, x, y) {
+  if (i < 0) return;
+  W.pin[i] = 1;
+  W.px[i] = (x === undefined ? W.x[i] : x);
+  W.py[i] = (y === undefined ? W.y[i] : y);
+  W.im[i] = 0;
+  W.vx[i] = 0; W.vy[i] = 0;
+}
+function unpinP(W, i) {
+  if (i < 0) return;
+  W.pin[i] = 0;
+  W.im[i] = W.imBase[i];
+}
+
+/* cloth sheet: rows x cols grid; structural + shear + bending (+area) */
+function buildCloth(W, o) {
+  const cols = o.cols, rows = o.rows, sp = o.sp;
+  const b = addBody(W, {
+    kind: BK_CLOTH, cols: cols, rows: rows, p0: W.n, pn: cols * rows,
+    aero: true, self: true, col: o.col || '#5fd3c4', name: o.name || 'cloth',
+    dampMul: 1, sp: sp, thick: sp * 0.3,
+    hsl: { h: o.hue === undefined ? 168 : o.hue, s: 44, l: 42 }
+  });
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      addP(W, o.x0 + c * sp, o.y0 + r * sp, o.im,
+        (o.cr === undefined ? sp * 0.4 : o.cr), b, r, c, 1, true);
+    }
+  }
+  const at = (r, c) => b.p0 + r * cols + c;
+  const shear = o.shear !== false, bend = o.bend !== false;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (c + 1 < cols) addPair(W, at(r, c), at(r, c + 1), sp, CL_STRUCT);
+      if (r + 1 < rows) addPair(W, at(r, c), at(r + 1, c), sp, CL_STRUCT);
+      if (shear && c + 1 < cols && r + 1 < rows) {
+        addPair(W, at(r, c), at(r + 1, c + 1), sp * 1.4142135, CL_SHEAR);
+        addPair(W, at(r, c + 1), at(r + 1, c), sp * 1.4142135, CL_SHEAR);
+      }
+      if (bend && c + 2 < cols) addPair(W, at(r, c), at(r, c + 2), sp * 2, CL_BEND);
+      if (bend && r + 2 < rows) addPair(W, at(r, c), at(r + 2, c), sp * 2, CL_BEND);
+    }
+  }
+  return b;
+}
+
+/* open chain (rope) or closed pressurised ring */
+function buildChain(W, o) {
+  const n = o.n, seg = o.seg, closed = !!o.closed;
+  const cnt = closed ? n : n + 1;
+  const b = addBody(W, {
+    kind: BK_ROPE, p0: W.n, pn: cnt, closed: closed,
+    aero: true, self: true, col: o.col || '#e8b45a', name: o.name || 'rope',
+    dampMul: 1, thick: o.thick || 5.5,
+    ropeCol: o.ropeCol || 'rgba(228,178,94,0.96)',
+    hsl: { h: o.hue === undefined ? 38 : o.hue, s: 60, l: 52 }
+  });
+  for (let i = 0; i < cnt; i++) {
+    let x, y;
+    if (closed) {
+      const a = (i / n) * Math.PI * 2;
+      x = o.cx + Math.cos(a) * o.r; y = o.y0 + Math.sin(a) * o.r;
+    } else {
+      /* (dx,dy) is a direction hint; spacing is always `seg` so the chain
+         starts with zero strain */
+      const L = Math.hypot(o.dx, o.dy) || 1;
+      x = o.x0 + (o.dx / L) * seg * i;
+      y = o.y0 + (o.dy / L) * seg * i;
+    }
+    addP(W, x, y, o.im, (o.cr === undefined ? seg * 0.4 : o.cr), b, i, 0, 2, o.aero !== false);
+  }
+  const last = closed ? cnt : cnt - 1;
+  for (let i = 0; i < last; i++) {
+    addPair(W, b.p0 + i, b.p0 + (i + 1) % cnt, seg, CL_STRUCT);
+  }
+  if (o.bend) {
+    if (closed) {
+      for (let i = 0; i < cnt; i++) {
+        addPair(W, b.p0 + i, b.p0 + (i + 2) % cnt, seg * 2, CL_BEND);
+      }
+    } else {
+      for (let i = 0; i + 2 < cnt; i++) addPair(W, b.p0 + i, b.p0 + i + 2, seg * 2, CL_BEND);
+    }
+  }
+  if (closed && o.area !== false) {
+    const idx = [];
+    for (let i = 0; i < cnt; i++) idx.push(b.p0 + i);
+    addArea(W, idx, cnt, 1);
+  }
+  return b;
+}
+
+/* pressurised soft body: N-gon shell + optional core, area + bending */
+function buildBlob(W, o) {
+  const n = o.n, r = o.r, ry = o.ry || o.r;
+  const b = addBody(W, {
+    kind: BK_BLOB, p0: W.n, pn: n, closed: true, aero: false, self: true,
+    col: o.col || '#f2708a', name: o.name || 'blob', dampMul: 1.5,
+    ring: n, rad: Math.max(r, ry), thick: (o.cr || 4) * 1.4,
+    hsl: { h: o.hue === undefined ? 344 : o.hue, s: 70, l: 56 }
+  });
+  const start = W.n;
+  const spc = (Math.PI * 2 * Math.max(r, ry) / n);        /* shell spacing */
+  const cr0 = (o.cr === undefined ? spc * 0.45 : o.cr);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    addP(W, o.cx + Math.cos(a) * r, o.y0 + Math.sin(a) * ry,
+      o.im, cr0, b, i, 0, 2, false);
+  }
+  const idx = [];
+  for (let i = 0; i < n; i++) idx.push(start + i);
+  for (let i = 0; i < n; i++) {
+    addPair(W, start + i, start + (i + 1) % n, undefined, CL_STRUCT);
+    addPair(W, start + i, start + (i + 2) % n, undefined, CL_BEND);
+  }
+  addArea(W, idx, n, 1);
+  if (o.core) {
+    const c = addP(W, o.cx, o.y0, o.im, cr0, b, 250, 0, 2, false);
+    b.pn++;
+    for (let i = 0; i < n; i++) addPair(W, c, start + i, undefined, CL_SHEAR);
+  }
+  return b;
+}
+
+/* soft lattice ("jelly"): structural + shear + bending + per-cell area */
+function buildJelly(W, o) {
+  const cols = o.cols, rows = o.rows, sp = o.sp;
+  const b = addBody(W, {
+    kind: BK_JELLY, cols: cols, rows: rows, p0: W.n, pn: cols * rows,
+    aero: false, self: true, col: o.col || '#8ea6ff', name: o.name || 'jelly',
+    dampMul: 1.3, sp: sp, thick: sp * 0.42,
+    hsl: { h: o.hue === undefined ? 226 : o.hue, s: 62, l: 58 }
+  });
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      addP(W, o.x0 + c * sp, o.y0 + r * sp, o.im,
+        (o.cr === undefined ? sp * 0.4 : o.cr), b, r, c, 1, false);
+    }
+  }
+  const at = (r, c) => b.p0 + r * cols + c;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (c + 1 < cols) addPair(W, at(r, c), at(r, c + 1), sp, CL_STRUCT);
+      if (r + 1 < rows) addPair(W, at(r, c), at(r + 1, c), sp, CL_STRUCT);
+      if (c + 1 < cols && r + 1 < rows) {
+        addPair(W, at(r, c), at(r + 1, c + 1), sp * 1.4142135, CL_SHEAR);
+        addPair(W, at(r, c + 1), at(r + 1, c), sp * 1.4142135, CL_SHEAR);
+        addArea(W, [at(r, c), at(r, c + 1), at(r + 1, c + 1), at(r + 1, c)], 4, 1);
+      }
+      if (c + 2 < cols) addPair(W, at(r, c), at(r, c + 2), sp * 2, CL_BEND);
+      if (r + 2 < rows) addPair(W, at(r, c), at(r + 2, c), sp * 2, CL_BEND);
+    }
+  }
+  return b;
+}
+
+/* rigid-ish disc: dense particle cluster welded on a stiff lattice */
+function buildCluster(W, o) {
+  const r = o.r, sp = o.sp;
+  const b = addBody(W, {
+    kind: BK_JELLY, p0: W.n, pn: 0, aero: false, self: true,
+    col: o.col || '#c9d3e8', name: o.name || 'rigid', dampMul: 2
+  });
+  const idx = [], pos = [];
+  for (let y = -r; y <= r + 1e-6; y += sp) {
+    for (let x = -r; x <= r + 1e-6; x += sp) {
+      if (x * x + y * y <= r * r + 1e-6) {
+        pos.push([o.cx + x, o.y0 + y]);
+        idx.push(addP(W, o.cx + x, o.y0 + y, o.im,
+          (o.cr === undefined ? sp * 0.5 : o.cr), b, 0, idx.length, 2, false));
+      }
+    }
+  }
+  b.pn = idx.length;
+  b.hull = hullOf(W, b.p0, idx.length);
+  b.rad = r;
+  for (let i = b.p0; i < b.p0 + b.pn; i++) W.tmode[i] = 3;   /* rigid: no self CCP */
+  const R2 = (sp * 2.05) * (sp * 2.05);
+  for (let i = 0; i < idx.length; i++) {
+    for (let j = i + 1; j < idx.length; j++) {
+      const dx = pos[i][0] - pos[j][0], dy = pos[i][1] - pos[j][1];
+      if (dx * dx + dy * dy <= R2) addPair(W, idx[i], idx[j], undefined, CL_STRUCT);
+    }
+  }
+  return b;
+}
+
+/* ------------------------------------------------------------------ solver */
+
+function computeAeroNormals(W) {
+  const x = W.x, y = W.y, nx = W.nx, ny = W.ny, bodies = W.bodies;
+  for (let bi = 0; bi < bodies.length; bi++) {
+    const b = bodies[bi];
+    if (!b.aero || b.dead) continue;
+    if (b.kind === BK_CLOTH) {
+      const cols = b.cols, rows = b.rows;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const i = b.p0 + r * cols + c;
+          let gx = 0, gy = 0, cnt = 0;
+          if (c > 0 && c + 1 < cols) {
+            gx += x[b.p0 + r * cols + c + 1] - x[b.p0 + r * cols + c - 1];
+            gy += y[b.p0 + r * cols + c + 1] - y[b.p0 + r * cols + c - 1];
+            cnt++;
+          }
+          if (r > 0 && r + 1 < rows) {
+            gx += x[b.p0 + (r + 1) * cols + c] - x[b.p0 + (r - 1) * cols + c];
+            gy += y[b.p0 + (r + 1) * cols + c] - y[b.p0 + (r - 1) * cols + c];
+            cnt++;
+          }
+          if (cnt === 0) { nx[i] = 0; ny[i] = -1; continue; }
+          const l = Math.sqrt(gx * gx + gy * gy);
+          if (l < 1e-9) { nx[i] = 0; ny[i] = -1; continue; }
+          nx[i] = gy / l; ny[i] = -gx / l;
+        }
+      }
+    } else if (b.kind === BK_ROPE) {
+      const n = b.pn;
+      for (let i = 0; i < n; i++) {
+        const p = b.p0 + i;
+        const prv = (i === 0) ? (b.closed ? n - 1 : 1) : i - 1;
+        const nxt = (i === n - 1) ? (b.closed ? 0 : n - 2) : i + 1;
+        const gx = x[b.p0 + nxt] - x[b.p0 + prv];
+        const gy = y[b.p0 + nxt] - y[b.p0 + prv];
+        const l = Math.sqrt(gx * gx + gy * gy);
+        if (l < 1e-9) { nx[p] = 0; ny[p] = -1; continue; }
+        nx[p] = gy / l; ny[p] = -gx / l;
+      }
+    }
+  }
+}
+
+function integrate(W, S, h) {
+  const n = W.n, x = W.x, y = W.y, vx = W.vx, vy = W.vy;
+  const ox = W.ox, oy = W.oy, im = W.im, act = W.act;
+  const aero = W.aero, nx = W.nx, ny = W.ny;
+  const damp = Math.exp(-S.damping * h);
+  const windOn = S.wind > 1;
+  const wa = S.wind, wt = S.windTurb, t = W.t;
+  const g = W.gust;
+  const lim = MAX_SPEED;
+  for (let i = 0; i < n; i++) {
+    if (!act[i] || im[i] === 0) continue;
+    let axx = S.gx, ayy = S.gy;
+    if (windOn) {
+      const nz = Math.sin(x[i] * 0.011 + t * 2.7 + y[i] * 0.007) *
+        Math.cos(y[i] * 0.013 - t * 1.9 + x[i] * 0.004);
+      const wdx = S.windDx * wa * (1 + wt * nz);
+      const wdy = S.windDy * wa * (1 + wt * nz);
+      if (aero[i]) {
+        const rvx = wdx - vx[i], rvy = wdy - vy[i];
+        const nnx = nx[i], nny = ny[i];
+        const fn = rvx * nnx + rvy * nny;
+        let f = 1.1 * fn * (fn > 0 ? fn : -fn) * 0.0018;
+        if (f > 2600) f = 2600; else if (f < -2600) f = -2600;
+        axx += f * nnx; ayy += f * nny;
+        axx += (wdx - vx[i]) * 0.05; ayy += (wdy - vy[i]) * 0.05;
+      } else {
+        axx += (wdx - vx[i]) * 0.02; ayy += (wdy - vy[i]) * 0.02;
+      }
+    }
+    if (g) {   /* pointer wind gust: radial push inside the tool radius */
+      const dx = x[i] - g.x, dy = y[i] - g.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < g.r * g.r && d2 > 1e-9) {
+        const d = Math.sqrt(d2);
+        const k = (1 - d / g.r) * g.k;
+        axx += (g.dx / d) * k * d * 0.08 + dx / d * k * 260;
+        ayy += (g.dy / d) * k * d * 0.08 + dy / d * k * 260;
+      }
+    }
+    let nvx = (vx[i] + axx * h) * damp;
+    let nvy = (vy[i] + ayy * h) * damp;
+    const sp2 = nvx * nvx + nvy * nvy;
+    if (sp2 > lim * lim) {
+      const sc = lim / Math.sqrt(sp2);
+      nvx *= sc; nvy *= sc;
+    }
+    vx[i] = nvx; vy[i] = nvy;
+    ox[i] = x[i]; oy[i] = y[i];
+    x[i] += nvx * h;
+    y[i] += nvy * h;
+  }
+}
+
+/* pointer spring: pulls the grabbed particle set toward the cursor */
+function solveGrab(W, S) {
+  const g = W.grab;
+  if (!g || !g.idx || g.n === 0) return;
+  const kk = Math.min(1, S.grabK);
+  for (let m = 0; m < g.n; m++) {
+    const i = g.idx[m];
+    if (i < 0 || !W.act[i] || W.pin[i]) continue;
+    let dx = g.tx - W.x[i], dy = g.ty - W.y[i];
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < 1e-9) continue;
+    if (d > 320) { const s = 320 / d; dx *= s; dy *= s; }
+    W.x[i] += dx * kk * 0.6;
+    W.y[i] += dy * kk * 0.6;
+  }
+}
+
+function solvePairs(W, S, stat) {
+  const pa = W.pa, pb = W.pb, prest = W.prest, palive = W.palive, pcls = W.pcls;
+  const x = W.x, y = W.y, im = W.im;
+  const sub = S.substeps;
+  const kS = 1 - Math.pow(1 - S.kStruct, 1 / sub);
+  const kSh = 1 - Math.pow(1 - S.kShear, 1 / sub);
+  const kB = 1 - Math.pow(1 - S.kBend, 1 / sub);
+  let maxErr = 0, maxStrain = 0;
+  for (let k = 0; k < W.pc; k++) {
+    if (!palive[k]) continue;
+    const a = pa[k], b = pb[k];
+    const dx = x[b] - x[a], dy = y[b] - y[a];
+    const d2 = dx * dx + dy * dy;
+    if (d2 < 1e-16) continue;
+    const d = Math.sqrt(d2);
+    const rest = prest[k];
+    const C = d - rest;
+    const wa = im[a], wb = im[b];
+    const w = wa + wb;
+    if (w <= 0) continue;
+    stat.consTested++;
+    const ac = C < 0 ? -C : C;
+    if (ac > maxErr) maxErr = ac;
+    const strain = ac / rest;
+    if (strain > maxStrain) maxStrain = strain;
+    if (ac < 1e-9) continue;
+    const cls = pcls[k];
+    const kk = cls === CL_SHEAR ? kSh : (cls === CL_BEND ? kB : kS);
+    const s = kk * C / w;
+    const nx = dx / d, ny = dy / d;
+    x[a] += s * wa * nx; y[a] += s * wa * ny;
+    x[b] -= s * wb * nx; y[b] -= s * wb * ny;
+  }
+  if (maxErr > stat.maxErr) stat.maxErr = maxErr;
+  if (maxStrain > stat.maxStrain) stat.maxStrain = maxStrain;
+}
+
+/* area / gas-pressure constraint (2D volume conservation) */
+function solveArea(W, S, stat) {
+  if (W.ac === 0 || S.pressure <= 0.0001) return;
+  const x = W.x, y = W.y, im = W.im, poly = W.poly;
+  const infl = 0.12 * S.pressure;                       /* target inflation */
+  const stiff = Math.min(1, 0.2 + S.pressure * 0.9);
+  const kk = 1 - Math.pow(1 - stiff, 1 / S.substeps);
+  let g = W.gbuf;
+  for (let c = 0; c < W.ac; c++) {
+    if (!W.aAlive[c]) continue;
+    const off = W.aOff[c], cnt = W.aCnt[c];
+    if (cnt * 2 > g.length) { g = W.gbuf = new Float64Array(Math.max(512, cnt * 4)); }
+    let A = 0;
+    for (let i = 0; i < cnt; i++) {
+      const a = poly[off + i], b = poly[off + (i + 1) % cnt];
+      A += x[a] * y[b] - y[a] * x[b];
+    }
+    A *= 0.5;
+    const Aabs = A < 0 ? -A : A;
+    const sA = A < 0 ? -1 : 1;
+    const target = W.aRest[c] * (1 + infl);
+    const C = Aabs - target;
+    if (Math.abs(C) < 1e-9) continue;
+    let den = 0;
+    for (let i = 0; i < cnt; i++) {
+      const i0 = poly[off + (i - 1 + cnt) % cnt];
+      const i1 = poly[off + i];
+      const i2 = poly[off + (i + 1) % cnt];
+      /* exact gradient of the signed area:
+           dA/dx_i = 0.5*(y_{i+1} - y_{i-1}),  dA/dy_i = 0.5*(x_{i-1} - x_{i+1});
+         scaled by sign(A) so it always points outward (increasing |A|) */
+      const gx = (y[i2] - y[i0]) * 0.5 * sA;
+      const gy = (x[i0] - x[i2]) * 0.5 * sA;
+      const ww = im[i1];
+      g[i * 2] = gx; g[i * 2 + 1] = gy;
+      den += ww * (gx * gx + gy * gy);
+    }
+    if (den < 1e-14) continue;
+    const lam = -kk * C / den;
+    for (let i = 0; i < cnt; i++) {
+      const p = poly[off + i];
+      const w = im[p];
+      if (w === 0) continue;
+      let dxp = lam * w * g[i * 2];
+      let dyp = lam * w * g[i * 2 + 1];
+      const dd = Math.sqrt(dxp * dxp + dyp * dyp);
+      if (dd > 2.5) { const sc = 2.5 / dd; dxp *= sc; dyp *= sc; }
+      x[p] += dxp; y[p] += dyp;
+    }
+    const str = Math.abs(C) / (W.aRest[c] + 1e-9);
+    W.aStr[c] = str;
+    if (str > stat.maxStrain) stat.maxStrain = str;
+  }
+}
+
+/* ---------------------------------------------------------------- collisions */
+
+function buildGrid(W, S) {
+  const cs = S.cellSize;
+  let G = W.grid;
+  if (!G || G.cs !== cs) {
+    const gw = Math.ceil(WORLD_W / cs) + 2;
+    const gh = Math.ceil(WORLD_H / cs) + 2;
+    G = W.grid = {
+      cs: cs, gw: gw, gh: gh, nc: gw * gh, mcr: W.maxCr,
+      count: new Int32Array(gw * gh),
+      start: new Int32Array(gw * gh + 1),
+      cursor: new Int32Array(gw * gh + 1),
+      items: new Int32Array(W.cap + 64),
+      cell: new Int32Array(W.cap + 64)
+    };
+  }
+  if (G.items.length < W.n + 8) {
+    G.items = new Int32Array(W.n + 4096);
+    G.cell = new Int32Array(W.n + 4096);
+  }
+  const count = G.count, start = G.start, cursor = G.cursor;
+  const items = G.items, cell = G.cell;
+  count.fill(0, 0, G.nc);
+  const n = W.n, x = W.x, y = W.y, act = W.act;
+  const gw = G.gw, gh = G.gh, cs2 = G.cs;
+  for (let i = 0; i < n; i++) {
+    if (!act[i]) continue;
+    let cx = (x[i] / cs2 + 1) | 0;
+    let cy = (y[i] / cs2 + 1) | 0;
+    if (cx < 0) cx = 0; else if (cx >= gw) cx = gw - 1;
+    if (cy < 0) cy = 0; else if (cy >= gh) cy = gh - 1;
+    const c = cy * gw + cx;
+    cell[i] = c;
+    count[c]++;
+  }
+  start[0] = 0;
+  for (let c = 0; c < G.nc; c++) start[c + 1] = start[c] + count[c];
+  for (let c = 0; c <= G.nc; c++) cursor[c] = start[c];
+  for (let i = 0; i < n; i++) {
+    if (!act[i]) continue;
+    items[cursor[cell[i]]++] = i;
+  }
+}
+
+function collidePairs(W, S, stat) {
+  const G = W.grid;
+  if (!G) return;
+  if (!S.selfCollide && !S.pairCollide) return;
+  const x = W.x, y = W.y, cr = W.cr, act = W.act, im = W.im;
+  const body = W.body, tmode = W.tmode, ta = W.ta, tb = W.tb;
+  const start = G.start, items = G.items, cell = G.cell;
+  const gw = G.gw, gh = G.gh;
+  const ts = S.ts === undefined ? 1 : S.ts;
+  for (let i = 0; i < W.n; i++) {
+    if (!act[i] || im[i] === 0) continue;
+    const ci = cell[i];
+    const gx0 = ci % gw, gy0 = (ci / gw) | 0;
+    const ri = cr[i] * ts;
+    const wi = im[i];
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = gy0 + dy;
+      if (yy < 0 || yy >= gh) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = gx0 + dx;
+        if (xx < 0 || xx >= gw) continue;
+        const c = yy * gw + xx;
+        const s0 = start[c], s1 = start[c + 1];
+        for (let s = s0; s < s1; s++) {
+          const j = items[s];
+          if (j <= i || !act[j] || im[j] === 0) continue;
+          const bi = body[i], bj = body[j];
+          if (bi === bj) {
+            if (!S.selfCollide) continue;
+            const m = tmode[i];
+            if (m === 3) continue;        /* rigid cluster: no self CCP */
+            if (m === 1) {
+              let d1 = ta[i] - ta[j]; if (d1 < 0) d1 = -d1;
+              let d2 = tb[i] - tb[j]; if (d2 < 0) d2 = -d2;
+              if (d1 <= 2 && d2 <= 2) continue;
+            } else if (m === 2) {
+              let d1 = ta[i] - ta[j]; if (d1 < 0) d1 = -d1;
+              if (d1 <= 3) continue;
+            }
+          } else if (!S.pairCollide) continue;
+          stat.pairsTested++;
+          /* skin factor 1.25: a contact distance below the node spacing
+             lets one lattice slide through the gaps of another */
+          const d0 = (ri + cr[j] * ts) * (bi === bj ? 0.8 : 1.25);
+          const ddx = x[j] - x[i], ddy = y[j] - y[i];
+          const d2 = ddx * ddx + ddy * ddy;
+          if (d2 >= d0 * d0 || d2 < 1e-12) continue;
+          const d = Math.sqrt(d2);
+          const nx = ddx / d, ny = ddy / d;
+          const pen = (d0 - d) * 0.85;
+          const wj = im[j];
+          const wt = wi + wj;
+          x[i] -= nx * pen * (wi / wt); y[i] -= ny * pen * (wi / wt);
+          x[j] += nx * pen * (wj / wt); y[j] += ny * pen * (wj / wt);
+          stat.contacts++;
+          if (W.cc < W.ccCap) {
+            const q = W.cc;
+            W.cI[q] = i; W.cJ[q] = j;
+            W.cNX[q] = nx; W.cNY[q] = ny; W.cK[q] = 0;
+            W.cX[q] = x[i]; W.cY[q] = y[i];
+            W.cc++;
+          }
+        }
+      }
+    }
+  }
+}
+
+function collideShapes(W, S, stat) {
+  const shapes = W.shapes;
+  if (!shapes.length || !S.pairCollide) return;
+  const G = W.grid;
+  if (!G) return;
+  const x = W.x, y = W.y, cr = W.cr, act = W.act, im = W.im;
+  const ts = S.ts === undefined ? 1 : S.ts;
+  for (let si = 0; si < shapes.length; si++) {
+    const sh = shapes[si];
+    if (!sh.alive) continue;
+    let minX, minY, maxX, maxY;
+    if (sh.kind === 'circle') {
+      minX = sh.cx - sh.r; maxX = sh.cx + sh.r;
+      minY = sh.cy - sh.r; maxY = sh.cy + sh.r;
+    } else if (sh.kind === 'box') {
+      const ca = Math.abs(Math.cos(sh.angle)), sa = Math.abs(Math.sin(sh.angle));
+      const ex = sh.hw * ca + sh.hh * sa, ey = sh.hw * sa + sh.hh * ca;
+      minX = sh.cx - ex; maxX = sh.cx + ex;
+      minY = sh.cy - ey; maxY = sh.cy + ey;
+    } else {
+      minX = Math.min(sh.x0, sh.x1) - sh.r; maxX = Math.max(sh.x0, sh.x1) + sh.r;
+      minY = Math.min(sh.y0, sh.y1) - sh.r; maxY = Math.max(sh.y0, sh.y1) + sh.r;
+    }
+    const pad = 16;
+    let c0 = ((minX - pad) / G.cs + 1) | 0, c1 = ((maxX + pad) / G.cs + 1) | 0;
+    let r0 = ((minY - pad) / G.cs + 1) | 0, r1 = ((maxY + pad) / G.cs + 1) | 0;
+    if (c0 < 0) c0 = 0;
+    if (r0 < 0) r0 = 0;
+    if (c1 >= G.gw) c1 = G.gw - 1;
+    if (r1 >= G.gh) r1 = G.gh - 1;
+    for (let cy = r0; cy <= r1; cy++) {
+      for (let cx = c0; cx <= c1; cx++) {
+        const c = cy * G.gw + cx;
+        const s0 = G.start[c], s1 = G.start[c + 1];
+        for (let s = s0; s < s1; s++) {
+          const i = G.items[s];
+          if (!act[i] || im[i] === 0) continue;
+          const px = x[i], py = y[i];
+          const rr = cr[i] * ts + 0.5;
+          let hx = 0, hy = 0, hp = 0, got = false;
+          if (sh.kind === 'circle') {
+            const dx = px - sh.cx, dy = py - sh.cy;
+            const need = sh.r + rr;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < need * need) {
+              const d = Math.sqrt(d2);
+              if (d > 1e-9) { hx = dx / d; hy = dy / d; hp = need - d; got = true; }
+              else { hx = 0; hy = -1; hp = need; got = true; }
+            }
+          } else if (sh.kind === 'seg') {
+            const ax = sh.x0, ay = sh.y0;
+            const ex = sh.x1 - ax, ey = sh.y1 - ay;
+            const l2 = ex * ex + ey * ey;
+            let t = l2 > 0 ? ((px - ax) * ex + (py - ay) * ey) / l2 : 0;
+            if (t < 0) t = 0; else if (t > 1) t = 1;
+            const qx = ax + ex * t, qy = ay + ey * t;
+            const dx = px - qx, dy = py - qy;
+            const need = sh.r + rr;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < need * need && d2 > 1e-12) {
+              const d = Math.sqrt(d2);
+              hx = dx / d; hy = dy / d; hp = need - d; got = true;
+            }
+          } else {
+            const ca = Math.cos(-sh.angle), sa = Math.sin(-sh.angle);
+            const dx0 = px - sh.cx, dy0 = py - sh.cy;
+            const lx = dx0 * ca - dy0 * sa, ly = dx0 * sa + dy0 * ca;
+            const inX = lx >= -sh.hw && lx <= sh.hw;
+            const inY = ly >= -sh.hh && ly <= sh.hh;
+            let nxl = 0, nyl = 0, pen = 0;
+            if (inX && inY) {
+              const ex1 = sh.hw - Math.abs(lx), ey1 = sh.hh - Math.abs(ly);
+              if (ex1 < ey1) { nxl = lx < 0 ? -1 : 1; pen = ex1 + rr; }
+              else { nyl = ly < 0 ? -1 : 1; pen = ey1 + rr; }
+              const cb = Math.cos(sh.angle), sb = Math.sin(sh.angle);
+              hx = nxl * cb - nyl * sb; hy = nxl * sb + nyl * cb; hp = pen;
+              got = true;
+            } else {
+              const qx = lx < -sh.hw ? -sh.hw : (lx > sh.hw ? sh.hw : lx);
+              const qy = ly < -sh.hh ? -sh.hh : (ly > sh.hh ? sh.hh : ly);
+              const dx = lx - qx, dy = ly - qy;
+              const d2 = dx * dx + dy * dy;
+              if (d2 < rr * rr && d2 > 1e-12) {
+                const d = Math.sqrt(d2);
+                const nlx = dx / d, nly = dy / d;
+                const cb = Math.cos(sh.angle), sb = Math.sin(sh.angle);
+                hx = nlx * cb - nly * sb; hy = nlx * sb + nly * cb;
+                hp = rr - d; got = true;
+              }
+            }
+          }
+          if (!got) continue;
+          stat.contacts++;
+          x[i] += hx * hp; y[i] += hy * hp;
+          if (W.cc < W.ccCap) {
+            const q = W.cc;
+            W.cI[q] = i; W.cJ[q] = -2 - si;
+            W.cNX[q] = hx; W.cNY[q] = hy; W.cK[q] = 1;
+            W.cX[q] = px; W.cY[q] = py;
+            W.cc++;
+          }
+        }
+      }
+    }
+  }
+}
+
+function bounds(W, S) {
+  const x = W.x, y = W.y, act = W.act, im = W.im, cr = W.cr;
+  const ts = S.ts === undefined ? 1 : S.ts;
+  for (let i = 0; i < W.n; i++) {
+    if (!act[i] || im[i] === 0) continue;
+    const r = cr[i] * ts;
+    let hit = false, nx = 0, ny = 0;
+    if (x[i] < r) { x[i] = r; hit = true; nx = 1; ny = 0; }
+    else if (x[i] > W.W - r) { x[i] = W.W - r; hit = true; nx = -1; ny = 0; }
+    if (y[i] < r) { y[i] = r; hit = true; nx = 0; ny = 1; }
+    else if (y[i] > W.H - r) { y[i] = W.H - r; hit = true; nx = 0; ny = -1; }
+    if (!hit) continue;
+    if (W.cc < W.ccCap) {
+      const q = W.cc;
+      W.cI[q] = i; W.cJ[q] = -9999;
+      W.cNX[q] = nx; W.cNY[q] = ny; W.cK[q] = 2;
+      W.cX[q] = x[i]; W.cY[q] = y[i];
+      W.cc++;
+    }
+  }
+}
+
+/* velocity-level restitution + Coulomb friction from the contact journal */
+function resolveVelocities(W, S) {
+  const vx = W.vx, vy = W.vy, im = W.im, act = W.act, x = W.x, y = W.y;
+  const n = W.cc;
+  const rest = S.restitution, mu = S.friction;
+  for (let c = 0; c < n; c++) {
+    const i = W.cI[c], j = W.cJ[c];
+    const nx = W.cNX[c], ny = W.cNY[c], kind = W.cK[c];
+    if (i < 0 || !act[i] || im[i] === 0) continue;
+    let svx = 0, svy = 0, wsum = im[i];
+    if (kind === 0) {
+      if (j < 0 || !act[j] || im[j] === 0) continue;
+      wsum = im[i] + im[j];
+    } else if (kind === 1) {
+      const sh = W.shapes[-2 - j];
+      if (sh && (sh.vx || sh.vy || sh.omg)) {
+        const dxc = x[i] - sh.cx, dyc = y[i] - sh.cy;
+        svx = sh.vx - sh.omg * dyc;
+        svy = sh.vy + sh.omg * dxc;
+      }
+    }
+    const rvx = (kind === 0 ? vx[j] - vx[i] : vx[i] - svx);
+    const rvy = (kind === 0 ? vy[j] - vy[i] : vy[i] - svy);
+    const vn = rvx * nx + rvy * ny;
+    const tx = -ny, ty = nx;
+    const vt = kind === 0
+      ? (vx[j] - vx[i]) * tx + (vy[j] - vy[i]) * ty
+      : (vx[i] - svx) * tx + (vy[i] - svy) * ty;
+    const inv = 1 / wsum;
+    /* normal impulse (restitution).  For a pair the two equal-and-opposite
+       impulses already produce the full relative change; for a static or
+       kinematic obstacle the whole change has to go into the one particle. */
+    if (vn < -18) {
+      const p = -(1 + rest) * vn * inv;
+      if (kind === 0) {
+        vx[i] -= p * nx * im[i]; vy[i] -= p * ny * im[i];
+        vx[j] += p * nx * im[j]; vy[j] += p * ny * im[j];
+      } else {
+        vx[i] += p * nx * im[i]; vy[i] += p * ny * im[i];
+      }
+    }
+    /* tangential friction, clamped by mu * normal load proxy */
+    const load = Math.abs(vn < 0 ? vn : 0) + 14;
+    const jtMax = mu * load * inv;
+    let jt = -vt * inv;
+    if (jt > jtMax) jt = jtMax; else if (jt < -jtMax) jt = -jtMax;
+    if (kind === 0) {
+      vx[i] += jt * tx * im[i]; vy[i] += jt * ty * im[i];
+      vx[j] -= jt * tx * im[j]; vy[j] -= jt * ty * im[j];
+    } else if (im[i] > 0) {
+      vx[i] += jt * tx * im[i]; vy[i] += jt * ty * im[i];
+    }
+    void x; void y;
+  }
+}
+
+/* convex hull (monoutone chain) of a particle range -> array of indices */
+function hullOf(W, start, count) {
+  const pts = [];
+  for (let i = 0; i < count; i++) pts.push([W.x[start + i], W.y[start + i], start + i]);
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  const out = [];
+  for (const p of lower) out.push(p[2]);
+  for (let i = 1; i + 1 < upper.length; i++) out.push(upper[i][2]);
+  return out;
+}
+
+/* kinematic / static collider motion (spinner, orbiter, slider) */
+function updateShapes(W, dt) {
+  for (let i = 0; i < W.shapes.length; i++) {
+    const sh = W.shapes[i];
+    if (!sh.alive) continue;
+    if (sh.spin) {
+      sh.angle += sh.spin * dt;
+      sh.omg = sh.spin;
+      sh.vx = 0; sh.vy = 0;
+    } else if (sh.slide) {
+      const s2 = sh.slide;
+      sh.cx += s2.vx * dt;
+      if (sh.cx < s2.min) { sh.cx = s2.min; s2.vx = -s2.vx; }
+      else if (sh.cx > s2.max) { sh.cx = s2.max; s2.vx = -s2.vx; }
+      sh.vx = s2.vx; sh.vy = 0; sh.omg = 0;
+    } else {
+      sh.omg = 0; sh.vx = 0; sh.vy = 0;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ stepping */
+
+function checkTear(W, S) {
+  let tears = 0;
+  const thr = S.tear;
+  const x = W.x, y = W.y;
+  for (let k = 0; k < W.pc; k++) {
+    if (!W.palive[k]) continue;
+    const a = W.pa[k], b = W.pb[k];
+    const dx = x[b] - x[a], dy = y[b] - y[a];
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const rest = W.prest[k];
+    const strain = (d - rest) / rest;
+    if (strain > thr / (TEAR_FACTOR[W.pcls[k]] || 1)) {
+      W.palive[k] = 0; W.pstr[k] = 1; tears++;
+    }
+  }
+  W.stats.tears += tears;
+}
+
+function stepFrame(W, S, dt) {
+  const stat = W.stats;
+  updateShapes(W, dt);
+  const subs = Math.max(1, S.substeps | 0);
+  const iters = Math.max(1, S.iters | 0);
+  stat.pairsTested = 0; stat.contacts = 0; stat.maxErr = 0;
+  stat.consTested = 0;
+  stat.maxStrain = 0; stat.tears = 0;
+  stat.iters = iters; stat.subs = subs;
+  /* Contact skin scales with the discretisation spacing: a skin smaller
+     than the particle spacing lets one body slip through another, because
+     the two lattices never generate enough overlapping pairs. */
+  const ts = Math.max(0.2, Math.min(2.4, S.thick / 6));
+  S.ts = ts;
+  const skin = W.maxCr * 2 * ts;
+  S.maxStep = Math.max(4, skin);
+  const wantCell = Math.max(10, Math.round(skin * 1.3));
+  if (W.grid && (W.grid.cs !== wantCell || W.grid.mcr !== W.maxCr)) W.grid = null;
+  S.cellSize = wantCell;
+  const h = dt / subs;
+  computeAeroNormals(W);
+  const collide = S.selfCollide || S.pairCollide;
+  for (let s = 0; s < subs; s++) {
+    integrate(W, S, h);
+    for (let it = 0; it < iters; it++) {
+      solvePairs(W, S, stat);
+      solveArea(W, S, stat);
+      if (it % 2 === 1) solveGrab(W, S);
+    }
+    solveGrab(W, S);
+    /* one contact journal per substep: stale normals must not leak over */
+    W.cc = 0;
+    if (collide) {
+      buildGrid(W, S);
+      if (S.pairCollide) collideShapes(W, S, stat);
+      collidePairs(W, S, stat);
+    }
+    bounds(W, S);                       /* the world box always contains */
+    /* velocity update from the corrected positions */
+    const x = W.x, y = W.y, vx = W.vx, vy = W.vy, ox = W.ox, oy = W.oy;
+    const im = W.im, act = W.act, pin = W.pin;
+    for (let i = 0; i < W.n; i++) {
+      if (!act[i] || im[i] === 0) continue;
+      if (pin[i]) { x[i] = W.px[i]; y[i] = W.py[i]; vx[i] = 0; vy[i] = 0; continue; }
+      vx[i] = (x[i] - ox[i]) / h;
+      vy[i] = (y[i] - oy[i]) / h;
+    }
+    if (collide) resolveVelocities(W, S);
+    if (S.tearOn) checkTear(W, S);
+    W.t += h;
+  }
+  /* final strain snapshot for the stress visualisation */
+  const x2 = W.x, y2 = W.y;
+  for (let k = 0; k < W.pc; k++) {
+    if (!W.palive[k]) continue;
+    const a = W.pa[k], b = W.pb[k];
+    const dx = x2[b] - x2[a], dy = y2[b] - y2[a];
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const st = (d - W.prest[k]) / W.prest[k];
+    W.pstr[k] = st < 0 ? -st : st;
+  }
+  let parts = 0;
+  for (let i = 0; i < W.n; i++) if (W.act[i]) parts++;
+  let cons = 0;
+  for (let k = 0; k < W.pc; k++) if (W.palive[k]) cons++;
+  for (let k = 0; k < W.ac; k++) if (W.aAlive[k]) cons++;
+  stat.parts = parts; stat.cons = cons;
+}
+
+function nearestParticle(W, x, y, r) {
+  let best = -1, bd = r * r;
+  for (let i = 0; i < W.n; i++) {
+    if (!W.act[i]) continue;
+    const dx = W.x[i] - x, dy = W.y[i] - y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bd) { bd = d2; best = i; }
+  }
+  return best;
+}
+
+/* weld particle i to the closest particle of `body` with an attachment link */
+function weldNearest(W, i, body, maxDist) {
+  let best = -1, bd = (maxDist || 1e9) * (maxDist || 1e9);
+  for (let k = body.p0; k < body.p0 + body.pn; k++) {
+    if (!W.act[k] || k === i) continue;
+    const dx = W.x[k] - W.x[i], dy = W.y[k] - W.y[i];
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bd) { bd = d2; best = k; }
+  }
+  if (best >= 0) addPair(W, i, best, undefined, CL_ATTACH);
+  return best;
+}
+
+function applyImpulse(W, x, y, r, dx, dy, k) {
+  let n = 0;
+  for (let i = 0; i < W.n; i++) {
+    if (!W.act[i] || W.im[i] === 0 || W.pin[i]) continue;
+    const ddx = W.x[i] - x, ddy = W.y[i] - y;
+    const d2 = ddx * ddx + ddy * ddy;
+    if (d2 > r * r) continue;
+    const f = k * (1 - Math.sqrt(d2) / r);
+    W.vx[i] += dx * f; W.vy[i] += dy * f;
+    n++;
+  }
+  return n;
+}
+
+function cutSegment(W, x0, y0, x1, y1) {
+  let cut = 0;
+  const ex = x1 - x0, ey = y1 - y0;
+  const l2 = ex * ex + ey * ey;
+  if (l2 < 1e-9) {
+    for (let k = 0; k < W.pc; k++) {
+      if (!W.palive[k]) continue;
+      const a = W.pa[k], b = W.pb[k];
+      const mx = (W.x[a] + W.x[b]) * 0.5 - x0, my = (W.y[a] + W.y[b]) * 0.5 - y0;
+      if (mx * mx + my * my < 100) { W.palive[k] = 0; cut++; }
+    }
+    return cut;
+  }
+  for (let k = 0; k < W.pc; k++) {
+    if (!W.palive[k]) continue;
+    const a = W.pa[k], b = W.pb[k];
+    const ax = W.x[a], ay = W.y[a];
+    const c1x = W.x[b] - ax, c1y = W.y[b] - ay;
+    const den = ex * c1y - ey * c1x;
+    if (den > -1e-9 && den < 1e-9) continue;
+    const rx = ax - x0, ry = ay - y0;
+    const t = (rx * c1y - ry * c1x) / den;
+    if (t < 0 || t > 1) continue;
+    const u = (rx * ey - ry * ex) / den;
+    if (u >= 0 && u <= 1) { W.palive[k] = 0; cut++; }
+  }
+  return cut;
+}
+
+function eraseBody(W, x, y, r) {
+  for (let bi = W.bodies.length - 1; bi >= 0; bi--) {
+    const b = W.bodies[bi];
+    if (b.dead) continue;
+    let found = false;
+    for (let i = b.p0; i < b.p0 + b.pn; i++) {
+      if (!W.act[i]) continue;
+      const dx = W.x[i] - x, dy = W.y[i] - y;
+      if (dx * dx + dy * dy < r * r) { found = true; break; }
+    }
+    if (!found) continue;
+    b.dead = true;
+    for (let i = b.p0; i < b.p0 + b.pn; i++) W.act[i] = 0;
+    for (let k = 0; k < W.pc; k++) {
+      if (W.palive[k] && (!W.act[W.pa[k]] || !W.act[W.pb[k]])) W.palive[k] = 0;
+    }
+    for (let k = 0; k < W.ac; k++) {
+      if (!W.aAlive[k]) continue;
+      for (let j = 0; j < W.aCnt[k]; j++) {
+        if (!W.act[W.poly[W.aOff[k] + j]]) { W.aAlive[k] = 0; break; }
+      }
+    }
+    return b;
+  }
+  return null;
+}
+
+const CORE_API = {
+  makeWorld, addBody, addP, addPair, addArea, addShape, pinP, unpinP,
+  buildCloth, buildChain, buildBlob, buildJelly, buildCluster, hullOf,
+  updateShapes, stepFrame, nearestParticle, cutSegment, eraseBody,
+  weldNearest, applyImpulse,
+  CL_STRUCT, CL_SHEAR, CL_BEND, CL_ATTACH, BK_CLOTH, BK_ROPE, BK_BLOB,
+  BK_JELLY, WORLD_W, WORLD_H
+};
+/*==CORE-END==*/
+
+/* ============================================================================
+ * PHYSICS CORE END
+ * ==========================================================================*/
+
+/* ===== 10-render.js ===== */
+/* ==========================================================================
+ * RENDERER — Canvas 2D, deliberate visual polish + 8 diagnostic modes.
+ * Batched fills (shade buckets) keep per-frame path counts low.
+ * =========================================================================*/
+
+const MODES = [
+  { id: 'render', name: 'Render', hint: 'shaded surfaces, shadows, contacts' },
+  { id: 'particles', name: 'Particles', hint: 'raw particle positions, speed-tinted' },
+  { id: 'constraints', name: 'Constraints', hint: 'constraint graph by type' },
+  { id: 'velocity', name: 'Velocity', hint: 'motion vectors' },
+  { id: 'stress', name: 'Stress', hint: 'live constraint strain / tear warning' },
+  { id: 'contacts', name: 'Contacts', hint: 'collision pairs this frame' },
+  { id: 'pins', name: 'Pins', hint: 'pinned particles + anchors' },
+  { id: 'grid', name: 'Grid', hint: 'spatial-partition cells (broad phase)' }
+];
+
+const TOOL_INFO = {
+  grab: { name: 'Grab', key: '1', color: '#6ee7ff' },
+  pin: { name: 'Pin / Unpin', key: '2', color: '#ffd166' },
+  cut: { name: 'Cut / Tear', key: '3', color: '#ff5d73' },
+  push: { name: 'Impulse', key: '4', color: '#a78bfa' },
+  wind: { name: 'Wind gust', key: '5', color: '#5eead4' },
+  spawn: { name: 'Spawn', key: '6', color: '#8ce99a' },
+  erase: { name: 'Erase body', key: '7', color: '#f87171' }
+};
+
+function createRenderer(canvas) {
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const R = {
+    canvas: canvas, ctx: ctx,
+    view: { scale: 1, ox: 0, oy: 0, w: 800, h: 500, dpr: 1 },
+    shadeCache: new Map(),
+    windSeeds: null
+  };
+
+  function resize(cssW, cssH, worldW, worldH) {
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const w = Math.max(120, Math.floor(cssW)), h = Math.max(120, Math.floor(cssH));
+    const need = Math.round(w * dpr), needH = Math.round(h * dpr);
+    if (canvas.width !== need || canvas.height !== needH) {
+      canvas.width = need; canvas.height = needH;
+    }
+    const pad = 10;
+    const scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
+    const V = R.view;
+    const old = V.scale;
+    V.scale = scale;
+    V.ox = (w - worldW * scale) / 2;
+    V.oy = (h - worldH * scale) / 2;
+    V.w = w; V.h = h; V.dpr = dpr;
+    return old !== scale;
+  }
+
+  function screenToWorld(sx, sy) {
+    const V = R.view;
+    return [(sx - V.ox) / V.scale, (sy - V.oy) / V.scale];
+  }
+
+  function applyView() {
+    const V = R.view;
+    ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+  }
+
+  /* fast transform: world -> device px, drawn with an identity-ish transform
+     so batched paths do not pay per-path transform cost */
+  function setWorldTransform() {
+    const V = R.view;
+    ctx.setTransform(V.dpr * V.scale, 0, 0, V.dpr * V.scale, V.dpr * V.ox, V.dpr * V.oy);
+  }
+
+  function shadeKey(r, g, b) { return (r << 16) | (g << 8) | b; }
+
+  /* ---------------------------- background -------------------------------- */
+  function drawBackdrop(app) {
+    const V = R.view;
+    ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, V.h);
+    g.addColorStop(0, '#0d1522');
+    g.addColorStop(0.55, '#121c2b');
+    g.addColorStop(1, '#182435');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, V.w, V.h);
+    /* world plate */
+    setWorldTransform();
+    ctx.fillStyle = 'rgba(255,255,255,0.022)';
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    /* grid guides */
+    ctx.strokeStyle = 'rgba(140,180,220,0.055)';
+    ctx.lineWidth = 1 / V.viewScale;
+    ctx.beginPath();
+    for (let x = 0; x <= WORLD_W; x += 50) { ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); }
+    for (let y = 0; y <= WORLD_H; y += 50) { ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); }
+    ctx.stroke();
+    setWorldTransform();
+    ctx.strokeStyle = 'rgba(120,200,255,0.30)';
+    ctx.lineWidth = 2.5 / V.viewScale;
+    ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
+  }
+
+  /* wind streamlines: make the wind field visible while it is enabled */
+  function drawWind(W, S) {
+    if (S.wind < 30) return;
+    const V = R.view;
+    if (!R.windSeeds || R.windSeeds.n !== 64) {
+      const n = 64, arr = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        arr[i * 4] = Math.random() * WORLD_W;
+        arr[i * 4 + 1] = Math.random() * WORLD_H;
+        arr[i * 4 + 2] = 0.4 + Math.random() * 0.8;
+        arr[i * 4 + 3] = Math.random() * 6.28;
+      }
+      R.windSeeds = { a: arr, n: n };
+    }
+    const A = R.windSeeds.a;
+    const sp = Math.min(420, S.wind) * 0.55;
+    const dx = S.windDx, dy = S.windDy;
+    ctx.save();
+    setWorldTransform();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(125,205,255,0.17)';
+    ctx.lineWidth = 1.6 / V.viewScale;
+    ctx.beginPath();
+    for (let i = 0; i < R.windSeeds.n; i++) {
+      const o = i * 4;
+      const x = A[o], y = A[o + 1], len = A[o + 2];
+      const l = 34 + len * 46;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + dx * l, y + dy * l);
+      A[o] += dx * sp * 0.016;
+      A[o + 1] += dy * sp * 0.016 + Math.sin(W.t * 2 + A[o + 3]) * 0.45;
+      if (A[o] > WORLD_W + 40 || A[o] < -40 || A[o + 1] > WORLD_H + 40 || A[o + 1] < -40) {
+        A[o] = dx > 0 ? -20 : (dx < 0 ? WORLD_W + 20 : Math.random() * WORLD_W);
+        A[o + 1] = dy > 0 ? -20 : (dy < 0 ? WORLD_H + 20 : Math.random() * WORLD_H);
+        if (Math.abs(dx) < 0.1) A[o] = Math.random() * WORLD_W;
+        if (Math.abs(dy) < 0.1) A[o + 1] = Math.random() * WORLD_H;
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+    void V;
+  }
+
+  /* --------------------------- spatial grid ------------------------------- */
+  function drawGrid(W) {
+    const G = W.grid;
+    if (!G) return;
+    const V = R.view;
+    setWorldTransform();
+    const cs = G.cs;
+    ctx.fillStyle = 'rgba(110,231,255,0.05)';
+    ctx.strokeStyle = 'rgba(110,231,255,0.16)';
+    ctx.lineWidth = 0.7 / V.viewScale;
+    ctx.beginPath();
+    let hot = 0;
+    for (let cy = 0; cy < G.gh; cy++) {
+      for (let cx = 0; cx < G.gw; cx++) {
+        const c = cy * G.gw + cx;
+        const k = G.count[c];
+        const x = (cx - 1) * cs, y = (cy - 1) * cs;
+        if (k > 0) {
+          if (k > hot) hot = k;
+          ctx.rect(x, y, cs, cs);
+        }
+      }
+    }
+    ctx.fill();
+    ctx.beginPath();
+    for (let cy = 0; cy < G.gh; cy++) {
+      for (let cx = 0; cx < G.gw; cx++) {
+        const c = cy * G.gw + cx;
+        if (G.count[c] === 0) continue;
+        const x = (cx - 1) * cs, y = (cy - 1) * cs;
+        ctx.moveTo(x, y); ctx.lineTo(x + cs, y);
+        ctx.moveTo(x + cs, y); ctx.lineTo(x + cs, y + cs);
+      }
+    }
+    ctx.stroke();
+    /* dense cells glow: shows where the broad phase is actually working */
+    if (hot > 1) {
+      ctx.fillStyle = 'rgba(255,120,90,0.16)';
+      ctx.beginPath();
+      for (let cy = 0; cy < G.gh; cy++) {
+        for (let cx = 0; cx < G.gw; cx++) {
+          const c = cy * G.gw + cx;
+          const k = G.count[c];
+          if (k >= 4) ctx.rect((cx - 1) * cs, (cy - 1) * cs, cs, cs);
+        }
+      }
+      ctx.fill();
+    }
+    R.lastHot = hot;
+  }
+
+  /* ------------------------------ obstacles ------------------------------- */
+  function drawShapes(W, mode) {
+    setWorldTransform();
+    const V = R.view;
+    for (let i = 0; i < W.shapes.length; i++) {
+      const sh = W.shapes[i];
+      if (!sh.alive) continue;
+      const kin = !!sh.spin || !!sh.orbit || sh.kin;
+      ctx.beginPath();
+      if (sh.kind === 'circle') {
+        ctx.arc(sh.cx, sh.cy, sh.r, 0, 6.2831853);
+      } else if (sh.kind === 'seg') {
+        const a = Math.atan2(sh.y1 - sh.y0, sh.x1 - sh.x0);
+        ctx.lineWidth = sh.r * 2;
+        ctx.lineCap = 'round';
+        if (mode === 'render') {
+          ctx.strokeStyle = kin ? 'rgba(255,150,90,0.85)' : 'rgba(122,146,176,0.9)';
+          ctx.moveTo(sh.x0, sh.y0); ctx.lineTo(sh.x1, sh.y1); ctx.stroke();
+          ctx.lineWidth = sh.r * 0.9;
+          ctx.strokeStyle = 'rgba(20,28,40,0.75)';
+          ctx.moveTo(sh.x0, sh.y0); ctx.lineTo(sh.x1, sh.y1); ctx.stroke();
+        } else {
+          ctx.strokeStyle = 'rgba(150,180,210,0.5)';
+          ctx.lineWidth = 1.5 / V.viewScale;
+          ctx.moveTo(sh.x0, sh.y0); ctx.lineTo(sh.x1, sh.y1); ctx.stroke();
+        }
+        continue;
+      } else {
+        ctx.save();
+        ctx.translate(sh.cx, sh.cy);
+        ctx.rotate(sh.angle);
+        ctx.rect(-sh.hw, -sh.hh, sh.hw * 2, sh.hh * 2);
+        ctx.restore();
+      }
+      if (mode === 'render') {
+        const g = ctx.createLinearGradient(sh.cx - 60, sh.cy - 60, sh.cx + 60, sh.cy + 60);
+        if (kin) { g.addColorStop(0, 'rgba(255,159,98,0.92)'); g.addColorStop(1, 'rgba(180,80,50,0.92)'); }
+        else { g.addColorStop(0, 'rgba(150,172,200,0.9)'); g.addColorStop(1, 'rgba(88,106,132,0.9)'); }
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(15,22,32,0.85)';
+        ctx.lineWidth = 2 / V.viewScale;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = 'rgba(160,190,220,0.75)';
+        ctx.lineWidth = 1.4 / V.viewScale;
+        ctx.stroke();
+      }
+    }
+  }
+
+  /* -------------------------------- cloth --------------------------------- */
+  const shadeOf = (t) => (t < 0 ? 0 : (t > 1 ? 1 : t));
+
+  function drawClothRender(W, b) {
+    const V = R.view;
+    const cols = b.cols, rows = b.rows;
+    const x = W.x, y = W.y;
+    const at = (r, c) => b.p0 + r * cols + c;
+    const h = b.hsl;
+    /* shadow pass: whole sheet, offset with the "light" direction */
+    const sx = 11, sy = 15;
+    ctx.beginPath();
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        const a = at(r, c), d = at(r, c + 1), e = at(r + 1, c + 1), f = at(r + 1, c);
+        ctx.moveTo(x[a] + sx, y[a] + sy);
+        ctx.lineTo(x[d] + sx, y[d] + sy);
+        ctx.lineTo(x[e] + sx, y[e] + sy);
+        ctx.lineTo(x[f] + sx, y[f] + sy);
+        ctx.closePath();
+      }
+    }
+    ctx.fillStyle = 'rgba(4,8,14,0.30)';
+    ctx.fill();
+
+    /* shaded quads, bucketed into 12 brightness levels (12 fills total) */
+    const NB = 12;
+    if (!R.buckets) {
+      R.buckets = [];
+      for (let i = 0; i < NB; i++) R.buckets.push(new Path2D());
+    }
+    const paths = R.buckets;
+    for (let i = 0; i < NB; i++) paths[i] = new Path2D();
+    const sp = b.sp || 20;
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        const a = at(r, c), d = at(r, c + 1), e = at(r + 1, c + 1), f = at(r + 1, c);
+        const w0 = Math.abs(x[d] - x[a]) + Math.abs(x[e] - x[f]);
+        const h0 = Math.abs(y[e] - y[a]) + Math.abs(y[f] - y[d]);
+        /* fold darkness from in-plane compression, sheen from edge-on run */
+        const comp = Math.max(0, Math.min(1.4, (2 * sp - Math.abs(w0)) / (2 * sp)));
+        const edge = Math.abs(w0) / (Math.abs(h0) + 0.001);
+        const sheen = Math.max(0, 1 - Math.abs(edge - 0.55) * 1.7) * 0.45;
+        const t = shadeOf(0.62 - comp * 0.5 + sheen);
+        const p = paths[Math.min(NB - 1, (t * (NB - 1)) | 0)];
+        p.moveTo(x[a], y[a]); p.lineTo(x[d], y[d]);
+        p.lineTo(x[e], y[e]); p.lineTo(x[f], y[f]);
+        p.closePath();
+      }
+    }
+    for (let i = 0; i < NB; i++) {
+      const t = i / (NB - 1);
+      const l = 22 + t * 52;
+      const s = h.s - t * 12;
+      ctx.fillStyle = 'hsl(' + h.h + ',' + Math.max(18, s) + '%,' + l + '%)';
+      ctx.fill(paths[i]);
+    }
+    /* weave lines: cheap diagonal texture along the sheet */
+    ctx.strokeStyle = 'rgba(0,0,0,0.20)';
+    ctx.lineWidth = 0.8 / V.viewScale;
+    ctx.beginPath();
+    for (let r = 0; r < rows - 1; r += 2) {
+      for (let c = 0; c < cols - 1; c += 2) {
+        const a = at(r, c), e = at(r + 1, c + 1);
+        ctx.moveTo(x[a], y[a]); ctx.lineTo(x[e], y[e]);
+      }
+    }
+    ctx.stroke();
+  }
+
+  function drawJellyRender(W, b) {
+    const cols = b.cols, rows = b.rows, x = W.x, y = W.y;
+    const at = (r, c) => b.p0 + r * cols + c;
+    ctx.beginPath();
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        const a = at(r, c), d = at(r, c + 1), e = at(r + 1, c + 1), f = at(r + 1, c);
+        ctx.moveTo(x[a] + 9, y[a] + 13); ctx.lineTo(x[d] + 9, y[d] + 13);
+        ctx.lineTo(x[e] + 9, y[e] + 13); ctx.lineTo(x[f] + 9, y[f] + 13);
+        ctx.closePath();
+      }
+    }
+    ctx.fillStyle = 'rgba(6,10,18,0.35)';
+    ctx.fill();
+    const h = b.hsl;
+    const NB = 8;
+    if (!R.jb) { R.jb = []; for (let i = 0; i < NB; i++) R.jb.push(new Path2D()); }
+    for (let i = 0; i < NB; i++) R.jb[i] = new Path2D();
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        const a = at(r, c), d = at(r, c + 1), e = at(r + 1, c + 1), f = at(r + 1, c);
+        const dx1 = x[d] - x[a], dy1 = y[d] - y[a];
+        const dx2 = x[f] - x[e], dy2 = y[f] - y[e];
+        const len1 = Math.hypot(dx1, dy1), len2 = Math.hypot(dx2, dy2);
+        const area = (len1 + len2) * 0.5 * Math.abs(Math.sin(Math.atan2(dy1, dx1) - Math.atan2(dy2, dx2)));
+        const t = Math.max(0, Math.min(1, 0.30 + (area - 300) / 900));
+        const p = R.jb[Math.min(NB - 1, (t * (NB - 1)) | 0)];
+        p.moveTo(x[a], y[a]); p.lineTo(x[d], y[d]);
+        p.lineTo(x[e], y[e]); p.lineTo(x[f], y[f]);
+        p.closePath();
+      }
+    }
+    for (let i = 0; i < NB; i++) {
+      const t = i / (NB - 1);
+      ctx.fillStyle = 'hsla(' + h.h + ',' + (60 + t * 20) + '%,' + (34 + t * 30) + '%,0.92)';
+      ctx.fill(R.jb[i]);
+    }
+    /* rim light around the outline */
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.6 / R.view.viewScale;
+    ctx.beginPath();
+    const c1 = b.p0, c2 = b.p0 + cols - 1, c3 = c2 + (rows - 1) * cols, c4 = c1 + (rows - 1) * cols;
+    polyStroke(ctx, x, y, c1, c2);
+    polyStroke(ctx, x, y, c2, c3);
+    polyStroke(ctx, x, y, c3, c4);
+    polyStroke(ctx, x, y, c4, c1);
+    ctx.stroke();
+  }
+  function polyStroke(ctx, x, y, a, b) {
+    if (b > a) { for (let i = a; i <= b; i++) { if (i === a) ctx.moveTo(x[i], y[i]); else ctx.lineTo(x[i], y[i]); } }
+    else { for (let i = a; i >= b; i--) { if (i === a) ctx.moveTo(x[i], y[i]); else ctx.lineTo(x[i], y[i]); } }
+  }
+
+  /* pressurised shell: smooth loop through the ring particles */
+  function drawBlobRender(W, b) {
+    const x = W.x, y = W.y;
+    const n = b.ring;
+    if (n < 3) return;
+    const cx0 = (() => { let sx = 0, sy = 0; for (let i = 0; i < n; i++) { sx += x[b.p0 + i]; sy += y[b.p0 + i]; } return [sx / n, sy / n]; })();
+    ctx.beginPath();
+    /* quadratic smoothing through midpoints */
+    let mx = (x[b.p0 + n - 1] + x[b.p0]) * 0.5, my = (y[b.p0 + n - 1] + y[b.p0]) * 0.5;
+    ctx.moveTo(mx, my);
+    for (let i = 0; i < n; i++) {
+      const a = b.p0 + i, c = b.p0 + (i + 1) % n;
+      const mx2 = (x[a] + x[c]) * 0.5, my2 = (y[a] + y[c]) * 0.5;
+      ctx.quadraticCurveTo(x[a], y[a], mx2, my2);
+    }
+    ctx.closePath();
+    let maxR = 0;
+    for (let i = 0; i < n; i++) {
+      const d = Math.hypot(x[b.p0 + i] - cx0[0], y[b.p0 + i] - cx0[1]);
+      if (d > maxR) maxR = d;
+    }
+    const h = b.hsl;
+    const g = ctx.createRadialGradient(
+      cx0[0] - maxR * 0.35, cx0[1] - maxR * 0.45, maxR * 0.08,
+      cx0[0], cx0[1], maxR * 1.15);
+    g.addColorStop(0, 'hsla(' + h.h + ',88%,74%,0.98)');
+    g.addColorStop(0.55, 'hsla(' + h.h + ',72%,54%,0.97)');
+    g.addColorStop(1, 'hsla(' + (h.h + 14) + ',66%,34%,0.96)');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(12,18,28,0.8)';
+    ctx.lineWidth = 2 / R.view.viewScale;
+    ctx.stroke();
+    /* specular highlight */
+    ctx.beginPath();
+    ctx.ellipse(cx0[0] - maxR * 0.3, cx0[1] - maxR * 0.42, maxR * 0.30, maxR * 0.16,
+      -0.5, 0, 6.2831853);
+    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.fill();
+  }
+
+  function drawClusterRender(W, b) {
+    const hull = b.hull;
+    if (!hull || hull.length < 3) return;
+    const x = W.x, y = W.y;
+    ctx.beginPath();
+    ctx.moveTo(x[hull[0]], y[hull[0]]);
+    for (let i = 1; i < hull.length; i++) ctx.lineTo(x[hull[i]], y[hull[i]]);
+    ctx.closePath();
+    let cx0 = 0, cy0 = 0;
+    for (let i = 0; i < hull.length; i++) { cx0 += x[hull[i]]; cy0 += y[hull[i]]; }
+    cx0 /= hull.length; cy0 /= hull.length;
+    const g = ctx.createRadialGradient(cx0 - 12, cy0 - 16, 4, cx0, cy0, b.rad * 1.4);
+    g.addColorStop(0, 'rgba(232,238,250,0.98)');
+    g.addColorStop(0.6, 'rgba(150,166,196,0.96)');
+    g.addColorStop(1, 'rgba(74,88,112,0.95)');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(14,20,30,0.9)';
+    ctx.lineWidth = 2 / R.view.viewScale;
+    ctx.stroke();
+  }
+
+  function drawRopeRender(W, b) {
+    const x = W.x, y = W.y;
+    const n = b.pn;
+    if (n < 2) return;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    /* dark backing, then core, then highlight: reads as twisted fibre */
+    const passes = [
+      [b.thick * 1.0, 'rgba(10,14,22,0.55)'],
+      [b.thick * 0.72, b.ropeCol || 'rgba(226,176,92,0.95)'],
+      [b.thick * 0.26, 'rgba(255,238,200,0.55)']
+    ];
+    for (let p = 0; p < passes.length; p++) {
+      ctx.beginPath();
+      ctx.moveTo(x[b.p0], y[b.p0]);
+      for (let i = 1; i < n; i++) ctx.lineTo(x[b.p0 + i], y[b.p0 + i]);
+      if (b.closed) { ctx.lineTo(x[b.p0], y[b.p0]); ctx.closePath(); }
+      ctx.lineWidth = passes[p][0];
+      ctx.strokeStyle = passes[p][1];
+      ctx.stroke();
+    }
+  }
+
+  /* --------------------------- diagnostic modes --------------------------- */
+  function drawParticlesMode(W, mode) {
+    const x = W.x, y = W.y, act = W.act, cr = W.cr;
+    setWorldTransform();
+    const V = R.view;
+    if (mode === 'particles' || mode === 'pins') {
+      const NB = 10;
+      if (!R.pb) { R.pb = []; for (let i = 0; i < NB; i++) R.pb.push(new Path2D()); }
+      for (let i = 0; i < NB; i++) R.pb[i] = new Path2D();
+      for (let i = 0; i < W.n; i++) {
+        if (!act[i]) continue;
+        const sp = Math.min(1, Math.hypot(W.vx[i], W.vy[i]) / 900);
+        const bi = Math.min(NB - 1, (sp * NB) | 0);
+        const r = Math.max(1.6, cr[i] * 0.75);
+        R.pb[bi].moveTo(x[i] + r, y[i]);
+        R.pb[bi].arc(x[i], y[i], r, 0, 6.2831853);
+      }
+      for (let i = 0; i < NB; i++) {
+        const t = i / (NB - 1);
+        ctx.fillStyle = 'hsl(' + (200 - t * 200) + ',85%,' + (55 + t * 8) + '%)';
+        ctx.fill(R.pb[i]);
+      }
+      if (mode === 'pins') {
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 2 / V.viewScale;
+        ctx.beginPath();
+        for (let i = 0; i < W.n; i++) {
+          if (!act[i] || !W.pin[i]) continue;
+          const r = 5;
+          ctx.moveTo(x[i] - r, y[i] - r); ctx.lineTo(x[i] + r, y[i] + r);
+          ctx.moveTo(x[i] + r, y[i] - r); ctx.lineTo(x[i] - r, y[i] + r);
+        }
+        ctx.stroke();
+      }
+    } else if (mode === 'velocity') {
+      const NB = 12;
+      if (!R.vb) { R.vb = []; for (let i = 0; i < NB; i++) R.vb.push(new Path2D()); }
+      for (let i = 0; i < NB; i++) R.vb[i] = new Path2D();
+      let maxSp = 1;
+      for (let i = 0; i < W.n; i++) {
+        const s = Math.hypot(W.vx[i], W.vy[i]);
+        if (s > maxSp) maxSp = s;
+      }
+      for (let i = 0; i < W.n; i++) {
+        if (!act[i]) continue;
+        const s = Math.hypot(W.vx[i], W.vy[i]);
+        if (s < 3) continue;
+        const k = 0.075;
+        const bi = Math.min(NB - 1, (s / maxSp * NB) | 0);
+        R.vb[bi].moveTo(x[i], y[i]);
+        R.vb[bi].lineTo(x[i] - W.vx[i] * k, y[i] - W.vy[i] * k);
+      }
+      for (let i = 0; i < NB; i++) {
+        const t = (i + 1) / NB;
+        ctx.strokeStyle = 'hsl(' + (190 - t * 190) + ',90%,60%)';
+        ctx.lineWidth = Math.max(0.8, 2.2 * t) / V.viewScale;
+        ctx.stroke(R.vb[i]);
+      }
+    } else if (mode === 'contacts') {
+      ctx.beginPath();
+      const x2 = W.cX, y2 = W.cY;
+      for (let c = 0; c < W.cc; c++) {
+        const px = x2[c], py = y2[c];
+        ctx.moveTo(px + 3.2, py);
+        ctx.arc(px, py, 3.2, 0, 6.2831853);
+      }
+      ctx.fillStyle = 'rgba(255,90,90,0.75)';
+      ctx.fill();
+      ctx.beginPath();
+      for (let c = 0; c < W.cc; c++) {
+        const px = x2[c], py = y2[c];
+        const nx = W.cNX[c], ny = W.cNY[c];
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + nx * 9, py + ny * 9);
+      }
+      ctx.strokeStyle = 'rgba(120,255,190,0.5)';
+      ctx.lineWidth = 1 / V.viewScale;
+      ctx.stroke();
+    }
+  }
+
+  function drawConstraintsMode(W, mode) {
+    setWorldTransform();
+    const V = R.view;
+    const x = W.x, y = W.y;
+    if (mode === 'constraints') {
+      const cols = ['rgba(90,220,200,0.85)', 'rgba(240,180,80,0.6)',
+        'rgba(160,120,255,0.55)', 'rgba(255,255,255,0.8)'];
+      const lw = [1.5, 1.0, 0.9, 2.0];
+      for (let cls = 1; cls <= 4; cls++) {
+        ctx.beginPath();
+        for (let k = 0; k < W.pc; k++) {
+          if (!W.palive[k] || W.pcls[k] !== cls) continue;
+          const a = W.pa[k], b = W.pb[k];
+          ctx.moveTo(x[a], y[a]); ctx.lineTo(x[b], y[b]);
+        }
+        ctx.strokeStyle = cols[cls - 1];
+        ctx.lineWidth = lw[cls - 1] / V.viewScale;
+        ctx.stroke();
+      }
+      /* closed area / pressure loops */
+      ctx.beginPath();
+      for (let c = 0; c < W.ac; c++) {
+        if (!W.aAlive[c]) continue;
+        const off = W.aOff[c], n = W.aCnt[c];
+        for (let i = 0; i < n; i++) {
+          const a = W.poly[off + i], b = W.poly[off + (i + 1) % n];
+          ctx.moveTo(x[a], y[a]); ctx.lineTo(x[b], y[b]);
+        }
+      }
+      ctx.strokeStyle = 'rgba(255,120,190,0.55)';
+      ctx.lineWidth = 1 / V.viewScale;
+      ctx.stroke();
+    } else if (mode === 'stress') {
+      const thr = Math.max(0.02, R.app ? R.app.S.tear : 0.5);
+      const NB = 14;
+      if (!R.sb) { R.sb = []; for (let i = 0; i < NB; i++) R.sb.push(new Path2D()); }
+      for (let i = 0; i < NB; i++) R.sb[i] = new Path2D();
+      let maxSt = 0.001, hot = 0;
+      for (let k = 0; k < W.pc; k++) {
+        if (!W.palive[k]) continue;
+        const s = W.pstr[k];
+        if (s > maxSt) maxSt = s;
+        const t = Math.min(1, s / thr);
+        const bi = Math.min(NB - 1, (t * NB) | 0);
+        if (t > 0.8) hot++;
+        const a = W.pa[k], b = W.pb[k];
+        R.sb[bi].moveTo(x[a], y[a]); R.sb[bi].lineTo(x[b], y[b]);
+      }
+      for (let i = 0; i < NB; i++) {
+        const t = (i + 1) / NB;
+        const hue = 140 - t * 140;
+        ctx.strokeStyle = 'hsl(' + Math.max(0, hue) + ',95%,' + (48 + t * 12) + '%)';
+        ctx.lineWidth = (1.1 + t * 2.4) / V.viewScale;
+        ctx.stroke(R.sb[i]);
+      }
+      if (hot > 0) {   /* imminent tearing flashes */
+        const pulse = 0.45 + 0.35 * Math.sin(W.t * 18);
+        ctx.beginPath();
+        for (let k = 0; k < W.pc; k++) {
+          if (!W.palive[k]) continue;
+          if (W.pstr[k] / thr <= 0.8) continue;
+          const a = W.pa[k], b = W.pb[k];
+          ctx.moveTo(x[a], y[a]); ctx.lineTo(x[b], y[b]);
+        }
+        ctx.strokeStyle = 'rgba(255,40,120,' + pulse.toFixed(3) + ')';
+        ctx.lineWidth = 3.4 / V.viewScale;
+        ctx.stroke();
+      }
+      R.stressInfo = { max: maxSt, hot: hot, thr: thr };
+    }
+  }
+
+  /* ------------------------------ tool layer ------------------------------ */
+  function drawToolLayer(W, S, app) {
+    const V = R.view;
+    setWorldTransform();
+    const p = app.pointer;
+    /* tool ring */
+    if (p.inside) {
+      const info = TOOL_INFO[app.tool] || TOOL_INFO.grab;
+      const r = (app.tool === 'cut' ? 12 : app.tool === 'erase' ? 26 : S.grabRadius);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, 6.2831853);
+      ctx.strokeStyle = info.color;
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 1.6 / V.viewScale;
+      ctx.stroke();
+      if (app.tool === 'wind' || app.tool === 'push') {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * 0.55, 0, 6.2831853);
+        ctx.globalAlpha = 0.35;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      if (p.down) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3.2, 0, 6.2831853);
+        ctx.fillStyle = info.color;
+        ctx.fill();
+      }
+    }
+    /* grab tethers */
+    if (app.tool === 'grab' && app.grabs && app.grabs.length) {
+      ctx.beginPath();
+      for (const g of app.grabs) {
+        if (!g.idx) continue;
+        for (let i = 0; i < g.n; i++) {
+          ctx.moveTo(g.tx, g.ty);
+          ctx.lineTo(W.x[g.idx[i]], W.y[g.idx[i]]);
+        }
+      }
+      ctx.strokeStyle = 'rgba(110,231,255,0.5)';
+      ctx.lineWidth = 1 / V.viewScale;
+      ctx.stroke();
+    }
+    /* cut trail */
+    if (app.cutTrail && app.cutTrail.length > 2) {
+      ctx.beginPath();
+      ctx.moveTo(app.cutTrail[0], app.cutTrail[1]);
+      for (let i = 2; i < app.cutTrail.length; i += 2) ctx.lineTo(app.cutTrail[i], app.cutTrail[i + 1]);
+      ctx.strokeStyle = 'rgba(255,93,115,0.9)';
+      ctx.lineWidth = 2.4 / V.viewScale;
+      ctx.stroke();
+    }
+    /* spawn ghost */
+    if (app.spawnGhost) {
+      const g = app.spawnGhost;
+      ctx.strokeStyle = 'rgba(140,233,154,0.9)';
+      ctx.lineWidth = 1.6 / V.viewScale;
+      ctx.setLineDash([6 / V.viewScale, 5 / V.viewScale]);
+      ctx.strokeRect(g.x, g.y, g.w, g.h);
+      ctx.setLineDash([]);
+    }
+  }
+
+  /* --------------------------------- frame -------------------------------- */
+  function draw(W, S, app) {
+    const V = R.view;
+    V.viewScale = V.scale;
+    R.app = app;
+    applyView();
+    drawBackdrop(app);
+    const mode = app.mode;
+    if (mode === 'grid') drawGrid(W);
+    if (mode === 'render') drawWind(W, S);
+    setWorldTransform();
+    /* shadows for the smooth bodies first, then the bodies themselves */
+    drawShapes(W, mode);
+    for (let i = 0; i < W.bodies.length; i++) {
+      const b = W.bodies[i];
+      if (b.dead || b.pn === 0) continue;
+      if (mode === 'render') {
+        if (b.kind === BK_CLOTH) drawClothRender(W, b);
+        else if (b.kind === BK_JELLY) {
+          if (b.hull) drawClusterRender(W, b);
+          else if (b.closed) drawBlobRender(W, b);
+          else drawJellyRender(W, b);
+        } else if (b.kind === BK_BLOB) drawBlobRender(W, b);
+        else drawRopeRender(W, b);
+      } else if (mode !== 'grid') {
+        if (b.kind === BK_ROPE) drawRopeRender(W, b);
+      }
+    }
+    if (mode !== 'render' && mode !== 'grid') drawParticlesMode(W, mode);
+    if (mode === 'constraints' || mode === 'stress') drawConstraintsMode(W, mode);
+    drawToolLayer(W, S, app);
+    ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+  }
+
+  return { resize: resize, draw: draw, screenToWorld: screenToWorld, R: R };
+}
+
+/* ===== 15-scenarios.js ===== */
+/* ==========================================================================
+ * SCENARIOS — each one builds a fresh world and can tune the solver defaults.
+ * World box is 1600 x 1000 world units, +y is down, 100 u = 1 "metre".
+ * =========================================================================*/
+
+function makeScenarios(A) {
+  const SC = [];
+  const shape = (W, s) => A.addShape(W, s);
+  const cloth = (W, o) => A.buildCloth(W, o);
+  const rope = (W, o) => A.buildChain(W, o);
+  const blob = (W, o) => A.buildBlob(W, o);
+  const jelly = (W, o) => A.buildJelly(W, o);
+  const ball = (W, o) => A.buildCluster(W, Object.assign({ sp: 15 }, o));
+
+  /* press a body's particles to a neighbour body (attachment constraints) */
+  function sew(W, body, host, maxDist) {
+    let n = 0;
+    for (let i = body.p0; i < body.p0 + body.pn; i++) {
+      const k = A.weldNearest(W, i, host, maxDist || 30);
+      if (k >= 0) n++;
+    }
+    return n;
+  }
+
+  /* pressurised tube: elliptical shell that conserves its area */
+  function tube(W, o) {
+    const n = o.n;
+    const b = A.addBody(W, {
+      kind: A.BK_BLOB, p0: W.n, pn: n, closed: true, aero: false, self: true,
+      name: 'tube', dampMul: 1.5, ring: n, rad: Math.max(o.rx, o.ry),
+      thick: 7, hsl: { h: o.hue, s: 66, l: 55 }
+    });
+    const start = W.n;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      A.addP(W, o.cx + Math.cos(a) * o.rx, o.y0 + Math.sin(a) * o.ry, o.im, 4.2, b, i, 0, 2, false);
+    }
+    const idx = [];
+    for (let i = 0; i < n; i++) idx.push(start + i);
+    for (let i = 0; i < n; i++) {
+      A.addPair(W, start + i, start + (i + 1) % n, undefined, A.CL_STRUCT);
+      A.addPair(W, start + i, start + (i + 2) % n, undefined, A.CL_BEND);
+    }
+    A.addArea(W, idx, n, 1);
+    return b;
+  }
+
+  /* ------------------------------------------------------------ scenarios */
+
+  SC.push({
+    id: 'cascade', name: 'Cascade Crash', default: true,
+    blurb: 'Sheet, pendulum chain and a spinning paddle: the machine keeps running.',
+    tool: 'grab',
+    settings: { gravity: 900, wind: 250, windDir: 0, tear: 0.55 },
+    build(W) {
+      /* One machine, not a still life: everything is in contact with something.
+         A steep chute feeds a kinematic paddle; a chain hangs into the paddle;
+         a curtain hangs across the chute and gets raked by the pucks; the
+         right-hand bin collects pucks, jelly and a pressurised balloon. */
+      shape(W, { kind: 'seg', x0: 110, y0: 210, x1: 660, y1: 470, r: 14 });
+      shape(W, { kind: 'seg', x0: 990, y0: 330, x1: 700, y1: 540, r: 14 });
+      shape(W, { kind: 'box', cx: 780, cy: 720, hw: 180, hh: 13, spin: 2.2 });
+      shape(W, { kind: 'circle', cx: 1060, cy: 250, r: 95 });
+      shape(W, { kind: 'box', cx: 1120, cy: 620, hw: 15, hh: 165, angle: 0.22 });
+      shape(W, { kind: 'box', cx: 1490, cy: 620, hw: 15, hh: 165, angle: -0.22 });
+      shape(W, { kind: 'box', cx: 1290, cy: 830, hw: 220, hh: 16 });
+      /* curtain: pinned along the top every 4th node so it can billow */
+      /* banner: held along its whole top edge so it stays taut and streams
+         in the wind instead of crumpling into a long tail */
+      const c = cloth(W, { x0: 90, y0: 70, cols: 16, rows: 7, sp: 20, im: 0.45, hue: 168 });
+      for (let r = 0; r < 16; r++) A.pinP(W, c.p0 + r);
+      /* chain hanging into the paddle */
+      const ro = rope(W, { x0: 620, y0: 150, dx: 0.5, dy: 1, n: 18, seg: 20, im: 0.32, thick: 6.5 });
+      A.pinP(W, ro.p0);
+      /* pucks: two on the chute, one on the deflector, three already in the bin */
+      ball(W, { cx: 250, y0: 250, r: 34, sp: 14, im: 0.28, name: 'puck' });
+      ball(W, { cx: 420, y0: 330, r: 28, sp: 13, im: 0.28, name: 'puck' });
+      ball(W, { cx: 560, y0: 380, r: 24, sp: 13, im: 0.28, name: 'puck' });
+      ball(W, { cx: 1060, y0: 90, r: 36, sp: 14, im: 0.28, name: 'puck' });
+      ball(W, { cx: 1230, y0: 700, r: 30, sp: 14, im: 0.28, name: 'puck' });
+      ball(W, { cx: 1300, y0: 740, r: 34, sp: 14, im: 0.28, name: 'puck' });
+      ball(W, { cx: 1400, y0: 700, r: 26, sp: 13, im: 0.28, name: 'puck' });
+      /* soft bodies */
+      blob(W, { cx: 1180, y0: 480, r: 52, n: 20, im: 0.5, hue: 300 });
+      blob(W, { cx: 1400, y0: 520, r: 46, n: 20, im: 0.5, hue: 24 });
+      jelly(W, { x0: 1250, y0: 620, cols: 6, rows: 5, sp: 26, im: 0.45, hue: 226 });
+    }
+  });
+
+  SC.push({
+    id: 'flag', name: 'Hanging Flag',
+    blurb: 'Curtain sewn to a mast, flapping in turbulence. Push the wind up to shred it.',
+    tool: 'grab',
+    settings: { gravity: 420, wind: 400, windDir: 0, windTurb: 0.8, tear: 0.42, kBend: 0.22 },
+    build(W) {
+      shape(W, { kind: 'seg', x0: 250, y0: 90, x1: 250, y1: 860, r: 13 });
+      const c = cloth(W, { x0: 262, y0: 100, cols: 30, rows: 18, sp: 21, im: 0.5, hue: 205 });
+      for (let r = 0; r < 18; r++) A.pinP(W, c.p0 + r * 30);
+      shape(W, { kind: 'circle', cx: 1250, cy: 620, r: 150 });
+      shape(W, { kind: 'box', cx: 880, cy: 880, hw: 300, hh: 16, angle: -0.14 });
+      rope(W, { x0: 1000, y0: 110, dx: 0, dy: 1, n: 30, seg: 20, im: 0.6 });
+    }
+  });
+
+  SC.push({
+    id: 'drape', name: 'Cloth Drape',
+    blurb: 'Folding over static geometry, plus a kinematic paddle that drags fabric around.',
+    tool: 'grab',
+    settings: { gravity: 1000, wind: 110, tear: 0.6, friction: 0.62, thickness: 6 },
+    build(W) {
+      shape(W, { kind: 'circle', cx: 430, cy: 430, r: 145 });
+      shape(W, { kind: 'box', cx: 800, cy: 560, hw: 210, hh: 22, angle: 0.28 });
+      shape(W, { kind: 'box', cx: 1200, cy: 430, hw: 110, hh: 110, angle: 0.5 });
+      shape(W, { kind: 'box', cx: 700, cy: 240, hw: 190, hh: 12, spin: 1.6 });
+      shape(W, { kind: 'seg', x0: 1300, y0: 560, x1: 1520, y1: 780, r: 14 });
+      cloth(W, { x0: 260, y0: 40, cols: 26, rows: 22, sp: 21, im: 0.5, hue: 178 });
+      cloth(W, { x0: 930, y0: 60, cols: 26, rows: 20, sp: 21, im: 0.5, hue: 44 });
+      const r = rope(W, { x0: 1350, y0: 90, dx: 0, dy: 1, n: 26, seg: 20, im: 0.6 });
+      A.pinP(W, r.p0);
+      blob(W, { cx: 1120, y0: 160, r: 62, n: 22, im: 0.55, hue: 344 });
+    }
+  });
+
+  SC.push({
+    id: 'bridge', name: 'Bridge Under Load',
+    blurb: 'Suspension deck of welded links carrying a soft cart and heavy shot.',
+    tool: 'grab',
+    settings: { gravity: 1050, wind: 80, tear: 0.3, kStruct: 0.96, kBend: 0.45 },
+    build(W) {
+      shape(W, { kind: 'box', cx: 200, cy: 300, hw: 24, hh: 230 });
+      shape(W, { kind: 'box', cx: 1340, cy: 300, hw: 24, hh: 230 });
+      shape(W, { kind: 'box', cx: 770, cy: 910, hw: 430, hh: 22, angle: 0.04 });
+      const deck = rope(W, {
+        x0: 225, y0: 520, dx: 1090, dy: 40, n: 52, seg: 21.2,
+        im: 0.55, thick: 9, bend: true, ropeCol: 'rgba(212,168,110,0.96)'
+      });
+      A.pinP(W, deck.p0);
+      A.pinP(W, deck.p0 + 52);
+      const c1 = rope(W, { x0: 420, y0: 120, dx: 1, dy: 1.25, n: 26, seg: 24, im: 0.7, thick: 4.5 });
+      const c2 = rope(W, { x0: 1120, y0: 120, dx: -1, dy: 1.25, n: 26, seg: 24, im: 0.7, thick: 4.5 });
+      A.pinP(W, c1.p0);
+      A.pinP(W, c2.p0);
+      /* cables sewn onto the deck every few links = attachment constraints */
+      sew(W, c1, deck, 40);
+      sew(W, c2, deck, 40);
+      const cart = jelly(W, { x0: 620, y0: 380, cols: 11, rows: 6, sp: 26, im: 0.34, hue: 210 });
+      for (let i = cart.p0; i < cart.p0 + cart.pn; i++) W.im[i] *= 1.8;
+      const shot = ball(W, { cx: 980, y0: 300, r: 40, im: 0.3, name: 'shot' });
+      void shot;
+    }
+  });
+
+  SC.push({
+    id: 'stack', name: 'Soft Body Stack',
+    blurb: 'Pressurised shells and jelly slabs on a platform, squeezed by a sliding plate.',
+    tool: 'grab',
+    settings: { gravity: 980, wind: 50, pressure: 0.8, tear: 0.6, friction: 0.55 },
+    build(W) {
+      shape(W, { kind: 'box', cx: 620, cy: 700, hw: 330, hh: 18, angle: -0.18 });
+      shape(W, { kind: 'box', cx: 1180, cy: 620, hw: 210, hh: 16, angle: 0.24 });
+      shape(W, {
+        kind: 'box', cx: 1180, cy: 420, hw: 24, hh: 150,
+        slide: { vx: -70, min: 1000, max: 1400 }
+      });
+      shape(W, { kind: 'circle', cx: 1010, cy: 280, r: 60 });
+      jelly(W, { x0: 430, y0: 430, cols: 10, rows: 8, sp: 27, im: 0.42, hue: 205 });
+      jelly(W, { x0: 640, y0: 560, cols: 10, rows: 5, sp: 27, im: 0.42, hue: 262 });
+      jelly(W, { x0: 860, y0: 600, cols: 6, rows: 6, sp: 27, im: 0.42, hue: 40 });
+      blob(W, { cx: 1130, y0: 430, r: 64, n: 24, im: 0.5, hue: 344 });
+      blob(W, { cx: 1300, y0: 380, r: 52, n: 22, im: 0.5, hue: 300 });
+      blob(W, { cx: 520, y0: 250, r: 58, n: 22, im: 0.5, hue: 152 });
+      cloth(W, { x0: 160, y0: 90, cols: 18, rows: 14, sp: 21, im: 0.5, hue: 18 });
+      rope(W, { x0: 980, y0: 210, dx: 1, dy: 0.35, n: 26, seg: 20, im: 0.45 });
+    }
+  });
+
+  SC.push({
+    id: 'net', name: 'Suspended Rope Net',
+    blurb: 'A sling woven from plain distance links holds three heavy shots. Cut it and watch.',
+    tool: 'cut',
+    settings: { gravity: 1100, wind: 130, tear: 0.35, kStruct: 0.94 },
+    build(W) {
+      const net = cloth(W, {
+        x0: 320, y0: 300, cols: 26, rows: 12, sp: 24, im: 0.45,
+        shear: false, bend: false, hue: 200
+      });
+      A.pinP(W, net.p0);
+      A.pinP(W, net.p0 + 25);
+      A.pinP(W, net.p0 + 11 * 26);
+      A.pinP(W, net.p0 + 11 * 26 + 25);
+      const b1 = ball(W, { cx: 470, y0: 180, r: 40, im: 0.28, name: 'shot A' });
+      const b2 = ball(W, { cx: 690, y0: 150, r: 48, im: 0.28, name: 'shot B' });
+      const b3 = ball(W, { cx: 900, y0: 200, r: 36, im: 0.28, name: 'shot C' });
+      void b1; void b2; void b3;
+      shape(W, { kind: 'box', cx: 1250, cy: 620, hw: 240, hh: 18, angle: 0.2 });
+      cloth(W, { x0: 1150, y0: 120, cols: 20, rows: 18, sp: 21, im: 0.5, hue: 60 });
+    }
+  });
+
+  SC.push({
+    id: 'balloon', name: 'Balloon Chamber',
+    blurb: 'Low gravity, live pressure. Shells and a pressurised tube squash and collide.',
+    tool: 'grab',
+    settings: { gravity: 170, wind: 240, windDir: 0, pressure: 0.9, damping: 1.3, tear: 0.75 },
+    build(W) {
+      shape(W, { kind: 'box', cx: 520, cy: 830, hw: 330, hh: 18, angle: -0.1 });
+      shape(W, { kind: 'box', cx: 1130, cy: 810, hw: 300, hh: 18, angle: 0.12 });
+      shape(W, { kind: 'circle', cx: 800, cy: 560, r: 90 });
+      blob(W, { cx: 380, y0: 300, r: 76, n: 26, im: 0.5, hue: 344 });
+      blob(W, { cx: 560, y0: 430, r: 54, n: 22, im: 0.5, hue: 300 });
+      blob(W, { cx: 1080, y0: 320, r: 90, n: 28, im: 0.5, hue: 200 });
+      blob(W, { cx: 1290, y0: 470, r: 60, n: 22, im: 0.5, hue: 148 });
+      tube(W, { cx: 760, y0: 250, rx: 180, ry: 56, n: 34, im: 0.45, hue: 30 });
+      ball(W, { cx: 950, y0: 660, r: 44, im: 0.55, name: 'anchor shot' });
+      cloth(W, { x0: 150, y0: 600, cols: 16, rows: 10, sp: 22, im: 0.5, hue: 220 });
+    }
+  });
+
+  SC.push({
+    id: 'stress', name: 'Destructive Stress Test',
+    blurb: 'Overloaded sheet carrying heavy loads, with a shredder underneath. Tears fast.',
+    tool: 'cut',
+    settings: {
+      gravity: 1500, wind: 500, windDir: 0, windTurb: 0.9, tear: 0.2,
+      tearOn: true, kBend: 0.1, kShear: 0.3, damping: 0.5
+    },
+    build(W) {
+      const c = cloth(W, { x0: 380, y0: 130, cols: 34, rows: 14, sp: 23, im: 0.45, hue: 8 });
+      for (let col = 0; col < 34; col++) A.pinP(W, c.p0 + col);   /* top rail */
+      shape(W, { kind: 'box', cx: 760, cy: 660, hw: 220, hh: 11, spin: -3.1 });
+      shape(W, { kind: 'circle', cx: 1250, cy: 560, r: 110 });
+      for (let k = 0; k < 5; k++) {
+        const j = jelly(W, {
+          x0: 430 + k * 155, y0: 420, cols: 6, rows: 6, sp: 24,
+          im: 0.2, hue: 262, name: 'load ' + (k + 1)
+        });
+        for (let i = j.p0; i < j.p0 + j.pn; i++) W.im[i] *= 2.6;
+        sew(W, j, c, 30);
+      }
+      rope(W, { x0: 110, y0: 220, dx: 0.2, dy: 1, n: 24, seg: 22, im: 0.5 });
+    }
+  });
+
+  SC.push({
+    id: 'wreck', name: 'Wrecking Ball',
+    blurb: 'Heavy chain pendulum versus a loaded platform. Reset and it swings again.',
+    tool: 'grab',
+    settings: { gravity: 1400, wind: 0, tear: 0.35, restitution: 0.3, friction: 0.5 },
+    build(W) {
+      const r = rope(W, { x0: 250, y0: 140, dx: 1, dy: 0.8, n: 12, seg: 34, im: 0.28, thick: 8 });
+      A.pinP(W, r.p0);
+      const bob = ball(W, { cx: 620, y0: 400, r: 52, im: 0.2, name: 'wrecker' });
+      A.weldNearest(W, r.p0 + 12, bob, 120);
+      shape(W, { kind: 'box', cx: 1050, cy: 720, hw: 300, hh: 18 });
+      shape(W, { kind: 'box', cx: 1400, cy: 520, hw: 18, hh: 180, angle: 0.1 });
+      const j1 = jelly(W, { x0: 900, y0: 540, cols: 8, rows: 6, sp: 26, im: 0.45, hue: 210 });
+      jelly(W, { x0: 1010, y0: 400, cols: 7, rows: 5, sp: 26, im: 0.45, hue: 340 });
+      blob(W, { cx: 1190, y0: 470, r: 56, n: 22, im: 0.5, hue: 152 });
+      blob(W, { cx: 1270, y0: 340, r: 46, n: 20, im: 0.5, hue: 44 });
+      cloth(W, { x0: 1420, y0: 130, cols: 12, rows: 20, sp: 21, im: 0.5, hue: 190 });
+      void j1;
+    }
+  });
+
+  SC.push({
+    id: 'sandbox', name: 'Sandbox',
+    blurb: 'Mostly empty: obstacles, one sheet, one shell. Use the Spawn tool to fill it up.',
+    tool: 'spawn',
+    settings: { gravity: 900, wind: 150, tear: 0.5 },
+    build(W) {
+      shape(W, { kind: 'box', cx: 420, cy: 650, hw: 260, hh: 16, angle: -0.2 });
+      shape(W, { kind: 'circle', cx: 980, cy: 520, r: 120 });
+      shape(W, { kind: 'box', cx: 1330, cy: 360, hw: 160, hh: 11, spin: 1.1 });
+      shape(W, { kind: 'seg', x0: 120, y0: 880, x1: 700, y1: 820, r: 12 });
+      cloth(W, { x0: 250, y0: 80, cols: 22, rows: 16, sp: 21, im: 0.5, hue: 168 });
+      blob(W, { cx: 1200, y0: 220, r: 62, n: 22, im: 0.5, hue: 344 });
+    }
+  });
+
+  return { list: SC, byId: (id) => SC.find((s) => s.id === id) || SC[0] };
+}
+
+
+/* ===== 20-app.js ===== */
+/* ==========================================================================
+ * APP — UI wiring, pointer/keyboard tools, main loop, HUD, persistence.
+ * =========================================================================*/
+
+const DEFAULTS = {
+  gravity: 900, gravDir: 90, wind: 220, windDir: 0, windTurb: 0.55,
+  damping: 0.8, restitution: 0.12, friction: 0.5, thick: 6,
+  iters: 6, substeps: 3, dtScale: 1.0,
+  kStruct: 0.9, kShear: 0.4, kBend: 0.16, pressure: 0.55,
+  tear: 0.5, tearOn: true, selfCollide: true, pairCollide: true,
+  density: 1.5, grabRadius: 44, grabK: 0.55,
+  hud: true, spark: true
+};
+
+const SPAWN_TYPES = [
+  { id: 'cloth', name: 'Cloth sheet' },
+  { id: 'rope', name: 'Rope / chain' },
+  { id: 'blob', name: 'Soft body (pressurised)' },
+  { id: 'balloon', name: 'Balloon' },
+  { id: 'jelly', name: 'Jelly lattice' },
+  { id: 'ball', name: 'Rigid puck' },
+  { id: 'circle', name: 'Static circle' },
+  { id: 'box', name: 'Static box' },
+  { id: 'spinner', name: 'Spinning paddle' }
+];
+
+const TOOL_ORDER = ['grab', 'pin', 'cut', 'push', 'wind', 'spawn', 'erase'];
+
+const TOOL_HINT = {
+  grab: 'Drag particles. <kbd>Space</kbd> pause · <kbd>N</kbd> step · <kbd>R</kbd> reset · <kbd>V</kbd> viz mode · <kbd>1-7</kbd> tools · <kbd>[</kbd><kbd>]</kbd> radius',
+  pin: 'Click or drag to pin points; drag over pinned points to unpin them. <kbd>2</kbd> = this tool.',
+  cut: 'Drag across the mesh to sever constraints. Tearing stays torn — the graph really changes.',
+  push: 'Drag to punch impulses into the material (direction = drag direction).',
+  wind: 'Hold to blow a local wind gust; drag to steer it.',
+  spawn: 'Press and drag to size a new object, release to drop it. Pick the type in the panel.',
+  erase: 'Click or drag over a body to delete that body and its constraints.'
+};
+
+function bootApp(api, makeScenarios, createRenderer) {
+  const doc = document;
+  const canvas = doc.getElementById('sim');
+  const stage = doc.getElementById('stage');
+  const hud = doc.getElementById('hud');
+  const hintEl = doc.getElementById('hint');
+  const toastEl = doc.getElementById('toast');
+  const sparkC = doc.getElementById('spark');
+  const sparkCtx = sparkC ? sparkC.getContext('2d') : null;
+
+  const A = api;
+  const scen = makeScenarios(api);
+  let W = A.makeWorld();
+  const S = Object.assign({
+    gx: 0, gy: 900, windDx: 1, windDy: 0, maxStep: 9, cellSize: 15,
+    substeps: 3, iters: 6
+  }, DEFAULTS);
+
+  const view = {
+    paused: false, stepOnce: false, mode: 'render', tool: 'grab',
+    spawnType: 'cloth', panelOpen: true, fps: 60
+  };
+  const app = {
+    W: W, S: S, mode: 'render', tool: 'grab',
+    pointer: { x: 0, y: 0, inside: false, down: false, px: 0, py: 0, dx: 0, dy: 0 },
+    grabs: [], cutTrail: [], spawnGhost: null,
+    toasts: [], errors: [], keys: TOOL_ORDER.slice(), sceneId: 'cascade'
+  };
+
+  /* --------------------------------------------------------------- helpers */
+  function toast(msg, isErr) {
+    const d = doc.createElement('div');
+    d.className = 'toast' + (isErr ? ' err' : '');
+    d.textContent = msg;
+    toastEl.appendChild(d);
+    app.toasts.push({ el: d, t: performance.now(), msg: msg, err: !!isErr });
+    while (app.toasts.length > 4) {
+      const old = app.toasts.shift();
+      if (old.el.parentNode) old.el.parentNode.removeChild(old.el);
+    }
+    setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 2600);
+  }
+
+  const fmt = {
+    int: (v) => String(Math.round(v)),
+    f1: (v) => v.toFixed(1),
+    f2: (v) => v.toFixed(2)
+  };
+
+  /* ------------------------------------------------------------- renderer  */
+  const R = createRenderer(canvas);
+  app.R = R;
+
+  function refit() {
+    const rect = stage.getBoundingClientRect();
+    const cr = canvas.getBoundingClientRect();
+    R.resize(cr.width || rect.width, cr.height || rect.height, A.WORLD_W, A.WORLD_H);
+    drawSpark();
+  }
+
+  /* ------------------------------------------------------------- scenarios */
+  function applyScenarioDefaults(sc) {
+    if (sc.settings) Object.assign(S, sc.settings);
+    if (sc.tool) { app.tool = sc.tool; syncToolButtons(); }
+    rebuildForces();
+    syncControls();
+  }
+
+  function loadScenario(id, quiet) {
+    const sc = scen.byId(id);
+    app.sceneId = sc.id;
+    W = A.makeWorld();
+    app.W = W;
+    Object.assign(S, DEFAULTS);
+    applyScenarioDefaults(sc);
+    sc.build(W, S);
+    doc.getElementById('blurb').textContent = sc.name + ' — ' + sc.blurb;
+    if (!quiet) toast('Scenario: ' + sc.name);
+    refit();
+    saveSession();
+  }
+
+  function rebuildForces() {
+    const th = (S.gravDir * Math.PI) / 180;
+    S.gx = Math.cos(th) * S.gravity;
+    S.gy = Math.sin(th) * S.gravity;
+    const wa = (S.windDir * Math.PI) / 180;
+    S.windDx = Math.cos(wa);
+    S.windDy = Math.sin(wa);
+  }
+
+  /* ------------------------------------------------------------ tool setup */
+  const toolsWrap = doc.getElementById('tools');
+  function buildToolButtons() {
+    toolsWrap.innerHTML = '';
+    for (const t of TOOL_ORDER) {
+      const b = doc.createElement('button');
+      b.className = 'tool' + (t === app.tool ? ' active' : '');
+      b.dataset.tool = t;
+      b.title = TOOL_INFO[t].name + '  (' + TOOL_INFO[t].key + ')';
+      b.innerHTML = '<span>' + TOOL_INFO[t].name + '</span><small>' + TOOL_INFO[t].key + '</small>';
+      b.addEventListener('click', () => setTool(t));
+      toolsWrap.appendChild(b);
+    }
+  }
+  function syncToolButtons() {
+    for (const b of toolsWrap.querySelectorAll('.tool')) {
+      b.classList.toggle('active', b.dataset.tool === app.tool);
+    }
+    canvas.style.cursor = app.tool === 'grab' ? 'grab'
+      : (app.tool === 'cut' ? 'cell' : app.tool === 'erase' ? 'not-allowed' : 'crosshair');
+    hintEl.innerHTML = TOOL_HINT[app.tool] || '';
+  }
+  function setTool(t) {
+    if (!TOOL_INFO[t]) return;
+    app.tool = t;
+    if (t !== 'grab') { W.grab = null; app.grabs = []; }
+    app.cutTrail.length = 0;
+    app.spawnGhost = null;
+    syncToolButtons();
+    saveSession();
+  }
+
+  /* mode select */
+  const modeSel = doc.getElementById('mode');
+  for (const m of MODES) {
+    const o = doc.createElement('option');
+    o.value = m.id;
+    o.textContent = m.name;
+    o.title = m.hint;
+    modeSel.appendChild(o);
+  }
+  modeSel.addEventListener('change', () => {
+    app.mode = modeSel.value;              /* never touches the world */
+    saveSession();
+  });
+
+  /* scenario select */
+  const scenSel = doc.getElementById('scenario');
+  for (const sc of scen.list) {
+    const o = doc.createElement('option');
+    o.value = sc.id;
+    o.textContent = sc.name;
+    o.title = sc.blurb;
+    scenSel.appendChild(o);
+  }
+  scenSel.addEventListener('change', () => loadScenario(scenSel.value));
+
+  /* spawn type select */
+  const spawnSel = doc.getElementById('spawnType');
+  for (const t of SPAWN_TYPES) {
+    const o = doc.createElement('option');
+    o.value = t.id;
+    o.textContent = t.name;
+    spawnSel.appendChild(o);
+  }
+
+  /* ------------------------------------------------------------- controls */
+  const ctrls = Array.from(doc.querySelectorAll('[data-s],[data-c]'));
+  function syncControls() {
+    for (const el of ctrls) {
+      const key = el.dataset.s || el.dataset.c;
+      if (!(key in S)) continue;
+      if (el.type === 'checkbox') el.checked = !!S[key];
+      else {
+        el.value = String(S[key]);
+        const out = el.parentNode.querySelector('output');
+        if (out) out.textContent = (fmt[el.dataset.fmt] || fmt.f2)(S[key]);
+      }
+    }
+    modeSel.value = app.mode;
+    spawnSel.value = app.spawnType;
+    scenSel.value = app.sceneId;
+  }
+
+  function onControl(el) {
+    const key = el.dataset.s || el.dataset.c;
+    if (el.type === 'checkbox') S[key] = el.checked;
+    else {
+      S[key] = parseFloat(el.value);
+      const out = el.parentNode.querySelector('output');
+      if (out) out.textContent = (fmt[el.dataset.fmt] || fmt.f2)(S[key]);
+    }
+    if (key === 'gravity' || key === 'gravDir' || key === 'wind' || key === 'windDir') rebuildForces();
+    saveSession();
+  }
+  for (const el of ctrls) {
+    el.addEventListener('input', () => onControl(el));
+    el.addEventListener('change', () => onControl(el));
+  }
+
+  /* ---------------------------------------------------------- persistence */
+  const LS_KEY = 'softplay.session.v1';
+  let saveTimer = 0;
+  function saveSession() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        const data = { v: 1, scene: app.sceneId, mode: app.mode, tool: app.tool,
+          spawn: app.spawnType, paused: view.paused, s: {} };
+        for (const el of ctrls) {
+          const key = el.dataset.s || el.dataset.c;
+          data.s[key] = el.type === 'checkbox' ? el.checked : parseFloat(el.value);
+        }
+        localStorage.setItem(LS_KEY, JSON.stringify(data));
+      } catch (e) { /* storage unavailable (file:// without perms) — ignore */ }
+    }, 260);
+  }
+  function loadSession() {
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) { data = null; }
+    if (!data || !data.s) return null;
+    Object.assign(S, data.s);
+    app.mode = data.mode || 'render';
+    app.tool = data.tool || 'grab';
+    app.spawnType = data.spawn || 'cloth';
+    view.paused = !!data.paused;
+    return data.scene || 'cascade';
+  }
+
+  /* --------------------------------------------------------------- transport */
+  const btnPause = doc.getElementById('btnPause');
+  function setPaused(p) {
+    view.paused = p;
+    btnPause.classList.toggle('on', p);
+    btnPause.textContent = p ? '▶ Resume' : '⏸ Pause';
+    saveSession();
+  }
+  btnPause.addEventListener('click', () => setPaused(!view.paused));
+  doc.getElementById('btnStep').addEventListener('click', () => {
+    view.stepOnce = true;
+    if (!view.paused) setPaused(true);
+  });
+  doc.getElementById('btnReset').addEventListener('click', () => loadScenario(app.sceneId));
+  doc.getElementById('btnClear').addEventListener('click', () => {
+    W = A.makeWorld();
+    app.W = W;
+    W.grab = null;
+    app.grabs = [];
+    toast('World cleared — use the Spawn tool or pick a scenario');
+    refit();
+  });
+  doc.getElementById('btnCentre').addEventListener('click', refit);
+  doc.getElementById('btnDefaults').addEventListener('click', () => {
+    Object.assign(S, DEFAULTS);
+    rebuildForces();
+    syncControls();
+    toast('Settings restored to defaults');
+    saveSession();
+  });
+
+  /* panel drawer */
+  const panel = doc.getElementById('panel');
+  const fab = doc.getElementById('fab');
+  function setPanel(open) {
+    view.panelOpen = open;
+    panel.classList.toggle('hidden', !open);
+    fab.setAttribute('aria-expanded', open ? 'true' : 'false');
+    fab.textContent = open ? 'Controls ✕' : '☰ Controls';
+  }
+  fab.addEventListener('click', () => setPanel(!view.panelOpen));
+  if (window.innerWidth < 820) setPanel(false);
+
+  /* --------------------------------------------------------- export/import */
+  function serializeWorld() {
+    const w = app.W;
+    const r3 = (v) => Math.round(v * 1000) / 1000;
+    const parts = [];
+    for (let i = 0; i < w.n; i++) {
+      parts.push([r3(w.x[i]), r3(w.y[i]), r3(w.vx[i]), r3(w.vy[i]), w.im[i],
+        w.cr[i], w.pin[i], w.ta[i], w.tb[i], w.tmode[i], w.aero[i], w.act[i], w.body[i],
+        r3(w.px[i]), r3(w.py[i])]);
+    }
+    const pairs = [];
+    for (let k = 0; k < w.pc; k++) {
+      pairs.push([w.pa[k], w.pb[k], r3(w.prest[k]), w.pcls[k], w.palive[k]]);
+    }
+    const areas = [];
+    for (let k = 0; k < w.ac; k++) {
+      const idx = [];
+      for (let j = 0; j < w.aCnt[k]; j++) idx.push(w.poly[w.aOff[k] + j]);
+      areas.push([r3(w.aRest[k]), w.aAlive[k], idx]);
+    }
+    const bodies = w.bodies.map((b) => ({
+      kind: b.kind, cols: b.cols, rows: b.rows, p0: b.p0, pn: b.pn, closed: b.closed,
+      aero: b.aero, name: b.name, hsl: b.hsl, thick: b.thick, ring: b.ring,
+      rad: b.rad, sp: b.sp, dead: b.dead, hull: !!b.hull
+    }));
+    const shapes = w.shapes.map((s) => {
+      const o = {};
+      for (const k in s) if (typeof s[k] !== 'function') o[k] = s[k];
+      return o;
+    });
+    return {
+      v: 1, app: 'softplay', scene: app.sceneId, settings: { ...S },
+      n: w.n, polyN: w.polyN, parts, pairs, areas, bodies, shapes
+    };
+  }
+
+  function deserializeWorld(data) {
+    if (!data || data.v !== 1 || !Array.isArray(data.parts) || !Array.isArray(data.pairs)) {
+      throw new Error('not a softplay world file');
+    }
+    const w = A.makeWorld();
+    if (data.parts.length > w.cap) throw new Error('file needs ' + data.parts.length + ' particles (max ' + w.cap + ')');
+    for (const s of (data.shapes || [])) A.addShape(w, { ...s });
+    for (const p of data.parts) {
+      A.addP(w, p[0], p[1], p[4], p[5], undefined, p[7], p[8], p[9], !!p[10]);
+    }
+    for (let i = 0; i < data.parts.length; i++) {
+      const p = data.parts[i];
+      w.act[i] = p[11]; w.body[i] = p[12];
+      w.px[i] = p[13]; w.py[i] = p[14];
+      if (p[6]) { w.pin[i] = 1; w.im[i] = 0; }
+    }
+    for (const pr of data.pairs) {
+      if (!pr[4]) continue;
+      A.addPair(w, pr[0], pr[1], pr[2], pr[3]);
+    }
+    for (const a of (data.areas || [])) {
+      if (!a[1]) continue;
+      const c = w.ac;
+      A.addArea(w, a[2], a[2].length, 1);
+      w.aRest[c] = a[0];
+    }
+    for (const b of (data.bodies || [])) {
+      const spec = { ...b, dead: !!b.dead };
+      delete spec.hull;
+      const nb = A.addBody(w, spec);
+      if (b.hull) nb.hull = A.hullOf(w, nb.p0, nb.pn);
+    }
+    if (data.settings) {
+      Object.assign(S, data.settings);
+      rebuildForces();
+      syncControls();
+    }
+    app.W = W = w;
+    app.grabs = [];
+    W.grab = null;
+    refit();
+    return true;
+  }
+
+  doc.getElementById('btnSave').addEventListener('click', () => {
+    try {
+      const json = JSON.stringify(serializeWorld());
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = doc.createElement('a');
+      a.href = url;
+      a.download = 'softplay-' + app.sceneId + '-' + Date.now() + '.json';
+      doc.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); doc.body.removeChild(a); }, 500);
+      toast('World exported (' + Math.round(json.length / 1024) + ' KB)');
+    } catch (e) {
+      toast('Export failed: ' + e.message, true);
+    }
+  });
+
+  const fileEl = doc.getElementById('fileImport');
+  doc.getElementById('btnLoad').addEventListener('click', () => fileEl.click());
+  fileEl.addEventListener('change', () => {
+    const f = fileEl.files && fileEl.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onerror = () => toast('Could not read that file', true);
+    rd.onload = () => {
+      try {
+        deserializeWorld(JSON.parse(String(rd.result)));
+        toast('World loaded: ' + f.name);
+      } catch (e) {
+        toast('Load failed: ' + e.message, true);
+      }
+    };
+    rd.readAsText(f);
+    fileEl.value = '';
+  });
+
+  /* -------------------------------------------------------------- spawning */
+  const SPAWN_LIMIT = 9200;
+  function imFor(kind) {
+    const vol = kind === 'cluster' ? 2.4 : (kind === 'jelly' ? 1.0 : (kind === 'rope' ? 0.4 : 0.6));
+    return 1 / Math.max(0.2, S.density * vol);
+  }
+
+  function spawnAt(type, x0, y0, x1, y1) {
+    const w = app.W;
+    if (w.n > SPAWN_LIMIT) { toast('Particle budget reached (' + SPAWN_LIMIT + ')', true); return null; }
+    const dx = x1 - x0, dy = y1 - y0;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const sgn = (v) => (v < 0 ? -1 : 1);
+    const clampX = (v) => Math.max(8, Math.min(A.WORLD_W - 8, v));
+    const clampY = (v) => Math.max(8, Math.min(A.WORLD_H - 8, v));
+    let desc = '';
+    switch (type) {
+      case 'cloth': {
+        const cw = Math.min(560, Math.max(60, adx || 240));
+        const ch = Math.min(430, Math.max(40, ady || 220));
+        const cols = Math.max(3, Math.round(cw / 21)), rows = Math.max(3, Math.round(ch / 21));
+        const ox = clampX(x0 - (dx < 0 ? cw : 0)), oy = clampY(y0 - (dy < 0 ? ch : 0));
+        A.buildCloth(w, { x0: ox, y0: oy, cols: cols, rows: rows, sp: 21, im: imFor('cloth'), hue: 168 });
+        desc = 'cloth ' + cols + '×' + rows;
+        break;
+      }
+      case 'rope': {
+        const n = Math.max(4, Math.min(70, Math.round(Math.max(120, Math.hypot(dx, dy)) / 20)));
+        const dirx = Math.abs(dx) < 1 ? 0.05 : sgn(dx), diry = Math.abs(dy) < 1 ? 0.9 : sgn(dy);
+        A.buildChain(w, { x0: clampX(x0), y0: clampY(y0), dx: dirx, dy: diry, n: n, seg: 20, im: imFor('rope') });
+        desc = 'rope ' + n + ' links';
+        break;
+      }
+      case 'blob': {
+        const r = Math.max(24, Math.min(170, Math.max(adx, ady) * 0.5 || 60));
+        A.buildBlob(w, { cx: clampX(x0), y0: clampY(y0), r: r, n: Math.round(Math.max(16, r / 3.4)), im: imFor('blob'), hue: 344 });
+        desc = 'soft body r=' + Math.round(r);
+        break;
+      }
+      case 'balloon': {
+        const r = Math.max(24, Math.min(170, Math.max(adx, ady) * 0.5 || 62));
+        A.buildBlob(w, { cx: clampX(x0), y0: clampY(y0), r: r, n: Math.round(Math.max(16, r / 3.2)), im: imFor('blob') * 0.55, hue: 300, core: true });
+        desc = 'balloon r=' + Math.round(r);
+        break;
+      }
+      case 'jelly': {
+        const cw = Math.min(300, Math.max(40, adx || 150)), ch = Math.min(300, Math.max(40, ady || 130));
+        const cols = Math.max(3, Math.round(cw / 26)), rows = Math.max(3, Math.round(ch / 26));
+        A.buildJelly(w, {
+          x0: clampX(x0 - (dx < 0 ? cw : 0)), y0: clampY(y0 - (dy < 0 ? ch : 0)),
+          cols: cols, rows: rows, sp: 26, im: imFor('jelly'), hue: 214
+        });
+        desc = 'jelly ' + cols + '×' + rows;
+        break;
+      }
+      case 'ball': {
+        const r = Math.max(20, Math.min(120, Math.max(adx, ady) * 0.5 || 44));
+        A.buildCluster(w, { cx: clampX(x0), y0: clampY(y0), r: r, sp: 15, im: imFor('cluster'), name: 'puck' });
+        desc = 'rigid puck r=' + Math.round(r);
+        break;
+      }
+      case 'circle': {
+        const r = Math.max(16, Math.min(200, Math.max(adx, ady) * 0.5 || 70));
+        A.addShape(w, { kind: 'circle', cx: clampX(x0), cy: clampY(y0), r: r });
+        desc = 'static circle r=' + Math.round(r);
+        break;
+      }
+      case 'box': {
+        const hw = Math.max(12, Math.min(280, adx * 0.5 || 90)), hh = Math.max(12, Math.min(280, ady * 0.5 || 60));
+        A.addShape(w, { kind: 'box', cx: clampX(x0), cy: clampY(y0), hw: hw, hh: hh, angle: 0 });
+        desc = 'static box';
+        break;
+      }
+      case 'spinner': {
+        const hw = Math.max(30, Math.min(260, adx * 0.5 || 120)), hh = Math.max(8, Math.min(60, ady * 0.5 || 12));
+        A.addShape(w, { kind: 'box', cx: clampX(x0), cy: clampY(y0), hw: hw, hh: hh, angle: 0, spin: 1.6 });
+        desc = 'spinning paddle';
+        break;
+      }
+      default: return null;
+    }
+    saveSession();
+    return desc;
+  }
+
+  doc.getElementById('btnDrop').addEventListener('click', () => {
+    const d = spawnAt(app.spawnType, A.WORLD_W * 0.5, 140, A.WORLD_W * 0.5 + 150, 240);
+    if (d) toast('Dropped ' + d);
+  });
+
+  /* ---------------------------------------------------------------- pointer */
+  const pointers = new Map();
+
+  function toWorld(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return R.screenToWorld(clientX - rect.left, clientY - rect.top);
+  }
+
+  function beginTool(p, e) {
+    const w = app.W;
+    const rad = S.grabRadius;
+    switch (app.tool) {
+      case 'grab': {
+        const idx = [];
+        let best = -1, bd = 1e18;
+        for (let i = 0; i < w.n; i++) {
+          if (!w.act[i]) continue;
+          const dx = w.x[i] - p.x, dy = w.y[i] - p.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < rad * rad) {
+            idx.push(i);
+            if (d2 < bd) { bd = d2; best = i; }
+          }
+        }
+        if (idx.length > 44) {           /* keep the strongest, closest ones */
+          idx.sort((a, b) => {
+            const da = (w.x[a] - p.x) ** 2 + (w.y[a] - p.y) ** 2;
+            const db = (w.x[b] - p.x) ** 2 + (w.y[b] - p.y) ** 2;
+            return da - db;
+          });
+          idx.length = 44;
+        }
+        p.grab = { idx: idx, n: idx.length, tx: p.x, ty: p.y };
+        if (!idx.length) {
+          toast('Nothing within ' + Math.round(rad) + ' u — widen the radius with [ ]', true);
+        }
+        break;
+      }
+      case 'pin': {
+        const i = A.nearestParticle(w, p.x, p.y, 18);
+        p.pinMode = (i >= 0 && w.pin[i]) ? 'unpin' : 'pin';
+        applyPin(p);
+        break;
+      }
+      case 'cut': {
+        p.cut = A.cutSegment(w, p.px, p.py, p.x, p.y);
+        app.cutTrail.length = 0;
+        app.cutTrail.push(p.x, p.y);
+        break;
+      }
+      case 'push':
+      case 'wind':
+        break;
+      case 'spawn': {
+        app.spawnGhost = { x: p.x, y: p.y, w: 0, h: 0 };
+        break;
+      }
+      case 'erase': {
+        const b = A.eraseBody(w, p.x, p.y, 26);
+        if (b) toast('Deleted ' + b.name + ' (' + b.pn + ' particles)');
+        else toast('No body under the cursor', true);
+        break;
+      }
+    }
+    void e;
+  }
+
+  function applyPin(p) {
+    const w = app.W;
+    const r = 14;
+    let n = 0;
+    for (let i = 0; i < w.n; i++) {
+      if (!w.act[i]) continue;
+      const dx = w.x[i] - p.x, dy = w.y[i] - p.y;
+      if (dx * dx + dy * dy > r * r) continue;
+      if (p.pinMode === 'pin' && !w.pin[i]) { A.pinP(w, i, w.x[i], w.y[i]); n++; }
+      else if (p.pinMode === 'unpin' && w.pin[i]) { A.unpinP(w, i); n++; }
+    }
+    return n;
+  }
+
+  function moveTool(p) {
+    const w = app.W;
+    switch (app.tool) {
+      case 'grab':
+        if (p.grab) { p.grab.tx = p.x; p.grab.ty = p.y; }
+        break;
+      case 'pin':
+        applyPin(p);
+        break;
+      case 'cut': {
+        const n = A.cutSegment(w, p.px, p.py, p.x, p.y);
+        p.cut = (p.cut || 0) + n;
+        if (app.cutTrail.length > 90) { app.cutTrail.splice(0, 2); }
+        app.cutTrail.push(p.x, p.y);
+        break;
+      }
+      case 'push': {
+        const sp = Math.hypot(p.dx, p.dy);
+        if (sp > 0.6) {
+          const k = Math.min(6, sp * 0.55) * (0.4 + S.grabK);
+          A.applyImpulse(w, p.x, p.y, S.grabRadius, p.dx, p.dy, k);
+        }
+        break;
+      }
+      case 'wind': {
+        const sp = Math.hypot(p.dx, p.dy);
+        let ux = 0, uy = 0;
+        if (sp > 0.4) { ux = p.dx / sp; uy = p.dy / sp; }
+        else { ux = S.windDx; uy = S.windDy; }
+        w.gust = { x: p.x, y: p.y, r: Math.max(40, S.grabRadius * 1.5),
+          k: 0.6 + S.grabK * 1.8, dx: ux, dy: uy };
+        break;
+      }
+      case 'spawn': {
+        if (app.spawnGhost) {
+          app.spawnGhost.w = p.x - app.spawnGhost.ox;
+          app.spawnGhost.h = p.y - app.spawnGhost.oy;
+        }
+        break;
+      }
+      case 'erase': {
+        const b = A.eraseBody(w, p.x, p.y, 20);
+        if (b) toast('Deleted ' + b.name);
+        break;
+      }
+    }
+  }
+
+  function endTool(p) {
+    if (app.tool === 'spawn' && app.spawnGhost) {
+      const g = app.spawnGhost;
+      const d = spawnAt(app.spawnType, g.ox, g.oy, g.ox + g.w, g.oy + g.h);
+      if (d) toast('Spawned ' + d);
+      app.spawnGhost = null;
+    }
+    if (app.tool === 'cut' && p.cut) toast('Severed ' + p.cut + ' constraints');
+    if (app.tool === 'wind') app.W.gust = null;
+    if (p.grab) p.grab = null;
+  }
+
+  function syncGrab() {
+    const idx = [];
+    for (const p of pointers.values()) if (p.grab && p.grab.idx) idx.push(...p.grab.idx);
+    if (!idx.length) { app.W.grab = null; app.grabs = []; return; }
+    const g = { idx: idx, n: idx.length, tx: 0, ty: 0 };
+    let cx = 0, cy = 0;
+    for (const p of pointers.values()) if (p.grab) { cx += p.grab.tx; cy += p.grab.ty; }
+    const k = pointers.size || 1;
+    g.tx = cx / k; g.ty = cy / k;
+    app.W.grab = g;
+    app.grabs = Array.from(pointers.values()).filter((p) => p.grab).map((p) => p.grab);
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const [wx, wy] = toWorld(e.clientX, e.clientY);
+    canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+    const p = { id: e.pointerId, x: wx, y: wy, px: wx, py: wy, dx: 0, dy: 0, t: performance.now() };
+    pointers.set(e.pointerId, p);
+    app.pointer.x = wx; app.pointer.y = wy; app.pointer.inside = true;
+    app.pointer.down = true;
+    app.pointer.px = wx; app.pointer.py = wy;
+    beginTool(p, e);
+    syncGrab();
+    e.preventDefault();
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    const [wx, wy] = toWorld(e.clientX, e.clientY);
+    let p = pointers.get(e.pointerId);
+    if (!p) {
+      p = { id: e.pointerId, x: wx, y: wy, px: wx, py: wy, dx: 0, dy: 0, t: performance.now() };
+      if (!view.paused || !app.pointer.down) { /* hover tracking only */ }
+    }
+    const now = performance.now();
+    const dt = Math.max(8, now - p.t) / 1000;
+    p.dx = (wx - p.x) / dt / 26;
+    p.dy = (wy - p.y) / dt / 26;
+    p.px = p.x; p.py = p.y;
+    p.x = wx; p.y = wy; p.t = now;
+    if (!pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
+    app.pointer.x = wx; app.pointer.y = wy; app.pointer.inside = true;
+    app.pointer.dx = p.dx; app.pointer.dy = p.dy;
+    if (app.pointer.down) { moveTool(p); syncGrab(); }
+  });
+
+  function releasePointer(e) {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    endTool(p);
+    pointers.delete(e.pointerId);
+    if (!pointers.size) {
+      app.pointer.down = false;
+      app.W.gust = null;
+      app.W.grab = null;
+      app.grabs = [];
+      app.cutTrail.length = 0;
+    }
+    syncGrab();
+  }
+  canvas.addEventListener('pointerup', releasePointer);
+  canvas.addEventListener('pointercancel', releasePointer);
+  canvas.addEventListener('pointerleave', (e) => {
+    app.pointer.inside = false;
+    releasePointer(e);
+  });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  /* -------------------------------------------------------------- keyboard */
+  const KEYMAP = { '1': 'grab', '2': 'pin', '3': 'cut', '4': 'push', '5': 'wind', '6': 'spawn', '7': 'erase' };
+  doc.addEventListener('keydown', (e) => {
+    if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    const k = e.key;
+    if (k === ' ' || k === 'Spacebar') { setPaused(!view.paused); e.preventDefault(); }
+    else if (k === 'n' || k === 'N') { doc.getElementById('btnStep').click(); }
+    else if (k === 'r' || k === 'R') { loadScenario(app.sceneId); }
+    else if (k === 'x' || k === 'X') { doc.getElementById('btnClear').click(); }
+    else if (k === 'v' || k === 'V') {
+      const i = MODES.findIndex((m) => m.id === app.mode);
+      const nx = e.shiftKey ? (i + MODES.length - 1) % MODES.length : (i + 1) % MODES.length;
+      app.mode = MODES[nx].id;
+      modeSel.value = app.mode;
+      toast('View: ' + MODES[nx].name + ' — ' + MODES[nx].hint);
+      saveSession();
+    }
+    else if (KEYMAP[k]) setTool(KEYMAP[k]);
+    else if (k === '[') { S.grabRadius = Math.max(6, S.grabRadius - 6); syncControls(); saveSession(); }
+    else if (k === ']') { S.grabRadius = Math.min(160, S.grabRadius + 6); syncControls(); saveSession(); }
+    else if (k === ',') { S.substeps = Math.max(1, S.substeps - 1); syncControls(); saveSession(); }
+    else if (k === '.') { S.substeps = Math.min(8, S.substeps + 1); syncControls(); saveSession(); }
+    else if (k === 'h' || k === 'H') { S.hud = !S.hud; syncControls(); saveSession(); }
+    else if (k === 'p' || k === 'P') setPanel(!view.panelOpen);
+    else if (k === 'Escape') { pointers.clear(); app.W.grab = null; app.grabs = []; }
+    else return;
+    e.preventDefault();
+  });
+
+  /* shortcut legend */
+  doc.getElementById('keys').innerHTML =
+    '<b>Space</b> pause · <b>N</b> step · <b>R</b> reset · <b>X</b> clear<br>' +
+    '<b>1-7</b> tools · <b>V</b> / <b>Shift+V</b> viz mode<br>' +
+    '<b>[ ]</b> tool radius · <b>, .</b> substeps · <b>H</b> hud · <b>P</b> panel';
+
+  /* --------------------------------------------------------------- the HUD */
+  const fpsHist = new Float32Array(120);
+  let fpsIdx = 0;
+  let hudText = '';
+  function updateHud(fps, fpsAvg) {
+    if (!S.hud) { hud.style.display = 'none'; return; }
+    hud.style.display = 'block';
+    const st = app.W.stats;
+    const err = st.maxErr.toFixed(1);
+    const strain = (st.maxStrain * 100).toFixed(1);
+    const ti = TOOL_INFO[app.tool] || TOOL_INFO.grab;
+    const modeName = (MODES.find((m) => m.id === app.mode) || MODES[0]).name;
+    const sc = scen.byId(app.sceneId);
+    const lines = [
+      (view.paused ? '‖ PAUSED  ' : '▶ RUNNING ') + '  ' + fps.toFixed(1) + ' fps (avg ' + fpsAvg.toFixed(1) + ')',
+      'particles <b>' + st.parts + '</b>   constraints <b>' + st.cons + '</b>   bodies ' + app.W.bodies.filter((b) => !b.dead).length,
+      'collision pairs <b>' + st.pairsTested + '</b>   contacts ' + st.contacts + '   tears ' + st.tears,
+      'solver ' + st.iters + ' it × ' + st.subs + ' sub   step ' + st.solveMs.toFixed(2) + ' ms   draw ' + st.renderMs.toFixed(2) + ' ms',
+      'max link error <b>' + err + ' u</b>   strain ' + strain + ' %   skin ' + S.thick.toFixed(1),
+      'tool <b>' + ti.name + '</b>   view <b>' + modeName + '</b>   r=' + Math.round(S.grabRadius) + ' u',
+      'scenario <b>' + sc.name + '</b>   g ' + Math.round(S.gravity) + ' u/s² @ ' + Math.round(S.gravDir) + '°   wind ' + Math.round(S.wind)
+    ];
+    const t = lines.join('\n');
+    if (t !== hudText) { hud.innerHTML = t; hudText = t; }
+    if (S.spark && sparkCtx) drawSpark();
+  }
+
+  function drawSpark() {
+    if (!sparkCtx || !S.spark) return;
+    const c = sparkCtx, wpx = sparkC.width, hpx = sparkC.height;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, wpx, hpx);
+    c.fillStyle = '#0d1826';
+    c.fillRect(0, 0, wpx, hpx);
+    c.strokeStyle = 'rgba(110,231,255,0.35)';
+    c.beginPath();
+    const y60 = hpx - (60 / 90) * hpx;
+    c.moveTo(0, y60); c.lineTo(wpx, y60);
+    c.stroke();
+    c.fillStyle = 'rgba(140,170,200,0.65)';
+    c.font = '9px ui-monospace,monospace';
+    c.fillText('60 fps', 3, y60 - 3);
+    c.beginPath();
+    const n = fpsHist.length;
+    for (let i = 0; i < n; i++) {
+      const v = fpsHist[(fpsIdx + i) % n];
+      const x = (i / (n - 1)) * wpx;
+      const y = hpx - Math.min(90, v) / 90 * hpx;
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.strokeStyle = '#5fe3d0';
+    c.lineWidth = 1.5;
+    c.stroke();
+  }
+
+  /* ------------------------------------------------------------- main loop */
+  let last = performance.now();
+  let acc = 0, frames = 0, fps = 60, fpsAvg = 60, lastHud = 0;
+  let stepCounter = 0;
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dtReal = Math.min(80, now - last);
+    last = now;
+    acc += dtReal; frames++;
+    if (acc >= 250) {
+      fps = (frames * 1000) / acc;
+      fpsAvg = fpsAvg * 0.6 + fps * 0.4;
+      fpsHist[fpsIdx % fpsHist.length] = fps;
+      fpsIdx++;
+      acc = 0; frames = 0;
+    }
+    const t0 = performance.now();
+    if (!view.paused || view.stepOnce) {
+      view.stepOnce = false;
+      rebuildForces();
+      const dt = (1 / 60) * S.dtScale;
+      const ts = performance.now();
+      A.stepFrame(app.W, S, dt);
+      app.W.stats.solveMs = performance.now() - ts;
+      stepCounter++;
+    }
+    const t1 = performance.now();
+    R.draw(app.W, S, app);
+    app.W.stats.renderMs = performance.now() - t1;
+    app.W.stats.fps = fps;
+    if (now - lastHud > 110) { updateHud(fps, fpsAvg); lastHud = now; }
+    void t0;
+  }
+
+  /* ------------------------------------------------------------------ boot */
+  const saved = loadSession();
+  buildToolButtons();
+  syncToolButtons();
+  loadScenario(saved || (scen.list.find((s) => s.default) || scen.list[0]).id, true);
+  syncControls();
+  setPaused(view.paused);
+  refit();
+
+  let ro = null;
+  if (window.ResizeObserver) {
+    ro = new ResizeObserver(() => refit());
+    ro.observe(stage);
+  }
+  window.addEventListener('resize', () => { refit(); });
+
+  /* debug / harness hook */
+  window.SOFTPLAY = {
+    version: '1.0.0',
+    api: api,
+    app: app,
+    get world() { return app.W; },
+    stats() {
+      const st = app.W.stats;
+      return { fps: Math.round(st.fps * 10) / 10, particles: st.parts, constraints: st.cons,
+        pairs: st.pairsTested, contacts: st.contacts, iters: st.iters, substeps: st.subs,
+        maxErr: st.maxErr, tool: app.tool, mode: app.mode, scene: app.sceneId,
+        paused: view.paused, solveMs: Math.round(st.solveMs * 100) / 100 };
+    },
+    setTool(t) { setTool(t); },
+    setMode(m) { app.mode = m; modeSel.value = m; },
+    setScenario(id) { scenSel.value = id; loadScenario(id); },
+    setSetting(k, v) { S[k] = v; syncControls(); },
+    spawn(type, x, y, w, h) { return spawnAt(type || app.spawnType, x, y, x + (w || 0), y + (h || 0)); },
+    /* scripted pointer for automated checks: real DOM PointerEvents */
+    drag(sx, sy, ex, ey, steps) {
+      const mk = (type, x, y, id) => {
+        const ev = new PointerEvent(type, {
+          pointerType: 'mouse', pointerId: id || 1, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+          clientX: x, clientY: y, bubbles: true, cancelable: true
+        });
+        canvas.dispatchEvent(ev);
+      };
+      const n = steps || 8;
+      mk('pointermove', sx, sy);
+      mk('pointerdown', sx, sy);
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        mk('pointermove', sx + (ex - sx) * t, sy + (ey - sy) * t);
+      }
+      mk('pointerup', ex, ey);
+      return true;
+    },
+    screenToWorld: (x, y) => R.screenToWorld(x, y),
+    refit: refit,
+    errors: app.errors
+  };
+  window.addEventListener('error', (e) => {
+    app.errors.push(String(e.message));
+    if (app.errors.length > 20) app.errors.shift();
+  });
+
+  requestAnimationFrame(loop);
+  return app;
+}
+
+bootApp(CORE_API, makeScenarios, createRenderer);
+
+})();
+</script>
+</body>
+</html>

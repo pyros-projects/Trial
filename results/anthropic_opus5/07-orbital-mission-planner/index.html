@@ -1,0 +1,3574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>ORBITAL — Mission Planning Sandbox</title>
+<style>
+:root{
+  --bg:#04060b; --bg2:#070c14; --grid:#0d1520;
+  --panel:rgba(8,13,20,.94); --panel2:rgba(11,17,26,.96);
+  --line:#17222f; --line2:#22344a;
+  --tx:#c7d6e6; --dim:#8296ab; --dim2:#54687e;
+  --cy:#3fe0d0; --am:#ffb454; --bl:#5aa9ff; --vi:#b98bff; --rd:#ff5f6d; --gr:#5ce08a; --pk:#ff7ab6;
+  --mono:ui-monospace,"SFMono-Regular","SF Mono",Menlo,Consolas,"Liberation Mono","DejaVu Sans Mono",monospace;
+  --pad:10px; --panelW:368px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0;background:var(--bg);color:var(--tx);
+  font-family:var(--mono);font-size:12px;line-height:1.35;overflow:hidden;
+  -webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit;font-variant-numeric:tabular-nums}
+::selection{background:rgba(63,224,208,.3)}
+
+#view{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none;
+  cursor:crosshair;background:#04060b}
+#view.grabbing{cursor:grabbing}
+#view.grab{cursor:grab}
+
+/* ---------- generic panel chrome ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  box-shadow:0 8px 30px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.02);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.mlabel{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim2)}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;top:8px;left:8px;z-index:20;min-width:236px;max-width:280px;
+  padding:8px 9px 7px;user-select:none}
+#hud .brand{display:flex;align-items:baseline;gap:7px;margin-bottom:6px;
+  padding-bottom:5px;border-bottom:1px solid var(--line)}
+#hud .brand b{font-size:12px;letter-spacing:.24em;color:var(--cy);font-weight:600}
+#hud .brand span{font-size:9px;letter-spacing:.1em;color:var(--dim2);text-transform:uppercase}
+#hudGrid{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;font-size:10.5px}
+#hudGrid .k{color:var(--dim2);letter-spacing:.06em;text-transform:uppercase;font-size:9px;
+  align-self:center;white-space:nowrap}
+#hudGrid .v{color:var(--tx);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hudGrid .v.warn{color:var(--am)} #hudGrid .v.bad{color:var(--rd)} #hudGrid .v.ok{color:var(--gr)}
+#hudGrid .v.acc{color:var(--cy)}
+#hudScn{margin-top:6px;padding-top:5px;border-top:1px solid var(--line);
+  font-size:9.5px;color:var(--dim);line-height:1.3}
+#hudScn b{color:var(--bl);font-weight:600}
+
+/* ---------- transport ---------- */
+#transport{position:fixed;bottom:8px;left:8px;right:calc(var(--panelW) + 8px);z-index:20;display:flex;
+  align-items:center;gap:6px;padding:6px 8px;flex-wrap:wrap}
+.tgroup{display:flex;align-items:center;gap:3px}
+.tsep{width:1px;height:20px;background:var(--line2);margin:0 3px}
+.btn{background:#0d1522;border:1px solid var(--line2);color:var(--tx);border-radius:2px;
+  padding:4px 8px;cursor:pointer;font-size:11px;line-height:1.1;white-space:nowrap;
+  transition:background .12s,border-color .12s,color .12s}
+.btn:hover{background:#152233;border-color:#38536f}
+.btn:active{background:#1d3049}
+.btn:focus-visible{outline:1px solid var(--cy);outline-offset:1px}
+.btn.on{background:rgba(63,224,208,.14);border-color:var(--cy);color:var(--cy)}
+.btn.danger:hover{border-color:var(--rd);color:var(--rd)}
+.btn.icon{min-width:28px;text-align:center;padding:4px 6px;font-size:12px}
+.btn.wide{padding:4px 10px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+#warpRead{min-width:78px;text-align:center;color:var(--am);font-size:11px;
+  border:1px solid var(--line);border-radius:2px;padding:3px 4px;background:#080d15}
+#warpRead small{display:block;font-size:8.5px;color:var(--dim2);letter-spacing:.06em}
+#clock{min-width:126px;text-align:center;color:var(--cy);font-size:12px;letter-spacing:.04em;
+  border:1px solid var(--line);border-radius:2px;padding:3px 6px;background:#080d15}
+#clock small{display:block;font-size:8.5px;color:var(--dim2);letter-spacing:.08em}
+#frameSel{background:#0d1522;border:1px solid var(--line2);border-radius:2px;padding:4px 5px;
+  font-size:10.5px;max-width:170px}
+
+/* ---------- side panel ---------- */
+#panel{position:fixed;top:0;right:0;bottom:0;width:var(--panelW);z-index:30;display:flex;flex-direction:column;
+  background:var(--panel2);border-left:1px solid var(--line2);
+  box-shadow:-14px 0 40px rgba(0,0,0,.5);transition:transform .22s ease}
+#panel.hidden{transform:translateX(100%)}
+#tabs{display:flex;border-bottom:1px solid var(--line2);background:#070c13;flex:0 0 auto}
+#tabs button{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim2);
+  padding:9px 1px 7px;cursor:pointer;font-size:9px;letter-spacing:.06em;text-transform:uppercase;min-width:0}
+#tabs button:hover{color:var(--dim);background:rgba(255,255,255,.02)}
+#tabs button.on{color:var(--cy);border-bottom-color:var(--cy);background:rgba(63,224,208,.05)}
+#tabBody{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#tabBody::-webkit-scrollbar{width:8px}
+#tabBody::-webkit-scrollbar-thumb{background:#1c2b3d;border-radius:4px}
+#tabBody::-webkit-scrollbar-track{background:#080d14}
+.tab{display:none;padding:9px 10px 24px}
+.tab.on{display:block}
+
+.sec{margin:0 0 12px}
+.sec>h3{margin:0 0 6px;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--cy);
+  padding-bottom:4px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+  align-items:center;font-weight:600}
+.sec>h3 em{font-style:normal;color:var(--dim2);letter-spacing:.04em;text-transform:none;font-size:9.5px}
+.hint{font-size:9.5px;color:var(--dim2);line-height:1.4;margin:4px 0 0}
+
+/* control rows */
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;margin:0 0 6px}
+.ctl>label{font-size:10px;color:var(--dim);letter-spacing:.02em}
+.ctl>.val{font-size:10px;color:var(--am);text-align:right;white-space:nowrap}
+.ctl>input[type=range]{grid-column:1/3;width:100%;margin:1px 0 0}
+.ctl.inline{grid-template-columns:1fr 118px}
+.ctl.inline>select,.ctl.inline>input[type=number],.ctl.inline>input[type=text]{
+  width:118px;background:#0b111a;border:1px solid var(--line2);border-radius:2px;padding:3px 5px;font-size:10.5px}
+.ctl.inline>input[type=number]{text-align:right}
+input[type=range]{-webkit-appearance:none;appearance:none;height:16px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:#1e2d40;border-radius:1px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:14px;margin-top:-6px;
+  background:var(--cy);border-radius:1px;box-shadow:0 0 6px rgba(63,224,208,.5)}
+input[type=range]::-moz-range-track{height:2px;background:#1e2d40}
+input[type=range]::-moz-range-thumb{width:9px;height:14px;border:none;border-radius:1px;background:var(--cy)}
+input[type=range]:focus-visible{outline:1px solid var(--cy);outline-offset:2px}
+input[type=range][disabled]::-webkit-slider-thumb{background:#3b4a5c;box-shadow:none}
+select,input[type=number],input[type=text],textarea{background:#0b111a;border:1px solid var(--line2);
+  border-radius:2px;padding:3px 5px;font-size:10.5px}
+select:focus-visible,input:focus-visible,textarea:focus-visible{outline:1px solid var(--cy);outline-offset:0}
+
+/* toggle switch rows */
+.tog{display:flex;align-items:center;gap:7px;padding:3px 2px;cursor:pointer;border-radius:2px}
+.tog:hover{background:rgba(255,255,255,.025)}
+.tog input{position:absolute;opacity:0;width:0;height:0}
+.tog .sw{flex:0 0 auto;width:22px;height:12px;border-radius:7px;background:#16202d;border:1px solid var(--line2);
+  position:relative;transition:background .14s,border-color .14s}
+.tog .sw::after{content:"";position:absolute;top:1px;left:1px;width:8px;height:8px;border-radius:50%;
+  background:#4a5b6e;transition:transform .14s,background .14s}
+.tog input:checked+.sw{background:rgba(63,224,208,.22);border-color:var(--cy)}
+.tog input:checked+.sw::after{transform:translateX(10px);background:var(--cy)}
+.tog input:focus-visible+.sw{outline:1px solid var(--cy);outline-offset:2px}
+.tog span.lb{font-size:10.5px;color:var(--dim)}
+.tog input:checked~span.lb{color:var(--tx)}
+.toggrid{display:grid;grid-template-columns:1fr 1fr;gap:0 6px}
+
+/* telemetry readouts */
+.tel{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;font-size:10.5px}
+.tel .k{color:var(--dim2);white-space:nowrap;font-size:9.5px;letter-spacing:.04em;align-self:center}
+.tel .v{text-align:right;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tel .v.hi{color:var(--cy)} .tel .v.am{color:var(--am)} .tel .v.rd{color:var(--rd)} .tel .v.gr{color:var(--gr)}
+.tel .sp{grid-column:1/3;height:5px}
+.tel .hd{grid-column:1/3;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim2);
+  border-top:1px dashed var(--line);padding-top:4px;margin-top:3px}
+
+/* body list */
+.blist{display:flex;flex-direction:column;gap:2px}
+.brow{display:flex;align-items:center;gap:7px;padding:4px 6px;border:1px solid transparent;border-radius:2px;
+  cursor:pointer;background:#0a0f18}
+.brow:hover{background:#101a27;border-color:var(--line2)}
+.brow.sel{border-color:var(--cy);background:rgba(63,224,208,.08)}
+.brow .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 6px currentColor}
+.brow .nm{flex:1;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brow .ty{font-size:8.5px;color:var(--dim2);letter-spacing:.1em;text-transform:uppercase}
+.brow.dead .nm{text-decoration:line-through;color:var(--dim2)}
+
+/* node list */
+.nrow{display:flex;align-items:center;gap:6px;padding:5px 6px;background:#0a0f18;border:1px solid var(--line);
+  border-radius:2px;margin-bottom:3px;cursor:pointer}
+.nrow:hover{border-color:var(--line2);background:#101a27}
+.nrow.sel{border-color:var(--vi);background:rgba(185,139,255,.09)}
+.nrow.done{opacity:.55}
+.nrow .idx{width:16px;height:16px;border-radius:50%;background:var(--vi);color:#0b0713;font-size:9px;
+  display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-weight:700}
+.nrow.done .idx{background:var(--dim2)}
+.nrow .n1{flex:1;font-size:10px;line-height:1.25;overflow:hidden}
+.nrow .n1 b{color:var(--tx);font-weight:600}
+.nrow .n1 i{font-style:normal;color:var(--dim2);display:block;font-size:9px}
+.nrow .dv{color:var(--vi);font-size:10.5px;white-space:nowrap}
+.nrow .x{color:var(--dim2);padding:0 3px;font-size:12px;line-height:1}
+.nrow .x:hover{color:var(--rd)}
+
+/* scenario cards */
+.scn{display:block;width:100%;text-align:left;background:#0a0f18;border:1px solid var(--line);
+  border-radius:2px;padding:6px 8px;margin-bottom:4px;cursor:pointer}
+.scn:hover{border-color:var(--cy);background:#101a27}
+.scn.on{border-color:var(--cy);background:rgba(63,224,208,.09)}
+.scn b{display:block;font-size:11px;color:var(--tx);margin-bottom:1px;font-weight:600}
+.scn i{font-style:normal;font-size:9.5px;color:var(--dim2);line-height:1.35;display:block}
+
+/* log */
+#logList{max-height:150px;overflow-y:auto;font-size:9.5px;line-height:1.5;
+  background:#070b12;border:1px solid var(--line);border-radius:2px;padding:4px 6px}
+#logList div{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#logList div b{color:var(--dim2);font-weight:400}
+#logList .burn{color:var(--vi)} #logList .warn{color:var(--am)} #logList .bad{color:var(--rd)}
+#logList .ok{color:var(--gr)}
+
+textarea{width:100%;height:74px;resize:vertical;font-size:9.5px;line-height:1.3}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+
+/* floating buttons */
+#panelToggle{position:fixed;top:8px;right:8px;z-index:40;display:block;transition:right .22s ease}
+body.panelOn #panelToggle{right:calc(var(--panelW) + 8px)}
+body.panelOff #transport{right:8px}
+#toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%) translateY(8px);z-index:50;
+  padding:6px 12px;font-size:11px;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;
+  border:1px solid var(--line2);background:rgba(10,16,24,.96);border-radius:2px;max-width:70vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.burn{border-color:var(--vi);color:var(--vi)}
+#toast.bad{border-color:var(--rd);color:var(--rd)}
+#toast.ok{border-color:var(--gr);color:var(--gr)}
+
+kbd{background:#101a27;border:1px solid var(--line2);border-bottom-width:2px;border-radius:2px;
+  padding:0 3px;font-size:9px;color:var(--dim)}
+
+/* ---------- narrow / mobile ---------- */
+@media (max-width:1000px){ :root{--panelW:330px} }
+@media (max-width:820px){
+  :root{--panelW:0px}
+  #panel{top:auto;left:0;right:0;bottom:0;width:auto;height:62vh;border-left:none;
+    border-top:1px solid var(--line2);box-shadow:0 -14px 40px rgba(0,0,0,.6);transform:translateY(0)}
+  #panel.hidden{transform:translateY(100%)}
+  body.panelOn #panelToggle{right:8px}
+  #transport{right:8px;bottom:8px;justify-content:center;gap:4px;padding:5px 6px}
+  body.panelOn #transport{display:none}
+  body.panelOn #hudScn{display:none}
+  body.panelOn #hud{width:calc(100% - 90px)}
+  #hud{max-width:none;min-width:0;width:calc(100% - 74px);top:6px;left:6px}
+  #hudGrid{grid-template-columns:auto 1fr auto 1fr;gap:1px 6px}
+  #clock{min-width:104px}
+  .btn{padding:5px 7px}
+  .toggrid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:430px){
+  #transport{gap:3px;padding:4px}
+  .btn.icon{min-width:26px;padding:5px 4px}
+  #clock{min-width:96px;font-size:11px}
+  #warpRead{min-width:64px}
+  #frameSel{max-width:120px}
+  #hudGrid{grid-template-columns:auto 1fr auto 1fr}
+}
+@media (max-height:520px){
+  #panel{height:78vh}
+}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Orbital simulation viewport"></canvas>
+
+<!-- ======================= HUD ======================= -->
+<div id="hud" class="card" role="status" aria-live="off">
+  <div class="brand"><b>ORBITAL</b><span>mission planner</span></div>
+  <div id="hudGrid">
+    <div class="k">FPS</div><div class="v" id="hFps">—</div>
+    <div class="k">MET</div><div class="v acc" id="hMet">—</div>
+    <div class="k">Warp</div><div class="v" id="hWarp">—</div>
+    <div class="k">Steps/f</div><div class="v" id="hSteps">—</div>
+    <div class="k">Bodies</div><div class="v" id="hBodies">—</div>
+    <div class="k">ΔE/E₀</div><div class="v" id="hEnergy">—</div>
+    <div class="k">Frame</div><div class="v" id="hFrame">—</div>
+    <div class="k">State</div><div class="v" id="hState">—</div>
+  </div>
+  <div id="hudScn"><b id="hScnName">—</b><span id="hScnBlurb"></span></div>
+</div>
+
+<!-- ======================= TRANSPORT ======================= -->
+<div id="transport" class="card">
+  <div class="tgroup">
+    <button class="btn icon" id="btnReset" title="Restart scenario (Backspace)" aria-label="Restart scenario">⟲</button>
+    <button class="btn icon" id="btnPause" title="Pause / Resume (Space)" aria-label="Pause or resume">❚❚</button>
+    <button class="btn icon" id="btnStep" title="Single integration step (period key)" aria-label="Single step">▶|</button>
+  </div>
+  <div class="tsep"></div>
+  <div class="tgroup">
+    <button class="btn icon" id="btnWarpDn" title="Slower (comma)" aria-label="Decrease time warp">«</button>
+    <div id="warpRead" title="Time warp factor"><span id="warpVal">1×</span><small id="warpTgt">target 1×</small></div>
+    <button class="btn icon" id="btnWarpUp" title="Faster (period)" aria-label="Increase time warp">»</button>
+  </div>
+  <div class="tsep"></div>
+  <div id="clock" title="Mission elapsed time / simulated time"><span id="clkMet">T+ 00:00:00</span><small id="clkTu">0.0 TU</small></div>
+  <div class="tsep"></div>
+  <div class="tgroup">
+    <button class="btn" id="btnCkptSave" title="Save checkpoint (C)">CKPT ⌂</button>
+    <button class="btn" id="btnCkptLoad" title="Revert to saved checkpoint (X)">↩ REVERT</button>
+  </div>
+  <div class="tsep"></div>
+  <div class="tgroup">
+    <label class="sr" for="frameSel">Reference frame</label>
+    <select id="frameSel" title="Reference frame (F cycles)"></select>
+  </div>
+  <div class="tsep"></div>
+  <div class="tgroup">
+    <button class="btn icon" id="btnZoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+    <button class="btn icon" id="btnZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+    <button class="btn" id="btnFit" title="Frame the whole system">FIT</button>
+  </div>
+</div>
+
+<button class="btn" id="panelToggle" aria-label="Open control panel">☰ PANEL</button>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- ======================= PANEL ======================= -->
+<aside id="panel" aria-label="Mission control panel">
+  <nav id="tabs" role="tablist">
+    <button role="tab" data-tab="mission" class="on" id="tabMission">Mission</button>
+    <button role="tab" data-tab="nodes" id="tabNodes">Nodes</button>
+    <button role="tab" data-tab="physics" id="tabPhysics">Physics</button>
+    <button role="tab" data-tab="view" id="tabView">View</button>
+    <button role="tab" data-tab="scenarios" id="tabScenarios">Scenes</button>
+    <button role="tab" data-tab="help" id="tabHelp" title="Help">?</button>
+  </nav>
+  <div id="tabBody">
+
+    <!-- MISSION -->
+    <section class="tab on" data-tab="mission" role="tabpanel" aria-labelledby="tabMission">
+      <div class="sec">
+        <h3>Objects <em id="bodyCount"></em></h3>
+        <div class="blist" id="bodyList"></div>
+      </div>
+      <div class="sec">
+        <h3>Telemetry <em id="telName">—</em></h3>
+        <div class="tel" id="telSel"></div>
+      </div>
+      <div class="sec" id="craftEditSec">
+        <h3>State vector editor <em>paused only</em></h3>
+        <div id="craftEdit"></div>
+        <p class="hint" id="craftEditHint">Pause the simulation, then drag the craft or its velocity handle in the viewport — or type exact values here.</p>
+      </div>
+      <div class="sec">
+        <h3>System conservation</h3>
+        <div class="tel" id="telSys"></div>
+        <div style="margin-top:6px"><button class="btn" id="btnRebase" title="Reset the conservation baseline to the current state">RE-BASELINE</button></div>
+      </div>
+      <div class="sec">
+        <h3>Flight log</h3>
+        <div id="logList"></div>
+      </div>
+    </section>
+
+    <!-- NODES -->
+    <section class="tab" data-tab="nodes" role="tabpanel" aria-labelledby="tabNodes">
+      <div class="sec">
+        <h3>Maneuver nodes <em id="nodeSummary"></em></h3>
+        <div class="row2" style="margin-bottom:6px">
+          <button class="btn" id="btnAddNode">+ ADD NODE</button>
+          <button class="btn danger" id="btnClearNodes">CLEAR ALL</button>
+        </div>
+        <div id="nodeList"></div>
+        <p class="hint">Nodes are placed on the predicted trajectory. Editing Δv re-plots the prediction immediately; the burn is applied to the real simulation when the clock reaches the node time.</p>
+      </div>
+      <div class="sec" id="nodeEditSec">
+        <h3>Node editor <em id="nodeEditName">no node</em></h3>
+        <div id="nodeEdit"></div>
+      </div>
+      <div class="sec">
+        <h3>Post-burn orbit <em id="postBurnWhen"></em></h3>
+        <div class="tel" id="telPost"></div>
+      </div>
+      <div class="sec">
+        <h3>Predicted encounters</h3>
+        <div class="tel" id="encList"></div>
+      </div>
+    </section>
+
+    <!-- PHYSICS -->
+    <section class="tab" data-tab="physics" role="tabpanel" aria-labelledby="tabPhysics">
+      <div class="sec"><h3>Integrator</h3><div id="ctlIntegrator"></div></div>
+      <div class="sec"><h3>Gravity model</h3><div id="ctlGravity"></div></div>
+      <div class="sec"><h3>Collisions</h3><div id="ctlCollision"></div></div>
+      <div class="sec"><h3>Prediction</h3><div id="ctlPredict"></div></div>
+      <div class="sec">
+        <h3>Diagnostics</h3>
+        <div class="tel" id="telPerf"></div>
+      </div>
+    </section>
+
+    <!-- VIEW -->
+    <section class="tab" data-tab="view" role="tabpanel" aria-labelledby="tabView">
+      <div class="sec"><h3>Reference frame</h3><div id="ctlFrame"></div></div>
+      <div class="sec"><h3>Overlays</h3><div class="toggrid" id="ctlToggles"></div></div>
+      <div class="sec"><h3>Scale &amp; style</h3><div id="ctlStyle"></div></div>
+      <div class="sec"><h3>Camera</h3><div id="ctlCamera"></div>
+        <div class="row2" style="margin-top:4px">
+          <button class="btn" id="btnFit2">FIT SYSTEM</button>
+          <button class="btn" id="btnFocus">FOCUS SELECTION</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCENARIOS -->
+    <section class="tab" data-tab="scenarios" role="tabpanel" aria-labelledby="tabScenarios">
+      <div class="sec"><h3>Scenarios</h3><div id="scnList"></div></div>
+      <div class="sec">
+        <h3>State I/O</h3>
+        <div class="row2" style="margin-bottom:4px">
+          <button class="btn" id="btnSaveLocal">SAVE LOCAL</button>
+          <button class="btn" id="btnLoadLocal">LOAD LOCAL</button>
+        </div>
+        <div class="row2" style="margin-bottom:4px">
+          <button class="btn" id="btnExport">EXPORT JSON</button>
+          <button class="btn" id="btnImport">IMPORT JSON</button>
+        </div>
+        <label class="sr" for="ioText">Scenario JSON</label>
+        <textarea id="ioText" spellcheck="false" placeholder="Exported scenario JSON appears here. Paste JSON and press IMPORT."></textarea>
+        <p class="hint">Everything stays local — export writes into the box above, save/load uses browser storage. No network is ever touched.</p>
+      </div>
+    </section>
+
+    <!-- HELP -->
+    <section class="tab" data-tab="help" role="tabpanel" aria-labelledby="tabHelp">
+      <div class="sec">
+        <h3>Keyboard</h3>
+        <div class="tel" id="helpKeys"></div>
+      </div>
+      <div class="sec">
+        <h3>Pointer</h3>
+        <p class="hint">
+          <b>Drag</b> empty space to pan · <b>Wheel / pinch</b> to zoom about the cursor ·
+          <b>Click</b> a body to select it · while <b>paused</b>, drag a spacecraft to move it, or drag the
+          arrow head of its velocity vector to re-aim the burn-free trajectory ·
+          drag a <b>maneuver node</b> marker along the prediction to re-time the burn.
+        </p>
+      </div>
+      <div class="sec">
+        <h3>Units</h3>
+        <p class="hint">Normalised, internally coherent units: length <b>LU</b>, mass <b>MU</b>, time <b>TU</b>,
+          with G configurable (default 1). Each scenario declares how many seconds of mission clock one TU
+          represents so the MET readout stays human-readable. Velocities are LU/TU, energies are per unit
+          mass (LU²/TU²), angular momentum LU²/TU.</p>
+      </div>
+      <div class="sec">
+        <h3>Model notes</h3>
+        <p class="hint">Full N-body: every body attracts every other body, spacecraft included. The
+          simulation is planar (2-D), so maneuver components are prograde / retrograde, radial in / out and
+          Cartesian — a normal (out-of-plane) component has no meaning in the plane and is therefore not offered.
+          Sphere-of-influence circles, osculating conics and closest-approach markers are diagnostic overlays
+          computed from the true integrated state, not the model itself.</p>
+      </div>
+    </section>
+
+  </div>
+</aside>
+<script>
+'use strict';
+(function(){
+/* ============================================================================
+   ORBITAL — a self-contained N-body orbital mechanics & mission planning sandbox
+   No libraries, no build step, no network. Everything below is the application.
+   ---------------------------------------------------------------------------
+   Section map:
+     1. math + formatting helpers
+     2. world state (flat Float64Array packing)
+     3. force model + integrators (Verlet, Yoshida4, RK4, Dormand-Prince 4(5))
+     4. stepper: maneuver-node splitting, collisions, conservation bookkeeping
+     5. orbital elements
+     6. reference frames
+     7. trajectory prediction
+     8. camera + renderer
+     9. UI: declarative controls, telemetry, panels
+    10. input: pointer / wheel / touch / keyboard
+    11. scenarios
+    12. main loop + diagnostics API (window.SIM)
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- 1. math */
+var TAU = Math.PI * 2;
+function clamp(v, a, b){ return v < a ? a : v > b ? b : v; }
+function lerp(a, b, t){ return a + (b - a) * t; }
+function hypot(x, y){ return Math.sqrt(x * x + y * y); }
+
+function num(v, sig){
+  sig = sig || 4;
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  var a = Math.abs(v);
+  if (a === 0) return '0';
+  if (a < 1e-4 || a >= 1e7) return v.toExponential(2);
+  var d = Math.max(0, sig - 1 - Math.floor(Math.log10(a)));
+  return v.toFixed(Math.min(d, 6));
+}
+function sci(v, d){
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  if (v === 0) return '0';
+  return v.toExponential(d === undefined ? 2 : d);
+}
+function pad2(n){ return (n < 10 ? '0' : '') + n; }
+function fmtMET(tu, secPerTU){
+  var neg = tu < 0, s = Math.abs(tu) * secPerTU;
+  var d = Math.floor(s / 86400); s -= d * 86400;
+  var h = Math.floor(s / 3600); s -= h * 3600;
+  var m = Math.floor(s / 60); s -= m * 60;
+  return (neg ? 'T− ' : 'T+ ') + (d > 0 ? d + 'd ' : '') + pad2(h) + ':' + pad2(m) + ':' + pad2(Math.floor(s));
+}
+function fmtLead(tu, secPerTU){ return tu <= 0 ? 'now' : fmtDur(tu, secPerTU); }
+function fmtDur(tu, secPerTU){
+  var s = Math.abs(tu) * secPerTU, sign = tu < 0 ? '−' : '';
+  if (s < 60) return sign + s.toFixed(1) + 's';
+  var d = Math.floor(s / 86400); s -= d * 86400;
+  var h = Math.floor(s / 3600); s -= h * 3600;
+  var m = Math.floor(s / 60); s -= m * 60;
+  if (d > 0) return sign + d + 'd ' + pad2(h) + ':' + pad2(m);
+  return sign + pad2(h) + ':' + pad2(m) + ':' + pad2(Math.floor(s));
+}
+/* deterministic PRNG so the starfield is identical on every load */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ------------------------------------------------------- 2. world state */
+/* Packed layout: y = [x0..xn-1, y0..yn-1, vx0..vxn-1, vy0..vyn-1] */
+function makeWorld(specs, t0){
+  var n = specs.length;
+  var w = {
+    n: n, t: t0 || 0,
+    y: new Float64Array(4 * n),
+    m: new Float64Array(n),
+    alive: new Uint8Array(n),
+    rad: new Float64Array(n),
+    a: new Float64Array(2 * n),
+    aValid: false,
+    meta: [], index: {}
+  };
+  for (var i = 0; i < n; i++){
+    var s = specs[i];
+    w.y[i] = s.x; w.y[n + i] = s.y; w.y[2 * n + i] = s.vx; w.y[3 * n + i] = s.vy;
+    w.m[i] = s.m; w.alive[i] = 1; w.rad[i] = s.radius;
+    w.meta.push({
+      idx: i, id: s.id, name: s.name, type: s.type || 'planet',
+      color: s.color || '#8ab', radius: s.radius, glow: s.glow || 0,
+      m0: s.m, ring: !!s.ring
+    });
+    w.index[s.id] = i;
+  }
+  return w;
+}
+function cloneWorld(w){
+  return {
+    n: w.n, t: w.t,
+    y: new Float64Array(w.y), m: new Float64Array(w.m), alive: new Uint8Array(w.alive),
+    rad: new Float64Array(w.rad),
+    a: new Float64Array(w.a), aValid: w.aValid, meta: w.meta, index: w.index
+  };
+}
+function copyInto(dst, src){
+  dst.n = src.n; dst.t = src.t; dst.aValid = src.aValid;
+  dst.y.set(src.y); dst.m.set(src.m); dst.alive.set(src.alive); dst.a.set(src.a); dst.rad.set(src.rad);
+  dst.meta = src.meta; dst.index = src.index;
+  return dst;
+}
+function bodyState(w, i){
+  var n = w.n;
+  return { x: w.y[i], y: w.y[n + i], vx: w.y[2 * n + i], vy: w.y[3 * n + i] };
+}
+
+/* ------------------------------------------- 3. forces and integrators */
+function accelFrom(y, m, alive, n, G, soft2, out){
+  out.fill(0);
+  var oY = n;
+  for (var i = 0; i < n; i++){
+    if (!alive[i]) continue;
+    var xi = y[i], yi = y[oY + i], mi = m[i];
+    for (var j = i + 1; j < n; j++){
+      if (!alive[j]) continue;
+      var dx = y[j] - xi, dy = y[oY + j] - yi;
+      var r2 = dx * dx + dy * dy + soft2;
+      if (r2 < 1e-18) continue;
+      var inv = G / (r2 * Math.sqrt(r2));
+      var fi = inv * m[j], fj = inv * mi;
+      out[2 * i] += fi * dx;     out[2 * i + 1] += fi * dy;
+      out[2 * j] -= fj * dx;     out[2 * j + 1] -= fj * dy;
+    }
+  }
+}
+function accelWorld(w, out){ accelFrom(w.y, w.m, w.alive, w.n, P.G, P.soft * P.soft, out); }
+
+var scratchPool = {};
+function scratch(n){
+  var s = scratchPool[n];
+  if (!s){
+    s = scratchPool[n] = {
+      acc: new Float64Array(2 * n), tmp: new Float64Array(4 * n), yt: new Float64Array(4 * n),
+      k: [], err: new Float64Array(4 * n)
+    };
+    for (var i = 0; i < 7; i++) s.k.push(new Float64Array(4 * n));
+  }
+  return s;
+}
+/* dy/dt for the packed state */
+function deriv(y, m, alive, n, out){
+  var s = scratch(n);
+  accelFrom(y, m, alive, n, P.G, P.soft * P.soft, s.acc);
+  var oY = n, oVX = 2 * n, oVY = 3 * n;
+  for (var i = 0; i < n; i++){
+    if (!alive[i]){ out[i] = 0; out[oY + i] = 0; out[oVX + i] = 0; out[oVY + i] = 0; continue; }
+    out[i] = y[oVX + i]; out[oY + i] = y[oVY + i];
+    out[oVX + i] = s.acc[2 * i]; out[oVY + i] = s.acc[2 * i + 1];
+  }
+}
+
+/* --- velocity Verlet (2nd order symplectic, kick-drift-kick) --- */
+function stepVerlet(w, h){
+  var n = w.n, y = w.y, al = w.alive, a = w.a, oY = n, oVX = 2 * n, oVY = 3 * n, i;
+  if (!w.aValid){ accelWorld(w, a); w.aValid = true; }
+  var hh = h * 0.5;
+  for (i = 0; i < n; i++){
+    if (!al[i]) continue;
+    y[oVX + i] += a[2 * i] * hh; y[oVY + i] += a[2 * i + 1] * hh;
+    y[i] += y[oVX + i] * h;      y[oY + i] += y[oVY + i] * h;
+  }
+  accelWorld(w, a);
+  for (i = 0; i < n; i++){
+    if (!al[i]) continue;
+    y[oVX + i] += a[2 * i] * hh; y[oVY + i] += a[2 * i + 1] * hh;
+  }
+  STEPCOUNT++;
+}
+/* --- Yoshida 4th order symplectic (triple-jump composition of Verlet) --- */
+var CBRT2 = Math.cbrt(2);
+var YW1 = 1 / (2 - CBRT2), YW0 = -CBRT2 / (2 - CBRT2);
+function stepYoshida4(w, h){
+  stepVerlet(w, h * YW1); stepVerlet(w, h * YW0); stepVerlet(w, h * YW1);
+}
+/* --- classical RK4 (non-symplectic; shown for error comparison) --- */
+function stepRK4(w, h){
+  var n = w.n, N = 4 * n, s = scratch(n), y = w.y, i;
+  var k1 = s.k[0], k2 = s.k[1], k3 = s.k[2], k4 = s.k[3], t = s.tmp;
+  deriv(y, w.m, w.alive, n, k1);
+  for (i = 0; i < N; i++) t[i] = y[i] + 0.5 * h * k1[i];
+  deriv(t, w.m, w.alive, n, k2);
+  for (i = 0; i < N; i++) t[i] = y[i] + 0.5 * h * k2[i];
+  deriv(t, w.m, w.alive, n, k3);
+  for (i = 0; i < N; i++) t[i] = y[i] + h * k3[i];
+  deriv(t, w.m, w.alive, n, k4);
+  for (i = 0; i < N; i++) y[i] += h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
+  w.aValid = false;
+  STEPCOUNT++;
+}
+/* --- Dormand-Prince 4(5) with per-step tolerance control --- */
+var DP_A = [
+  [],
+  [1/5],
+  [3/40, 9/40],
+  [44/45, -56/15, 32/9],
+  [19372/6561, -25360/2187, 64448/6561, -212/729],
+  [9017/3168, -355/33, 46732/5247, 49/176, -5103/18656],
+  [35/384, 0, 500/1113, 125/192, -2187/6784, 11/84]
+];
+var DP_B5 = [35/384, 0, 500/1113, 125/192, -2187/6784, 11/84, 0];
+var DP_E  = [71/57600, 0, -71/16695, 71/1920, -17253/339200, 22/525, -1/40];
+function dpTry(w, h, yOut){
+  var n = w.n, N = 4 * n, s = scratch(n), y = w.y, i, j, st, sum;
+  var k = s.k, t = s.tmp;
+  deriv(y, w.m, w.alive, n, k[0]);
+  for (st = 1; st < 7; st++){
+    var row = DP_A[st];
+    for (i = 0; i < N; i++){
+      sum = 0;
+      for (j = 0; j < row.length; j++) if (row[j] !== 0) sum += row[j] * k[j][i];
+      t[i] = y[i] + h * sum;
+    }
+    deriv(t, w.m, w.alive, n, k[st]);
+  }
+  var rtol = P.tol, atol = P.tol * 1e-2, errNorm = 0, cnt = 0;
+  for (i = 0; i < N; i++){
+    sum = 0;
+    for (j = 0; j < 7; j++) if (DP_B5[j] !== 0) sum += DP_B5[j] * k[j][i];
+    yOut[i] = y[i] + h * sum;
+    var e = 0;
+    for (j = 0; j < 7; j++) if (DP_E[j] !== 0) e += DP_E[j] * k[j][i];
+    e *= h;
+    var scl = atol + rtol * Math.max(Math.abs(y[i]), Math.abs(yOut[i]));
+    var ratio = e / scl; errNorm += ratio * ratio; cnt++;
+  }
+  STEPCOUNT++;
+  return Math.sqrt(errNorm / Math.max(1, cnt));
+}
+/* advance exactly h using adaptive substeps */
+function stepDP45(w, h, ctx){
+  var s = scratch(w.n), done = 0, guard = 0;
+  var hh = ctx.hAdapt > 0 ? Math.min(ctx.hAdapt, h) : h;
+  while (done < h - 1e-13 && guard++ < 2000){
+    hh = Math.min(hh, h - done);
+    if (hh < 1e-12) break;
+    var err = dpTry(w, hh, s.yt);
+    if (err <= 1 || hh <= 1e-11){
+      w.y.set(s.yt); w.aValid = false; done += hh;
+      ctx.dpAccept++;
+    } else ctx.dpReject++;
+    var fac = clamp(0.9 * Math.pow(Math.max(err, 1e-12), -0.2), 0.2, 4);
+    hh = clamp(hh * fac, 1e-11, h);
+    ctx.hAdapt = hh;
+  }
+  ctx.lastErr = 0;
+}
+var INTEGRATORS = {
+  verlet:   { label: 'Velocity Verlet (2nd, symplectic)',  fn: stepVerlet,   adaptive: false, order: 2 },
+  yoshida4: { label: 'Yoshida 4th (symplectic)',           fn: stepYoshida4, adaptive: false, order: 4 },
+  rk4:      { label: 'Runge–Kutta 4 (non-symplectic)',     fn: stepRK4,      adaptive: false, order: 4 },
+  dp45:     { label: 'Dormand–Prince 4(5) adaptive',       fn: stepDP45,     adaptive: true,  order: 5 }
+};
+var STEPCOUNT = 0;
+
+/* ----------------------------------------- 4. parameters & simulation */
+var P = {                       /* physics */
+  G: 1, soft: 0, dt: 0.02, integrator: 'verlet', tol: 1e-9,
+  collide: 'crash', restitution: 0.55, autoDt: true, maxSteps: 2600
+};
+var V = {                       /* visualisation */
+  trails: true, predict: true, predBodies: true, vectors: true, accelVec: false,
+  vectorsAll: false, predictSelectedOnly: false,
+  guides: true, soi: true, potential: false, encounters: true, labels: true,
+  grid: true, errGraph: true, stars: true, nodeMarks: true, apsides: true,
+  trailSpan: 420, horizon: 420, predSteps: 4000, bodyScale: 1, vecScale: 1,
+  follow: true, trailWidth: 1.4
+};
+var T = { warp: 1, warpTarget: 1, paused: false, baseRate: 10, secondsPerTU: 60 };
+var FR = { mode: 'inertial', center: null, rotA: null, rotB: null };
+
+var world = null, nodes = [], nodeSeq = 1, events = [], checkpoint = null;
+var selId = null, selNode = null, scenarioId = null, scenarioDef = null;
+var base = { valid: false };
+var simCtx = { nodes: nodes, live: true, hAdapt: 0, dpAccept: 0, dpReject: 0 };
+
+function logEvent(text, kind){
+  events.push({ t: world ? world.t : 0, text: text, kind: kind || '' });
+  if (events.length > 120) events.shift();
+  ui.logDirty = true;
+}
+
+/* ---- conservation ---- */
+function systemTotals(w){
+  var n = w.n, y = w.y, m = w.m, al = w.alive, oY = n, oVX = 2 * n, oVY = 3 * n;
+  var KE = 0, PE = 0, Px = 0, Py = 0, L = 0, M = 0, absP = 0, absL = 0;
+  var G = P.G, s2 = P.soft * P.soft, i, j;
+  for (i = 0; i < n; i++){
+    if (!al[i]) continue;
+    var vx = y[oVX + i], vy = y[oVY + i], mi = m[i];
+    var v2 = vx * vx + vy * vy;
+    KE += 0.5 * mi * v2; Px += mi * vx; Py += mi * vy; M += mi;
+    var li = mi * (y[i] * vy - y[oY + i] * vx);
+    L += li; absL += Math.abs(li); absP += mi * Math.sqrt(v2);
+  }
+  for (i = 0; i < n; i++){
+    if (!al[i]) continue;
+    for (j = i + 1; j < n; j++){
+      if (!al[j]) continue;
+      var dx = y[j] - y[i], dy = y[oY + j] - y[oY + i];
+      PE -= G * m[i] * m[j] / Math.sqrt(dx * dx + dy * dy + s2);
+    }
+  }
+  return { KE: KE, PE: PE, E: KE + PE, Px: Px, Py: Py, Pmag: hypot(Px, Py),
+           L: L, M: M, absP: absP, absL: absL };
+}
+function rebaseline(reason){
+  var s = systemTotals(world);
+  base = { valid: true, E: s.E, Px: s.Px, Py: s.Py, L: s.L,
+           absP: Math.max(s.absP, 1e-12), absL: Math.max(s.absL, 1e-12),
+           absE: Math.max(Math.abs(s.E), 1e-12), t: world.t, reason: reason || '' };
+  errHist.length = 0; errPeak = 0;
+}
+function conservationErr(){
+  var s = systemTotals(world);
+  if (!base.valid) return { dE: 0, dP: 0, dL: 0, tot: s };
+  return {
+    dE: (s.E - base.E) / base.absE,
+    dP: hypot(s.Px - base.Px, s.Py - base.Py) / base.absP,
+    dL: (s.L - base.L) / base.absL,
+    tot: s
+  };
+}
+var errHist = [], errPeak = 0;
+
+/* ---- dominant attractor (used for "primary", radial basis, SOI colouring) ---- */
+function dominantIndex(w, i){
+  var n = w.n, best = -1, bestA = 0, mMax = 0, j;
+  for (j = 0; j < n; j++) if (w.alive[j] && w.m[j] > mMax) mMax = w.m[j];
+  /* a negligible body (station marker, another probe) must never become the
+     "primary": during a close rendezvous its 1/r² term can otherwise dominate
+     and corrupt the prograde/radial maneuver basis */
+  var mMin = mMax * 1e-6;
+  for (j = 0; j < n; j++){
+    if (j === i || !w.alive[j] || w.m[j] <= 0 || w.m[j] < mMin) continue;
+    var dx = w.y[j] - w.y[i], dy = w.y[n + j] - w.y[n + i];
+    var r2 = dx * dx + dy * dy;
+    if (r2 < 1e-12) continue;
+    var a = P.G * w.m[j] / r2;
+    if (a > bestA){ bestA = a; best = j; }
+  }
+  return best;
+}
+/* ---- maneuver frame: prograde + radial-out (perpendicular to velocity) ---- */
+function maneuverBasis(w, ci){
+  var n = w.n;
+  var pi = dominantIndex(w, ci);
+  /* prograde is defined against the dominant attractor, not the global inertial
+     frame — otherwise a burn "prograde" around a moving planet points nowhere useful */
+  var vx = w.y[2 * n + ci], vy = w.y[3 * n + ci];
+  if (pi >= 0){ vx -= w.y[2 * n + pi]; vy -= w.y[3 * n + pi]; }
+  var sp = hypot(vx, vy);
+  var px = sp > 1e-12 ? vx / sp : 1, py = sp > 1e-12 ? vy / sp : 0;
+  var rx = 1, ry = 0;
+  if (pi >= 0){
+    rx = w.y[ci] - w.y[pi]; ry = w.y[n + ci] - w.y[n + pi];
+    var rl = hypot(rx, ry);
+    if (rl > 1e-12){ rx /= rl; ry /= rl; } else { rx = 1; ry = 0; }
+  }
+  var nx = -py, ny = px;                       /* in-plane, perpendicular to prograde */
+  if (nx * rx + ny * ry < 0){ nx = -nx; ny = -ny; }   /* point away from the primary */
+  return { px: px, py: py, rx: nx, ry: ny, primary: pi, speed: sp };
+}
+function nodeDv(nd){
+  return nd.mode === 'cart' ? hypot(nd.cx, nd.cy) : hypot(nd.pro, nd.rad);
+}
+function applyManeuver(w, nd){
+  var ci = w.index[nd.craft];
+  if (ci === undefined || !w.alive[ci]) return null;
+  var n = w.n, dvx, dvy;
+  if (nd.mode === 'cart'){ dvx = nd.cx; dvy = nd.cy; }
+  else {
+    var b = maneuverBasis(w, ci);
+    dvx = b.px * nd.pro + b.rx * nd.rad;
+    dvy = b.py * nd.pro + b.ry * nd.rad;
+  }
+  w.y[2 * n + ci] += dvx; w.y[3 * n + ci] += dvy;
+  return { dvx: dvx, dvy: dvy, mag: hypot(dvx, dvy) };
+}
+/* smallest node time strictly greater than t0 and <= t1 (null when none) */
+function nextNodeTime(list, t0, t1){
+  var best = null;
+  for (var i = 0; i < list.length; i++){
+    var nt = list[i].t;
+    if (nt > t0 && nt <= t1 && (best === null || nt < best)) best = nt;
+  }
+  return best;
+}
+function fireNodesAt(w, tt, ctx){
+  for (var i = 0; i < ctx.nodes.length; i++){
+    var nd = ctx.nodes[i];
+    if (Math.abs(nd.t - tt) > 1e-9) continue;
+    var res = applyManeuver(w, nd);
+    if (!res) continue;
+    if (ctx.live){
+      logEvent('BURN #' + nd.id + '  Δv ' + num(res.mag, 3) + ' LU/TU  (' +
+               (nd.mode === 'cart' ? 'cartesian' : 'pro ' + num(nd.pro, 3) + ' / rad ' + num(nd.rad, 3)) + ')', 'burn');
+      toast('MANEUVER #' + nd.id + ' EXECUTED — Δv ' + num(res.mag, 3), 'burn');
+      rebaseline('burn');
+      ui.nodesDirty = true;
+    } else if (ctx.snapshots){
+      var ci = w.index[nd.craft], n = w.n;
+      ctx.snapshots.push({ id: nd.id, t: w.t, x: w.y[ci], y: w.y[n + ci],
+                           vx: w.y[2 * n + ci], vy: w.y[3 * n + ci] });
+    }
+  }
+}
+/* ---- collisions ---- */
+function mergeBodies(w, i, j, ctx){
+  var hi = w.m[i] >= w.m[j] ? i : j, lo = hi === i ? j : i, n = w.n;
+  var M = w.m[i] + w.m[j];
+  if (M <= 0) M = 1e-30;
+  var oY = n, oVX = 2 * n, oVY = 3 * n;
+  w.y[hi]        = (w.m[i] * w.y[i]        + w.m[j] * w.y[j])        / M;
+  w.y[oY + hi]   = (w.m[i] * w.y[oY + i]   + w.m[j] * w.y[oY + j])   / M;
+  w.y[oVX + hi]  = (w.m[i] * w.y[oVX + i]  + w.m[j] * w.y[oVX + j])  / M;
+  w.y[oVY + hi]  = (w.m[i] * w.y[oVY + i]  + w.m[j] * w.y[oVY + j])  / M;
+  w.m[hi] = M;
+  w.rad[hi] = Math.cbrt(w.rad[i] * w.rad[i] * w.rad[i] + w.rad[j] * w.rad[j] * w.rad[j]);
+  w.alive[lo] = 0; w.aValid = false;
+  if (ctx.live){
+    logEvent('MERGE — ' + w.meta[lo].name + ' absorbed by ' + w.meta[hi].name, 'bad');
+    toast(w.meta[lo].name + ' merged into ' + w.meta[hi].name, 'bad');
+    rebaseline('merge'); ui.bodiesDirty = true;
+  }
+}
+function handleCollisions(w, ctx){
+  var n = w.n, y = w.y, al = w.alive, oY = n, oVX = 2 * n, oVY = 3 * n;
+  for (var i = 0; i < n; i++){
+    if (!al[i]) continue;
+    for (var j = i + 1; j < n; j++){
+      if (!al[j]) continue;
+      var dx = y[j] - y[i], dy = y[oY + j] - y[oY + i];
+      var rr = w.rad[i] + w.rad[j], d2 = dx * dx + dy * dy;
+      if (d2 >= rr * rr || d2 < 1e-18) continue;
+      var mode = P.collide;
+      var iCraft = w.meta[i].type === 'craft', jCraft = w.meta[j].type === 'craft';
+      if (mode === 'crash' && (iCraft || jCraft)){
+        var dead = iCraft ? i : j, other = iCraft ? j : i;
+        al[dead] = 0; w.aValid = false;
+        if (ctx.live){
+          logEvent('LOSS OF VEHICLE — ' + w.meta[dead].name + ' impacted ' + w.meta[other].name, 'bad');
+          toast(w.meta[dead].name + ' impacted ' + w.meta[other].name, 'bad');
+          rebaseline('impact'); ui.bodiesDirty = true;
+        } else ctx.crash = { t: w.t, body: other, at: dead };
+        continue;
+      }
+      if (mode === 'bounce'){
+        var d = Math.sqrt(d2), nx = dx / d, ny = dy / d;
+        var rvx = y[oVX + j] - y[oVX + i], rvy = y[oVY + j] - y[oVY + i];
+        var vn = rvx * nx + rvy * ny;
+        var mi = w.m[i], mj = w.m[j], msum = mi + mj;
+        if (msum <= 0) continue;
+        if (vn < 0){
+          var imp = -(1 + P.restitution) * vn / (1 / Math.max(mi, 1e-30) + 1 / Math.max(mj, 1e-30));
+          y[oVX + i] -= imp * nx / Math.max(mi, 1e-30); y[oVY + i] -= imp * ny / Math.max(mi, 1e-30);
+          y[oVX + j] += imp * nx / Math.max(mj, 1e-30); y[oVY + j] += imp * ny / Math.max(mj, 1e-30);
+        }
+        var pen = (rr - d);
+        var wi = mj / msum, wj = mi / msum;
+        y[i] -= nx * pen * wi; y[oY + i] -= ny * pen * wi;
+        y[j] += nx * pen * wj; y[oY + j] += ny * pen * wj;
+        w.aValid = false;
+        if (ctx.live && !ctx.bounceCooldown){
+          ctx.bounceCooldown = 40;
+          logEvent('CONTACT — ' + w.meta[i].name + ' / ' + w.meta[j].name, 'warn');
+          rebaseline('contact');
+        }
+        continue;
+      }
+      if (mode === 'merge' || mode === 'crash') mergeBodies(w, i, j, ctx);
+    }
+  }
+  if (ctx.bounceCooldown > 0) ctx.bounceCooldown--;
+}
+/* ---- advance the world by dt, splitting the step at maneuver-node times ---- */
+function advance(w, dt, ctx){
+  var integ = INTEGRATORS[P.integrator] || INTEGRATORS.verlet;
+  var remaining = dt, guard = 0;
+  while (remaining > 1e-13 && guard++ < 48){
+    var nd = ctx.nodes.length ? nextNodeTime(ctx.nodes, w.t, w.t + remaining) : null;
+    var h = remaining;
+    if (nd !== null) h = Math.min(h, nd - w.t);
+    if (h > 1e-13){
+      integ.fn(w, h, ctx);
+      w.t += h; remaining -= h;
+    }
+    if (nd !== null && nd - w.t <= 1e-9){
+      w.t = nd;                       /* pin exactly so the node cannot re-fire */
+      fireNodesAt(w, nd, ctx);
+    } else if (h <= 1e-13) break;
+  }
+  if (P.collide !== 'none') handleCollisions(w, ctx);
+}
+
+/* --------------------------------------------------- 5. orbital elements */
+function elementsFrom(rx, ry, vx, vy, mu){
+  var r = hypot(rx, ry), v2 = vx * vx + vy * vy, v = Math.sqrt(v2);
+  var h = rx * vy - ry * vx;
+  var eps = v2 / 2 - mu / r;
+  var rv = rx * vx + ry * vy;
+  var ex = ((v2 - mu / r) * rx - rv * vx) / mu;
+  var ey = ((v2 - mu / r) * ry - rv * vy) / mu;
+  var e = hypot(ex, ey);
+  var a = Math.abs(eps) > 1e-13 ? -mu / (2 * eps) : Infinity;
+  var rp = isFinite(a) ? a * (1 - e) : h * h / mu / 2;
+  var ra = (e < 1 && a > 0) ? a * (1 + e) : NaN;
+  var per = (e < 1 && a > 0) ? TAU * Math.sqrt(a * a * a / mu) : NaN;
+  var argp = e > 1e-9 ? Math.atan2(ey, ex) : 0;
+  var nu = Math.atan2(ry, rx) - argp;
+  while (nu < -Math.PI) nu += TAU;
+  while (nu > Math.PI) nu -= TAU;
+  return { r: r, v: v, h: h, eps: eps, a: a, e: e, rp: rp, ra: ra, T: per,
+           argp: argp, nu: nu, mu: mu, vr: rv / r,
+           vc: Math.sqrt(mu / r), vesc: Math.sqrt(2 * mu / r) };
+}
+function elementsOf(w, i, pi){
+  if (pi < 0 || pi === undefined || pi === i) return null;
+  var n = w.n;
+  return elementsFrom(w.y[i] - w.y[pi], w.y[n + i] - w.y[n + pi],
+                      w.y[2 * n + i] - w.y[2 * n + pi], w.y[3 * n + i] - w.y[3 * n + pi],
+                      P.G * (w.m[pi] + w.m[i]));
+}
+/* Laplace sphere of influence of body i around its own dominant attractor */
+function soiRadius(w, i){
+  var pi = dominantIndex(w, i);
+  if (pi < 0 || w.m[i] <= 0 || w.m[pi] <= 0) return 0;
+  var n = w.n;
+  var d = hypot(w.y[i] - w.y[pi], w.y[n + i] - w.y[n + pi]);
+  return d * Math.pow(w.m[i] / w.m[pi], 0.4);
+}
+
+/* ------------------------------------------------- 6. reference frames */
+/* A frame is: an origin (possibly moving) plus a rotation angle (possibly turning).
+   pos_frame = R(-θ)·(r − o)          vel_frame = R(-θ)·(v − ȯ) + ω·(y_f, −x_f)     */
+var FL = { ox: 0, oy: 0, ovx: 0, ovy: 0, ang: 0, cos: 1, sin: 0, omega: 0, name: 'Inertial' };
+
+function frameLabel(){
+  if (FR.mode === 'inertial') return 'Inertial (origin)';
+  if (FR.mode === 'bary') return 'Inertial (barycentre)';
+  if (FR.mode === 'body'){
+    var i = world.index[FR.center];
+    return 'Centred: ' + (i === undefined ? '?' : world.meta[i].name);
+  }
+  if (FR.mode === 'rot'){
+    var a = world.index[FR.rotA], b = world.index[FR.rotB];
+    return 'Rotating: ' + (a === undefined ? '?' : world.meta[a].name) + '–' +
+           (b === undefined ? '?' : world.meta[b].name);
+  }
+  return 'Inertial';
+}
+function computeFrameLive(w){
+  var n = w.n, i, a, b;
+  FL.ox = FL.oy = FL.ovx = FL.ovy = FL.ang = FL.omega = 0;
+  if (FR.mode === 'bary'){
+    var M = 0;
+    for (i = 0; i < n; i++){
+      if (!w.alive[i]) continue;
+      M += w.m[i];
+      FL.ox += w.m[i] * w.y[i];       FL.oy += w.m[i] * w.y[n + i];
+      FL.ovx += w.m[i] * w.y[2*n+i];  FL.ovy += w.m[i] * w.y[3*n+i];
+    }
+    if (M > 0){ FL.ox /= M; FL.oy /= M; FL.ovx /= M; FL.ovy /= M; }
+  } else if (FR.mode === 'body'){
+    i = w.index[FR.center];
+    if (i !== undefined && w.alive[i]){
+      FL.ox = w.y[i]; FL.oy = w.y[n + i]; FL.ovx = w.y[2*n+i]; FL.ovy = w.y[3*n+i];
+    }
+  } else if (FR.mode === 'rot'){
+    a = w.index[FR.rotA]; b = w.index[FR.rotB];
+    if (a !== undefined && b !== undefined && w.alive[a] && w.alive[b]){
+      var ma = w.m[a], mb = w.m[b], ms = ma + mb;
+      if (ms <= 0) ms = 1;
+      FL.ox = (ma * w.y[a] + mb * w.y[b]) / ms;
+      FL.oy = (ma * w.y[n+a] + mb * w.y[n+b]) / ms;
+      FL.ovx = (ma * w.y[2*n+a] + mb * w.y[2*n+b]) / ms;
+      FL.ovy = (ma * w.y[3*n+a] + mb * w.y[3*n+b]) / ms;
+      var dx = w.y[b] - w.y[a], dy = w.y[n+b] - w.y[n+a];
+      var dvx = w.y[2*n+b] - w.y[2*n+a], dvy = w.y[3*n+b] - w.y[3*n+a];
+      var d2 = dx * dx + dy * dy;
+      FL.ang = Math.atan2(dy, dx);
+      FL.omega = d2 > 1e-12 ? (dx * dvy - dy * dvx) / d2 : 0;
+    }
+  }
+  FL.cos = Math.cos(FL.ang); FL.sin = Math.sin(FL.ang);
+  FL.name = frameLabel();
+  return FL;
+}
+/* frame origin+rotation from a bare position snapshot (history / prediction) */
+function frameFromSnapshot(px, py, off, n, m, alive, out){
+  out.ox = out.oy = out.ang = 0; out.cos = 1; out.sin = 0;
+  var i;
+  if (FR.mode === 'bary'){
+    var M = 0;
+    for (i = 0; i < n; i++){
+      if (!alive[i]) continue;
+      M += m[i]; out.ox += m[i] * px[off + i]; out.oy += m[i] * py[off + i];
+    }
+    if (M > 0){ out.ox /= M; out.oy /= M; }
+  } else if (FR.mode === 'body'){
+    i = world.index[FR.center];
+    if (i !== undefined){ out.ox = px[off + i]; out.oy = py[off + i]; }
+  } else if (FR.mode === 'rot'){
+    var a = world.index[FR.rotA], b = world.index[FR.rotB];
+    if (a !== undefined && b !== undefined){
+      var ma = m[a], mb = m[b], ms = ma + mb; if (ms <= 0) ms = 1;
+      out.ox = (ma * px[off + a] + mb * px[off + b]) / ms;
+      out.oy = (ma * py[off + a] + mb * py[off + b]) / ms;
+      out.ang = Math.atan2(py[off + b] - py[off + a], px[off + b] - px[off + a]);
+    }
+  }
+  out.cos = Math.cos(out.ang); out.sin = Math.sin(out.ang);
+  return out;
+}
+function fpx(f, x, y){ var dx = x - f.ox, dy = y - f.oy; return dx * f.cos + dy * f.sin; }
+function fpy(f, x, y){ var dx = x - f.ox, dy = y - f.oy; return -dx * f.sin + dy * f.cos; }
+/* velocity into the live frame (needs the rotating-frame Coriolis term) */
+function frameVel(vx, vy, xf, yf){
+  var dvx = vx - FL.ovx, dvy = vy - FL.ovy;
+  var rx = dvx * FL.cos + dvy * FL.sin, ry = -dvx * FL.sin + dvy * FL.cos;
+  return { x: rx + FL.omega * yf, y: ry - FL.omega * xf };
+}
+/* inverse transforms (used when dragging a spacecraft in a moving frame) */
+function invPos(xf, yf){
+  return { x: xf * FL.cos - yf * FL.sin + FL.ox, y: xf * FL.sin + yf * FL.cos + FL.oy };
+}
+function invVel(vxf, vyf, xf, yf){
+  var ax = vxf - FL.omega * yf, ay = vyf + FL.omega * xf;
+  return { x: ax * FL.cos - ay * FL.sin + FL.ovx, y: ax * FL.sin + ay * FL.cos + FL.ovy };
+}
+
+/* --------------------------------------------------- 7. trajectory prediction */
+var pred = {
+  valid: false, n: 0, count: 0, stride: 1, dt: 0, steps: 0, truncated: false,
+  t: null, px: null, py: null, craft: -1, encounters: [], nodeSnaps: [],
+  crash: null, soiEvents: [], ms: 0, endT: 0
+};
+var predWorld = null;
+var predCtx = { nodes: nodes, live: false, hAdapt: 0, snapshots: [], bounceCooldown: 0 };
+var PRED_MAX_SAMPLES = 1400;
+
+function ensurePred(n, samples){
+  if (pred.px && pred.n === n && pred.px.length >= samples * n) return;
+  pred.n = n;
+  pred.t = new Float64Array(samples);
+  pred.px = new Float64Array(samples * n);
+  pred.py = new Float64Array(samples * n);
+}
+function runPrediction(force){
+  if (!world) return;
+  var t0 = performance.now();
+  if (!predWorld || predWorld.n !== world.n) predWorld = cloneWorld(world);
+  else copyInto(predWorld, world);
+  var w = predWorld, n = w.n;
+  var ci = selId !== null && world.index[selId] !== undefined ? world.index[selId] : -1;
+  if (ci >= 0 && world.meta[ci].type !== 'craft'){
+    var alt = -1;
+    for (var q = 0; q < n; q++) if (world.meta[q].type === 'craft' && world.alive[q]){ alt = q; break; }
+    if (alt >= 0 && !V.predictSelectedOnly) ci = alt;
+  }
+  pred.craft = ci;
+  var horizon = Math.max(1e-6, V.horizon);
+  var steps = Math.max(50, Math.round(V.predSteps));
+  var dtp = horizon / steps;
+  var stride = Math.max(1, Math.ceil(steps / PRED_MAX_SAMPLES));
+  var samples = Math.floor(steps / stride) + 2;
+  ensurePred(n, samples);
+  predCtx.nodes = nodes; predCtx.snapshots = []; predCtx.hAdapt = 0; predCtx.bounceCooldown = 0;
+  pred.encounters = []; pred.soiEvents = []; pred.crash = null; pred.truncated = false;
+  pred.dt = dtp; pred.steps = steps; pred.stride = stride;
+
+  var enc = [], i;
+  if (ci >= 0){
+    for (i = 0; i < n; i++){
+      if (i === ci || !w.alive[i]) continue;
+      enc.push({ j: i, d: Infinity, t: 0, x: 0, y: 0, bx: 0, by: 0, vrel: 0, rising: false });
+    }
+  }
+  var k = 0;
+  var rec = function(){
+    if (k >= samples) return;
+    pred.t[k] = w.t;
+    var off = k * n;
+    for (var b = 0; b < n; b++){ pred.px[off + b] = w.y[b]; pred.py[off + b] = w.y[n + b]; }
+    k++;
+  };
+  rec();
+  var lastDom = ci >= 0 ? dominantIndex(w, ci) : -1;
+  var budget = 55;
+  var savedStep = STEPCOUNT;
+  for (var s = 1; s <= steps; s++){
+    advance(w, dtp, predCtx);
+    if (ci >= 0){
+      if (!w.alive[ci]){
+        pred.crash = { t: w.t, x: w.y[ci], y: w.y[n + ci] };
+        rec(); break;
+      }
+      for (i = 0; i < enc.length; i++){
+        var e = enc[i], j = e.j;
+        if (!w.alive[j]) continue;
+        var dx = w.y[ci] - w.y[j], dy = w.y[n + ci] - w.y[n + j];
+        var d = Math.sqrt(dx * dx + dy * dy);
+        if (d < e.d){
+          e.d = d; e.t = w.t; e.x = w.y[ci]; e.y = w.y[n + ci]; e.bx = w.y[j]; e.by = w.y[n + j];
+          e.vrel = hypot(w.y[2*n+ci] - w.y[2*n+j], w.y[3*n+ci] - w.y[3*n+j]);
+        }
+      }
+      if ((s & 15) === 0){
+        var dom = dominantIndex(w, ci);
+        if (dom !== lastDom && dom >= 0 && lastDom >= 0){
+          pred.soiEvents.push({ t: w.t, x: w.y[ci], y: w.y[n + ci], from: lastDom, to: dom });
+          if (pred.soiEvents.length > 12) pred.soiEvents.shift();
+        }
+        lastDom = dom;
+      }
+    }
+    if (s % stride === 0) rec();
+    if ((s & 255) === 0 && performance.now() - t0 > budget){ pred.truncated = true; rec(); break; }
+  }
+  STEPCOUNT = savedStep;                      /* prediction work is reported separately */
+  pred.count = k;
+  pred.endT = w.t;
+  pred.nodeSnaps = predCtx.snapshots;
+  enc.sort(function(a, b){ return a.d - b.d; });
+  pred.encounters = enc.filter(function(e){ return isFinite(e.d); });
+  pred.valid = true;
+  pred.ms = performance.now() - t0;
+  predDirty = false; lastPredAt = performance.now(); lastPredSimT = world.t;
+}
+var predDirty = true, lastPredAt = 0, lastPredSimT = 0;
+function markPredDirty(){ predDirty = true; }
+/* interpolate the predicted position of body b at prediction-sample time tt */
+function predSampleAt(tt){
+  if (!pred.valid || pred.count < 2) return -1;
+  var lo = 0, hi = pred.count - 1;
+  if (tt <= pred.t[0]) return 0;
+  if (tt >= pred.t[hi]) return hi;
+  while (hi - lo > 1){
+    var mid = (lo + hi) >> 1;
+    if (pred.t[mid] <= tt) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+/* ------------------------------------------------ 8. history ring buffer */
+var hist = { cap: 2200, n: 0, len: 0, head: 0, t: null, px: null, py: null, lastT: -1e30 };
+function initHistory(n){
+  hist.n = n; hist.len = 0; hist.head = 0; hist.lastT = -1e30;
+  hist.t = new Float64Array(hist.cap);
+  hist.px = new Float64Array(hist.cap * n);
+  hist.py = new Float64Array(hist.cap * n);
+}
+function recordHistory(w){
+  var n = w.n, off = hist.head * n;
+  hist.t[hist.head] = w.t;
+  for (var i = 0; i < n; i++){ hist.px[off + i] = w.y[i]; hist.py[off + i] = w.y[n + i]; }
+  hist.head = (hist.head + 1) % hist.cap;
+  if (hist.len < hist.cap) hist.len++;
+  hist.lastT = w.t;
+}
+function histIndex(k){ return (hist.head - hist.len + k + hist.cap * 2) % hist.cap; }
+
+/* ------------------------------------------------------- 9. canvas / camera */
+var cv, g, W = 0, H = 0, DPR = 1;
+var cam = { x: 0, y: 0, scale: 1 };
+var VCX = 0, VCY = 0;                 /* centre of the *visible* canvas area */
+function sx(px){ return (px - cam.x) * cam.scale + VCX; }
+function sy(py){ return VCY - (py - cam.y) * cam.scale; }
+function ux(s){ return (s - VCX) / cam.scale + cam.x; }
+function uy(s){ return cam.y - (s - VCY) / cam.scale; }
+
+function resizeCanvas(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  var r = cv.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  VCX = W * 0.5; VCY = H * 0.5;
+  potCache.dirty = true;
+}
+function fitSystem(pad){
+  if (!world) return;
+  var n = world.n, f = computeFrameLive(world);
+  var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, any = false;
+  for (var i = 0; i < n; i++){
+    if (!world.alive[i]) continue;
+    var X = fpx(f, world.y[i], world.y[n + i]), Y = fpy(f, world.y[i], world.y[n + i]);
+    minx = Math.min(minx, X); maxx = Math.max(maxx, X);
+    miny = Math.min(miny, Y); maxy = Math.max(maxy, Y); any = true;
+  }
+  if (!any) return;
+  var cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
+  var w = Math.max(maxx - minx, 1e-6), h = Math.max(maxy - miny, 1e-6);
+  var m = pad === undefined ? 1.28 : pad;
+  cam.x = cx; cam.y = cy;
+  var aw = Math.max(80, W - insetR), ah = Math.max(80, H - insetB);
+  cam.scale = clamp(Math.min(aw / (w * m), ah / (h * m)), 1e-7, 1e7);
+  potCache.dirty = true;
+}
+function focusSelection(zoom){
+  if (!world || selId === null) return;
+  var i = world.index[selId]; if (i === undefined) return;
+  var f = computeFrameLive(world);
+  cam.x = fpx(f, world.y[i], world.y[world.n + i]);
+  cam.y = fpy(f, world.y[i], world.y[world.n + i]);
+  if (zoom){
+    var r = Math.max(world.rad[i] * 6, 12);
+    cam.scale = clamp(Math.min(Math.max(80, W - insetR), Math.max(80, H - insetB)) / (r * 4), 1e-7, 1e7);
+  }
+  potCache.dirty = true;
+}
+function zoomAt(sxp, syp, factor){
+  var wx = ux(sxp), wy = uy(syp);
+  cam.scale = clamp(cam.scale * factor, 1e-7, 1e7);
+  cam.x = wx - (sxp - VCX) / cam.scale;
+  cam.y = wy + (syp - VCY) / cam.scale;
+  potCache.dirty = true;
+}
+
+/* ------------------------------------------------------- 10. background */
+var starTile = null, STAR_TILE = 512;
+function buildStars(){
+  starTile = document.createElement('canvas');
+  starTile.width = STAR_TILE; starTile.height = STAR_TILE;
+  var c = starTile.getContext('2d');
+  var rnd = mulberry32(20260908);
+  c.fillStyle = 'rgba(0,0,0,0)'; c.fillRect(0, 0, STAR_TILE, STAR_TILE);
+  for (var i = 0; i < 340; i++){
+    var x = rnd() * STAR_TILE, y = rnd() * STAR_TILE;
+    var a = 0.10 + rnd() * 0.62, s = rnd();
+    var sz = s > 0.985 ? 2 : 1;
+    var tint = rnd();
+    var col = tint > 0.86 ? '190,215,255' : tint > 0.72 ? '255,225,190' : '225,235,245';
+    c.fillStyle = 'rgba(' + col + ',' + a.toFixed(3) + ')';
+    c.fillRect(Math.round(x), Math.round(y), sz, sz);
+  }
+  /* a couple of faint nebula smudges for depth */
+  for (var k = 0; k < 3; k++){
+    var gx = rnd() * STAR_TILE, gy = rnd() * STAR_TILE, gr = 90 + rnd() * 130;
+    var grd = c.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    var hue = k === 0 ? '40,90,140' : k === 1 ? '90,60,140' : '30,110,120';
+    grd.addColorStop(0, 'rgba(' + hue + ',0.055)');
+    grd.addColorStop(1, 'rgba(' + hue + ',0)');
+    c.fillStyle = grd; c.beginPath(); c.arc(gx, gy, gr, 0, TAU); c.fill();
+  }
+}
+function drawBackground(){
+  g.fillStyle = '#04060b';
+  g.fillRect(0, 0, W, H);
+  if (!V.stars) return;
+  if (!starTile) buildStars();
+  var par = 0.06;
+  var ox = -(cam.x * cam.scale * par) % STAR_TILE, oy = (cam.y * cam.scale * par) % STAR_TILE;
+  if (ox > 0) ox -= STAR_TILE;
+  if (oy > 0) oy -= STAR_TILE;
+  for (var x = ox; x < W; x += STAR_TILE)
+    for (var y = oy; y < H; y += STAR_TILE)
+      g.drawImage(starTile, Math.round(x), Math.round(y));
+}
+function niceStep(target){
+  var e = Math.pow(10, Math.floor(Math.log10(target)));
+  var m = target / e;
+  var s = m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10;
+  return s * e;
+}
+function drawGrid(){
+  if (!V.grid) return;
+  var step = niceStep(140 / cam.scale);
+  var px = step * cam.scale;
+  if (px < 8) return;
+  var x0 = Math.floor(ux(0) / step) * step, x1 = ux(W);
+  var y0 = Math.floor(uy(H) / step) * step, y1 = uy(0);
+  g.save();
+  g.lineWidth = 1;
+  g.strokeStyle = 'rgba(46,72,102,0.20)';
+  g.beginPath();
+  for (var x = x0; x <= x1; x += step){
+    var X = Math.round(sx(x)) + 0.5;
+    g.moveTo(X, 0); g.lineTo(X, H);
+  }
+  for (var y = y0; y <= y1; y += step){
+    var Y = Math.round(sy(y)) + 0.5;
+    g.moveTo(0, Y); g.lineTo(W, Y);
+  }
+  g.stroke();
+  /* axes through the frame origin */
+  g.strokeStyle = 'rgba(63,224,208,0.16)';
+  g.beginPath();
+  var ax = Math.round(sx(0)) + 0.5, ay = Math.round(sy(0)) + 0.5;
+  if (ax > -1 && ax < W + 1){ g.moveTo(ax, 0); g.lineTo(ax, H); }
+  if (ay > -1 && ay < H + 1){ g.moveTo(0, ay); g.lineTo(W, ay); }
+  g.stroke();
+  g.restore();
+  gridStep = step;
+}
+var gridStep = 1;
+function drawScaleBar(){
+  var target = Math.min(160, W * 0.24);
+  var step = niceStep(target / cam.scale);
+  var px = step * cam.scale;
+  var x = 12, y = H - 16;
+  g.save();
+  g.strokeStyle = 'rgba(160,190,215,0.55)'; g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(x, y - 4); g.lineTo(x, y); g.lineTo(x + px, y); g.lineTo(x + px, y - 4);
+  g.stroke();
+  g.fillStyle = 'rgba(160,190,215,0.75)';
+  g.font = '10px ' + MONO;
+  g.textAlign = 'left'; g.textBaseline = 'bottom';
+  g.fillText(num(step, 3) + ' LU', x + 3, y - 3);
+  g.restore();
+}
+var MONO = 'ui-monospace,Menlo,Consolas,monospace';
+
+/* ------------------------------------------------ 11. potential overlay */
+var potCache = { cv: null, ctx: null, img: null, cw: 0, ch: 0, dirty: true, at: 0, cell: 7 };
+function potColor(u, out, o){
+  var stops = POT_STOPS, i;
+  u = clamp(u, 0, 1);
+  for (i = 1; i < stops.length; i++) if (u <= stops[i][0]) break;
+  if (i >= stops.length) i = stops.length - 1;
+  var a = stops[i - 1], b = stops[i];
+  var f = (u - a[0]) / Math.max(1e-9, b[0] - a[0]);
+  var band = Math.abs((u * 24) % 1 - 0.5);
+  var mul = 0.80 + 0.42 * band;
+  out[o]     = clamp((a[1] + (b[1] - a[1]) * f) * mul, 0, 255);
+  out[o + 1] = clamp((a[2] + (b[2] - a[2]) * f) * mul, 0, 255);
+  out[o + 2] = clamp((a[3] + (b[3] - a[3]) * f) * mul, 0, 255);
+  out[o + 3] = 200;
+}
+var POT_STOPS = [
+  [0.00, 4, 8, 22], [0.30, 12, 46, 84], [0.55, 16, 108, 116],
+  [0.75, 66, 168, 122], [0.90, 190, 186, 96], [1.00, 255, 226, 168]
+];
+function drawPotential(){
+  if (!V.potential) return;
+  var cell = potCache.cell;
+  var cw = Math.max(2, Math.ceil(W / cell)), ch = Math.max(2, Math.ceil(H / cell));
+  var now = performance.now();
+  if (!potCache.cv){
+    potCache.cv = document.createElement('canvas');
+    potCache.ctx = potCache.cv.getContext('2d');
+  }
+  if (potCache.cw !== cw || potCache.ch !== ch){
+    potCache.cv.width = cw; potCache.cv.height = ch;
+    potCache.img = potCache.ctx.createImageData(cw, ch);
+    potCache.cw = cw; potCache.ch = ch; potCache.dirty = true;
+  }
+  if (potCache.dirty || (!T.paused && now - potCache.at > 110)){
+    var img = potCache.img, d = img.data, n = world.n, i, j;
+    var vals = potScratch(cw * ch);
+    var mn = Infinity, mx = -Infinity;
+    var xs = potXs(cw), ys = potYs(ch);
+    for (i = 0; i < cw; i++){
+      var fxx = ux(i * cell + cell * 0.5);
+      xs[i] = fxx;
+    }
+    for (j = 0; j < ch; j++) ys[j] = uy(j * cell + cell * 0.5);
+    for (j = 0; j < ch; j++){
+      for (i = 0; i < cw; i++){
+        var p = invPos(xs[i], ys[j]);
+        var phi = 0;
+        for (var b = 0; b < n; b++){
+          if (!world.alive[b] || world.m[b] <= 0) continue;
+          var dx = p.x - world.y[b], dy = p.y - world.y[n + b];
+          var r = Math.sqrt(dx * dx + dy * dy + world.rad[b] * world.rad[b] * 0.25 + 1e-9);
+          phi -= P.G * world.m[b] / r;
+        }
+        var lv = Math.log10(Math.max(1e-12, -phi));
+        vals[j * cw + i] = lv;
+        if (lv < mn) mn = lv; if (lv > mx) mx = lv;
+      }
+    }
+    var span = Math.max(1e-6, mx - mn);
+    for (i = 0; i < cw * ch; i++) potColor((vals[i] - mn) / span, d, i * 4);
+    potCache.ctx.putImageData(img, 0, 0);
+    potCache.dirty = false; potCache.at = now;
+    potCache.range = [mn, mx];
+  }
+  g.save();
+  g.globalAlpha = 0.62;
+  g.imageSmoothingEnabled = true;
+  g.drawImage(potCache.cv, 0, 0, potCache.cw, potCache.ch, 0, 0, potCache.cw * potCache.cell, potCache.ch * potCache.cell);
+  g.restore();
+}
+var _potV = null, _potX = null, _potY = null;
+function potScratch(n){ if (!_potV || _potV.length < n) _potV = new Float64Array(n); return _potV; }
+function potXs(n){ if (!_potX || _potX.length < n) _potX = new Float64Array(n); return _potX; }
+function potYs(n){ if (!_potY || _potY.length < n) _potY = new Float64Array(n); return _potY; }
+
+/* ----------------------------------------------------- 12. colour helpers */
+var _cc = {};
+function rgbOf(hex){
+  if (_cc[hex]) return _cc[hex];
+  var h = hex.replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var v = parseInt(h, 16);
+  return (_cc[hex] = [(v >> 16) & 255, (v >> 8) & 255, v & 255]);
+}
+function rgba(hex, a){
+  var c = rgbOf(hex);
+  return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+}
+function shade(hex, f, a){
+  var c = rgbOf(hex);
+  var m = function(x){ return Math.round(clamp(f > 1 ? x + (255 - x) * (f - 1) : x * f, 0, 255)); };
+  return 'rgba(' + m(c[0]) + ',' + m(c[1]) + ',' + m(c[2]) + ',' + (a === undefined ? 1 : a) + ')';
+}
+function clampCoord(v){ return v < -30000 ? -30000 : v > 30000 ? 30000 : v; }
+
+/* --------------------------------------------------------- 13. trails */
+var TF = { ox: null, oy: null, c: null, s: null, cap: 0 };
+function ensureTF(n){
+  if (TF.cap >= n) return;
+  TF.cap = n; TF.ox = new Float64Array(n); TF.oy = new Float64Array(n);
+  TF.c = new Float64Array(n); TF.s = new Float64Array(n);
+}
+var _fs = { ox: 0, oy: 0, ang: 0, cos: 1, sin: 0 };
+function drawTrails(){
+  if (!V.trails || hist.len < 3) return;
+  var n = hist.n, k, k0 = 0;
+  var cutoff = world.t - V.trailSpan;
+  for (k0 = 0; k0 < hist.len; k0++) if (hist.t[histIndex(k0)] >= cutoff) break;
+  var cnt = hist.len - k0;
+  if (cnt < 3) return;
+  ensureTF(cnt);
+  var identity = (FR.mode === 'inertial');
+  for (k = 0; k < cnt; k++){
+    var idx = histIndex(k0 + k);
+    if (identity){ TF.ox[k] = 0; TF.oy[k] = 0; TF.c[k] = 1; TF.s[k] = 0; }
+    else {
+      frameFromSnapshot(hist.px, hist.py, idx * n, n, world.m, world.alive, _fs);
+      TF.ox[k] = _fs.ox; TF.oy[k] = _fs.oy; TF.c[k] = _fs.cos; TF.s[k] = _fs.sin;
+    }
+  }
+  var NB = 9, per = Math.max(1, Math.floor(cnt / NB));
+  g.save();
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  for (var b = 0; b < n; b++){
+    var mt = world.meta[b];
+    var col = mt.color;
+    var lw = (mt.type === 'craft' ? V.trailWidth + 0.35 : V.trailWidth);
+    if (selId === mt.id) lw += 0.7;
+    g.lineWidth = lw;
+    for (var blk = 0; blk < NB; blk++){
+      var s0 = blk * per, s1 = (blk === NB - 1) ? cnt - 1 : Math.min(cnt - 1, (blk + 1) * per);
+      if (s1 - s0 < 1) continue;
+      var al = 0.055 + 0.85 * ((blk + 1) / NB);
+      if (mt.type !== 'craft' && selId !== mt.id) al *= 0.62;
+      g.strokeStyle = rgba(col, al);
+      g.beginPath();
+      var started = false, lastX = 0, lastY = 0;
+      for (k = s0; k <= s1; k++){
+        var idx2 = histIndex(k0 + k) * n + b;
+        var dx = hist.px[idx2] - TF.ox[k], dy = hist.py[idx2] - TF.oy[k];
+        var fx = dx * TF.c[k] + dy * TF.s[k], fy = -dx * TF.s[k] + dy * TF.c[k];
+        var X = clampCoord(sx(fx)), Y = clampCoord(sy(fy));
+        if (!started){ g.moveTo(X, Y); started = true; lastX = X; lastY = Y; }
+        else if (Math.abs(X - lastX) + Math.abs(Y - lastY) > 0.7){ g.lineTo(X, Y); lastX = X; lastY = Y; }
+      }
+      g.stroke();
+    }
+  }
+  g.restore();
+}
+
+/* --------------------------------------------- 14. predicted trajectory */
+var nodeScreen = [];
+function drawPrediction(){
+  if (!V.predict || !pred.valid || pred.count < 2) return;
+  var n = pred.n, cnt = pred.count, k;
+  ensureTF(cnt);
+  var identity = (FR.mode === 'inertial');
+  for (k = 0; k < cnt; k++){
+    if (identity){ TF.ox[k] = 0; TF.oy[k] = 0; TF.c[k] = 1; TF.s[k] = 0; }
+    else {
+      frameFromSnapshot(pred.px, pred.py, k * n, n, world.m, world.alive, _fs);
+      TF.ox[k] = _fs.ox; TF.oy[k] = _fs.oy; TF.c[k] = _fs.cos; TF.s[k] = _fs.sin;
+    }
+  }
+  var proj = function(k, b){
+    var i = k * n + b;
+    var dx = pred.px[i] - TF.ox[k], dy = pred.py[i] - TF.oy[k];
+    return [clampCoord(sx(dx * TF.c[k] + dy * TF.s[k])), clampCoord(sy(-dx * TF.s[k] + dy * TF.c[k]))];
+  };
+  nodeScreen.length = 0;
+  g.save();
+  g.lineJoin = 'round';
+  /* faint predicted paths for the massive bodies */
+  if (V.predBodies){
+    g.lineWidth = 1;
+    for (var b = 0; b < n; b++){
+      if (b === pred.craft || !world.alive[b] || world.meta[b].type === 'craft') continue;
+      g.strokeStyle = rgba(world.meta[b].color, 0.16);
+      g.setLineDash([2, 4]);
+      g.beginPath();
+      for (k = 0; k < cnt; k++){ var p = proj(k, b); if (k === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]); }
+      g.stroke();
+      g.setLineDash([]);
+    }
+  }
+  /* the spacecraft prediction itself */
+  if (pred.craft >= 0){
+    g.setLineDash([]);
+    g.lineWidth = 2.1;
+    g.strokeStyle = 'rgba(185,139,255,0.30)';
+    g.beginPath();
+    for (k = 0; k < cnt; k++){ var q = proj(k, pred.craft); if (k === 0) g.moveTo(q[0], q[1]); else g.lineTo(q[0], q[1]); }
+    g.stroke();
+    g.lineWidth = 1.05;
+    g.strokeStyle = 'rgba(214,178,255,0.95)';
+    g.stroke();
+    /* progress ticks every ~1/8 of the horizon */
+    g.fillStyle = 'rgba(185,139,255,0.5)';
+    var tickEvery = Math.max(1, Math.floor(cnt / 8));
+    for (k = tickEvery; k < cnt; k += tickEvery){
+      var tp = proj(k, pred.craft);
+      g.fillRect(tp[0] - 1.2, tp[1] - 1.2, 2.4, 2.4);
+    }
+    /* SOI transitions */
+    for (var e = 0; e < pred.soiEvents.length; e++){
+      var ev = pred.soiEvents[e];
+      var kk = predSampleAt(ev.t);
+      if (kk < 0) continue;
+      var sp = proj(kk, pred.craft);
+      g.strokeStyle = 'rgba(255,180,84,0.85)'; g.lineWidth = 1;
+      g.beginPath(); g.arc(sp[0], sp[1], 5, 0, TAU); g.stroke();
+      if (V.labels){
+        g.fillStyle = 'rgba(255,180,84,0.8)'; g.font = '9px ' + MONO; g.textAlign = 'left';
+        g.fillText('SOI→' + world.meta[ev.to].name, sp[0] + 7, sp[1] - 4);
+      }
+    }
+    /* impact marker */
+    if (pred.crash){
+      var ck = pred.count - 1, cp = proj(ck, pred.craft);
+      g.strokeStyle = 'rgba(255,95,109,0.95)'; g.lineWidth = 1.6;
+      g.beginPath();
+      g.moveTo(cp[0] - 6, cp[1] - 6); g.lineTo(cp[0] + 6, cp[1] + 6);
+      g.moveTo(cp[0] + 6, cp[1] - 6); g.lineTo(cp[0] - 6, cp[1] + 6);
+      g.stroke();
+      if (V.labels){
+        g.fillStyle = 'rgba(255,95,109,0.9)'; g.font = '9.5px ' + MONO; g.textAlign = 'left';
+        g.fillText('IMPACT ' + fmtDur(pred.crash.t - world.t, T.secondsPerTU), cp[0] + 9, cp[1] + 3);
+      }
+    }
+    /* closest approach markers */
+    if (V.encounters){
+      var encList = encountersOfInterest();
+      for (var i2 = 0; i2 < Math.min(2, encList.length); i2++){
+        var en = encList[i2];
+        if (!isFinite(en.d)) continue;
+        var kk2 = predSampleAt(en.t);
+        var ep = proj(kk2, pred.craft), bp = proj(kk2, en.j);
+        g.strokeStyle = i2 === 0 ? 'rgba(92,224,138,0.9)' : 'rgba(92,224,138,0.4)';
+        g.lineWidth = 1;
+        g.setLineDash([3, 3]);
+        g.beginPath(); g.moveTo(ep[0], ep[1]); g.lineTo(bp[0], bp[1]); g.stroke();
+        g.setLineDash([]);
+        g.beginPath(); g.arc(ep[0], ep[1], 3.4, 0, TAU); g.stroke();
+        if (V.labels && i2 === 0){
+          g.fillStyle = 'rgba(92,224,138,0.85)'; g.font = '9px ' + MONO; g.textAlign = 'left';
+          g.fillText('CA ' + num(en.d, 3) + ' · ' + fmtLead(en.t - world.t, T.secondsPerTU),
+                     ep[0] + 6, ep[1] + 10);
+        }
+      }
+    }
+    /* maneuver node markers */
+    if (V.nodeMarks){
+      for (var q2 = 0; q2 < nodes.length; q2++){
+        var nd = nodes[q2];
+        if (nd.t < world.t) continue;
+        var ki = predSampleAt(nd.t);
+        if (ki < 0) continue;
+        var np = proj(ki, pred.craft);
+        nodeScreen.push({ id: nd.id, x: np[0], y: np[1] });
+        var isSel = selNode === nd.id;
+        var R = isSel ? 8.5 : 6.5;
+        g.strokeStyle = isSel ? 'rgba(214,178,255,1)' : 'rgba(185,139,255,0.85)';
+        g.fillStyle = 'rgba(20,12,34,0.85)';
+        g.lineWidth = isSel ? 2 : 1.3;
+        g.beginPath(); g.arc(np[0], np[1], R, 0, TAU); g.fill(); g.stroke();
+        g.beginPath();
+        g.moveTo(np[0] - R * 0.5, np[1]); g.lineTo(np[0] + R * 0.5, np[1]);
+        g.moveTo(np[0], np[1] - R * 0.5); g.lineTo(np[0], np[1] + R * 0.5);
+        g.stroke();
+        if (V.labels){
+          g.fillStyle = isSel ? 'rgba(214,178,255,1)' : 'rgba(185,139,255,0.8)';
+          g.font = '9.5px ' + MONO; g.textAlign = 'left'; g.textBaseline = 'middle';
+          g.fillText('#' + nd.id + '  Δv ' + num(nodeDv(nd), 3), np[0] + R + 4, np[1] - 1);
+        }
+      }
+    }
+  }
+  g.restore();
+}
+
+/* ------------------------------------------- 15. conics, apsides, SOI */
+function conicPoints(el, primX, primY, out){
+  var pts = out || [];
+  pts.length = 0;
+  var ca = Math.cos(el.argp), sa = Math.sin(el.argp), i, xp, yp;
+  if (el.e < 1 && isFinite(el.a) && el.a > 0){
+    var bb = el.a * Math.sqrt(Math.max(0, 1 - el.e * el.e));
+    var N = 180;
+    for (i = 0; i <= N; i++){
+      var E = i / N * TAU;
+      xp = el.a * (Math.cos(E) - el.e); yp = bb * Math.sin(E);
+      pts.push(primX + xp * ca - yp * sa, primY + xp * sa + yp * ca);
+    }
+  } else if (el.e > 1 && el.a < 0){
+    var aa = -el.a, bh = aa * Math.sqrt(Math.max(0, el.e * el.e - 1));
+    var rmax = Math.max(el.r * 3, aa * 6);
+    var chMax = clamp((1 + rmax / aa) / el.e, 1.0001, 60);
+    var Hm = Math.acosh(chMax);
+    var N2 = 150;
+    for (i = 0; i <= N2; i++){
+      var Hh = -Hm + 2 * Hm * i / N2;
+      xp = el.a * (Math.cosh(Hh) - el.e); yp = -el.a * Math.sqrt(Math.max(0, el.e * el.e - 1)) * Math.sinh(Hh);
+      pts.push(primX + xp * ca - yp * sa, primY + xp * sa + yp * ca);
+    }
+  }
+  return pts;
+}
+var _cpts = [];
+function drawGuides(){
+  if (!V.guides || !world) return;
+  var n = world.n, f = FL;
+  g.save();
+  for (var i = 0; i < n; i++){
+    if (!world.alive[i]) continue;
+    var mt = world.meta[i];
+    var isSel = (selId === mt.id);
+    if (!isSel && mt.type === 'star') continue;
+    var pi = dominantIndex(world, i);
+    if (pi < 0) continue;
+    var el = elementsOf(world, i, pi);
+    if (!el || !isFinite(el.a) || el.e > 8) continue;
+    var pts = conicPoints(el, world.y[pi], world.y[n + pi], _cpts);
+    if (pts.length < 4) continue;
+    g.lineWidth = isSel ? 1.35 : 1;
+    g.strokeStyle = rgba(mt.color, isSel ? 0.62 : 0.20);
+    g.setLineDash(isSel ? [] : [4, 5]);
+    g.beginPath();
+    for (var k = 0; k < pts.length; k += 2){
+      var X = clampCoord(sx(fpx(f, pts[k], pts[k + 1]))), Y = clampCoord(sy(fpy(f, pts[k], pts[k + 1])));
+      if (k === 0) g.moveTo(X, Y); else g.lineTo(X, Y);
+    }
+    g.stroke();
+    g.setLineDash([]);
+    if (V.apsides && isSel && el.e < 1 && isFinite(el.a) && el.a > 0){
+      var ca = Math.cos(el.argp), sa = Math.sin(el.argp);
+      var mark = function(rr, lbl, col, shown){
+        var xp = rr * ca, yp = rr * sa;
+        var wx = world.y[pi] + xp, wy = world.y[n + pi] + yp;
+        var X2 = sx(fpx(f, wx, wy)), Y2 = sy(fpy(f, wx, wy));
+        g.strokeStyle = col; g.lineWidth = 1.2;
+        g.beginPath(); g.arc(X2, Y2, 3.2, 0, TAU); g.stroke();
+        if (V.labels){
+          g.fillStyle = col; g.font = '9px ' + MONO; g.textAlign = 'center'; g.textBaseline = 'bottom';
+          g.fillText(lbl + ' ' + num(shown === undefined ? rr : shown, 4), X2, Y2 - 5);
+        }
+      };
+      mark(el.rp, 'Pe', 'rgba(255,180,84,0.85)', el.rp);
+      mark(-el.ra, 'Ap', 'rgba(90,169,255,0.85)', el.ra);
+    }
+  }
+  g.restore();
+}
+function drawSOI(){
+  if (!V.soi || !world) return;
+  var n = world.n, f = FL;
+  g.save();
+  g.setLineDash([5, 6]);
+  g.lineWidth = 1;
+  for (var i = 0; i < n; i++){
+    if (!world.alive[i] || world.meta[i].type === 'craft' || world.m[i] <= 0) continue;
+    var r = soiRadius(world, i);
+    if (!(r > 0)) continue;
+    var R = r * cam.scale;
+    if (R < 6 || R > 40000) continue;
+    var X = sx(fpx(f, world.y[i], world.y[n + i])), Y = sy(fpy(f, world.y[i], world.y[n + i]));
+    g.strokeStyle = rgba(world.meta[i].color, 0.30);
+    g.beginPath(); g.arc(X, Y, R, 0, TAU); g.stroke();
+    if (V.labels && R > 40){
+      g.fillStyle = rgba(world.meta[i].color, 0.42);
+      g.font = '9px ' + MONO; g.textAlign = 'center'; g.textBaseline = 'top';
+      g.fillText('SOI ' + num(r, 3), X, Y + R + 3);
+    }
+  }
+  g.setLineDash([]);
+  g.restore();
+}
+
+/* ------------------------------------------------- 16. bodies & vectors */
+var scnVecRef = 1, scnAccRef = 1;
+function vecPxScale(){ return V.vecScale * 70 / Math.max(1e-9, scnVecRef); }
+function accPxScale(){ return V.vecScale * 70 / Math.max(1e-12, scnAccRef); }
+function arrow(x0, y0, x1, y1, color, w, head){
+  var dx = x1 - x0, dy = y1 - y0, L = hypot(dx, dy);
+  if (L < 0.5) return;
+  g.strokeStyle = color; g.lineWidth = w; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+  var an = Math.atan2(dy, dx);
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(x1, y1);
+  g.lineTo(x1 - head * Math.cos(an - 0.4), y1 - head * Math.sin(an - 0.4));
+  g.lineTo(x1 - head * Math.cos(an + 0.4), y1 - head * Math.sin(an + 0.4));
+  g.closePath(); g.fill();
+}
+var bodyScreen = [];
+function drawBodies(){
+  var n = world.n, f = FL, i;
+  var li = -1, bm = -1;
+  for (i = 0; i < n; i++) if (world.alive[i] && world.m[i] > bm){ bm = world.m[i]; li = i; }
+  bodyScreen.length = 0;
+  g.save();
+  for (i = 0; i < n; i++){
+    if (!world.alive[i]) continue;
+    var mt = world.meta[i];
+    var fx = fpx(f, world.y[i], world.y[n + i]), fy = fpy(f, world.y[i], world.y[n + i]);
+    var X = sx(fx), Y = sy(fy);
+    if (X < -400 || X > W + 400 || Y < -400 || Y > H + 400){
+      bodyScreen.push({ i: i, X: X, Y: Y, r: 0, off: true });
+      continue;
+    }
+    var isSel = (selId === mt.id);
+    var rr = world.rad[i] * cam.scale * V.bodyScale;
+    var minR = mt.type === 'craft' ? 0 : mt.type === 'star' ? 2.6 : 2.0;
+    var r = Math.max(rr, minR);
+    bodyScreen.push({ i: i, X: X, Y: Y, r: r, off: false });
+    if (mt.type === 'star'){
+      var gl = g.createRadialGradient(X, Y, 0, X, Y, Math.max(r * 7, 26));
+      gl.addColorStop(0, shade(mt.color, 1.0, 0.55));
+      gl.addColorStop(0.18, shade(mt.color, 0.9, 0.20));
+      gl.addColorStop(1, shade(mt.color, 0.7, 0));
+      g.fillStyle = gl;
+      g.beginPath(); g.arc(X, Y, Math.max(r * 7, 26), 0, TAU); g.fill();
+      var core = g.createRadialGradient(X - r * 0.25, Y - r * 0.25, r * 0.05, X, Y, r);
+      core.addColorStop(0, '#fffdf2');
+      core.addColorStop(0.55, shade(mt.color, 1.25));
+      core.addColorStop(1, shade(mt.color, 0.85));
+      g.fillStyle = core;
+      g.beginPath(); g.arc(X, Y, r, 0, TAU); g.fill();
+    } else if (mt.type === 'craft'){
+      var vx0 = world.y[2 * n + i], vy0 = world.y[3 * n + i];
+      var vf = frameVel(vx0, vy0, fx, fy);
+      var an = Math.atan2(-vf.y, vf.x);
+      var sc = 5.4;
+      g.save();
+      g.translate(X, Y); g.rotate(an);
+      g.fillStyle = shade(mt.color, 1.1, 0.95);
+      g.beginPath();
+      g.moveTo(sc * 1.5, 0); g.lineTo(-sc * 0.9, sc * 0.85);
+      g.lineTo(-sc * 0.4, 0); g.lineTo(-sc * 0.9, -sc * 0.85);
+      g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(4,8,14,0.9)'; g.lineWidth = 0.8; g.stroke();
+      g.restore();
+      if (rr > 3){ g.strokeStyle = rgba(mt.color, 0.5); g.lineWidth = 1;
+                   g.beginPath(); g.arc(X, Y, rr, 0, TAU); g.stroke(); }
+    } else {
+      var lx = 0, ly = -1;
+      if (li >= 0 && li !== i){
+        var dx = world.y[li] - world.y[i], dy = world.y[n + li] - world.y[n + i], dl = hypot(dx, dy);
+        if (dl > 1e-9){
+          var lfx = fpx(f, world.y[li], world.y[n + li]) - fx, lfy = fpy(f, world.y[li], world.y[n + li]) - fy;
+          var ll = hypot(lfx, lfy);
+          if (ll > 1e-9){ lx = lfx / ll; ly = -lfy / ll; }
+        }
+      }
+      var sp = g.createRadialGradient(X + lx * r * 0.42, Y + ly * r * 0.42, r * 0.08, X, Y, r * 1.02);
+      sp.addColorStop(0, shade(mt.color, 1.42));
+      sp.addColorStop(0.45, shade(mt.color, 1.0));
+      sp.addColorStop(1, shade(mt.color, 0.30));
+      g.fillStyle = sp;
+      g.beginPath(); g.arc(X, Y, r, 0, TAU); g.fill();
+      if (r > 3){
+        g.strokeStyle = shade(mt.color, 1.5, 0.35); g.lineWidth = 0.8;
+        g.beginPath(); g.arc(X, Y, r, 0, TAU); g.stroke();
+      }
+      if (mt.ring && r > 4){
+        g.save(); g.translate(X, Y); g.scale(1, 0.34);
+        g.strokeStyle = shade(mt.color, 1.3, 0.45); g.lineWidth = Math.max(1, r * 0.22);
+        g.beginPath(); g.arc(0, 0, r * 1.9, 0, TAU); g.stroke();
+        g.restore();
+      }
+    }
+    if (isSel){
+      var selR = Math.max(r + 7, 11);
+      g.strokeStyle = 'rgba(63,224,208,0.95)'; g.lineWidth = 1.2;
+      g.setLineDash([3, 4]);
+      g.beginPath(); g.arc(X, Y, selR, 0, TAU); g.stroke();
+      g.setLineDash([]);
+      g.beginPath();
+      var t2 = selR + 4;
+      g.moveTo(X - t2, Y); g.lineTo(X - t2 + 4, Y);
+      g.moveTo(X + t2, Y); g.lineTo(X + t2 - 4, Y);
+      g.moveTo(X, Y - t2); g.lineTo(X, Y - t2 + 4);
+      g.moveTo(X, Y + t2); g.lineTo(X, Y + t2 - 4);
+      g.stroke();
+    }
+    if (V.labels){
+      g.font = (isSel ? '10.5px ' : '10px ') + MONO;
+      g.textAlign = 'left'; g.textBaseline = 'middle';
+      g.fillStyle = isSel ? 'rgba(63,224,208,0.98)' : rgba(mt.color, 0.72);
+      g.fillText(mt.name, X + Math.max(r, 6) + 5, Y - Math.max(r, 6) - 3);
+    }
+  }
+  g.restore();
+}
+function drawVectors(){
+  if (!world) return;
+  var n = world.n, f = FL, vs = vecPxScale(), as = accPxScale();
+  if (!world.aValid){ accelWorld(world, world.a); world.aValid = true; }
+  g.save();
+  for (var i = 0; i < n; i++){
+    if (!world.alive[i]) continue;
+    var mt = world.meta[i];
+    var isSel = (selId === mt.id);
+    var isCraft = mt.type === 'craft';
+    if (!isSel && !isCraft && !V.vectorsAll) continue;
+    var fx = fpx(f, world.y[i], world.y[n + i]), fy = fpy(f, world.y[i], world.y[n + i]);
+    var X = sx(fx), Y = sy(fy);
+    if (X < -200 || X > W + 200 || Y < -200 || Y > H + 200) continue;
+    if (V.vectors){
+      var vf = frameVel(world.y[2 * n + i], world.y[3 * n + i], fx, fy);
+      var L = hypot(vf.x, vf.y) * vs;
+      if (L > 2){
+        var cl = Math.min(L, 460) / L;
+        arrow(X, Y, X + vf.x * vs * cl, Y - vf.y * vs * cl,
+              isSel ? 'rgba(92,224,138,0.95)' : rgba(mt.color, 0.5), isSel ? 1.7 : 1.1, isSel ? 7 : 5);
+      }
+    }
+    if (V.accelVec){
+      var ax = world.a[2 * i], ay = world.a[2 * i + 1];
+      var rx = ax * f.cos + ay * f.sin, ry = -ax * f.sin + ay * f.cos;
+      var La = hypot(rx, ry) * as;
+      if (La > 2){
+        var cl2 = Math.min(La, 300) / La;
+        arrow(X, Y, X + rx * as * cl2, Y - ry * as * cl2,
+              isSel ? 'rgba(255,180,84,0.9)' : 'rgba(255,180,84,0.4)', isSel ? 1.5 : 1, isSel ? 6 : 4);
+      }
+    }
+  }
+  g.restore();
+}
+/* drag handles for editing a paused spacecraft */
+function craftHandles(){
+  if (!T.paused || selId === null || !world) return null;
+  var i = world.index[selId];
+  if (i === undefined || !world.alive[i] || world.meta[i].type !== 'craft') return null;
+  var n = world.n, f = FL;
+  var fx = fpx(f, world.y[i], world.y[n + i]), fy = fpy(f, world.y[i], world.y[n + i]);
+  var vf = frameVel(world.y[2 * n + i], world.y[3 * n + i], fx, fy);
+  var vs = vecPxScale();
+  var X = sx(fx), Y = sy(fy);
+  return { i: i, X: X, Y: Y, TX: X + vf.x * vs, TY: Y - vf.y * vs, fx: fx, fy: fy, vs: vs, vf: vf };
+}
+function drawHandles(){
+  var h = craftHandles();
+  if (!h) return;
+  g.save();
+  g.strokeStyle = 'rgba(63,224,208,0.95)'; g.lineWidth = 1.2;
+  g.strokeRect(h.X - 7, h.Y - 7, 14, 14);
+  g.setLineDash([2, 3]);
+  g.strokeStyle = 'rgba(92,224,138,0.7)';
+  g.beginPath(); g.moveTo(h.X, h.Y); g.lineTo(h.TX, h.TY); g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = 'rgba(10,18,14,0.9)';
+  g.strokeStyle = 'rgba(92,224,138,1)'; g.lineWidth = 1.6;
+  g.beginPath(); g.arc(h.TX, h.TY, 6, 0, TAU); g.fill(); g.stroke();
+  g.font = '9px ' + MONO; g.fillStyle = 'rgba(92,224,138,0.9)';
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.fillText('v', h.TX + 9, h.TY);
+  g.restore();
+}
+/* ------------------------------------------------ 17. integration error plot */
+var insetR = 0, insetB = 60, insetT = 190;
+function drawErrGraph(){
+  if (!V.errGraph || H < 380 || (H - insetB) < 360) return;
+  var bw = 176, bh = 56;
+  var bx = 12, by = insetT + 8;
+  if (by + bh > H - insetB - 4) return;
+  g.save();
+  g.fillStyle = 'rgba(8,13,20,0.82)';
+  g.strokeStyle = 'rgba(23,34,47,1)'; g.lineWidth = 1;
+  g.beginPath(); g.rect(bx + .5, by + .5, bw, bh); g.fill(); g.stroke();
+  g.font = '8.5px ' + MONO; g.textBaseline = 'top'; g.textAlign = 'left';
+  g.fillStyle = 'rgba(84,104,126,1)';
+  g.fillText('INTEGRATION ERROR  log₁₀|ΔE/E₀|', bx + 5, by + 4);
+  var y0 = by + 16, gh = bh - 22, x0 = bx + 5, gw = bw - 10;
+  var top = -2, bot = -16;
+  var k, e;
+  g.strokeStyle = 'rgba(30,45,64,0.9)';
+  g.beginPath();
+  for (k = -4; k >= -16; k -= 4){
+    var yy = y0 + (top - k) / (top - bot) * gh;
+    g.moveTo(x0, yy); g.lineTo(x0 + gw, yy);
+  }
+  g.stroke();
+  g.fillStyle = 'rgba(84,104,126,0.8)';
+  g.textAlign = 'right';
+  g.fillText('-2', x0 + gw, y0 - 1);
+  g.fillText('-16', x0 + gw, y0 + gh - 8);
+  if (errHist.length > 1){
+    g.strokeStyle = 'rgba(63,224,208,0.9)'; g.lineWidth = 1.1;
+    g.beginPath();
+    for (k = 0; k < errHist.length; k++){
+      e = errHist[k];
+      var lv = clamp(Math.log10(Math.max(1e-17, Math.abs(e.dE))), bot, top);
+      var X = x0 + gw * (k / Math.max(1, errHist.length - 1));
+      var Y = y0 + (top - lv) / (top - bot) * gh;
+      if (k === 0) g.moveTo(X, Y); else g.lineTo(X, Y);
+    }
+    g.stroke();
+    g.strokeStyle = 'rgba(255,180,84,0.55)'; g.lineWidth = 1;
+    g.beginPath();
+    for (k = 0; k < errHist.length; k++){
+      e = errHist[k];
+      var lv2 = clamp(Math.log10(Math.max(1e-17, Math.abs(e.dP))), bot, top);
+      var X2 = x0 + gw * (k / Math.max(1, errHist.length - 1));
+      var Y2 = y0 + (top - lv2) / (top - bot) * gh;
+      if (k === 0) g.moveTo(X2, Y2); else g.lineTo(X2, Y2);
+    }
+    g.stroke();
+  }
+  g.restore();
+}
+function computeInsets(){
+  var wide = window.innerWidth > 820;
+  var hidden = panelEl.classList.contains('hidden');
+  insetR = (wide && !hidden) ? panelEl.getBoundingClientRect().width : 0;
+  insetB = (!wide && !hidden) ? panelEl.getBoundingClientRect().height
+                              : (transportEl.getBoundingClientRect().height + 16);
+  var hr = hudEl.getBoundingClientRect();
+  insetT = hr.bottom;
+  VCX = (W - insetR) * 0.5;
+  VCY = Math.max(60, (H - insetB)) * 0.5;
+}
+/* ------------------------------------------------------------ 18. draw */
+function draw(){
+  computeFrameLive(world);
+  if (V.follow && selId !== null && world.index[selId] !== undefined){
+    var i = world.index[selId];
+    if (world.alive[i]){
+      cam.x = fpx(FL, world.y[i], world.y[world.n + i]);
+      cam.y = fpy(FL, world.y[i], world.y[world.n + i]);
+    }
+  }
+  computeInsets();
+  drawBackground();
+  drawPotential();
+  drawGrid();
+  drawSOI();
+  drawGuides();
+  drawTrails();
+  drawPrediction();
+  drawBodies();
+  drawVectors();
+  drawHandles();
+  drawScaleBar();
+  drawErrGraph();
+}
+
+/* ============================================================ 19. UI core */
+function $(id){ return document.getElementById(id); }
+var panelEl, transportEl, hudEl, ui = { logDirty: true, bodiesDirty: true, nodesDirty: true,
+                                 ctlDirty: true, scnDirty: true, lastTel: 0 };
+var controls = [], CTLGROUP = null;
+function dropGroup(nm){ controls = controls.filter(function(c){ return c.group !== nm; }); }
+function syncControls(){
+  var act = document.activeElement;
+  for (var i = 0; i < controls.length; i++) if (controls[i].el !== act) controls[i].sync();
+}
+function logPos(o, v){
+  return clamp(1000 * Math.log(Math.max(v, o.min) / o.min) / Math.log(o.max / o.min), 0, 1000);
+}
+function logVal(o, p){ return o.min * Math.pow(o.max / o.min, p / 1000); }
+
+function mkCtl(o, host){
+  var wrap = document.createElement('div');
+  wrap.className = 'ctl' + (o.type === 'select' || o.type === 'number' ? ' inline' : '');
+  var lab = document.createElement('label');
+  lab.setAttribute('for', o.id); lab.textContent = o.label;
+  if (o.title) wrap.title = o.title;
+  var el, valEl = null, num2 = null;
+
+  if (o.type === 'range' || o.type === 'rangenum'){
+    valEl = document.createElement('div'); valEl.className = 'val'; valEl.id = o.id + 'Val';
+    el = document.createElement('input'); el.type = 'range'; el.id = o.id;
+    if (o.log){ el.min = 0; el.max = 1000; el.step = 1; }
+    else { el.min = o.min; el.max = o.max; el.step = o.step === undefined ? 'any' : o.step; }
+    wrap.appendChild(lab); wrap.appendChild(valEl); wrap.appendChild(el);
+    el.addEventListener('input', function(){
+      o.set(o.log ? logVal(o, +el.value) : +el.value);
+      valEl.textContent = fmtOf(o);
+      if (num2) num2.value = num(o.get(), 6);
+      ui.ctlDirty = true;
+    });
+    if (o.type === 'rangenum'){
+      num2 = document.createElement('input');
+      num2.type = 'number'; num2.id = o.id + 'Num'; num2.step = o.numStep || 'any';
+      num2.style.width = '100%'; num2.style.marginTop = '2px'; num2.style.gridColumn = '1/3';
+      num2.setAttribute('aria-label', o.label + ' (exact value)');
+      wrap.appendChild(num2);
+      num2.addEventListener('input', function(){
+        var v = parseFloat(num2.value);
+        if (isFinite(v)){ o.set(v); valEl.textContent = fmtOf(o); el.value = o.log ? logPos(o, o.get()) : o.get(); ui.ctlDirty = true; }
+      });
+    }
+  } else if (o.type === 'select'){
+    el = document.createElement('select'); el.id = o.id;
+    wrap.appendChild(lab); wrap.appendChild(el);
+    el.addEventListener('change', function(){ o.set(el.value); ui.ctlDirty = true; });
+  } else if (o.type === 'number'){
+    el = document.createElement('input'); el.type = 'number'; el.id = o.id;
+    el.step = o.step === undefined ? 'any' : o.step;
+    wrap.appendChild(lab); wrap.appendChild(el);
+    el.addEventListener('input', function(){
+      var v = parseFloat(el.value); if (isFinite(v)) { o.set(v); ui.ctlDirty = true; }
+    });
+  } else if (o.type === 'toggle'){
+    wrap.className = 'tog';
+    var lb = document.createElement('label'); lb.className = 'tog'; lb.setAttribute('for', o.id);
+    el = document.createElement('input'); el.type = 'checkbox'; el.id = o.id;
+    var sw = document.createElement('span'); sw.className = 'sw';
+    var tx = document.createElement('span'); tx.className = 'lb'; tx.textContent = o.label;
+    lb.appendChild(el); lb.appendChild(sw); lb.appendChild(tx);
+    if (o.title) lb.title = o.title;
+    host.appendChild(lb);
+    el.addEventListener('change', function(){ o.set(el.checked); ui.ctlDirty = true; });
+    var c1 = { el: el, group: CTLGROUP, sync: function(){ el.checked = !!o.get(); } };
+    controls.push(c1); c1.sync();
+    return c1;
+  }
+  function fmtOf(oo){ return oo.fmt ? oo.fmt(oo.get()) : num(oo.get(), 4); }
+  host.appendChild(wrap);
+  var c = { el: el, opt: o, group: CTLGROUP, sync: function(){
+    if (o.type === 'select'){
+      if (o.options){
+        var opts = typeof o.options === 'function' ? o.options() : o.options;
+        var sig = opts.map(function(x){ return x[0]; }).join('|');
+        if (el.__sig !== sig){
+          el.innerHTML = '';
+          for (var i = 0; i < opts.length; i++){
+            var op = document.createElement('option');
+            op.value = opts[i][0]; op.textContent = opts[i][1];
+            el.appendChild(op);
+          }
+          el.__sig = sig;
+        }
+      }
+      el.value = o.get();
+    } else if (o.type === 'number'){
+      el.value = num(o.get(), 6);
+    } else {
+      el.value = o.log ? logPos(o, o.get()) : o.get();
+      if (valEl) valEl.textContent = fmtOf(o);
+      if (num2) num2.value = num(o.get(), 6);
+    }
+    if (o.enabled){ var en = o.enabled(); el.disabled = !en; if (num2) num2.disabled = !en; wrap.style.opacity = en ? 1 : .45; }
+  } };
+  controls.push(c); c.sync();
+  return c;
+}
+function mkButtons(host, defs){
+  var row = document.createElement('div');
+  row.className = defs.length > 2 ? 'row3' : 'row2';
+  for (var i = 0; i < defs.length; i++){
+    (function(d){
+      var b = document.createElement('button');
+      b.className = 'btn'; b.textContent = d.label; if (d.id) b.id = d.id;
+      if (d.title) b.title = d.title;
+      b.addEventListener('click', d.fn);
+      row.appendChild(b);
+    })(defs[i]);
+  }
+  host.appendChild(row);
+  return row;
+}
+function toast(msg, kind){
+  var t = $('toast');
+  t.textContent = msg; t.className = 'card show ' + (kind || '');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(function(){ t.className = 'card'; }, 2300);
+}
+
+/* --------------------------------------------------- 20. frame plumbing */
+function frameValue(){
+  if (FR.mode === 'body') return 'body:' + FR.center;
+  if (FR.mode === 'rot') return 'rot:' + FR.rotA + '|' + FR.rotB;
+  return FR.mode;
+}
+function setFrameValue(v, keepView){
+  if (!world) return;
+  var oldF = { ox: FL.ox, oy: FL.oy, cos: FL.cos, sin: FL.sin };
+  var anchor = invPos(cam.x, cam.y);
+  if (v === 'inertial' || v === 'bary'){ FR.mode = v; }
+  else if (v.indexOf('body:') === 0){ FR.mode = 'body'; FR.center = v.slice(5); }
+  else if (v.indexOf('rot:') === 0){
+    var p = v.slice(4).split('|');
+    FR.mode = 'rot'; FR.rotA = p[0]; FR.rotB = p[1];
+  }
+  computeFrameLive(world);
+  if (!keepView){
+    cam.x = fpx(FL, anchor.x, anchor.y);
+    cam.y = fpy(FL, anchor.x, anchor.y);
+  }
+  potCache.dirty = true; ui.ctlDirty = true;
+  markPredDirty();
+}
+function frameOptions(){
+  var out = [['inertial', 'Inertial (origin)'], ['bary', 'Inertial (barycentre)']];
+  if (!world) return out;
+  var i;
+  for (i = 0; i < world.n; i++)
+    out.push(['body:' + world.meta[i].id, 'Centred: ' + world.meta[i].name]);
+  var pairs = rotPairs();
+  for (i = 0; i < pairs.length; i++)
+    out.push(['rot:' + pairs[i][0] + '|' + pairs[i][1],
+              'Rotating: ' + world.meta[world.index[pairs[i][0]]].name + '–' +
+              world.meta[world.index[pairs[i][1]]].name]);
+  return out;
+}
+function rotPairs(){
+  var out = [], seen = {};
+  if (!world) return out;
+  for (var i = 0; i < world.n; i++){
+    if (!world.alive[i] || world.meta[i].type === 'craft') continue;
+    var pi = dominantIndex(world, i);
+    if (pi < 0 || world.meta[pi].type === 'craft' || world.m[pi] <= world.m[i]) continue;
+    var key = world.meta[pi].id + '|' + world.meta[i].id;
+    if (seen[key]) continue;
+    seen[key] = 1;
+    out.push([world.meta[pi].id, world.meta[i].id]);
+  }
+  return out;
+}
+function cycleFrame(dir){
+  var opts = frameOptions(), cur = frameValue(), idx = 0;
+  for (var i = 0; i < opts.length; i++) if (opts[i][0] === cur) idx = i;
+  idx = (idx + (dir || 1) + opts.length) % opts.length;
+  setFrameValue(opts[idx][0]);
+  toast('FRAME → ' + opts[idx][1]);
+}
+
+/* ------------------------------------------------- 21. panel construction */
+var scnDvMax = 0.5;
+function buildPanels(){
+  var h;
+  /* ---- Physics: integrator ---- */
+  h = $('ctlIntegrator'); h.innerHTML = ''; CTLGROUP = 'static';
+  mkCtl({ id: 'integrator', label: 'Method', type: 'select',
+    options: Object.keys(INTEGRATORS).map(function(k){ return [k, INTEGRATORS[k].label]; }),
+    get: function(){ return P.integrator; },
+    set: function(v){ P.integrator = v; world.aValid = false; markPredDirty();
+                      logEvent('Integrator → ' + INTEGRATORS[v].label); } }, h);
+  mkCtl({ id: 'dt', label: 'Timestep dt (TU)', type: 'rangenum', log: true, min: 1e-4, max: 2,
+    fmt: function(v){ return num(v, 4) + ' TU'; },
+    title: 'Integration step used by the live simulation',
+    get: function(){ return P.dt; }, set: function(v){ P.dt = clamp(v, 1e-5, 5); } }, h);
+  mkCtl({ id: 'tol', label: 'Tolerance (adaptive only)', type: 'range', log: true, min: 1e-13, max: 1e-4,
+    fmt: function(v){ return sci(v, 1); }, enabled: function(){ return INTEGRATORS[P.integrator].adaptive; },
+    get: function(){ return P.tol; }, set: function(v){ P.tol = v; markPredDirty(); } }, h);
+  mkCtl({ id: 'maxSteps', label: 'Step budget / frame', type: 'range', log: true, min: 50, max: 20000,
+    fmt: function(v){ return Math.round(v) + ''; },
+    get: function(){ return P.maxSteps; }, set: function(v){ P.maxSteps = Math.round(v); } }, h);
+  mkCtl({ id: 'autoDt', label: 'Auto-enlarge dt at high warp', type: 'toggle',
+    title: 'Keeps the requested warp by growing dt instead of throttling the clock',
+    get: function(){ return P.autoDt; }, set: function(v){ P.autoDt = v; } }, h);
+
+  /* ---- Physics: gravity ---- */
+  h = $('ctlGravity'); h.innerHTML = '';
+  mkCtl({ id: 'G', label: 'Gravitational constant G', type: 'rangenum', log: true, min: 0.02, max: 50,
+    fmt: function(v){ return num(v, 4); },
+    get: function(){ return P.G; },
+    set: function(v){ P.G = clamp(v, 1e-4, 1e4); world.aValid = false; markPredDirty(); potCache.dirty = true; } }, h);
+  mkCtl({ id: 'soft', label: 'Softening ε (LU)', type: 'range', min: 0, max: 5, step: 0.01,
+    fmt: function(v){ return num(v, 3) + ' LU'; },
+    title: 'Plummer softening — removes the singularity at r→0',
+    get: function(){ return P.soft; },
+    set: function(v){ P.soft = v; world.aValid = false; markPredDirty(); potCache.dirty = true; } }, h);
+
+  /* ---- Physics: collisions ---- */
+  h = $('ctlCollision'); h.innerHTML = '';
+  mkCtl({ id: 'collide', label: 'Contact behaviour', type: 'select',
+    options: [['none', 'None — pass through'], ['crash', 'Crash craft / merge bodies'],
+              ['bounce', 'Bounce (restitution)'], ['merge', 'Merge all contacts']],
+    get: function(){ return P.collide; }, set: function(v){ P.collide = v; markPredDirty(); } }, h);
+  mkCtl({ id: 'restitution', label: 'Restitution', type: 'range', min: 0, max: 1, step: 0.01,
+    enabled: function(){ return P.collide === 'bounce'; },
+    get: function(){ return P.restitution; }, set: function(v){ P.restitution = v; } }, h);
+
+  /* ---- Physics: prediction ---- */
+  h = $('ctlPredict'); h.innerHTML = '';
+  mkCtl({ id: 'predict', label: 'Predict trajectory', type: 'toggle',
+    get: function(){ return V.predict; }, set: function(v){ V.predict = v; markPredDirty(); } }, h);
+  mkCtl({ id: 'horizon', label: 'Prediction horizon', type: 'rangenum', log: true, min: 1, max: 200000,
+    fmt: function(v){ return num(v, 4) + ' TU'; },
+    get: function(){ return V.horizon; }, set: function(v){ V.horizon = clamp(v, 0.1, 1e6); markPredDirty(); } }, h);
+  mkCtl({ id: 'predSteps', label: 'Prediction resolution (steps)', type: 'range', log: true, min: 200, max: 40000,
+    fmt: function(v){ return Math.round(v) + ' × ' + num(V.horizon / Math.round(v), 3) + ' TU'; },
+    get: function(){ return V.predSteps; }, set: function(v){ V.predSteps = Math.round(v); markPredDirty(); } }, h);
+  mkCtl({ id: 'predBodies', label: 'Show predicted body paths', type: 'toggle',
+    get: function(){ return V.predBodies; }, set: function(v){ V.predBodies = v; } }, h);
+
+  /* ---- View: frame ---- */
+  h = $('ctlFrame'); h.innerHTML = '';
+  mkCtl({ id: 'frameMode', label: 'Frame', type: 'select', options: frameOptions,
+    get: frameValue, set: function(v){ setFrameValue(v); } }, h);
+  mkCtl({ id: 'follow', label: 'Camera follows selection', type: 'toggle',
+    get: function(){ return V.follow; }, set: function(v){ V.follow = v; } }, h);
+
+  /* ---- View: overlays ---- */
+  h = $('ctlToggles'); h.innerHTML = '';
+  var togs = [
+    ['trails', 'Trails', 'trails'], ['predictT', 'Prediction', 'predict'],
+    ['vectors', 'Velocity vectors', 'vectors'], ['accelVec', 'Accel. vectors', 'accelVec'],
+    ['vectorsAll', 'Vectors: all bodies', 'vectorsAll'], ['guides', 'Orbital guides', 'guides'],
+    ['apsides', 'Apsis markers', 'apsides'], ['soi', 'Sphere of influence', 'soi'],
+    ['potential', 'Potential field', 'potential'], ['encounters', 'Encounter markers', 'encounters'],
+    ['nodeMarks', 'Node markers', 'nodeMarks'], ['labels', 'Labels', 'labels'],
+    ['grid', 'Grid', 'grid'], ['errGraph', 'Error plot', 'errGraph'],
+    ['stars', 'Starfield', 'stars'], ['predBodies2', 'Body predictions', 'predBodies']
+  ];
+  togs.forEach(function(t){
+    mkCtl({ id: t[0], label: t[1], type: 'toggle',
+      get: function(){ return !!V[t[2]]; },
+      set: function(v){ V[t[2]] = v; if (t[2] === 'potential') potCache.dirty = true;
+                        if (t[2] === 'predict') markPredDirty(); } }, h);
+  });
+
+  /* ---- View: style ---- */
+  h = $('ctlStyle'); h.innerHTML = '';
+  mkCtl({ id: 'bodyScale', label: 'Body display scale', type: 'range', log: true, min: 0.2, max: 60,
+    fmt: function(v){ return '×' + num(v, 3); },
+    get: function(){ return V.bodyScale; }, set: function(v){ V.bodyScale = v; } }, h);
+  mkCtl({ id: 'vecScale', label: 'Vector scale', type: 'range', log: true, min: 0.05, max: 20,
+    fmt: function(v){ return '×' + num(v, 3); },
+    get: function(){ return V.vecScale; }, set: function(v){ V.vecScale = v; } }, h);
+  mkCtl({ id: 'trailSpan', label: 'Trail length', type: 'range', log: true, min: 1, max: 100000,
+    fmt: function(v){ return num(v, 4) + ' TU'; },
+    get: function(){ return V.trailSpan; }, set: function(v){ V.trailSpan = v; } }, h);
+  mkCtl({ id: 'trailWidth', label: 'Trail width', type: 'range', min: 0.5, max: 4, step: 0.1,
+    fmt: function(v){ return num(v, 2) + ' px'; },
+    get: function(){ return V.trailWidth; }, set: function(v){ V.trailWidth = v; } }, h);
+
+  /* ---- View: camera ---- */
+  h = $('ctlCamera'); h.innerHTML = '';
+  mkCtl({ id: 'zoom', label: 'Zoom (px per LU)', type: 'range', log: true, min: 1e-6, max: 1e5,
+    fmt: function(v){ return sci(v, 2); },
+    get: function(){ return cam.scale; },
+    set: function(v){ zoomAt(VCX, VCY, v / cam.scale); } }, h);
+  CTLGROUP = null;
+  ui.ctlDirty = true;
+}
+
+/* ---------------------------------------------- 21b. state-vector editor */
+function frameStateOf(i){
+  var n = world.n, f = FL;
+  var fx = fpx(f, world.y[i], world.y[n + i]), fy = fpy(f, world.y[i], world.y[n + i]);
+  var vf = frameVel(world.y[2 * n + i], world.y[3 * n + i], fx, fy);
+  return { x: fx, y: fy, vx: vf.x, vy: vf.y };
+}
+function setFrameStateOf(i, st){
+  var n = world.n;
+  var p = invPos(st.x, st.y), v = invVel(st.vx, st.vy, st.x, st.y);
+  world.y[i] = p.x; world.y[n + i] = p.y; world.y[2 * n + i] = v.x; world.y[3 * n + i] = v.y;
+  onStateEdited();
+}
+function buildCraftEditor(){
+  dropGroup('craft');
+  var host = $('craftEdit');
+  host.innerHTML = '';
+  if (!world || selId === null || world.index[selId] === undefined){
+    host.innerHTML = '<p class="hint">Select an object to edit its state vector.</p>';
+    return;
+  }
+  var i = world.index[selId];
+  if (!world.alive[i]){ host.innerHTML = '<p class="hint">Object destroyed.</p>'; return; }
+  CTLGROUP = 'craft';
+  var def = [
+    ['svx', 'x (LU)', 'x'], ['svy', 'y (LU)', 'y'],
+    ['svvx', 'vx (LU/TU)', 'vx'], ['svvy', 'vy (LU/TU)', 'vy']
+  ];
+  def.forEach(function(d){
+    mkCtl({ id: d[0], label: d[1] + ' — ' + (FR.mode === 'inertial' ? 'inertial' : 'frame'), type: 'number', step: 'any',
+      enabled: function(){ return T.paused; },
+      get: function(){ return frameStateOf(i)[d[2]]; },
+      set: function(v){ if (!T.paused) return; var st = frameStateOf(i); st[d[2]] = v; setFrameStateOf(i, st); } }, host);
+  });
+  CTLGROUP = null;
+  mkButtons(host, [
+    { label: 'CIRCULARISE', id: 'btnCircular', title: 'Set the velocity for a circular orbit about the dominant body',
+      fn: function(){
+        if (!T.paused){ toast('Pause first', 'bad'); return; }
+        var pi = dominantIndex(world, i); if (pi < 0) return;
+        var n = world.n;
+        var rx = world.y[i] - world.y[pi], ry = world.y[n + i] - world.y[n + pi], r = hypot(rx, ry);
+        if (r < 1e-9) return;
+        var vc = Math.sqrt(P.G * (world.m[pi] + world.m[i]) / r);
+        var h = world.y[2 * n + i] * ry - world.y[3 * n + i] * rx;
+        var sgn = (rx * (world.y[3 * n + i] - world.y[3 * n + pi]) - ry * (world.y[2 * n + i] - world.y[2 * n + pi])) >= 0 ? 1 : -1;
+        world.y[2 * n + i] = world.y[2 * n + pi] - sgn * vc * ry / r;
+        world.y[3 * n + i] = world.y[3 * n + pi] + sgn * vc * rx / r;
+        onStateEdited(); toast('CIRCULARISED about ' + world.meta[pi].name, 'ok');
+      } },
+    { label: 'HALT (v=0)', id: 'btnHalt', fn: function(){
+        if (!T.paused){ toast('Pause first', 'bad'); return; }
+        var n = world.n; world.y[2 * n + i] = 0; world.y[3 * n + i] = 0; onStateEdited(); } }
+  ]);
+  ui.ctlDirty = true;
+}
+
+/* ------------------------------------------------------- 22. node editor */
+function getNode(id){
+  for (var i = 0; i < nodes.length; i++) if (nodes[i].id === id) return nodes[i];
+  return null;
+}
+function craftList(){
+  var out = [];
+  if (!world) return out;
+  for (var i = 0; i < world.n; i++)
+    if (world.meta[i].type === 'craft') out.push([world.meta[i].id, world.meta[i].name]);
+  return out;
+}
+function addNode(atT, craft){
+  var cl = craftList();
+  if (!cl.length){ toast('No spacecraft in this scenario', 'bad'); return null; }
+  var cr = craft || (selId !== null && world.index[selId] !== undefined &&
+                     world.meta[world.index[selId]].type === 'craft' ? selId : cl[0][0]);
+  var t = atT === undefined ? world.t + V.horizon * 0.33 : atT;
+  if (t <= world.t) t = world.t + Math.max(V.horizon * 0.02, P.dt * 10);
+  var nd = { id: nodeSeq++, craft: cr, t: t, mode: 'pn', pro: 0, rad: 0, cx: 0, cy: 0 };
+  nodes.push(nd);
+  nodes.sort(function(a, b){ return a.t - b.t; });
+  selNode = nd.id;
+  markPredDirty(); ui.nodesDirty = true;
+  logEvent('Node #' + nd.id + ' created at T+' + num(nd.t, 5));
+  return nd;
+}
+function deleteNode(id){
+  for (var i = 0; i < nodes.length; i++) if (nodes[i].id === id){ nodes.splice(i, 1); break; }
+  if (selNode === id) selNode = nodes.length ? nodes[nodes.length - 1].id : null;
+  markPredDirty(); ui.nodesDirty = true;
+}
+function buildNodeEditor(){
+  dropGroup('node');
+  var host = $('nodeEdit'); host.innerHTML = '';
+  var nd = getNode(selNode);
+  if (!nd){
+    $('nodeEditName').textContent = 'no node';
+    host.innerHTML = '<p class="hint">Add a node, then set its time and Δv. The dashed violet line is the trajectory the craft will actually fly.</p>';
+    return;
+  }
+  $('nodeEditName').textContent = '#' + nd.id;
+  CTLGROUP = 'node';
+  var cl = craftList();
+  if (cl.length > 1){
+    mkCtl({ id: 'nodeCraft', label: 'Vehicle', type: 'select', options: cl,
+      get: function(){ return nd.craft; }, set: function(v){ nd.craft = v; markPredDirty(); } }, host);
+  }
+  mkCtl({ id: 'nodeT', label: 'Burn time (Δt from now)', type: 'rangenum', min: 0, max: V.horizon, step: 'any',
+    fmt: function(v){ return num(v, 5) + ' TU  ·  ' + fmtDur(v, T.secondsPerTU); },
+    get: function(){ return Math.max(0, nd.t - world.t); },
+    set: function(v){ nd.t = world.t + Math.max(0, v); nodes.sort(function(a, b){ return a.t - b.t; });
+                      markPredDirty(); ui.nodesDirty = true; } }, host);
+  mkCtl({ id: 'nodeMode', label: 'Δv basis', type: 'select',
+    options: [['pn', 'Prograde / radial'], ['cart', 'Cartesian x / y']],
+    get: function(){ return nd.mode; }, set: function(v){ nd.mode = v; markPredDirty(); buildNodeEditor(); } }, host);
+  if (nd.mode === 'pn'){
+    mkCtl({ id: 'nodePro', label: 'Prograde (+) / retrograde (−)', type: 'rangenum',
+      min: -scnDvMax, max: scnDvMax, step: 'any', numStep: 0.001,
+      fmt: function(v){ return num(v, 4) + ' LU/TU'; },
+      get: function(){ return nd.pro; }, set: function(v){ nd.pro = v; markPredDirty(); ui.nodesDirty = true; } }, host);
+    mkCtl({ id: 'nodeRad', label: 'Radial out (+) / in (−)', type: 'rangenum',
+      min: -scnDvMax, max: scnDvMax, step: 'any', numStep: 0.001,
+      fmt: function(v){ return num(v, 4) + ' LU/TU'; },
+      get: function(){ return nd.rad; }, set: function(v){ nd.rad = v; markPredDirty(); ui.nodesDirty = true; } }, host);
+  } else {
+    mkCtl({ id: 'nodeDvx', label: 'Δv x (inertial)', type: 'rangenum',
+      min: -scnDvMax, max: scnDvMax, step: 'any', numStep: 0.001,
+      fmt: function(v){ return num(v, 4) + ' LU/TU'; },
+      get: function(){ return nd.cx; }, set: function(v){ nd.cx = v; markPredDirty(); ui.nodesDirty = true; } }, host);
+    mkCtl({ id: 'nodeDvy', label: 'Δv y (inertial)', type: 'rangenum',
+      min: -scnDvMax, max: scnDvMax, step: 'any', numStep: 0.001,
+      fmt: function(v){ return num(v, 4) + ' LU/TU'; },
+      get: function(){ return nd.cy; }, set: function(v){ nd.cy = v; markPredDirty(); ui.nodesDirty = true; } }, host);
+  }
+  CTLGROUP = null;
+  mkButtons(host, [
+    { label: 'ZERO Δv', id: 'btnNodeZero', fn: function(){ nd.pro = nd.rad = nd.cx = nd.cy = 0;
+        markPredDirty(); ui.ctlDirty = true; ui.nodesDirty = true; } },
+    { label: 'DELETE NODE', id: 'btnNodeDel', fn: function(){ deleteNode(nd.id); buildNodeEditor(); } }
+  ]);
+  var info = document.createElement('p');
+  info.className = 'hint'; info.id = 'nodeInfo';
+  host.appendChild(info);
+  ui.ctlDirty = true;
+}
+
+/* ------------------------------------------------------ 23. telemetry UI */
+function tr(k, v, cls){ return '<div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div>'; }
+function thd(t){ return '<div class="hd">' + t + '</div>'; }
+function remainingDv(craftId){
+  var s = 0;
+  for (var i = 0; i < nodes.length; i++)
+    if (nodes[i].craft === craftId && nodes[i].t > world.t) s += nodeDv(nodes[i]);
+  return s;
+}
+function nextBurn(craftId){
+  var best = null;
+  for (var i = 0; i < nodes.length; i++){
+    var nd = nodes[i];
+    if (nd.craft === craftId && nd.t > world.t && (best === null || nd.t < best.t)) best = nd;
+  }
+  return best;
+}
+function renderSelTel(){
+  var host = $('telSel'), nameEl = $('telName');
+  if (!world || selId === null || world.index[selId] === undefined){
+    nameEl.textContent = '—';
+    host.innerHTML = tr('selection', 'click a body');
+    return;
+  }
+  var i = world.index[selId], n = world.n, mt = world.meta[i];
+  nameEl.textContent = mt.name + ' · ' + mt.type;
+  if (!world.alive[i]){ host.innerHTML = tr('STATUS', 'DESTROYED', 'rd'); return; }
+  var f = FL;
+  var ix = world.y[i], iy = world.y[n + i], ivx = world.y[2 * n + i], ivy = world.y[3 * n + i];
+  var fx = fpx(f, ix, iy), fy = fpy(f, ix, iy);
+  var vf = frameVel(ivx, ivy, fx, fy);
+  var pi = dominantIndex(world, i);
+  var el = pi >= 0 ? elementsOf(world, i, pi) : null;
+  var out = [];
+  out.push(thd('state vector — ' + FL.name));
+  out.push(tr('x', num(fx, 6) + ' LU'));
+  out.push(tr('y', num(fy, 6) + ' LU'));
+  out.push(tr('vx', num(vf.x, 5) + ' LU/TU'));
+  out.push(tr('vy', num(vf.y, 5) + ' LU/TU'));
+  out.push(tr('speed', num(hypot(vf.x, vf.y), 5) + ' LU/TU', 'hi'));
+  if (FR.mode !== 'inertial'){
+    out.push(thd('inertial'));
+    out.push(tr('x / y', num(ix, 5) + ' , ' + num(iy, 5)));
+    out.push(tr('vx / vy', num(ivx, 4) + ' , ' + num(ivy, 4)));
+    out.push(tr('speed', num(hypot(ivx, ivy), 5) + ' LU/TU'));
+  }
+  out.push(thd('body'));
+  out.push(tr('mass', num(world.m[i], 5) + ' MU'));
+  out.push(tr('radius', num(world.rad[i], 4) + ' LU'));
+  if (el && pi >= 0){
+    out.push(thd('orbit about ' + world.meta[pi].name));
+    out.push(tr('distance r', num(el.r, 6) + ' LU', 'hi'));
+    out.push(tr('altitude', num(el.r - world.rad[pi], 5) + ' LU'));
+    out.push(tr('spec. energy ε', num(el.eps, 5) + ' LU²/TU²', el.eps >= 0 ? 'rd' : ''));
+    out.push(tr('ang. momentum h', num(el.h, 5) + ' LU²/TU'));
+    out.push(tr('semi-major a', isFinite(el.a) ? num(el.a, 6) + ' LU' : '∞'));
+    out.push(tr('eccentricity e', num(el.e, 5), el.e >= 1 ? 'am' : ''));
+    out.push(tr('periapsis', num(el.rp, 6) + ' LU'));
+    out.push(tr('apoapsis', isFinite(el.ra) ? num(el.ra, 6) + ' LU' : '— (unbound)'));
+    out.push(tr('period T', isFinite(el.T) ? num(el.T, 6) + ' TU  (' + fmtDur(el.T, T.secondsPerTU) + ')' : '— (unbound)'));
+    out.push(tr('v circular', num(el.vc, 5) + ' LU/TU'));
+    out.push(tr('v escape', num(el.vesc, 5) + ' LU/TU'));
+    out.push(tr('radial vel.', num(el.vr, 5) + ' LU/TU'));
+    out.push(tr('regime', el.e < 1e-3 ? 'circular' : el.e < 1 ? 'elliptical' : el.e < 1.0001 ? 'parabolic' : 'hyperbolic',
+                el.e >= 1 ? 'am' : 'gr'));
+  }
+  if (mt.type === 'craft'){
+    out.push(thd('mission'));
+    var rem = remainingDv(mt.id), nb = nextBurn(mt.id);
+    out.push(tr('scheduled Δv left', num(rem, 5) + ' LU/TU', rem > 0 ? 'am' : ''));
+    out.push(tr('next burn', nb ? '#' + nb.id + ' in ' + fmtLead(nb.t - world.t, T.secondsPerTU) : 'none'));
+    var encT = pred.valid && pred.craft === i ? encountersOfInterest() : [];
+    if (encT.length){
+      var e0 = encT[0];
+      out.push(tr('closest approach', world.meta[e0.j].name + ' @ ' + num(e0.d, 5) + ' LU', 'gr'));
+      out.push(tr('  altitude', num(e0.d - world.rad[e0.j], 5) + ' LU'));
+      out.push(tr('  in', fmtLead(e0.t - world.t, T.secondsPerTU)));
+      out.push(tr('  rel. speed', num(e0.vrel, 4) + ' LU/TU'));
+    }
+    if (pred.valid && pred.crash) out.push(tr('predicted impact', fmtDur(pred.crash.t - world.t, T.secondsPerTU), 'rd'));
+  }
+  host.innerHTML = out.join('');
+}
+function renderSysTel(){
+  var e = conservationErr(), s = e.tot;
+  var out = [];
+  out.push(tr('total energy E', num(s.E, 7), 'hi'));
+  out.push(tr('kinetic', num(s.KE, 6)));
+  out.push(tr('potential', num(s.PE, 6)));
+  out.push(tr('|momentum|', num(s.Pmag, 6)));
+  out.push(tr('ang. momentum', num(s.L, 6)));
+  out.push(thd('drift since baseline'));
+  var ae = Math.abs(e.dE);
+  out.push(tr('ΔE / E₀', sci(e.dE, 3), ae > 1e-3 ? 'rd' : ae > 1e-6 ? 'am' : 'gr'));
+  out.push(tr('Δ|p| / Σm|v|', sci(e.dP, 3), Math.abs(e.dP) > 1e-6 ? 'am' : 'gr'));
+  out.push(tr('ΔL / Σ|L|', sci(e.dL, 3), Math.abs(e.dL) > 1e-6 ? 'am' : 'gr'));
+  out.push(tr('peak |ΔE/E₀|', sci(errPeak, 3)));
+  out.push(tr('baseline set', base.valid ? 'T+' + num(base.t, 5) + (base.reason ? ' (' + base.reason + ')' : '') : '—'));
+  $('telSys').innerHTML = out.join('');
+}
+function renderPerfTel(){
+  var out = [];
+  out.push(tr('fps', perf.fps.toFixed(1)));
+  out.push(tr('frame', perf.frame.toFixed(2) + ' ms'));
+  out.push(tr('physics', perf.phys.toFixed(2) + ' ms'));
+  out.push(tr('render', perf.draw.toFixed(2) + ' ms'));
+  out.push(tr('prediction', pred.ms.toFixed(2) + ' ms' + (pred.truncated ? ' (budget)' : '')));
+  out.push(thd('integration'));
+  out.push(tr('method', INTEGRATORS[P.integrator].label));
+  out.push(tr('steps / frame', perf.steps + ''));
+  out.push(tr('dt requested', num(P.dt, 5) + ' TU'));
+  out.push(tr('dt effective', num(perf.dtEff, 5) + ' TU', perf.dtEff > P.dt * 1.001 ? 'am' : ''));
+  out.push(tr('warp achieved', num(perf.warpEff, 4) + '×', perf.throttled ? 'am' : 'gr'));
+  if (INTEGRATORS[P.integrator].adaptive){
+    out.push(tr('adaptive h', num(simCtx.hAdapt, 4)));
+    out.push(tr('accept / reject', simCtx.dpAccept + ' / ' + simCtx.dpReject));
+  }
+  out.push(thd('prediction'));
+  out.push(tr('horizon', num(V.horizon, 5) + ' TU'));
+  out.push(tr('steps', pred.steps + ' × ' + num(pred.dt, 4) + ' TU'));
+  out.push(tr('samples drawn', pred.count + ''));
+  out.push(tr('trail samples', hist.len + ' / ' + hist.cap));
+  $('telPerf').innerHTML = out.join('');
+}
+function renderBodyList(){
+  var host = $('bodyList');
+  host.innerHTML = '';
+  if (!world) return;
+  var alive = 0;
+  for (var i = 0; i < world.n; i++){
+    var mt = world.meta[i];
+    if (world.alive[i]) alive++;
+    var row = document.createElement('div');
+    row.className = 'brow' + (selId === mt.id ? ' sel' : '') + (world.alive[i] ? '' : ' dead');
+    row.id = 'body-' + mt.id;
+    row.setAttribute('role', 'button'); row.tabIndex = 0;
+    row.innerHTML = '<span class="dot" style="background:' + mt.color + ';color:' + mt.color + '"></span>' +
+                    '<span class="nm">' + mt.name + '</span><span class="ty">' + mt.type + '</span>';
+    (function(id){
+      row.addEventListener('click', function(){ selectBody(id); });
+      row.addEventListener('keydown', function(ev){ if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); selectBody(id); } });
+    })(mt.id);
+    host.appendChild(row);
+  }
+  $('bodyCount').textContent = alive + ' / ' + world.n + ' active';
+  ui.bodiesDirty = false;
+}
+function renderNodeList(){
+  var host = $('nodeList');
+  host.innerHTML = '';
+  var total = 0;
+  if (!nodes.length) host.innerHTML = '<p class="hint">No maneuver nodes.</p>';
+  for (var i = 0; i < nodes.length; i++){
+    (function(nd){
+      var done = nd.t <= world.t;
+      if (!done) total += nodeDv(nd);
+      var row = document.createElement('div');
+      row.className = 'nrow' + (selNode === nd.id ? ' sel' : '') + (done ? ' done' : '');
+      row.id = 'node-' + nd.id;
+      var cn = world.index[nd.craft] === undefined ? '?' : world.meta[world.index[nd.craft]].name;
+      var det = nd.mode === 'cart'
+        ? 'x ' + num(nd.cx, 3) + '  y ' + num(nd.cy, 3)
+        : 'pro ' + num(nd.pro, 3) + '  rad ' + num(nd.rad, 3);
+      row.innerHTML = '<span class="idx">' + nd.id + '</span>' +
+        '<span class="n1"><b>' + (done ? 'executed' : 'T−' + fmtDur(nd.t - world.t, T.secondsPerTU)) +
+        '</b><i>' + det + ' · ' + cn + '</i></span>' +
+        '<span class="dv">Δv ' + num(nodeDv(nd), 3) + '</span><span class="x" title="delete">✕</span>';
+      row.addEventListener('click', function(ev){
+        if (ev.target.classList.contains('x')){ deleteNode(nd.id); buildNodeEditor(); renderNodeList(); return; }
+        selNode = nd.id; buildNodeEditor(); renderNodeList();
+      });
+      host.appendChild(row);
+    })(nodes[i]);
+  }
+  $('nodeSummary').textContent = nodes.length + ' · Δv ' + num(total, 4);
+  ui.nodesDirty = false;
+}
+function renderPostBurn(){
+  var host = $('telPost'), whenEl = $('postBurnWhen');
+  var nd = getNode(selNode);
+  if (!nd || !pred.valid){ host.innerHTML = tr('—', 'no node selected'); whenEl.textContent = ''; return; }
+  var snap = null;
+  for (var i = 0; i < pred.nodeSnaps.length; i++) if (pred.nodeSnaps[i].id === nd.id) snap = pred.nodeSnaps[i];
+  if (!snap){
+    host.innerHTML = tr('status', nd.t <= world.t ? 'burn already executed' : 'outside prediction horizon', 'am');
+    whenEl.textContent = '';
+    return;
+  }
+  whenEl.textContent = 'T−' + fmtDur(nd.t - world.t, T.secondsPerTU);
+  var n = pred.n, k = predSampleAt(snap.t);
+  var best = -1, bestA = 0, j;
+  for (j = 0; j < n; j++){
+    if (world.meta[j].type === 'craft' || !world.alive[j] || world.m[j] <= 0) continue;   /* primary must have mass */
+    var dx = snap.x - pred.px[k * n + j], dy = snap.y - pred.py[k * n + j];
+    var r2 = dx * dx + dy * dy;
+    if (r2 < 1e-12) continue;
+    var acc = P.G * world.m[j] / r2;
+    if (acc > bestA){ bestA = acc; best = j; }
+  }
+  if (best < 0){ host.innerHTML = tr('—', 'no primary'); return; }
+  /* primary velocity by central difference on the predicted samples */
+  var k0 = Math.max(0, k - 1), k1 = Math.min(pred.count - 1, k + 1);
+  var dtc = Math.max(1e-9, pred.t[k1] - pred.t[k0]);
+  var pvx = (pred.px[k1 * n + best] - pred.px[k0 * n + best]) / dtc;
+  var pvy = (pred.py[k1 * n + best] - pred.py[k0 * n + best]) / dtc;
+  var el = elementsFrom(snap.x - pred.px[k * n + best], snap.y - pred.py[k * n + best],
+                        snap.vx - pvx, snap.vy - pvy, P.G * world.m[best]);
+  var ci = world.index[nd.craft];
+  var cur = ci !== undefined ? elementsOf(world, ci, dominantIndex(world, ci)) : null;
+  var d = function(a, b){ return (isFinite(a) && isFinite(b)) ? (a - b >= 0 ? ' (+' : ' (') + num(a - b, 4) + ')' : ''; };
+  var out = [];
+  out.push(tr('primary', world.meta[best].name));
+  out.push(tr('Δv applied', num(nodeDv(nd), 5) + ' LU/TU', 'hi'));
+  out.push(tr('semi-major a', (isFinite(el.a) ? num(el.a, 6) : '∞') + (cur ? d(el.a, cur.a) : '')));
+  out.push(tr('eccentricity e', num(el.e, 5) + (cur ? d(el.e, cur.e) : ''), el.e >= 1 ? 'am' : ''));
+  out.push(tr('periapsis', num(el.rp, 6) + (cur ? d(el.rp, cur.rp) : '')));
+  out.push(tr('apoapsis', isFinite(el.ra) ? num(el.ra, 6) + (cur ? d(el.ra, cur.ra) : '') : '— (unbound)'));
+  out.push(tr('period', isFinite(el.T) ? num(el.T, 6) + ' TU' : '— (unbound)'));
+  out.push(tr('spec. energy', num(el.eps, 5), el.eps >= 0 ? 'rd' : ''));
+  host.innerHTML = out.join('');
+  var info = $('nodeInfo');
+  if (info) info.textContent = 'Burn executes automatically when the mission clock reaches T+' + num(nd.t, 5) + ' TU.';
+}
+function encountersOfInterest(){
+  if (!pred.valid || pred.craft < 0) return [];
+  var prim = dominantIndex(world, pred.craft);
+  var out = [];
+  for (var i = 0; i < pred.encounters.length; i++)
+    if (pred.encounters[i].j !== prim) out.push(pred.encounters[i]);
+  return out;
+}
+function renderEncounters(){
+  var host = $('encList');
+  if (!pred.valid || pred.craft < 0){ host.innerHTML = tr('—', 'no prediction'); return; }
+  if (!pred.encounters.length){ host.innerHTML = tr('—', 'no encounters in horizon'); return; }
+  var out = [], prim = dominantIndex(world, pred.craft);
+  for (var i = 0; i < Math.min(4, pred.encounters.length); i++){
+    var e = pred.encounters[i];
+    out.push(thd(world.meta[e.j].name + (e.j === prim ? '  (current primary)' : '')));
+    out.push(tr('min distance', num(e.d, 6) + ' LU', i === 0 ? 'gr' : ''));
+    out.push(tr('altitude', num(e.d - world.rad[e.j], 5) + ' LU',
+                (e.d - world.rad[e.j]) < 0 ? 'rd' : ''));
+    out.push(tr('at', 'T+' + num(e.t, 5) + '  (' + fmtLead(e.t - world.t, T.secondsPerTU) + ')'));
+    out.push(tr('rel. speed', num(e.vrel, 4) + ' LU/TU'));
+  }
+  host.innerHTML = out.join('');
+}
+function renderLog(){
+  var host = $('logList');
+  var out = [];
+  for (var i = events.length - 1; i >= 0 && out.length < 40; i--){
+    var e = events[i];
+    out.push('<div class="' + e.kind + '"><b>' + num(e.t, 6) + '</b> ' + e.text + '</div>');
+  }
+  host.innerHTML = out.join('') || '<div><b>—</b> no events</div>';
+  ui.logDirty = false;
+}
+
+/* ------------------------------------------------------------ 24. HUD */
+var perf = { fps: 60, frame: 0, phys: 0, draw: 0, steps: 0, dtEff: 0, warpEff: 1, throttled: false };
+function updateHUD(){
+  var e = conservationErr();
+  var ae = Math.abs(e.dE);
+  errPeak = Math.max(errPeak, ae);
+  $('hFps').textContent = perf.fps.toFixed(0);
+  $('hMet').textContent = fmtMET(world.t, T.secondsPerTU);
+  $('hWarp').textContent = fmtWarp(T.warp) + (perf.throttled ? ' ⚠' : '');
+  $('hWarp').className = 'v ' + (perf.throttled ? 'warn' : '');
+  $('hSteps').textContent = perf.steps + (perf.dtEff > P.dt * 1.001 ? ' @' + num(perf.dtEff, 3) : '');
+  var alive = 0;
+  for (var i = 0; i < world.n; i++) if (world.alive[i]) alive++;
+  $('hBodies').textContent = alive + (alive !== world.n ? ' / ' + world.n : '');
+  $('hEnergy').textContent = sci(e.dE, 2);
+  $('hEnergy').className = 'v ' + (ae > 1e-3 ? 'bad' : ae > 1e-6 ? 'warn' : 'ok');
+  $('hFrame').textContent = FL.name;
+  $('hState').textContent = T.paused ? 'PAUSED' : 'RUNNING';
+  $('hState').className = 'v ' + (T.paused ? 'warn' : 'ok');
+  $('clkMet').textContent = fmtMET(world.t, T.secondsPerTU);
+  $('clkTu').textContent = num(world.t, 6) + ' TU';
+  $('warpVal').textContent = fmtWarp(T.warp);
+  $('warpTgt').textContent = 'target ' + fmtWarp(T.warpTarget);
+  $('btnPause').textContent = T.paused ? '▶' : '❚❚';
+  $('btnPause').setAttribute('aria-pressed', T.paused ? 'true' : 'false');
+}
+function fmtWarp(v){
+  if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k×';
+  if (v >= 10) return v.toFixed(0) + '×';
+  if (v >= 1) return v.toFixed(1) + '×';
+  return v.toFixed(2) + '×';
+}
+
+/* ------------------------------------------------- 25. selection & tabs */
+function selectBody(id){
+  selId = id;
+  ui.bodiesDirty = true; ui.ctlDirty = true;
+  markPredDirty();
+  renderBodyList();
+  buildCraftEditor();
+}
+function cycleSelection(dir){
+  if (!world) return;
+  var ids = [];
+  for (var i = 0; i < world.n; i++) if (world.alive[i]) ids.push(world.meta[i].id);
+  if (!ids.length) return;
+  var k = ids.indexOf(selId);
+  k = (k + (dir || 1) + ids.length) % ids.length;
+  selectBody(ids[k]);
+  toast('SELECTED ' + world.meta[world.index[ids[k]]].name);
+}
+function showTab(name){
+  var tabs = document.querySelectorAll('#tabs button');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('on', tabs[i].dataset.tab === name);
+  var secs = document.querySelectorAll('.tab');
+  for (var j = 0; j < secs.length; j++) secs[j].classList.toggle('on', secs[j].dataset.tab === name);
+}
+
+/* ------------------------------------------------- 26. transport actions */
+var WARPS = [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+function warpStep(dir){
+  var cur = T.warpTarget, k = 0;
+  for (var i = 0; i < WARPS.length; i++) if (WARPS[i] <= cur * 1.0001) k = i;
+  k = clamp(k + dir, 0, WARPS.length - 1);
+  T.warpTarget = WARPS[k];
+  toast('WARP → ' + fmtWarp(T.warpTarget));
+}
+function setPaused(v){
+  T.paused = v;
+  if (v) markPredDirty();
+  ui.ctlDirty = true;
+  $('craftEditHint').textContent = v
+    ? 'Drag the craft or the head of its green velocity arrow in the viewport, or type exact values here.'
+    : 'Paused-only: pause the simulation to edit the state vector by drag or by number.';
+  logEvent(v ? 'Paused' : 'Resumed');
+}
+function stepOnce(count){
+  var c = count || 1;
+  for (var i = 0; i < c; i++){
+    advance(world, P.dt, simCtx);
+    recordHistory(world);
+  }
+  perf.steps = c; perf.dtEff = P.dt;
+  markPredDirty();
+  pushErr();
+  toast('STEP +' + c + ' × dt = ' + num(c * P.dt, 4) + ' TU');
+}
+function saveCheckpoint(){
+  checkpoint = {
+    world: cloneWorld(world),
+    nodes: JSON.parse(JSON.stringify(nodes)),
+    base: JSON.parse(JSON.stringify(base)),
+    t: world.t
+  };
+  logEvent('Checkpoint saved at T+' + num(world.t, 5), 'ok');
+  toast('CHECKPOINT SAVED — T+' + num(world.t, 4), 'ok');
+  ui.ctlDirty = true;
+}
+function restoreCheckpoint(){
+  if (!checkpoint){ toast('No checkpoint saved yet', 'bad'); return; }
+  copyInto(world, checkpoint.world);
+  nodes.length = 0;
+  var src = JSON.parse(JSON.stringify(checkpoint.nodes));
+  for (var i = 0; i < src.length; i++) nodes.push(src[i]);
+  base = JSON.parse(JSON.stringify(checkpoint.base));
+  initHistory(world.n); recordHistory(world);
+  errHist.length = 0;
+  markPredDirty();
+  ui.nodesDirty = true; ui.bodiesDirty = true; ui.ctlDirty = true;
+  buildNodeEditor();
+  logEvent('Reverted to checkpoint T+' + num(world.t, 5), 'ok');
+  toast('REVERTED TO CHECKPOINT — T+' + num(world.t, 4), 'ok');
+}
+function pushErr(){
+  var e = conservationErr();
+  errPeak = Math.max(errPeak, Math.abs(e.dE));
+  errHist.push({ t: world.t, dE: e.dE, dP: e.dP });
+  if (errHist.length > 170) errHist.shift();
+}
+
+/* --------------------------------------------------------- 27. pointer */
+var pointers = {}, pcount = 0, pinchD = 0, pinchC = null;
+var drag = { mode: null, id: 0, sx: 0, sy: 0, camx: 0, camy: 0, t0: 0, moved: 0, node: null };
+function localXY(e){
+  var r = cv.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+function hitTest(x, y){
+  var h = craftHandles();
+  if (h && hypot(x - h.TX, y - h.TY) < 13) return { type: 'vel', h: h };
+  for (var i = 0; i < nodeScreen.length; i++){
+    var ns = nodeScreen[i];
+    if (hypot(x - ns.x, y - ns.y) < 13) return { type: 'node', node: ns.id };
+  }
+  if (h && hypot(x - h.X, y - h.Y) < 13) return { type: 'body', i: h.i, craft: true };
+  var best = null, bd = 16;
+  for (var k = 0; k < bodyScreen.length; k++){
+    var b = bodyScreen[k];
+    if (b.off) continue;
+    var d = hypot(x - b.X, y - b.Y);
+    var hitR = Math.max(b.r + 6, 12);
+    if (d < hitR && d < bd + b.r){ best = b; bd = d; }
+  }
+  if (best) return { type: 'body', i: best.i };
+  return { type: 'space' };
+}
+function onPointerDown(e){
+  cv.setPointerCapture(e.pointerId);
+  var p = localXY(e);
+  pointers[e.pointerId] = p; pcount++;
+  if (pcount === 2){
+    var ids = Object.keys(pointers);
+    var a = pointers[ids[0]], b = pointers[ids[1]];
+    pinchD = hypot(a.x - b.x, a.y - b.y);
+    pinchC = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    drag.mode = null;
+    return;
+  }
+  if (pcount > 2) return;
+  var hit = hitTest(p.x, p.y);
+  drag.sx = p.x; drag.sy = p.y; drag.t0 = performance.now(); drag.moved = 0;
+  drag.camx = cam.x; drag.camy = cam.y; drag.id = e.pointerId;
+  if (hit.type === 'vel' && T.paused){ drag.mode = 'vel'; cv.className = 'grabbing'; }
+  else if (hit.type === 'node'){ drag.mode = 'node'; drag.node = hit.node; selNode = hit.node; buildNodeEditor(); renderNodeList(); }
+  else if (hit.type === 'body' && hit.craft && T.paused){ drag.mode = 'craft'; cv.className = 'grabbing'; }
+  else if (hit.type === 'body'){ drag.mode = 'maybeSelect'; drag.hitIdx = hit.i; }
+  else { drag.mode = 'pan'; cv.className = 'grabbing'; }
+}
+function onPointerMove(e){
+  if (!(e.pointerId in pointers)) return;
+  var p = localXY(e);
+  pointers[e.pointerId] = p;
+  if (pcount === 2){
+    var ids = Object.keys(pointers);
+    var a = pointers[ids[0]], b = pointers[ids[1]];
+    var d = hypot(a.x - b.x, a.y - b.y);
+    var c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    if (pinchD > 4 && d > 4){
+      zoomAt(c.x, c.y, d / pinchD);
+      cam.x -= (c.x - pinchC.x) / cam.scale;
+      cam.y += (c.y - pinchC.y) / cam.scale;
+      V.follow = false; ui.ctlDirty = true;
+    }
+    pinchD = d; pinchC = c;
+    return;
+  }
+  if (!drag.mode) return;
+  var dx = p.x - drag.sx, dy = p.y - drag.sy;
+  drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dy));
+  if (drag.mode === 'maybeSelect' && drag.moved > 5){ drag.mode = 'pan'; cv.className = 'grabbing'; }
+  if (drag.mode === 'pan'){
+    cam.x = drag.camx - dx / cam.scale;
+    cam.y = drag.camy + dy / cam.scale;
+    if (V.follow){ V.follow = false; ui.ctlDirty = true; }
+    potCache.dirty = true;
+  } else if (drag.mode === 'craft'){
+    var h = craftHandles(); if (!h) return;
+    var n = world.n, i = h.i;
+    var fx = ux(p.x), fy = uy(p.y);
+    var vf = h.vf;
+    var np = invPos(fx, fy);
+    var nv = invVel(vf.x, vf.y, fx, fy);
+    world.y[i] = np.x; world.y[n + i] = np.y;
+    world.y[2 * n + i] = nv.x; world.y[3 * n + i] = nv.y;
+    world.aValid = false;
+    onStateEdited();
+  } else if (drag.mode === 'vel'){
+    var h2 = craftHandles(); if (!h2) return;
+    var n2 = world.n, i2 = h2.i;
+    var vfx = (p.x - h2.X) / h2.vs, vfy = -(p.y - h2.Y) / h2.vs;
+    var nv2 = invVel(vfx, vfy, h2.fx, h2.fy);
+    world.y[2 * n2 + i2] = nv2.x; world.y[3 * n2 + i2] = nv2.y;
+    onStateEdited();
+  } else if (drag.mode === 'node'){
+    var nd = getNode(drag.node);
+    if (nd && pred.valid && pred.craft >= 0){
+      /* find the predicted sample closest to the pointer, use its time */
+      var n3 = pred.n, bestK = -1, bestD = 1e18, ident = (FR.mode === 'inertial');
+      for (var k = 0; k < pred.count; k++){
+        var idx = k * n3 + pred.craft, X, Y;
+        if (ident){ X = sx(pred.px[idx]); Y = sy(pred.py[idx]); }
+        else {
+          frameFromSnapshot(pred.px, pred.py, k * n3, n3, world.m, world.alive, _fs);
+          var ddx = pred.px[idx] - _fs.ox, ddy = pred.py[idx] - _fs.oy;
+          X = sx(ddx * _fs.cos + ddy * _fs.sin); Y = sy(-ddx * _fs.sin + ddy * _fs.cos);
+        }
+        var dd = (X - p.x) * (X - p.x) + (Y - p.y) * (Y - p.y);
+        if (dd < bestD){ bestD = dd; bestK = k; }
+      }
+      if (bestK >= 0){
+        nd.t = Math.max(world.t + 1e-6, pred.t[bestK]);
+        nodes.sort(function(a, b){ return a.t - b.t; });
+        markPredDirty(); ui.nodesDirty = true; ui.ctlDirty = true;
+      }
+    }
+  }
+}
+function onPointerUp(e){
+  if (!(e.pointerId in pointers)) return;
+  var p = pointers[e.pointerId];
+  delete pointers[e.pointerId]; pcount = Math.max(0, pcount - 1);
+  cv.className = '';
+  if (pcount > 0){ drag.mode = null; return; }
+  var quick = performance.now() - drag.t0 < 400 && drag.moved < 6;
+  if (quick){
+    var hit = hitTest(drag.sx, drag.sy);
+    if (hit.type === 'body') selectBody(world.meta[hit.i].id);
+    else if (hit.type === 'space' && drag.mode !== 'node'){ selNode = null; buildNodeEditor(); renderNodeList(); }
+  }
+  drag.mode = null;
+}
+function onWheel(e){
+  e.preventDefault();
+  var p = localXY(e);
+  var d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+  zoomAt(p.x, p.y, Math.exp(-clamp(d, -400, 400) * 0.0016));
+  ui.ctlDirty = true;
+}
+function clearHistory(){ hist.len = 0; hist.head = 0; hist.lastT = -1e30; }
+function onStateEdited(){
+  world.aValid = false;
+  clearHistory(); recordHistory(world);
+  rebaseline('manual edit');
+  markPredDirty();
+  runPrediction();
+  ui.ctlDirty = true;
+}
+
+/* ------------------------------------------------------- 28. scenarios */
+function orbitAround(prim, r, phase, mu, retro){
+  var a = phase, v = Math.sqrt(mu / r) * (retro ? -1 : 1);
+  return { x: prim.x + r * Math.cos(a), y: prim.y + r * Math.sin(a),
+           vx: prim.vx - v * Math.sin(a), vy: prim.vy + v * Math.cos(a) };
+}
+function balance(specs){
+  /* remove net momentum and put the barycentre at the origin (heaviest body absorbs it) */
+  var M = 0, px = 0, py = 0, cx = 0, cy = 0, hi = 0, i;
+  for (i = 0; i < specs.length; i++){
+    M += specs[i].m; px += specs[i].m * specs[i].vx; py += specs[i].m * specs[i].vy;
+    cx += specs[i].m * specs[i].x; cy += specs[i].m * specs[i].y;
+    if (specs[i].m > specs[hi].m) hi = i;
+  }
+  if (M <= 0) return specs;
+  specs[hi].vx -= px / specs[hi].m; specs[hi].vy -= py / specs[hi].m;
+  cx /= M; cy /= M;
+  for (i = 0; i < specs.length; i++){ specs[i].x -= cx; specs[i].y -= cy; }
+  return specs;
+}
+var CRAFT_M = 1e-9;
+function craftSpec(id, name, st, color){
+  return { id: id, name: name, type: 'craft', m: CRAFT_M, radius: 0.12,
+           color: color || '#3fe0d0', x: st.x, y: st.y, vx: st.vx, vy: st.vy };
+}
+var SCENARIOS = [
+{ id: 'kestrel', name: 'Kestrel System', tag: 'default',
+  blurb: 'Star + planet + moon + spacecraft in low planet orbit. Everything perturbs everything.',
+  build: function(){
+    var star = { id: 'sol', name: 'Sol-K', type: 'star', m: 1000, radius: 14, color: '#ffb454', glow: 1,
+                 x: 0, y: 0, vx: 0, vy: 0 };
+    var pl = orbitAround(star, 600, 0, 1000);
+    var planet = { id: 'kestrel', name: 'Kestrel', type: 'planet', m: 8, radius: 6, color: '#5aa9ff', ring: true,
+                   x: pl.x, y: pl.y, vx: pl.vx, vy: pl.vy };
+    var mn = orbitAround(planet, 30, Math.PI * 0.5, 8);
+    var moon = { id: 'vela', name: 'Vela', type: 'moon', m: 0.05, radius: 2.2, color: '#b9c6d4',
+                 x: mn.x, y: mn.y, vx: mn.vx, vy: mn.vy };
+    var cr = orbitAround(planet, 12, 0, 8);
+    return { bodies: balance([star, planet, moon, craftSpec('odyssey', 'Odyssey', cr)]),
+             nodes: [], sel: 'odyssey',
+             P: { dt: 0.02, G: 1, collide: 'crash' },
+             V: { horizon: 420, predSteps: 12000, trailSpan: 420, bodyScale: 1 },
+             T: { baseRate: 10, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'body:kestrel', span: 92 } };
+  } },
+{ id: 'circular', name: 'Circular orbit', tag: 'reference',
+  blurb: 'A single planet and a spacecraft on a textbook circular orbit — e ≈ 0, constant speed.',
+  build: function(){
+    var planet = { id: 'terra', name: 'Terra', type: 'planet', m: 100, radius: 10, color: '#5aa9ff',
+                   x: 0, y: 0, vx: 0, vy: 0 };
+    var cr = orbitAround(planet, 80, 0, 100);
+    return { bodies: balance([planet, craftSpec('probe', 'Probe-1', cr)]),
+             nodes: [], sel: 'probe',
+             P: { dt: 0.02, G: 1, collide: 'crash' },
+             V: { horizon: 520, predSteps: 9000, trailSpan: 460, bodyScale: 1 },
+             T: { baseRate: 30, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'body:terra', span: 230 } };
+  } },
+{ id: 'elliptic', name: 'Elliptical orbit', tag: 'reference',
+  blurb: 'Same planet, periapsis kick of 1.25 × circular speed — e ≈ 0.56, visible apsis precession-free conic.',
+  build: function(){
+    var planet = { id: 'terra', name: 'Terra', type: 'planet', m: 100, radius: 10, color: '#5aa9ff',
+                   x: 0, y: 0, vx: 0, vy: 0 };
+    var cr = orbitAround(planet, 60, 0, 100);
+    cr.vx *= 1.25; cr.vy *= 1.25;
+    return { bodies: balance([planet, craftSpec('probe', 'Probe-1', cr)]),
+             nodes: [], sel: 'probe',
+             P: { dt: 0.02, G: 1, collide: 'crash' },
+             V: { horizon: 1100, predSteps: 14000, trailSpan: 1050, bodyScale: 1 },
+             T: { baseRate: 40, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'body:terra', span: 420 } };
+  } },
+{ id: 'hohmann', name: 'Hohmann transfer', tag: 'maneuver',
+  blurb: 'Two pre-loaded burns raise a 100 LU circular orbit to 250 LU, phased to rendezvous with a station.',
+  build: function(){
+    var mu = 200, r1 = 100, r2 = 250, tb = 40;
+    var planet = { id: 'ares', name: 'Ares', type: 'planet', m: 200, radius: 12, color: '#ff8f6d',
+                   x: 0, y: 0, vx: 0, vy: 0 };
+    var v1 = Math.sqrt(mu / r1), v2 = Math.sqrt(mu / r2), at = (r1 + r2) / 2;
+    var vp = Math.sqrt(mu * (2 / r1 - 1 / at)), va = Math.sqrt(mu * (2 / r2 - 1 / at));
+    var dv1 = vp - v1, dv2 = v2 - va;
+    var ttr = Math.PI * Math.sqrt(at * at * at / mu);
+    var w1 = v1 / r1, w2 = v2 / r2;
+    var arriveAng = w1 * tb + Math.PI, arriveT = tb + ttr;
+    /* 0.02 rad of lead leaves a ~5 LU miss distance at arrival: close enough to
+       read as a rendezvous, far enough that two point masses do not exchange a
+       singular impulse when they pass */
+    var stAng = arriveAng - w2 * arriveT + 0.02;
+    var cr = orbitAround(planet, r1, 0, mu);
+    var st = orbitAround(planet, r2, stAng, mu);
+    var station = { id: 'station', name: 'Ceres Stn', type: 'moon', m: 0, radius: 1.6, color: '#ffe08a',
+                    x: st.x, y: st.y, vx: st.vx, vy: st.vy };
+    return { bodies: balance([planet, station, craftSpec('tug', 'Tug-7', cr)]),
+             nodes: [{ craft: 'tug', t: tb, mode: 'pn', pro: dv1, rad: 0 },
+                     { craft: 'tug', t: arriveT, mode: 'pn', pro: dv2, rad: 0 }],
+             sel: 'tug',
+             P: { dt: 0.02, G: 1, collide: 'none' },
+             V: { horizon: 760, predSteps: 16000, trailSpan: 760, bodyScale: 1 },
+             T: { baseRate: 40, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'body:ares', span: 620 } };
+  } },
+{ id: 'moon', name: 'Moon transfer', tag: 'maneuver',
+  blurb: 'Kestrel system with a pre-loaded translunar injection — tune the burn to shrink the flyby distance.',
+  build: function(){
+    var star = { id: 'sol', name: 'Sol-K', type: 'star', m: 1000, radius: 14, color: '#ffb454',
+                 x: 0, y: 0, vx: 0, vy: 0 };
+    var pl = orbitAround(star, 600, 0, 1000);
+    var planet = { id: 'kestrel', name: 'Kestrel', type: 'planet', m: 8, radius: 6, color: '#5aa9ff', ring: true,
+                   x: pl.x, y: pl.y, vx: pl.vx, vy: pl.vy };
+    var mu = 8, r1 = 12, r2 = 30, tb = 24;
+    var v1 = Math.sqrt(mu / r1), at = (r1 + r2) / 2;
+    var vp = Math.sqrt(mu * (2 / r1 - 1 / at));
+    var dv1 = vp - v1, ttr = Math.PI * Math.sqrt(at * at * at / mu);
+    var w1 = v1 / r1, w2 = Math.sqrt(mu / r2) / r2;
+    /* +0.34 rad of lead leaves Vela ~5 LU ahead at arrival: a clean flyby that the
+       user can tighten by trimming the injection burn */
+    var arriveT = tb + ttr, moonAng = (w1 * tb + Math.PI) - w2 * arriveT + 0.34;
+    var mn = orbitAround(planet, r2, moonAng, mu);
+    var moon = { id: 'vela', name: 'Vela', type: 'moon', m: 0.05, radius: 2.2, color: '#b9c6d4',
+                 x: mn.x, y: mn.y, vx: mn.vx, vy: mn.vy };
+    var cr = orbitAround(planet, r1, 0, mu);
+    return { bodies: balance([star, planet, moon, craftSpec('ferry', 'Ferry-2', cr)]),
+             nodes: [{ craft: 'ferry', t: tb, mode: 'pn', pro: dv1, rad: 0 }],
+             sel: 'ferry',
+             P: { dt: 0.01, G: 1, collide: 'crash' },
+             V: { horizon: 260, predSteps: 16000, trailSpan: 260, bodyScale: 1 },
+             T: { baseRate: 6, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'body:kestrel', span: 88 } };
+  } },
+{ id: 'slingshot', name: 'Gravitational slingshot', tag: 'encounter',
+  blurb: 'A probe falls past a massive planet on its trailing side and leaves with more heliocentric energy.',
+  build: function(){
+    var star = { id: 'sol', name: 'Sol-K', type: 'star', m: 1000, radius: 14, color: '#ffb454',
+                 x: 0, y: 0, vx: 0, vy: 0 };
+    var pl = orbitAround(star, 600, 0, 1000);
+    var planet = { id: 'jove', name: 'Jove', type: 'planet', m: 40, radius: 11, color: '#c79a6a', ring: true,
+                   x: pl.x, y: pl.y, vx: pl.vx, vy: pl.vy };
+    var vinf = 0.9, dirx = -0.86, diry = -0.51;
+    var L = Math.sqrt(dirx * dirx + diry * diry); dirx /= L; diry /= L;
+    /* negative impact parameter -> the probe crosses behind Jove and gains
+       heliocentric energy; v_inf is comfortably above Jove's escape speed at
+       this range so the encounter is a true hyperbolic flyby, not a capture */
+    var b = -65, appr = 260;
+    var cr = { x: planet.x - dirx * appr + diry * b, y: planet.y - diry * appr - dirx * b,
+               vx: planet.vx + dirx * vinf, vy: planet.vy + diry * vinf };
+    return { bodies: balance([star, planet, craftSpec('voyager', 'Kite', cr)]),
+             nodes: [], sel: 'voyager',
+             P: { dt: 0.01, G: 1, collide: 'crash' },
+             V: { horizon: 900, predSteps: 22000, trailSpan: 900, bodyScale: 1 },
+             T: { baseRate: 25, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'body:jove', span: 700 } };
+  } },
+{ id: 'threebody', name: 'Unstable three-body', tag: 'chaos',
+  blurb: 'The Pythagorean 3-4-5 problem: three masses released from rest. Chaotic, ejection-prone, error-hungry.',
+  build: function(){
+    var s = 6, k = 10;
+    var A = { id: 'alpha', name: 'Alpha', type: 'planet', m: 3 * k, radius: 1.7, color: '#ff7ab6',
+              x: 1 * s, y: 3 * s, vx: 0, vy: 0 };
+    var B = { id: 'beta', name: 'Beta', type: 'planet', m: 4 * k, radius: 1.9, color: '#5ce08a',
+              x: -2 * s, y: -1 * s, vx: 0, vy: 0 };
+    var C = { id: 'gamma', name: 'Gamma', type: 'planet', m: 5 * k, radius: 2.1, color: '#5aa9ff',
+              x: 1 * s, y: -1 * s, vx: 0, vy: 0 };
+    var cr = orbitAround(C, 7, Math.PI * 0.5, 5 * k);
+    /* Plummer softening keeps the (physically singular) close encounters finite,
+       and contacts are disabled so the chaotic dance is not cut short by mergers */
+    return { bodies: [A, B, C, craftSpec('scout', 'Scout', cr)],
+             nodes: [], sel: 'scout',
+             P: { dt: 0.002, G: 1, collide: 'none', soft: 0.45, integrator: 'yoshida4' },
+             V: { horizon: 40, predSteps: 16000, trailSpan: 90, bodyScale: 1 },
+             T: { baseRate: 8, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'bary', span: 110 } };
+  } },
+{ id: 'escape', name: 'Escape trajectory', tag: 'reference',
+  blurb: 'Hyperbolic departure at 1.15 × escape speed — positive specific energy, e > 1, no apoapsis.',
+  build: function(){
+    var planet = { id: 'terra', name: 'Terra', type: 'planet', m: 100, radius: 10, color: '#5aa9ff',
+                   x: 0, y: 0, vx: 0, vy: 0 };
+    var cr = orbitAround(planet, 60, 0, 100);
+    var k = 1.15 * Math.SQRT2;
+    cr.vx *= k; cr.vy *= k;
+    return { bodies: balance([planet, craftSpec('vagabond', 'Vagabond', cr)]),
+             nodes: [], sel: 'vagabond',
+             P: { dt: 0.02, G: 1, collide: 'crash' },
+             V: { horizon: 700, predSteps: 12000, trailSpan: 700, bodyScale: 1 },
+             T: { baseRate: 30, secondsPerTU: 60, warp: 1 },
+             view: { frame: 'body:terra', span: 900 } };
+  } }
+];
+var DEF_P = JSON.parse(JSON.stringify(P)), DEF_V = JSON.parse(JSON.stringify(V)), DEF_T = JSON.parse(JSON.stringify(T));
+function loadScenario(id, keepCamera){
+  var def = null;
+  for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].id === id) def = SCENARIOS[i];
+  if (!def) return;
+  var b = def.build(), k;
+  for (k in DEF_P) P[k] = DEF_P[k];
+  for (k in DEF_V) V[k] = DEF_V[k];
+  for (k in DEF_T) T[k] = DEF_T[k];
+  if (b.P) for (k in b.P) P[k] = b.P[k];
+  if (b.V) for (k in b.V) V[k] = b.V[k];
+  if (b.T) for (k in b.T) T[k] = b.T[k];
+  T.warpTarget = T.warp;
+  world = makeWorld(b.bodies, 0);
+  scenarioId = id; scenarioDef = def;
+  nodes.length = 0; nodeSeq = 1; selNode = null;
+  for (i = 0; i < (b.nodes || []).length; i++){
+    var nd = b.nodes[i];
+    nodes.push({ id: nodeSeq++, craft: nd.craft, t: nd.t, mode: nd.mode || 'pn',
+                 pro: nd.pro || 0, rad: nd.rad || 0, cx: nd.cx || 0, cy: nd.cy || 0 });
+  }
+  if (nodes.length) selNode = nodes[0].id;
+  selId = b.sel || (world.n ? world.meta[world.n - 1].id : null);
+  events.length = 0; checkpoint = null;
+  simCtx.hAdapt = 0; simCtx.dpAccept = 0; simCtx.dpReject = 0; simCtx.bounceCooldown = 0;
+  /* reference scales for arrows and Δv sliders */
+  var maxV = 0, maxA = 0;
+  accelWorld(world, world.a); world.aValid = true;
+  for (i = 0; i < world.n; i++){
+    maxV = Math.max(maxV, hypot(world.y[2 * world.n + i], world.y[3 * world.n + i]));
+    maxA = Math.max(maxA, hypot(world.a[2 * i], world.a[2 * i + 1]));
+  }
+  scnVecRef = Math.max(maxV, 1e-6); scnAccRef = Math.max(maxA, 1e-12);
+  scnDvMax = Math.max(0.02, 0.6 * (maxV || 1));
+  initHistory(world.n); recordHistory(world);
+  rebaseline('scenario load');
+  errHist.length = 0; errPeak = 0;
+  var vw = b.view || {};
+  if (!keepCamera){
+    setFrameValue(vw.frame || 'inertial', true);
+    computeFrameLive(world);
+    cam.x = vw.cx || 0; cam.y = vw.cy || 0;
+    computeInsets();
+    cam.scale = clamp(Math.min(Math.max(80, W - insetR), Math.max(80, H - insetB)) / (vw.span || 200), 1e-7, 1e7);
+  }
+  potCache.dirty = true;
+  T.paused = false;
+  markPredDirty(); runPrediction();
+  buildNodeEditor(); buildCraftEditor();
+  ui.bodiesDirty = true; ui.nodesDirty = true; ui.ctlDirty = true; ui.scnDirty = true;
+  logEvent('Scenario loaded: ' + def.name, 'ok');
+  $('hScnName').textContent = def.name;
+  $('hScnBlurb').textContent = ' — ' + def.blurb;
+  renderScenarioList(); renderBodyList(); renderNodeList();
+}
+function renderScenarioList(){
+  var host = $('scnList');
+  host.innerHTML = '';
+  for (var i = 0; i < SCENARIOS.length; i++){
+    (function(s){
+      var b = document.createElement('button');
+      b.className = 'scn' + (scenarioId === s.id ? ' on' : '');
+      b.id = 'scn-' + s.id;
+      b.innerHTML = '<b>' + s.name + '</b><i>' + s.blurb + '</i>';
+      b.addEventListener('click', function(){ loadScenario(s.id); toast('SCENARIO — ' + s.name, 'ok'); });
+      host.appendChild(b);
+    })(SCENARIOS[i]);
+  }
+  ui.scnDirty = false;
+}
+
+/* --------------------------------------------------------- 29. keyboard */
+var KEYHELP = [
+  ['Space', 'pause / resume'], ['.', 'single integration step'], ['Shift + .', '10 steps'],
+  ['[  ]', 'time warp down / up'], ['−  =', 'zoom out / in'], ['Arrows', 'pan'],
+  ['F / Shift+F', 'cycle reference frame'], ['B', 'cycle selection'],
+  ['C / X', 'save / revert to checkpoint'], ['Backspace', 'restart scenario'],
+  ['N', 'add maneuver node'], ['Delete', 'delete selected node'],
+  ['T V A G O P L E', 'trails · vectors · accel · guides · SOI · potential · labels · error plot'],
+  ['H', 'show / hide panel'], ['Esc', 'clear selection']
+];
+function onKey(e){
+  var tg = e.target;
+  if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.tagName === 'SELECT')) return;
+  var k = e.key;
+  var handled = true;
+  switch (k){
+    case ' ': setPaused(!T.paused); break;
+    case '.': case '>': stepOnce(e.shiftKey ? 10 : 1); break;
+    case '[': warpStep(-1); break;
+    case ']': warpStep(1); break;
+    case '-': case '_': zoomAt(VCX, VCY, 1 / 1.35); break;
+    case '=': case '+': zoomAt(VCX, VCY, 1.35); break;
+    case 'ArrowLeft':  cam.x -= 60 / cam.scale; V.follow = false; potCache.dirty = true; break;
+    case 'ArrowRight': cam.x += 60 / cam.scale; V.follow = false; potCache.dirty = true; break;
+    case 'ArrowUp':    cam.y += 60 / cam.scale; V.follow = false; potCache.dirty = true; break;
+    case 'ArrowDown':  cam.y -= 60 / cam.scale; V.follow = false; potCache.dirty = true; break;
+    case 'f': case 'F': cycleFrame(e.shiftKey ? -1 : 1); break;
+    case 'b': case 'B': cycleSelection(e.shiftKey ? -1 : 1); break;
+    case 'c': case 'C': saveCheckpoint(); break;
+    case 'x': case 'X': restoreCheckpoint(); break;
+    case 'Backspace': loadScenario(scenarioId); toast('SCENARIO RESTARTED'); break;
+    case 'n': case 'N': addNode(); buildNodeEditor(); renderNodeList(); showTab('nodes'); break;
+    case 'Delete': if (selNode !== null){ deleteNode(selNode); buildNodeEditor(); renderNodeList(); } break;
+    case 't': case 'T': V.trails = !V.trails; break;
+    case 'v': case 'V': V.vectors = !V.vectors; break;
+    case 'a': case 'A': V.accelVec = !V.accelVec; break;
+    case 'g': case 'G': V.guides = !V.guides; break;
+    case 'o': case 'O': V.soi = !V.soi; break;
+    case 'p': case 'P': V.potential = !V.potential; potCache.dirty = true; break;
+    case 'l': case 'L': V.labels = !V.labels; break;
+    case 'e': case 'E': V.errGraph = !V.errGraph; break;
+    case 'h': case 'H': setPanelHidden(!panelEl.classList.contains('hidden')); break;
+    case 'Escape': selId = null; selNode = null; buildNodeEditor(); renderBodyList(); renderNodeList(); break;
+    default: handled = false;
+  }
+  if (handled){ e.preventDefault(); ui.ctlDirty = true; }
+}
+
+/* ------------------------------------------------------- 30. state I/O */
+function exportState(){
+  var n = world.n, bodies = [];
+  for (var i = 0; i < n; i++){
+    var mt = world.meta[i];
+    bodies.push({ id: mt.id, name: mt.name, type: mt.type, color: mt.color, ring: !!mt.ring,
+                  radius: world.rad[i], m: world.m[i], alive: world.alive[i],
+                  x: world.y[i], y: world.y[n + i], vx: world.y[2 * n + i], vy: world.y[3 * n + i] });
+  }
+  return { format: 'orbital-sandbox', version: 1, scenario: scenarioId, t: world.t,
+           physics: JSON.parse(JSON.stringify(P)), view: JSON.parse(JSON.stringify(V)),
+           time: { warp: T.warp, warpTarget: T.warpTarget, baseRate: T.baseRate, secondsPerTU: T.secondsPerTU },
+           frame: JSON.parse(JSON.stringify(FR)), camera: { x: cam.x, y: cam.y, scale: cam.scale },
+           selection: selId, bodies: bodies, nodes: JSON.parse(JSON.stringify(nodes)) };
+}
+function importState(obj){
+  if (!obj || obj.format !== 'orbital-sandbox') throw new Error('not an orbital-sandbox state');
+  var k;
+  if (obj.physics) for (k in obj.physics) if (k in P) P[k] = obj.physics[k];
+  if (obj.view) for (k in obj.view) if (k in V) V[k] = obj.view[k];
+  if (obj.time) for (k in obj.time) if (k in T) T[k] = obj.time[k];
+  world = makeWorld(obj.bodies, obj.t || 0);
+  for (var i = 0; i < obj.bodies.length; i++) world.alive[i] = obj.bodies[i].alive ? 1 : 0;
+  scenarioId = obj.scenario || scenarioId;
+  nodes.length = 0; nodeSeq = 1;
+  (obj.nodes || []).forEach(function(nd){ nodes.push(nd); nodeSeq = Math.max(nodeSeq, nd.id + 1); });
+  selNode = nodes.length ? nodes[0].id : null;
+  selId = obj.selection || null;
+  if (obj.frame){ FR.mode = obj.frame.mode; FR.center = obj.frame.center; FR.rotA = obj.frame.rotA; FR.rotB = obj.frame.rotB; }
+  if (obj.camera){ cam.x = obj.camera.x; cam.y = obj.camera.y; cam.scale = obj.camera.scale; }
+  var maxV = 0;
+  for (i = 0; i < world.n; i++) maxV = Math.max(maxV, hypot(world.y[2 * world.n + i], world.y[3 * world.n + i]));
+  scnVecRef = Math.max(maxV, 1e-6); scnDvMax = Math.max(0.02, 0.6 * (maxV || 1));
+  initHistory(world.n); recordHistory(world);
+  rebaseline('import'); errHist.length = 0;
+  markPredDirty(); runPrediction(); buildNodeEditor();
+  ui.bodiesDirty = true; ui.nodesDirty = true; ui.ctlDirty = true;
+  renderBodyList(); renderNodeList();
+  logEvent('State imported (' + world.n + ' bodies, ' + nodes.length + ' nodes)', 'ok');
+}
+var LS_KEY = 'orbital-sandbox-state-v1';
+
+/* ---------------------------------------------------------- 31. wiring */
+function setPanelHidden(v){
+  panelEl.classList.toggle('hidden', v);
+  document.body.classList.toggle('panelOff', v);
+  document.body.classList.toggle('panelOn', !v);
+  $('panelToggle').textContent = v ? '\u2630 PANEL' : '\u2715 CLOSE';
+  $('panelToggle').setAttribute('aria-label', v ? 'Open control panel' : 'Close control panel');
+  potCache.dirty = true;
+}
+function wire(){
+  var tabs = document.querySelectorAll('#tabs button');
+  for (var i = 0; i < tabs.length; i++)
+    (function(b){ b.addEventListener('click', function(){ showTab(b.dataset.tab); }); })(tabs[i]);
+
+  $('panelToggle').addEventListener('click', function(){ setPanelHidden(!panelEl.classList.contains('hidden')); });
+  $('btnPause').addEventListener('click', function(){ setPaused(!T.paused); });
+  $('btnPause').title = 'Pause / resume (Space)';
+  $('btnStep').addEventListener('click', function(){ stepOnce(1); });
+  $('btnStep').title = 'Single integration step (.)';
+  $('btnReset').addEventListener('click', function(){ loadScenario(scenarioId); toast('SCENARIO RESTARTED'); });
+  $('btnWarpDn').addEventListener('click', function(){ warpStep(-1); });
+  $('btnWarpDn').title = 'Slower ([)';
+  $('btnWarpUp').addEventListener('click', function(){ warpStep(1); });
+  $('btnWarpUp').title = 'Faster (])';
+  $('btnCkptSave').addEventListener('click', saveCheckpoint);
+  $('btnCkptLoad').addEventListener('click', restoreCheckpoint);
+  $('btnZoomIn').addEventListener('click', function(){ zoomAt(VCX, VCY, 1.4); ui.ctlDirty = true; });
+  $('btnZoomOut').addEventListener('click', function(){ zoomAt(VCX, VCY, 1 / 1.4); ui.ctlDirty = true; });
+  $('btnFit').addEventListener('click', function(){ V.follow = false; fitSystem(); ui.ctlDirty = true; });
+  $('btnFit2').addEventListener('click', function(){ V.follow = false; fitSystem(); ui.ctlDirty = true; });
+  $('btnFocus').addEventListener('click', function(){ focusSelection(true); ui.ctlDirty = true; });
+  $('btnRebase').addEventListener('click', function(){ rebaseline('manual'); toast('CONSERVATION BASELINE RESET', 'ok'); });
+  $('btnAddNode').addEventListener('click', function(){ addNode(); buildNodeEditor(); renderNodeList(); });
+  $('btnClearNodes').addEventListener('click', function(){
+    nodes.length = 0; selNode = null; markPredDirty(); buildNodeEditor(); renderNodeList();
+    toast('ALL NODES CLEARED');
+  });
+  var fs = $('frameSel');
+  fs.addEventListener('change', function(){ setFrameValue(fs.value); });
+  $('btnSaveLocal').addEventListener('click', function(){
+    try { localStorage.setItem(LS_KEY, JSON.stringify(exportState())); toast('STATE SAVED TO BROWSER STORAGE', 'ok'); }
+    catch (err){ toast('Storage unavailable: ' + err.message, 'bad'); }
+  });
+  $('btnLoadLocal').addEventListener('click', function(){
+    try {
+      var s = localStorage.getItem(LS_KEY);
+      if (!s){ toast('No saved state found', 'bad'); return; }
+      importState(JSON.parse(s)); toast('STATE RESTORED FROM STORAGE', 'ok');
+    } catch (err){ toast('Load failed: ' + err.message, 'bad'); }
+  });
+  $('btnExport').addEventListener('click', function(){
+    $('ioText').value = JSON.stringify(exportState(), null, 1);
+    toast('STATE EXPORTED TO TEXT BOX', 'ok');
+  });
+  $('btnImport').addEventListener('click', function(){
+    try { importState(JSON.parse($('ioText').value)); toast('STATE IMPORTED', 'ok'); }
+    catch (err){ toast('Import failed: ' + err.message, 'bad'); }
+  });
+  cv.addEventListener('pointerdown', onPointerDown);
+  cv.addEventListener('pointermove', onPointerMove);
+  cv.addEventListener('pointerup', onPointerUp);
+  cv.addEventListener('pointercancel', onPointerUp);
+  cv.addEventListener('wheel', onWheel, { passive: false });
+  cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('resize', function(){ resizeCanvas(); });
+  if (window.ResizeObserver) new ResizeObserver(function(){ resizeCanvas(); }).observe(document.body);
+  var help = $('helpKeys');
+  help.innerHTML = KEYHELP.map(function(r){ return tr(r[0], r[1]); }).join('');
+}
+
+/* -------------------------------------------------------- 32. main loop */
+var simAccum = 0, lastFrameT = 0, lastUI = 0, lastErrT = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  if (!world) return;
+  var dtReal = lastFrameT ? Math.min(0.25, (now - lastFrameT) / 1000) : 1 / 60;
+  lastFrameT = now;
+  if (dtReal > 0) perf.fps = perf.fps * 0.88 + (1 / dtReal) * 0.12;
+
+  /* smooth time-warp ramp (exponential approach in log space) */
+  if (Math.abs(Math.log(T.warp / T.warpTarget)) > 1e-4){
+    var kk = 1 - Math.exp(-dtReal / 0.30);
+    T.warp = Math.exp(Math.log(T.warp) + (Math.log(T.warpTarget) - Math.log(T.warp)) * kk);
+    if (Math.abs(Math.log(T.warp / T.warpTarget)) < 5e-3) T.warp = T.warpTarget;
+  }
+  var t0 = performance.now();
+  var steps = 0, dtEff = P.dt, throttled = false;
+  if (!T.paused){
+    simAccum += T.warp * T.baseRate * dtReal;
+    if (simAccum > P.maxSteps * dtEff){
+      if (P.autoDt) dtEff = Math.min(simAccum / P.maxSteps, P.dt * 64);
+      if (simAccum > P.maxSteps * dtEff){ simAccum = P.maxSteps * dtEff; throttled = true; }
+    }
+    var trailDt = V.trailSpan / 1300, recs = 0;
+    var s0 = STEPCOUNT;
+    while (simAccum >= dtEff - 1e-15 && steps < P.maxSteps){
+      advance(world, dtEff, simCtx);
+      simAccum -= dtEff; steps++;
+      if (world.t - hist.lastT >= trailDt && recs < 26){ recordHistory(world); recs++; }
+    }
+    if (recs === 0) recordHistory(world);
+    perf.steps = STEPCOUNT - s0;
+    perf.warpEff = dtReal > 0 ? (steps * dtEff) / (T.baseRate * dtReal) : 0;
+  } else {
+    simAccum = 0; perf.steps = 0; perf.warpEff = 0;
+  }
+  perf.dtEff = dtEff; perf.throttled = throttled;
+  perf.phys = performance.now() - t0;
+
+  if (V.predict && (predDirty || (!T.paused && now - lastPredAt > 90))) runPrediction();
+
+  if (now - lastErrT > 220){ pushErr(); lastErrT = now; }
+
+  var t1 = performance.now();
+  draw();
+  perf.draw = performance.now() - t1;
+  perf.frame = performance.now() - t0;
+
+  if (now - lastUI > 100){
+    lastUI = now;
+    updateHUD();
+    renderSelTel(); renderSysTel(); renderPerfTel(); renderPostBurn(); renderEncounters();
+    if (ui.bodiesDirty) renderBodyList();
+    if (ui.nodesDirty) renderNodeList();
+    if (ui.logDirty) renderLog();
+    if (ui.scnDirty) renderScenarioList();
+    syncControls();
+    if (ui.ctlDirty){ syncFrameSel(); ui.ctlDirty = false; }
+  }
+}
+function syncFrameSel(){
+  var fs = $('frameSel'), opts = frameOptions();
+  var sig = opts.map(function(o){ return o[0]; }).join('|');
+  if (fs.__sig !== sig){
+    fs.innerHTML = '';
+    opts.forEach(function(o){
+      var e = document.createElement('option');
+      e.value = o[0]; e.textContent = o[1];
+      fs.appendChild(e);
+    });
+    fs.__sig = sig;
+  }
+  fs.value = frameValue();
+}
+
+/* ------------------------------------------------------------ 33. init */
+function init(){
+  cv = $('view'); g = cv.getContext('2d', { alpha: false });
+  panelEl = $('panel'); transportEl = $('transport'); hudEl = $('hud');
+  resizeCanvas();
+  buildStars();
+  buildPanels();
+  wire();
+  setPanelHidden(window.innerWidth <= 820);
+  loadScenario('kestrel');
+  syncFrameSel();
+  showTab('mission');
+  requestAnimationFrame(frame);
+}
+
+/* ------------------------------------------- 34. diagnostics / test API */
+window.SIM = {
+  P: P, V: V, T: T, FR: FR, cam: cam, nodes: nodes,
+  scenarios: function(){ return SCENARIOS.map(function(s){ return s.id; }); },
+  world: function(){ return world; },
+  state: function(){
+    var e = conservationErr();
+    var alive = 0;
+    for (var i = 0; i < world.n; i++) if (world.alive[i]) alive++;
+    return { t: world.t, met: fmtMET(world.t, T.secondsPerTU), paused: T.paused,
+             warp: T.warp, warpTarget: T.warpTarget, steps: perf.steps, dtEff: perf.dtEff,
+             fps: perf.fps, bodies: alive, total: world.n, frame: FL.name, frameValue: frameValue(),
+             energyErr: e.dE, momentumErr: e.dP, angMomErr: e.dL, scenario: scenarioId,
+             selection: selId, nodes: nodes.length, predMs: pred.ms, zoom: cam.scale };
+  },
+  body: function(id, primaryId){
+    var i = world.index[id];
+    if (i === undefined) return null;
+    var n = world.n, pi = dominantIndex(world, i);
+    if (primaryId !== undefined && world.index[primaryId] !== undefined) pi = world.index[primaryId];
+    var el = pi >= 0 ? elementsOf(world, i, pi) : null;
+    var f = computeFrameLive(world);
+    var fx = fpx(f, world.y[i], world.y[n + i]), fy = fpy(f, world.y[i], world.y[n + i]);
+    var vf = frameVel(world.y[2 * n + i], world.y[3 * n + i], fx, fy);
+    return { id: id, name: world.meta[i].name, alive: !!world.alive[i], mass: world.m[i],
+             inertial: { x: world.y[i], y: world.y[n + i], vx: world.y[2 * n + i], vy: world.y[3 * n + i],
+                         speed: hypot(world.y[2 * n + i], world.y[3 * n + i]) },
+             frame: { x: fx, y: fy, vx: vf.x, vy: vf.y, speed: hypot(vf.x, vf.y), name: f.name },
+             primary: pi >= 0 ? world.meta[pi].id : null,
+             elements: el ? { a: el.a, e: el.e, rp: el.rp, ra: el.ra, T: el.T, eps: el.eps, h: el.h,
+                              r: el.r, v: el.v, vc: el.vc, vesc: el.vesc, vr: el.vr } : null };
+  },
+  prediction: function(){
+    return { valid: pred.valid, samples: pred.count, steps: pred.steps, dt: pred.dt, ms: pred.ms,
+             endT: pred.endT, craft: pred.craft >= 0 ? world.meta[pred.craft].id : null,
+             crash: pred.crash, truncated: pred.truncated,
+             encounters: pred.encounters.slice(0, 4).map(function(e){
+               return { body: world.meta[e.j].id, d: e.d, t: e.t, vrel: e.vrel }; }),
+             nodeSnaps: pred.nodeSnaps.map(function(s){ return { id: s.id, t: s.t, x: s.x, y: s.y, vx: s.vx, vy: s.vy }; }),
+             path: function(stride){
+               var st = stride || 1, out = [], n = pred.n;
+               for (var k = 0; k < pred.count; k += st) out.push([pred.t[k], pred.px[k * n + pred.craft], pred.py[k * n + pred.craft]]);
+               return out;
+             } };
+  },
+  pause: function(){ setPaused(true); }, resume: function(){ setPaused(false); },
+  step: function(k){ stepOnce(k || 1); },
+  setWarp: function(v){ T.warpTarget = v; ui.ctlDirty = true; },
+  setWarpNow: function(v){ T.warp = T.warpTarget = v; ui.ctlDirty = true; },
+  select: function(id){ selectBody(id); },
+  setFrame: function(v){ setFrameValue(v); },
+  loadScenario: function(id){ loadScenario(id); },
+  reset: function(){ loadScenario(scenarioId); },
+  checkpoint: saveCheckpoint, revert: restoreCheckpoint,
+  addNode: function(dt, dv){
+    var nd = addNode(world.t + (dt === undefined ? V.horizon * 0.3 : dt));
+    if (nd && dv){ nd.pro = dv.pro || 0; nd.rad = dv.rad || 0;
+                   if (dv.cx !== undefined || dv.cy !== undefined){ nd.mode = 'cart'; nd.cx = dv.cx || 0; nd.cy = dv.cy || 0; } }
+    markPredDirty(); runPrediction(); buildNodeEditor(); renderNodeList();
+    return nd ? nd.id : null;
+  },
+  setNode: function(id, patch){
+    var nd = getNode(id); if (!nd) return null;
+    for (var k in patch) nd[k] = patch[k];
+    nodes.sort(function(a, b){ return a.t - b.t; });
+    markPredDirty(); runPrediction(); ui.nodesDirty = true; ui.ctlDirty = true; buildNodeEditor();
+    return nd;
+  },
+  removeNode: function(id){ deleteNode(id); buildNodeEditor(); renderNodeList(); },
+  predictNow: function(){ markPredDirty(); runPrediction(); return window.SIM.prediction(); },
+  handles: function(){ var h = craftHandles(); return h ? { x: h.X, y: h.Y, tipX: h.TX, tipY: h.TY, vs: h.vs } : null; },
+  screenOf: function(id){
+    var i = world.index[id]; if (i === undefined) return null;
+    var f = computeFrameLive(world), n = world.n;
+    var fx = fpx(f, world.y[i], world.y[n + i]), fy = fpy(f, world.y[i], world.y[n + i]);
+    return { x: sx(fx), y: sy(fy), fx: fx, fy: fy, scale: cam.scale };
+  },
+  nodeMarkers: function(){ return nodeScreen.slice(); },
+  refs: function(){ return { vecRef: scnVecRef, accRef: scnAccRef, dvMax: scnDvMax, W: W, H: H, dpr: DPR }; },
+  conservation: conservationErr,
+  totals: function(){ return systemTotals(world); },
+  exportState: exportState,
+  importState: importState,
+  events: function(){ return events.slice(); },
+  version: '1.0'
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+})();
+</script>
+</body>
+</html>

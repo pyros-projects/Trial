@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wave Lab — Interference &amp; Diffraction</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#080a10; --panel:#10131c; --panel2:#151926; --line:#232a3a; --line2:#2e3850;
+  --txt:#d7deeb; --dim:#8b94a8; --faint:#5a6376;
+  --acc:#56c8ff; --acc2:#ffab4a; --ok:#5ee08a; --warn:#ffcf5e; --bad:#ff5d6c;
+  --mono:ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%; overflow:hidden}
+body{background:var(--bg); color:var(--txt); font:13px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+     -webkit-user-select:none; user-select:none;}
+button{font:inherit; color:inherit; background:none; border:none; cursor:pointer}
+select,input[type=checkbox]{accent-color:var(--acc)}
+input[type=range]{accent-color:var(--acc); width:100%; height:18px; cursor:pointer}
+canvas{display:block}
+
+/* ---------- top bar ---------- */
+#topbar{position:fixed; inset:0 0 auto 0; height:46px; z-index:30; display:flex; align-items:center; gap:10px;
+  padding:0 10px; background:linear-gradient(180deg,#0d1018,#0b0e15); border-bottom:1px solid var(--line)}
+#btnMenu{display:none; font-size:17px; width:32px; height:32px; border-radius:8px; border:1px solid var(--line2)}
+#title{font-weight:650; letter-spacing:.2px; white-space:nowrap}
+#title small{color:var(--faint); font-weight:450; margin-left:8px; font-size:11px}
+#topbar .spacer{flex:1}
+#presetSel{background:var(--panel2); color:var(--txt); border:1px solid var(--line2); border-radius:8px;
+  padding:5px 8px; max-width:220px; font-size:12.5px}
+.tbtn{display:flex; align-items:center; gap:6px; padding:6px 11px; border-radius:8px; border:1px solid var(--line2);
+  background:var(--panel2); font-size:12.5px; transition:background .12s,border-color .12s}
+.tbtn:hover{background:#1b2132; border-color:#3a4souvenir}
+.tbtn:hover{border-color:#3a4664}
+.tbtn.primary{background:#12335a; border-color:#2a5f9e; color:#bfe6ff}
+.tbtn.warnbtn{background:#3a1620; border-color:#7c2b3a}
+#hud{position:fixed; top:56px; right:10px; z-index:25; pointer-events:none; font-family:var(--mono); font-size:11px;
+  line-height:1.55; background:rgba(8,10,16,.78); border:1px solid var(--line); border-radius:9px; padding:7px 11px;
+  backdrop-filter:blur(6px); white-space:nowrap}
+#hud .ok{color:var(--ok)} #hud .warn{color:var(--warn)} #hud .bad{color:var(--bad); font-weight:700}
+#hud .dim{color:var(--dim)}
+#hint{position:fixed; left:326px; bottom:10px; z-index:25; pointer-events:none; color:var(--faint); font-size:11px;
+  background:rgba(8,10,16,.6); padding:4px 9px; border-radius:7px}
+
+/* ---------- layout ---------- */
+#main{position:fixed; inset:46px 0 0 0; display:flex}
+#side{width:302px; min-width:302px; overflow-y:auto; overflow-x:hidden; background:var(--panel);
+  border-right:1px solid var(--line); padding:10px 12px 40px; scrollbar-width:thin; scrollbar-color:#2a3245 transparent}
+#stage{flex:1; position:relative; overflow:hidden}
+#cv{position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair}
+
+/* ---------- sidebar widgets ---------- */
+.grp{margin-bottom:10px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); overflow:hidden}
+.grp>summary{cursor:pointer; padding:8px 11px; font-weight:650; font-size:12px; letter-spacing:.4px;
+  text-transform:uppercase; color:var(--dim); list-style:none; display:flex; align-items:center; gap:7px}
+.grp>summary::before{content:'▸'; transition:transform .15s; color:var(--faint)}
+.grp[open]>summary::before{transform:rotate(90deg)}
+.grp>summary:hover{color:var(--txt)}
+.gbody{padding:2px 11px 11px}
+
+.row{display:grid; grid-template-columns:1fr 58px; gap:8px; align-items:center; margin:7px 0 1px}
+.row label{color:var(--dim); font-size:12px}
+.row .val{font-family:var(--mono); font-size:11.5px; text-align:right; color:var(--txt)}
+.row.wide{grid-template-columns:1fr}
+.note{color:var(--faint); font-size:11px; margin-top:4px}
+
+#toolgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px}
+.tool{display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 2px 5px; border-radius:8px;
+  border:1px solid var(--line); background:#12161f; font-size:10.5px; color:var(--dim); position:relative}
+.tool .gl{font-size:15px; line-height:1; color:var(--txt)}
+.tool kbd{position:absolute; top:2px; right:4px; font-family:var(--mono); font-size:9px; color:var(--faint)}
+.tool:hover{border-color:var(--line2); color:var(--txt)}
+.tool.on{border-color:var(--acc); background:#0f2536; color:var(--acc)}
+.tool.on .gl{color:var(--acc)}
+
+.opts{margin-top:9px; border-top:1px dashed var(--line2); padding-top:6px}
+.opts h4{font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); margin:8px 0 2px}
+.segrow{display:flex; align-items:center; gap:8px; margin:7px 0}
+.segrow label{color:var(--dim); font-size:12px; flex:1}
+.segrow select{background:#0d1017; color:var(--txt); border:1px solid var(--line2); border-radius:6px; padding:3px 6px; font-size:12px}
+
+.chkrow{display:flex; align-items:center; gap:8px; margin:7px 0; font-size:12px; color:var(--dim); cursor:pointer}
+
+/* stability meter */
+#stabilityWrap{margin-top:8px}
+#stabilityBar{height:8px; border-radius:4px; background:#0d1017; border:1px solid var(--line2); overflow:hidden; position:relative}
+#stabilityFill{height:100%; width:40%; background:var(--ok); transition:width .15s,background .15s}
+#stabilityTxt{font-family:var(--mono); font-size:11px; color:var(--dim); margin-top:3px}
+#cflBadge{display:none; margin-left:6px; padding:0 6px; border-radius:5px; font-weight:700}
+#cflBadge.bad{display:inline-block; background:#4a1520; color:var(--bad); border:1px solid #7c2b3a}
+#cflBadge.clamp{display:inline-block; background:#3a3115; color:var(--warn); border:1px solid #6b5a25}
+
+/* source / probe lists */
+.item{border:1px solid var(--line); border-radius:9px; margin:7px 0; background:#0e1119; overflow:hidden}
+.item.hidden{display:none}
+.item>.ihead{display:flex; align-items:center; gap:7px; padding:6px 8px; cursor:pointer}
+.item>.ihead:hover{background:#121724}
+.item .dot{width:9px; height:9px; border-radius:50%; flex:none}
+.item .iname{font-family:var(--mono); font-size:11.5px}
+.item .itag{font-size:10px; color:var(--faint); border:1px solid var(--line2); border-radius:4px; padding:0 4px}
+.item .isub{color:var(--faint); font-size:10.5px; font-family:var(--mono); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.item .ibtn{width:22px; height:22px; border-radius:6px; color:var(--dim); font-size:12px; flex:none}
+.item .ibtn:hover{background:#1c2333; color:var(--txt)}
+.item .ibtn.off{color:#4a5164}
+.ihead.sel{background:#0f2536; box-shadow:inset 0 0 0 1px var(--acc)}
+.ibody{padding:4px 9px 9px; border-top:1px solid var(--line)}
+.pcv{width:100%; height:64px; background:#080a10; border:1px solid var(--line); border-radius:6px; margin-top:6px}
+.pstats{display:flex; gap:10px; flex-wrap:wrap; font-family:var(--mono); font-size:10.5px; color:var(--dim); margin-top:5px}
+.pstats b{color:var(--txt); font-weight:500}
+.empty{color:var(--faint); font-size:11.5px; padding:6px 2px}
+
+@media (max-width:860px){
+  #btnMenu{display:block}
+  #title small{display:none}
+  #side{position:fixed; top:46px; bottom:0; left:0; z-index:40; width:min(86vw,320px); min-width:0;
+    transform:translateX(-105%); transition:transform .18s ease; box-shadow:8px 0 30px rgba(0,0,0,.5)}
+  body.sideOpen #side{transform:translateX(0)}
+  .tbtn .btxt{display:none}
+  #hud{font-size:10px; padding:5px 8px; top:52px}
+  #hint{display:none}
+  #presetSel{max-width:130px}
+}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <button id="btnMenu" title="Toggle panel">☰</button>
+  <div id="title">Wave Lab<small>FDTD interference &amp; diffraction</small></div>
+  <div class="spacer"></div>
+  <select id="presetSel" aria-label="Preset scene"></select>
+  <button class="tbtn primary" id="btnPause"><span id="pauseIco">⏸</span><span class="btxt" id="pauseTxt">Pause</span></button>
+  <button class="tbtn" id="btnStep" title="Advance one frame">⏭<span class="btxt">Step</span></button>
+  <button class="tbtn" id="btnClear" title="Zero the field (keep scene)">✕<span class="btxt">Clear</span></button>
+  <button class="tbtn warnbtn" id="btnReset" title="Reset scene">↺<span class="btxt">Reset</span></button>
+</header>
+
+<div id="main">
+  <aside id="side"></aside>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+  </div>
+</div>
+<div id="hud"><div id="hud1">—</div><div id="hud2">—</div></div>
+<div id="hint">draw / place with pointer · right-drag erases · Space = pause · . = step · 1–0/q/w/e = tools</div>
+
+<script>
+'use strict';
+/* =====================================================================================
+   Wave Lab — a real-time 2D FDTD scalar wave laboratory.
+   Single self-contained file: no imports, no network, no build.
+   Solver: damped wave equation  u_tt + σ·u_t = c(x,y)² ∇²u  via explicit leapfrog FD,
+   hard sources, Dirichlet wall cells, lossy absorber cells, one-way (Mur-1) or sponge
+   or periodic or reflecting boundaries. CFL stability: c·dt/dx ≤ 1/√2 (dx = 1).
+   ===================================================================================== */
+
+//------------------------------------------------ utilities
+const TAU = Math.PI*2;
+const clamp = (v,a,b)=> v<a?a : v>b?b : v;
+const lerp = (a,b,t)=> a+(b-a)*t;
+const $ = s=>document.querySelector(s);
+function el(tag, cls, parent){ const e=document.createElement(tag); if(cls) e.className=cls; if(parent) parent.appendChild(e); return e; }
+function fmt(v,d=2){ return (+v).toFixed(d); }
+
+//------------------------------------------------ global state
+const S = {
+  tool:'move',
+  brush:12,            // brush radius, CSS px
+  slitCount:2, slitWidth:0.030,
+  refN:1.5,            // lens / medium index for new shapes
+  arrayN:9, arrayDphi:220,
+  defF:0.05, defAmp:0.55, defWave:'sine', defPhase:0, defDur:7, defPeriod:40,
+  showStruct:true, showSpectrum:true,
+  sim:{ res:288, dt:0.35, c:0.35, sigma:0.002, sub:4, bnd:'absorb', autoClamp:true },
+  disp:{ mode:'amp', scale:'div', exposure:1.6, persistence:0 },
+  paused:false, time:0,
+  selSrc:null, preset:'doubleslit',
+  dtEff:0.35, dtClamped:false, unstable:false,
+};
+let sources=[], structs=[], probes=[];
+let nextSrcId=1, nextStructId=1, nextProbeId=1;
+
+const TOOLBAR_TOOLS = [
+  ['move','✋','Move'],   ['point','●','Point'],   ['pulse','◉','Pulse'],
+  ['line','▬','Line'],    ['array','≡','Array'],   ['wall','▮','Wall'],
+  ['slit','⌷','Slits'],   ['absorb','▩','Absorb'], ['obstacle','⬤','Block'],
+  ['lens','◡','Lens'],    ['medium','▦','Medium'], ['erase','⌫','Erase'],
+  ['probe','✛','Probe'],
+];
+const TOOL_KEYS = ['1','2','3','4','5','6','7','8','9','0','q','w','e'];
+
+//------------------------------------------------ grid (simulation arrays)
+let g = null;   // {W,H,u0,u1,u2,wall,absorb,invN,karr,harr, img,off,offctx, pbuf, E,dr,di,fx,fy}
+
+function allocGrid(W,H,preserve,old){
+  const ng = {
+    W,H,
+    u0:new Float32Array(W*H), u1:new Float32Array(W*H), u2:new Float32Array(W*H),
+    wall:new Uint8Array(W*H), absorb:new Uint8Array(W*H), invN:new Float32Array(W*H).fill(1),
+    karr:new Float32Array(W*H), harr:new Float32Array(W*H),
+    E:new Float32Array(W*H), dr:new Float32Array(W*H), di:new Float32Array(W*H),
+    fx:new Float32Array(W*H), fy:new Float32Array(W*H),
+    pbuf:new Uint8ClampedArray(W*H*4),
+  };
+  ng.off = document.createElement('canvas'); ng.off.width=W; ng.off.height=H;
+  ng.offctx = ng.off.getContext('2d');
+  ng.img = ng.offctx.createImageData(W,H);
+  if(preserve && old && old.u1){
+    const o=old, sx=o.W/W, sy=o.H/H;
+    for(let j=0;j<H;j++){ const oj=Math.min(o.H-1,(j*sy)|0), rj=oj*o.W, wr=j*W;
+      for(let i=0;i<W;i++){ const oi=Math.min(o.W-1,(i*sx)|0), id=wr+i, oid=rj+oi;
+        ng.u0[id]=o.u0[oid]; ng.u1[id]=o.u1[oid]; ng.E[id]=o.E[oid]; ng.invN[id]=o.invN[oid]; } }
+  }
+  return ng;
+}
+
+function buildGrid(preserve){
+  const st=$('#stage'), cw=Math.max(64,st.clientWidth), chh=Math.max(64,st.clientHeight);
+  const W = clamp(S.sim.res, 64, 1024);
+  const H = clamp(Math.round(W*chh/cw), 32, 1024);
+  const old = g;
+  g = allocGrid(W,H,preserve,old);
+  rebuildMasks();
+  for(const s of sources) srcCells(s);
+  resetAux();
+}
+
+//------------------------------------------------ rasterization: scene → masks
+function structRadiusCells(st){
+  return Math.max(1, (st.r||0) * g.W/400);
+}
+function stampDisk(maskArr, xc,yc, r, val, cells){
+  const r2=r*r, x0=Math.max(0,Math.floor(xc-r)), x1=Math.min(g.W-1,Math.ceil(xc+r));
+  const y0=Math.max(0,Math.floor(yc-r)), y1=Math.min(g.H-1,Math.ceil(yc+r));
+  for(let j=y0;j<=y1;j++){ const wr=j*g.W;
+    for(let i=x0;i<=x1;i++){
+      const dx=i-xc, dy=j-yc;
+      if(dx*dx+dy*dy<=r2){ const id=wr+i; if(maskArr) maskArr[id]=val; if(cells) cells.push(id); }
+    } }
+}
+function refKey(i,j){ return ((i/g.W*400)|0)*4096 + ((j/g.H*400)|0); }
+function inGap(st, s){ // slit gaps: param s∈[0,1] along wall
+  const k=st.gaps|0;
+  const len=Math.max(1e-6, Math.hypot(st.x2-st.x1, st.y2-st.y1));
+  const w=clamp(st.gw/len, 0.001, 0.9); // gap width in parameter units
+  for(let m=0;m<k;m++){ const c=(m+0.5)/k; if(Math.abs(s-c)<w/2) return true; }
+  return false;
+}
+function rasterStruct(st){
+  st.cells = st.cells && st.cells.__keep ? st.cells : [];
+  st.cells.length=0;
+  const W=g.W,H=g.H;
+  if(st.shape==='stroke' || st.shape==='wallgap'){
+    const pts = st.shape==='stroke' ? st.pts : [[st.x1,st.y1],[st.x2,st.y2]];
+    const r = st.shape==='wallgap' ? Math.max(1, 0.9*W/288) : structRadiusCells(st);
+    const mask = st.type==='absorb' ? g.absorb : g.wall;
+    for(let s=0;s<pts.length-1;s++){
+      const [ax,ay]=pts[s], [bx,by]=pts[s+1];
+      const axp=ax*W, ayp=ay*H, bxp=bx*W, byp=by*H;
+      const len=Math.hypot(bxp-axp,byp-ayp);
+      const n=Math.max(1, Math.ceil(len/0.6));
+      for(let q=0;q<=n;q++){
+        const t=q/n, x=axp+(bxp-axp)*t, y=ayp+(byp-ayp)*t;
+        if(st.shape==='wallgap'){
+          const sp=s + t; // param along whole polyline (only 1 segment used)
+          if(inGap(st, sp/ (pts.length-1))) continue;
+        }
+        stampDisk(mask, x,y, r, 1, st.cells);
+      }
+    }
+  } else if(st.shape==='ellipse'){
+    const cx=st.x*W, cy=st.y*H, rx=st.rx*W, ry=st.ry*H;
+    const y0=Math.max(0,Math.floor(cy-ry)), y1=Math.min(H-1,Math.ceil(cy+ry));
+    const x0=Math.max(0,Math.floor(cx-rx)), x1=Math.min(W-1,Math.ceil(cx+rx));
+    for(let j=y0;j<=y1;j++){ const wr=j*W;
+      for(let i=x0;i<=x1;i++){
+        const dx=(i-cx)/rx, dy=(j-cy)/ry;
+        if(dx*dx+dy*dy<=1){ const id=wr+i;
+          if(st.type==='medium') g.invN[id]=st.n; else if(st.type==='absorb') g.absorb[id]=1; else g.wall[id]=1;
+          st.cells.push(id);
+        } } }
+  } else if(st.shape==='rect'){
+    const x0=Math.max(0,Math.floor(st.x*W)), x1=Math.min(W-1,Math.ceil((st.x+st.w)*W));
+    const y0=Math.max(0,Math.floor(st.y*H)), y1=Math.min(H-1,Math.ceil((st.y+st.h)*H));
+    for(let j=y0;j<=y1;j++){ const wr=j*W;
+      for(let i=x0;i<=x1;i++){ const id=wr+i;
+        if(st.type==='medium') g.invN[id]=st.n; else if(st.type==='absorb') g.absorb[id]=1; else g.wall[id]=1;
+        st.cells.push(id);
+      } }
+  }
+}
+function rebuildMasks(){
+  g.wall.fill(0); g.absorb.fill(0); g.invN.fill(1);
+  structs = structs.filter(st=>!st.dead);
+  for(const st of structs) rasterStruct(st);
+  updateDerived();
+}
+
+function updateDerived(){
+  computeStability();
+  const {W,H,wall,absorb,invN,karr,harr}=g;
+  const dt=S.dtEff, c=S.sim.c, sg=S.sim.sigma;
+  const sgDt=sg*dt/2, abDt=2.2*dt/2, spongeOn = S.sim.bnd==='sponge';
+  const D=16;
+  for(let j=0;j<H;j++){ const wr=j*W;
+    for(let i=0;i<W;i++){ const id=wr+i;
+      let h=sgDt;
+      if(absorb[id]) h+=abDt;
+      if(spongeOn){ const d=Math.min(i,j,W-1-i,H-1-j);
+        if(d<D){ const r=1-d/D; h+=3.2*r*r*dt/2; } }
+      harr[id]=Math.min(h,0.9);
+      const cl=c*invN[id];
+      karr[id]=cl*cl*dt*dt;
+    } }
+}
+
+function computeStability(){
+  const cfl = S.sim.c*S.sim.dt*Math.SQRT2;     // ratio to 1/√2 limit  (dx=1), from requested dt
+  S.cflRatio = cfl;
+  S.dtClamped = false; S.unstable=false;
+  if(cfl>1.0){
+    if(S.sim.autoClamp){ S.dtEff = 0.985/(S.sim.c*Math.SQRT2); S.dtClamped=true; }
+    else { S.unstable=true; S.dtEff=S.sim.dt; }
+  } else S.dtEff = S.sim.dt;
+  updateStabilityUI();
+}
+
+//------------------------------------------------ source waveforms & application
+function waveVal(w, ph){ // ph in radians
+  switch(w){
+    case 'square': return Math.sin(ph)>=0?1:-1;
+    case 'triangle': return 2/Math.PI*Math.asin(Math.sin(ph));
+    case 'saw': { let x=(ph/TAU)%1; if(x<0)x+=1; return 2*x-1; }
+    default: return Math.sin(ph);
+  }
+}
+function srcCells(src){
+  const W=g.W,H=g.H, cells=[];
+  const push=(x,y)=>{ const i=clamp(Math.round(x*W),0,W-1), j=clamp(Math.round(y*H),0,H-1); cells.push(j*W+i); };
+  if(src.kind==='point'){ const r=Math.max(1,Math.round(W/240));
+    const i=src.x*W, j=src.y*H; stampDisk(null,i,j,r,0,cells); }
+  else { // line & array along p1→p2
+    const n = src.kind==='array' ? src.n : 0;
+    if(n>=2){
+      for(let m=0;m<n;m++){ const t=m/(n-1);
+        push(src.x+(src.x2-src.x)*t, src.y+(src.y2-src.y)*t); }
+    } else {
+      const ax=src.x*W, ay=src.y*H, bx=src.x2*W, by=src.y2*H;
+      const len=Math.hypot(bx-ax,by-ay), ns=Math.max(1,Math.ceil(len/0.8));
+      for(let q=0;q<=ns;q++){ const t=q/ns;
+        push((ax+(bx-ax)*t)/W, (ay+(by-ay)*t)/H); }
+    }
+  }
+  src.cells=cells;
+}
+function applySources(tNew){
+  const u2=g.u2;
+  for(const src of sources){
+    if(!src.on || !src.cells) continue;
+    const pr=src.phase*Math.PI/180;
+    if(src.mode==='pulse'){
+      let tau=tNew-src.t0;
+      if(tau>=src.period){ src.t0 += Math.floor(tau/src.period)*src.period; tau=tNew-src.t0; }
+      if(tau<0 || tau>src.dur) continue;
+      const win=0.5-0.5*Math.cos(TAU*tau/src.dur);
+      if(src.kind==='array' && src.n>=2){
+        const cells=src.cells, n=cells.length;
+        for(let m=0;m<n;m++){ const ph=pr+m*src.dphi*Math.PI/180;
+          u2[cells[m]] = src.amp*win*waveVal(src.wave, TAU*src.f*tau+ph); }
+      } else {
+        const v=src.amp*win*waveVal(src.wave, TAU*src.f*tau+pr);
+        for(let m=0;m<src.cells.length;m++) u2[src.cells[m]]=v;
+      }
+    } else {
+      if(src.kind==='array' && src.n>=2){
+        const cells=src.cells, n=cells.length;
+        for(let m=0;m<n;m++){ const ph=pr+m*src.dphi*Math.PI/180;
+          u2[cells[m]] = src.amp*waveVal(src.wave, TAU*src.f*tNew+ph); }
+      } else {
+        const v=src.amp*waveVal(src.wave, TAU*src.f*tNew+pr);
+        for(let m=0;m<src.cells.length;m++) u2[src.cells[m]]=v;
+      }
+    }
+  }
+}
+
+//------------------------------------------------ solver step
+function step(dt){
+  const {W,H,wall,u0,u1,u2,karr,harr}=g;
+  const bnd=S.sim.bnd;
+  // interior
+  for(let j=1;j<H-1;j++){
+    const row=j*W;
+    for(let i=1;i<W-1;i++){
+      const id=row+i;
+      if(wall[id]){ u2[id]=0; continue; }
+      const lap=u1[id-1]+u1[id+1]+u1[id-W]+u1[id+W]-4*u1[id];
+      const h=harr[id];
+      u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h);
+    }
+  }
+  // edges
+  if(bnd==='periodic'){
+    for(let j=0;j<H;j++){
+      const row=j*W, up=((j-1+H)%H)*W, dn=((j+1)%H)*W;
+      let id=row;
+      if(!wall[id]){ const lap=u1[row+W-1]+u1[row+1]+u1[up]+u1[dn]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+      id=row+W-1;
+      if(!wall[id]){ const lap=u1[row+W-2]+u1[row]+u1[up]+u1[dn]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+    }
+    for(let i=1;i<W-1;i++){
+      let id=i;
+      if(!wall[id]){ const lap=u1[i-1]+u1[i+1]+u1[(H-1)*W+i]+u1[W+i]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+      id=(H-1)*W+i;
+      if(!wall[id]){ const lap=u1[id-1]+u1[id+1]+u1[(H-2)*W+i]+u1[i]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+    }
+  } else {
+    // reflecting (Neumann) edges — also base for absorb/sponge
+    for(let i=1;i<W-1;i++){
+      let id=i;
+      if(!wall[id]){ const lap=u1[i-1]+u1[i+1]+2*u1[W+i]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+      id=(H-1)*W+i;
+      if(!wall[id]){ const lap=u1[id-1]+u1[id+1]+2*u1[id-W]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+    }
+    for(let j=1;j<H-1;j++){
+      const row=j*W; let id=row;
+      if(!wall[id]){ const lap=2*u1[id+1]+u1[id-W]+u1[id+W]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+      id=row+W-1;
+      if(!wall[id]){ const lap=2*u1[id-1]+u1[id-W]+u1[id+W]-4*u1[id], h=harr[id];
+        u2[id]=((2-h)*u1[id]-(1-h)*u0[id]+karr[id]*lap)/(1+h); }
+    }
+    // corners
+    const c00=0, c0W=W-1, cH0=(H-1)*W, cHW=(H-1)*W+W-1;
+    if(!wall[c00]){ const lap=2*u1[1]+2*u1[W]-4*u1[c00], h=harr[c00];
+      u2[c00]=((2-h)*u1[c00]-(1-h)*u0[c00]+karr[c00]*lap)/(1+h); }
+    if(!wall[c0W]){ const lap=2*u1[W-2]+2*u1[2*W-1]-4*u1[c0W], h=harr[c0W];
+      u2[c0W]=((2-h)*u1[c0W]-(1-h)*u0[c0W]+karr[c0W]*lap)/(1+h); }
+    if(!wall[cH0]){ const lap=2*u1[cH0+1]+2*u1[cH0-W]-4*u1[cH0], h=harr[cH0];
+      u2[cH0]=((2-h)*u1[cH0]-(1-h)*u0[cH0]+karr[cH0]*lap)/(1+h); }
+    if(!wall[cHW]){ const lap=2*u1[cHW-1]+2*u1[cHW-W]-4*u1[cHW], h=harr[cHW];
+      u2[cHW]=((2-h)*u1[cHW]-(1-h)*u0[cHW]+karr[cHW]*lap)/(1+h); }
+  }
+  if(bnd==='absorb'){
+    // one-way (first-order Engquist–Majda / Mur-1) edge overwrite
+    const invN=g.invN, c0=S.sim.c;
+    for(let j=0;j<H;j++){
+      const row=j*W;
+      let s=clamp(c0*invN[row]*dt,0,1), id=row;
+      if(!wall[id]) u2[id]=u1[id]*(1-s)+u1[id+1]*s;
+      id=row+W-1; s=clamp(c0*invN[id]*dt,0,1);
+      if(!wall[id]) u2[id]=u1[id]*(1-s)+u1[id-1]*s;
+    }
+    for(let i=0;i<W;i++){
+      let s=clamp(c0*invN[i]*dt,0,1), id=i;
+      if(!wall[id]) u2[id]=u1[id]*(1-s)+u1[id+W]*s;
+      id=(H-1)*W+i; s=clamp(c0*invN[id]*dt,0,1);
+      if(!wall[id]) u2[id]=u1[id]*(1-s)+u1[id-W]*s;
+    }
+  }
+  applySources(S.time+dt);
+  // rotate buffers: u0<-u1, u1<-u2, u2<-old u0
+  const tmp=u0; g.u0=u1; g.u1=u2; g.u2=tmp;
+  S.time+=dt;
+}
+
+function advance(){
+  const n=S.sim.sub;
+  for(let k=0;k<n;k++) step(S.dtEff);
+  return n*S.dtEff;
+}
+
+//------------------------------------------------ aux fields (intensity EMA, phase demod, flow)
+function resetAux(){
+  g.E.fill(0); g.dr.fill(0); g.di.fill(0); g.fx.fill(0); g.fy.fill(0);
+  g.pbuf.fill(0);
+}
+function refFreq(){
+  for(const s of sources) if(s.on && s.mode==='cont') return s.f;
+  return 0.05;
+}
+function updateAux(simDt){
+  if(simDt<=0) return;
+  const {W,H,u1,E,dr,di,fx,fy,u0}=g, N=W*H;
+  const aI=1-Math.exp(-simDt/0.55);
+  const w=TAU*refFreq(), ct=Math.cos(w*S.time), st=Math.sin(w*S.time);
+  const aP=1-Math.exp(-simDt/0.30);
+  const mode=S.disp.mode;
+  const needFlow = mode==='flow';
+  for(let id=0; id<N; id++){
+    const u=u1[id];
+    E[id]+=(u*u-E[id])*aI;
+    if(mode==='phase'){
+      dr[id]+=(u*ct-dr[id])*aP;
+      di[id]+=(-u*st-di[id])*aP;
+    }
+    if(needFlow && id>=W && id<N-1){
+      const v=(u-u0[id])/S.dtEff;
+      const gx=(u1[id+1]-u1[id-1])*0.5, gy=(u1[id+W]-u1[id-W])*0.5;
+      fx[id]+=(-v*gx-fx[id])*0.25; fy[id]+=(-v*gy-fy[id])*0.25;
+    }
+  }
+}
+
+//------------------------------------------------ colormaps
+const STOPSETS = {
+  div:  [[0,60,130,255],[0.22,30,70,170],[0.5,7,9,14],[0.78,170,70,25],[1,255,140,60]],
+  divl: [[0,25,75,200],[0.25,90,140,230],[0.5,248,248,252],[0.75,235,150,130],[1,190,40,35]],
+  vir:  [[0,68,1,84],[0.25,59,82,139],[0.5,33,145,140],[0.75,94,201,98],[1,253,231,37]],
+  infer:[[0,0,0,4],[0.25,87,16,110],[0.5,188,55,84],[0.75,249,142,9],[1,252,255,164]],
+  ice:  [[0,3,8,16],[0.5,20,90,140],[1,190,245,255]],
+  mono: [[0,0,0,0],[1,255,255,255]],
+};
+const LUTS={};
+(function buildLUTs(){
+  for(const name in STOPSETS){
+    const stops=STOPSETS[name], R=new Uint8Array(256), G=new Uint8Array(256), B=new Uint8Array(256);
+    for(let i=0;i<256;i++){
+      const t=i/255;
+      let a=stops[0], b=stops[stops.length-1];
+      for(let s=0;s<stops.length-1;s++) if(t>=stops[s][0] && t<=stops[s+1][0]){ a=stops[s]; b=stops[s+1]; break; }
+      const f=b[0]>a[0]?(t-a[0])/(b[0]-a[0]):0;
+      R[i]=lerp(a[1],b[1],f); G[i]=lerp(a[2],b[2],f); B[i]=lerp(a[3],b[3],f);
+    }
+    LUTS[name]={R,G,B};
+  }
+})();
+function hsv2rgb(h,s,v,out,o){ // h∈[0,1)
+  const i=(h*6)|0, f=h*6-i, p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  let r,gg,b;
+  switch(((i%6)+6)%6){
+    case 0: r=v; gg=t; b=p; break; case 1: r=q; gg=v; b=p; break;
+    case 2: r=p; gg=v; b=t; break; case 3: r=p; gg=q; b=v; break;
+    case 4: r=t; gg=p; b=v; break; default: r=v; gg=p; b=q;
+  }
+  out[o]=r*255; out[o+1]=gg*255; out[o+2]=b*255;
+}
+
+//------------------------------------------------ rendering
+const cv=$('#cv'); const ctx=cv.getContext('2d');
+let dpr=1;
+
+function render(){
+  const {W,H,u1,wall,absorb,invN,img,pbuf,E,dr,di,fx,fy}=g;
+  const d=img.data, N=W*H;
+  const mode=S.disp.mode, gain=S.disp.exposure, showS=S.showStruct;
+  const lut=LUTS[S.disp.scale]||LUTS.div;
+  const sequential = !(S.disp.scale==='div'||S.disp.scale==='divl');
+  const tintMedia = showS && mode!=='media';
+
+  if(mode==='amp'){
+    for(let id=0,p=0; id<N; id++,p+=4){
+      let v=u1[id];
+      let r,gg,b;
+      if(sequential){ const t=clamp(Math.abs(v)*gain,0,1)*255|0; r=lut.R[t]; gg=lut.G[t]; b=lut.B[t]; }
+      else { const t=clamp((clamp(v*gain,-1,1)*0.5+0.5)*255,0,255)|0; r=lut.R[t]; gg=lut.G[t]; b=lut.B[t]; }
+      if(showS){ if(wall[id]){ r=lerp(r,142,0.55); gg=lerp(gg,150,0.55); b=lerp(b,168,0.55); }
+                 else if(absorb[id]){ r=lerp(r,255,0.35); gg=lerp(gg,80,0.35); b=lerp(b,95,0.35); } }
+      if(tintMedia && invN[id]>1.001){ r=lerp(r,205,0.16); gg=lerp(gg,165,0.16); b=lerp(b,115,0.16); }
+      d[p]=r; d[p+1]=gg; d[p+2]=b; d[p+3]=255;
+    }
+  } else if(mode==='int'){
+    for(let id=0,p=0; id<N; id++,p+=4){
+      const t=clamp(Math.sqrt(Math.max(E[id],0))*gain,0,1)*255|0;
+      let r=lut.R[t], gg=lut.G[t], b=lut.B[t];
+      if(showS){ if(wall[id]){ r=lerp(r,142,0.55); gg=lerp(gg,150,0.55); b=lerp(b,168,0.55); }
+                 else if(absorb[id]){ r=lerp(r,255,0.35); gg=lerp(gg,80,0.35); b=lerp(b,95,0.35); } }
+      if(tintMedia && invN[id]>1.001){ r=lerp(r,205,0.16); gg=lerp(gg,165,0.16); b=lerp(b,115,0.16); }
+      d[p]=r; d[p+1]=gg; d[p+2]=b; d[p+3]=255;
+    }
+  } else if(mode==='phase'){
+    for(let id=0,p=0; id<N; id++,p+=4){
+      let r=8,gg=10,b=16;
+      const amp=Math.hypot(dr[id],di[id]);
+      const br=clamp(amp*2.2*gain,0,1);
+      if(br>0.004){ hsv2rgb((Math.atan2(di[id],dr[id])/TAU+1)%1, 0.72, br, d, p); r=d[p]; gg=d[p+1]; b=d[p+2]; }
+      if(showS && wall[id]){ r=lerp(r,142,0.55); gg=lerp(gg,150,0.55); b=lerp(b,168,0.55); }
+      d[p]=r; d[p+1]=gg; d[p+2]=b; d[p+3]=255;
+    }
+  } else if(mode==='grad'){
+    for(let j=0,p=0; j<H; j++){ const row=j*W;
+      for(let i=0;i<W;i++,p+=4){
+        const id=row+i;
+        let m=0;
+        if(i>0&&i<W-1&&j>0&&j<H-1&&!wall[id]){
+          const gx=(u1[id+1]-u1[id-1])*0.5, gy=(u1[id+W]-u1[id-W])*0.5;
+          m=Math.hypot(gx,gy);
+        }
+        const t=clamp(m*gain,0,1)*255|0;
+        let r=lut.R[t], gg=lut.G[t], b=lut.B[t];
+        if(showS){ if(wall[id]){ r=lerp(r,142,0.55); gg=lerp(gg,150,0.55); b=lerp(b,168,0.55); }
+                   else if(absorb[id]){ r=lerp(r,255,0.35); gg=lerp(gg,80,0.35); b=lerp(b,95,0.35); } }
+        if(tintMedia && invN[id]>1.001){ r=lerp(r,205,0.16); gg=lerp(gg,165,0.16); b=lerp(b,115,0.16); }
+        d[p]=r; d[p+1]=gg; d[p+2]=b; d[p+3]=255;
+      } }
+  } else if(mode==='media'){
+    for(let id=0,p=0; id<N; id++,p+=4){
+      let r,gg,b;
+      if(wall[id]){ r=142; gg=150; b=168; }
+      else if(absorb[id]){ r=170; gg=60; b=72; }
+      else { const n=invN[id];
+        if(n>1.001){ const t=clamp((n-1)/1.5,0,1);
+          r=lerp(28,230,t); gg=lerp(70,130,t); b=lerp(180,50,t); }
+        else { r=10; gg=12; b=18; } }
+      d[p]=r; d[p+1]=gg; d[p+2]=b; d[p+3]=255;
+    }
+  } else { // flow
+    for(let id=0,p=0; id<N; id++,p+=4){
+      let r=8,gg=10,b=16;
+      const m=Math.hypot(fx[id],fy[id]);
+      const br=clamp(m*3*gain,0,1);
+      if(br>0.004){ hsv2rgb((Math.atan2(fy[id],fx[id])/TAU+1)%1, 0.85, br, d, p); r=d[p]; gg=d[p+1]; b=d[p+2]; }
+      if(showS && wall[id]){ r=lerp(r,142,0.55); gg=lerp(gg,150,0.55); b=lerp(b,168,0.55); }
+      d[p]=r; d[p+1]=gg; d[p+2]=b; d[p+3]=255;
+    }
+  }
+
+  // persistence (phosphor blend)
+  const p=S.disp.persistence;
+  if(p>0.001){
+    for(let k=0;k<d.length;k++){ const v=d[k]*(1-p)+pbuf[k]*p; pbuf[k]=v; d[k]=v; }
+  } else if(pbuf[0]!==0||pbuf[3]!==0){ pbuf.fill(0); }
+
+  g.offctx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality='high';
+  ctx.drawImage(g.off,0,0,cv.width,cv.height);
+  drawOverlays();
+}
+
+const SRC_COLORS={point:'#35d0ff', pulse:'#ffab4a', line:'#6cf7a8', array:'#c98bff'};
+function n2px(nx,ny){ return [nx*cv.width, ny*cv.height]; }
+
+function drawOverlays(){
+  const w=cv.width,h=cv.height;
+  ctx.save();
+  // sources
+  for(const s of sources){
+    const col=s.on?(SRC_COLORS[s.kind]||'#fff'):'#5a6376';
+    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=Math.max(1.2,dpr*1.2);
+    if(s.kind==='point'||s.kind==='pulse'){
+      const [x,y]=n2px(s.x,s.y);
+      ctx.beginPath(); ctx.arc(x,y,4.5*dpr,0,TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(x,y,8.5*dpr,0,TAU); ctx.stroke();
+      if(s.kind==='pulse'){ ctx.beginPath(); ctx.arc(x,y,12*dpr,0,TAU); ctx.globalAlpha=.45; ctx.stroke(); ctx.globalAlpha=1; }
+    } else {
+      const [x1,y1]=n2px(s.x,s.y),[x2,y2]=n2px(s.x2,s.y2);
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      const n=s.kind==='array'?s.n:2;
+      for(let m=0;m<n;m++){ const t=s.kind==='array'&&s.n>1?m/(s.n-1):m;
+        const x=lerp(x1,x2,t), y=lerp(y1,y2,t);
+        ctx.beginPath(); ctx.arc(x,y,3.5*dpr,0,TAU); ctx.fill(); }
+    }
+    if(S.selSrc===s.id){ ctx.strokeStyle='#fff'; ctx.setLineDash([4*dpr,4*dpr]);
+      const [x,y]=n2px(s.x,s.y);
+      ctx.beginPath(); ctx.arc(x,y,13*dpr,0,TAU); ctx.stroke(); ctx.setLineDash([]); }
+  }
+  // probes
+  ctx.font=`${11*dpr}px ${'ui-monospace,monospace'}`;
+  for(const p of probes){
+    const [x,y]=n2px(p.x,p.y);
+    ctx.strokeStyle='#ffd166'; ctx.lineWidth=Math.max(1.2,dpr*1.2);
+    ctx.beginPath(); ctx.arc(x,y,7*dpr,0,TAU); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x-11*dpr,y); ctx.lineTo(x-4*dpr,y); ctx.moveTo(x+4*dpr,y); ctx.lineTo(x+11*dpr,y);
+    ctx.moveTo(x,y-11*dpr); ctx.lineTo(x,y-4*dpr); ctx.moveTo(x,y+4*dpr); ctx.lineTo(x,y+11*dpr);
+    ctx.stroke();
+    ctx.fillStyle='#ffd166'; ctx.fillText('P'+p.id, x+10*dpr, y-9*dpr);
+  }
+  // drag preview
+  if(drag && drag.preview){
+    ctx.strokeStyle='rgba(255,255,255,.65)'; ctx.setLineDash([5*dpr,5*dpr]); ctx.lineWidth=dpr;
+    const [x1,y1]=n2px(drag.p1[0],drag.p1[1]), [x2,y2]=n2px(drag.p2[0],drag.p2[1]);
+    if(S.tool==='slit'){
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      const k=S.slitCount, dx=x2-x1, dy=y2-y1;
+      for(let m=0;m<k;m++){ const c=(m+0.5)/k, gw2=S.slitWidth/((drag.len)||1)*0.5;
+        const xa=lerp(x1,x2,c-gw2), ya=lerp(y1,y2,c-gw2), xb=lerp(x1,x2,c+gw2), yb=lerp(y1,y2,c+gw2);
+        ctx.strokeStyle='rgba(94,224,138,.9)';
+        ctx.beginPath(); ctx.moveTo(xa,ya); ctx.lineTo(xb,yb); ctx.stroke();
+        ctx.strokeStyle='rgba(255,255,255,.65)';
+      }
+    } else if(S.tool==='lens'||S.tool==='obstacle'){
+      ctx.beginPath();
+      ctx.ellipse((x1+x2)/2,(y1+y2)/2,Math.abs(x2-x1)/2,Math.abs(y2-y1)/2,0,0,TAU); ctx.stroke();
+    } else if(S.tool==='medium'){
+      ctx.strokeRect(Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1));
+    }
+    ctx.setLineDash([]);
+  }
+  // brush cursor
+  const bc=brushCursor();
+  if(bc){
+    ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=dpr;
+    ctx.beginPath(); ctx.arc(bc[0]*dpr,bc[1]*dpr,S.brush*dpr,0,TAU); ctx.stroke();
+  }
+  ctx.restore();
+}
+let lastPtr=null;
+function brushCursor(){
+  if(!lastPtr) return null;
+  if(['wall','absorb','erase'].includes(S.tool) || (drag&&!drag.preview)) return [lastPtr[0],lastPtr[1]];
+  return null;
+}
+
+//------------------------------------------------ probes
+function sampleFieldBilinear(nx,ny){
+  const {W,H,u1}=g;
+  const x=clamp(nx*W-0.5,0,W-1.001), y=clamp(ny*H-0.5,0,H-1.001);
+  const i=x|0, j=y|0, fx=x-i, fy=y-j, id=j*W+i;
+  return u1[id]*(1-fx)*(1-fy)+u1[id+1]*fx*(1-fy)+u1[id+W]*(1-fx)*fy+u1[id+W+1]*fx*fy;
+}
+function resetProbes(){
+  for(const p of probes){ p.buf=new Float32Array(512); p.tbuf=new Float32Array(512); p.head=0; p.count=0;
+    p.rms=0; p.fdom=0; p.phase=0; p.spec=null; }
+}
+function sampleProbes(){
+  for(const p of probes){
+    p.buf[p.head]=sampleFieldBilinear(p.x,p.y);
+    p.tbuf[p.head]=S.time;
+    p.head=(p.head+1)&511; if(p.count<512)p.count++;
+  }
+}
+function fft256(re,im){ // in-place radix-2
+  const n=256;
+  for(let i=1,j=0;i<n;i++){ let bit=n>>1;
+    for(;j&bit;bit>>=1) j^=bit; j^=bit;
+    if(i<j){ let t=re[i];re[i]=re[j];re[j]=t; t=im[i];im[i]=im[j];im[j]=t; } }
+  for(let len=2;len<=n;len<<=1){
+    const ang=-TAU/len, wr=Math.cos(ang), wi=Math.sin(ang);
+    for(let i=0;i<n;i+=len){
+      let cr=1, ci=0;
+      for(let k=0;k<len/2;k++){
+        const ur=re[i+k], ui=im[i+k], vr=re[i+k+len/2]*cr-im[i+k+len/2]*ci, vi=re[i+k+len/2]*ci+im[i+k+len/2]*cr;
+        re[i+k]=ur+vr; im[i+k]=ui+vi; re[i+k+len/2]=ur-vr; im[i+k+len/2]=ui-vi;
+        const ncr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=ncr;
+      } } }
+}
+function analyzeProbes(){
+  for(const p of probes){
+    if(p.count<8){ p.rms=0; continue; }
+    let sum=0, n=0;
+    for(let k=0;k<Math.min(256,p.count);k++){
+      const idx=(p.head-1-k+1024)&511, v=p.buf[idx]; sum+=v*v; n++;
+    }
+    p.rms=Math.sqrt(sum/Math.max(1,n));
+    // FFT of last 256 samples (only once the ring buffer is full — avoids zero-padding artifacts)
+    if(p.count>=256){
+      const re=new Float64Array(256), im=new Float64Array(256);
+      let t0=0,t1=0;
+      for(let k=0;k<256;k++){
+        const idx=(p.head-1-k+1024)&511;
+        const win=0.5-0.5*Math.cos(TAU*(k+0.5)/256);
+        re[k]=p.buf[idx]*win;
+        if(k===0)t0=p.tbuf[idx]; if(k===255)t1=p.tbuf[idx];
+      }
+      const dtSample=Math.max(1e-6,(t0-t1)/255);
+      fft256(re,im);
+      const spec=new Float32Array(110); let peak=1e-9, pk=1;
+      for(let k=1;k<110;k++){ const m=Math.hypot(re[k],im[k]); spec[k]=m; if(m>peak){peak=m; pk=k;} }
+      p.spec=spec;
+      p.dtSample=dtSample;
+      p.fdom=pk/(256*dtSample);
+      p.phase=Math.atan2(im[pk],re[pk])*180/Math.PI;
+    }
+  }
+}
+function drawProbePlots(){
+  for(const p of probes){
+    const c=p.canvas; if(!c) continue;
+    const dprL=Math.min(2,window.devicePixelRatio||1);
+    const cwCss=c.clientWidth||240, chCss=64;
+    if(c.width!==cwCss*dprL){ c.width=cwCss*dprL; c.height=chCss*dprL; }
+    const x=c.getContext('2d');
+    x.setTransform(dprL,0,0,dprL,0,0);
+    x.clearRect(0,0,cwCss,chCss);
+    x.strokeStyle='rgba(255,255,255,.14)'; x.lineWidth=1;
+    x.beginPath(); x.moveTo(0,chCss/2); x.lineTo(cwCss,chCss/2); x.stroke();
+    if(p.count<2) continue;
+    let mx=0.02;
+    const n=Math.min(256,p.count);
+    for(let k=0;k<n;k++){ const idx=(p.head-1-k+1024)&511; mx=Math.max(mx,Math.abs(p.buf[idx])); }
+    x.strokeStyle='#ffd166'; x.lineWidth=1.4; x.beginPath();
+    for(let k=0;k<n;k++){
+      const idx=(p.head-1-k+1024)&511;
+      const px=cwCss-1-(k/(n-1))*(cwCss-4)-2;
+      const py=chCss/2 - clamp(p.buf[idx]/(mx*1.15),-1,1)*(chCss/2-3);
+      if(k===0)x.moveTo(px,py); else x.lineTo(px,py);
+    }
+    x.stroke();
+    if(S.showSpectrum && p.spec && p.canvas2){
+      const c2=p.canvas2, ch2=44;
+      if(c2.width!==cwCss*dprL){ c2.width=cwCss*dprL; c2.height=ch2*dprL; c2.style.height=ch2+'px'; }
+      const x2=c2.getContext('2d');
+      x2.setTransform(dprL,0,0,dprL,0,0);
+      x2.clearRect(0,0,cwCss,ch2);
+      x2.fillStyle='#56c8ff';
+      const bars=88, bw=cwCss/bars;
+      let mmax=1e-9; for(let k=1;k<bars;k++) mmax=Math.max(mmax,p.spec[k]);
+      for(let k=1;k<bars;k++){
+        const bh=clamp(p.spec[k]/mmax,0,1)*(ch2-4);
+        x2.fillRect((k-1)*bw+0.5, ch2-2-bh, Math.max(1,bw-1), bh);
+      }
+      x2.fillStyle='rgba(139,148,168,.9)'; x2.font='9px ui-monospace,monospace';
+      x2.fillText('0', 2, 9);
+      const fmax=p.dtSample? 0.5/p.dtSample : 0.36;
+      x2.fillText(fmax.toFixed(2), cwCss-24, 9);
+    }
+  }
+}
+
+//------------------------------------------------ HUD
+let fpsEma=60, lastFrameTs=0;
+function updateHUD(){
+  const W=g.W,H=g.H;
+  const cfl=S.cflRatio, pct=Math.round(cfl*100);
+  const cls = cfl>1?'bad' : cfl>0.7?'warn':'ok';
+  $('#hud1').innerHTML =
+    `<span class="ok">${Math.round(fpsEma)}</span> fps · <span class="dim">grid</span> ${W}×${H} · `+
+    `dt <span>${S.dtEff.toFixed(3)}${S.dtClamped?'*':''}</span> · `+
+    `CFL <span class="${cls}">${pct}%</span> · t <span>${S.time.toFixed(1)}</span>`;
+  const modeNames={amp:'amplitude',int:'intensity',phase:'phase',grad:'gradient',media:'medium',flow:'energy flow'};
+  $('#hud2').innerHTML =
+    `src <span>${sources.length}</span> · prb <span>${probes.length}</span> · <span class="dim">${modeNames[S.disp.mode]}</span> · `+
+    (S.paused?'<span class="warn">⏸ paused</span>':'<span class="ok">▶ running</span>')+
+    (S.dtClamped?'<span class="clamp" id="cflBadge2"> dt clamped</span>':'')+
+    (S.unstable?'<span class="bad"> ⚠ UNSTABLE (CFL &gt; 100%)</span>':'');
+}
+function updateStabilityUI(){
+  const pct=clamp(S.cflRatio*100,0,130);
+  const fill=$('#stabilityFill'); if(!fill) return;
+  fill.style.width=Math.min(100,pct)+'%';
+  fill.style.background = S.cflRatio>1?'var(--bad)' : S.cflRatio>0.7?'var(--warn)':'var(--ok)';
+  $('#stabilityTxt').innerHTML=`CFL = c·dt/dx ÷ (1/√2) = <b style="color:var(--txt)">${Math.round(S.cflRatio*100)}%</b>`+
+    (S.unstable?` <span id="cflBadge" class="bad">UNSTABLE</span>`:S.dtClamped?` <span id="cflBadge" class="clamp">clamped</span>`:'');
+}
+
+//------------------------------------------------ main loop
+function loop(ts){
+  const wallDt=Math.min(0.1,(ts-lastFrameTs)/1000||0.016); lastFrameTs=ts;
+  fpsEma = fpsEma*0.92 + (1/Math.max(1e-3,wallDt))*0.08;
+  let simDt=0;
+  if(!S.paused) simDt=advance();
+  updateAux(simDt);
+  render();
+  sampleProbes();
+  if((frameCount++%3)===0){ analyzeProbes(); updateProbeReadouts(); }
+  drawProbePlots();
+  updateHUD();
+  requestAnimationFrame(loop);
+}
+let frameCount=0;
+
+//------------------------------------------------ pointer interaction
+let drag=null;   // {tool, p1:[x,y], p2, moved, preview, srcRef, offPt, len}
+function evNorm(e){
+  const r=cv.getBoundingClientRect();
+  return [clamp((e.clientX-r.left)/r.width,0,1), clamp((e.clientY-r.top)/r.height,0,1)];
+}
+function evPx(e){ const r=cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
+function distSeg(px,py,ax,ay,bx,by){ // in px space
+  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+  const t=L2>0?clamp(((px-ax)*dx+(py-ay)*dy)/L2,0,1):0;
+  return Math.hypot(px-(ax+dx*t), py-(ay+dy*t));
+}
+function hitSource(nx,ny){
+  const r=cv.getBoundingClientRect();
+  const px=nx*r.width, py=ny*r.height, tol=12;
+  for(let k=sources.length-1;k>=0;k--){ const s=sources[k];
+    if(s.kind==='point'||s.kind==='pulse'){ if(Math.hypot(px-s.x*r.width,py-s.y*r.height)<tol) return s; }
+    else { if(distSeg(px,py,s.x*r.width,s.y*r.height,s.x2*r.width,s.y2*r.height)<tol+3) return s; } }
+  return null;
+}
+function hitProbe(nx,ny){
+  const r=cv.getBoundingClientRect();
+  const px=nx*r.width, py=ny*r.height;
+  for(let k=probes.length-1;k>=0;k--){ const p=probes[k];
+    if(Math.hypot(px-p.x*r.width,py-p.y*r.height)<12) return p; }
+  return null;
+}
+function brushCells(){
+  const stageW=Math.max(1,$('#stage').clientWidth);
+  return Math.max(1, S.brush/stageW*g.W);
+}
+function eraseAt(nx,ny){
+  const R=brushCells(), cx=nx*g.W, cy=ny*g.H, r=cv.getBoundingClientRect();
+  const Rpx=S.brush, cxpx=nx*r.width, cypx=ny*r.height;
+  let changed=false;
+  // probes
+  for(const p of probes){ if(Math.hypot(cxpx-p.x*r.width,cypx-p.y*r.height)<Rpx+6){ p.dead=true; changed=true; } }
+  probes=probes.filter(p=>!p.dead);
+  // sources
+  for(const s of sources){
+    let hit=false;
+    if(s.kind==='point'||s.kind==='pulse') hit=Math.hypot(cxpx-s.x*r.width,cypx-s.y*r.height)<Rpx+8;
+    else hit=distSeg(cxpx,cypx,s.x*r.width,s.y*r.height,s.x2*r.width,s.y2*r.height)<Rpx+4;
+    if(hit){ s.dead=true; changed=true; }
+  }
+  sources=sources.filter(s=>!s.dead);
+  // structures: strokes per-cell, shapes whole-object
+  for(const st of structs){
+    if(st.shape==='stroke'||st.shape==='wallgap'){
+      const keep=[];
+      for(const id of st.cells){
+        const i=id%g.W, j=(id/g.W)|0;
+        if(Math.hypot(i-cx,j-cy)<=R){ st.erased.add(refKey(i,j)); changed=true; }
+        else keep.push(id);
+      }
+      st.cells=keep;
+      if(st.cells.length===0) st.dead=true;
+    } else {
+      // inside bounding shape?
+      const inB = st.shape==='ellipse'
+        ? (((nx-st.x)/(st.rx||1e-6))**2+((ny-st.y)/(st.ry||1e-6))**2)<=1.15
+        : nx>=st.x-0.01&&nx<=st.x+st.w+0.01&&ny>=st.y-0.01&&ny<=st.y+st.h+0.01;
+      if(inB){ st.dead=true; changed=true; }
+    }
+  }
+  if(changed){ structs=structs.filter(s=>!s.dead); renderSourceList(); rebuildMasks(); }
+}
+
+cv.addEventListener('contextmenu', e=>e.preventDefault());
+cv.addEventListener('pointerdown', e=>{
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){ /* synthetic pointers may not be capturable */ }
+  const [nx,ny]=evNorm(e); lastPtr=evPx(e);
+  const erase = e.button===2 || S.tool==='erase';
+  if(erase){
+    drag={tool:'erase'}; eraseAt(nx,ny); return;
+  }
+  switch(S.tool){
+    case 'move': {
+      const s=hitSource(nx,ny);
+      if(s){ drag={tool:'move', srcRef:s, off:[nx-s.x, ny-s.y], off2:[nx-s.x2, ny-s.y2], p2o:[s.x2-s.x, s.y2-s.y]};
+        S.selSrc=s.id; renderSourceList(); }
+      else { const p=hitProbe(nx,ny); if(p) drag={tool:'moveP', srcRef:p}; }
+      break; }
+    case 'probe': {
+      const p={id:nextProbeId++, x:nx, y:ny};
+      probes.push(p); resetProbe(p); buildProbePanel(p); renderSourceList();
+      break; }
+    case 'point': case 'pulse': {
+      const s=mkSource(S.tool==='pulse'?'pulse':'point', nx,ny);
+      s.x2=s.x; s.y2=s.y; srcCells(s); sources.push(s);
+      S.selSrc=s.id; renderSourceList();
+      break; }
+    case 'line': case 'array':
+      drag={tool:S.tool, p1:[nx,ny], p2:[nx,ny], moved:false};
+      break;
+    case 'slit':
+      drag={tool:'slit', p1:[nx,ny], p2:[nx,ny], moved:false, preview:true, len:1e-3};
+      break;
+    case 'obstacle': case 'lens': case 'medium':
+      drag={tool:S.tool, p1:[nx,ny], p2:[nx,ny], moved:false, preview:true};
+      break;
+    case 'wall': case 'absorb': {
+      const stageW=Math.max(1,$('#stage').clientWidth);
+      const st={id:nextStructId++, shape:'stroke', type:S.tool==='wall'?'wall':'absorb',
+        r:Math.max(1, S.brush/stageW*400), // thickness in 400-ref cells
+        pts:[[nx,ny]], cells:[], erased:new Set()};
+      structs.push(st);
+      drag={tool:'paint', st};
+      rebuildMasks();
+      break; }
+  }
+});
+cv.addEventListener('pointermove', e=>{
+  lastPtr=evPx(e);
+  if(!drag) return;
+  const [nx,ny]=evNorm(e);
+  if(drag.tool==='erase'){ eraseAt(nx,ny); return; }
+  if(drag.tool==='move'){
+    const s=drag.srcRef;
+    s.x=clamp(nx-drag.off[0],0,1); s.y=clamp(ny-drag.off[1],0,1);
+    s.x2=clamp(s.x+drag.p2o[0],0,1); s.y2=clamp(s.y+drag.p2o[1],0,1);
+    srcCells(s); updateSourceSub(s);
+    return;
+  }
+  if(drag.tool==='moveP'){ drag.srcRef.x=nx; drag.srcRef.y=ny; return; }
+  if(drag.tool==='paint'){
+    const st=drag.st, last=st.pts[st.pts.length-1];
+    if(Math.hypot((nx-last[0])*cv.width,(ny-last[1])*cv.height)>2.5){ st.pts.push([nx,ny]); rebuildMasks(); }
+    return;
+  }
+  // preview drags
+  drag.p2=[nx,ny]; drag.moved=true;
+  if(drag.tool==='slit') drag.len=Math.max(1e-3,Math.hypot(drag.p2[0]-drag.p1[0],(drag.p2[1]-drag.p1[1])*1));
+});
+cv.addEventListener('pointerup', e=>{
+  if(!drag) { return; }
+  const [nx,ny]=evNorm(e);
+  if(drag.tool==='line'||drag.tool==='array'){
+    const [x1,y1]=drag.p1, moved=Math.hypot((nx-x1)*cv.width,(ny-y1)*cv.height)>8;
+    if(moved){
+      const s=mkSource(drag.tool, x1,y1);
+      s.x2=nx; s.y2=ny;
+      if(drag.tool==='array'){ s.n=S.arrayN; s.dphi=S.arrayDphi; }
+      srcCells(s); sources.push(s); S.selSrc=s.id; renderSourceList();
+    }
+  } else if(drag.tool==='slit' && drag.moved){
+    structs.push({id:nextStructId++, shape:'wallgap', type:'wall',
+      x1:drag.p1[0], y1:drag.p1[1], x2:nx, y2:ny, gaps:S.slitCount, gw:S.slitWidth,
+      cells:[], erased:new Set()});
+    rebuildMasks();
+  } else if((drag.tool==='obstacle'||drag.tool==='lens'||drag.tool==='medium') && drag.moved){
+    const [x1,y1]=drag.p1;
+    if(drag.tool==='medium'){
+      structs.push({id:nextStructId++, shape:'rect', type:'medium',
+        x:Math.min(x1,nx), y:Math.min(y1,ny), w:Math.abs(nx-x1), h:Math.abs(ny-y1), n:S.refN, cells:[]});
+    } else {
+      structs.push({id:nextStructId++, shape:'ellipse',
+        type:drag.tool==='lens'?'medium':'wall', n:S.refN,
+        x:(x1+nx)/2, y:(y1+ny)/2, rx:Math.max(0.004,Math.abs(nx-x1)/2), ry:Math.max(0.004,Math.abs(ny-y1)/2), cells:[]});
+    }
+    rebuildMasks();
+  }
+  drag=null;
+});
+cv.addEventListener('pointercancel', ()=>{ drag=null; });
+cv.addEventListener('pointerleave', ()=>{ lastPtr=null; });
+
+function mkSource(kind,x,y){
+  return { id:nextSrcId++, kind,
+    mode: kind==='pulse' ? 'pulse' : 'cont',
+    x,y, x2:x,y2:y,
+    on:true, f:S.defF, amp:S.defAmp, wave:S.defWave, phase:S.defPhase,
+    dur:S.defDur, period:S.defPeriod, n:S.arrayN, dphi:S.arrayDphi, t0:0, cells:[] };
+}
+
+//------------------------------------------------ sidebar UI
+const side=$('#side');
+function mkGroup(title, open=true){
+  const d=el('details','grp',side); if(open)d.open=true;
+  const s=el('summary',null,d); s.textContent=title;
+  const b=el('div','gbody',d);
+  return b;
+}
+function mkRow(parent,label,min,max,step,get,set,fmtf){
+  const row=el('div','row',parent);
+  const l=el('label',null,row); l.textContent=label; l.htmlFor='in_'+label.replace(/\W/g,'');
+  const inp=el('input',null,row); inp.type='range'; inp.id=l.htmlFor;
+  inp.min=min; inp.max=max; inp.step=step; inp.value=get(); inp.setAttribute('aria-label',label);
+  const out=el('div','val',row); out.textContent=fmtf?fmtf(get()):(fmt(get()));
+  inp.addEventListener('input',()=>{ const v=parseFloat(inp.value); set(v); out.textContent=fmtf?fmtf(v):fmt(v); });
+  inp.refresh=()=>{ inp.value=get(); out.textContent=fmtf?fmtf(get()):fmt(get()); };
+  curRefresh.push(inp);
+  return row;
+}
+const sliderRefresh=[];
+let curRefresh=sliderRefresh;
+function mkSelect(parent,label,options,get,set){
+  const row=el('div','segrow',parent);
+  const l=el('label',null,row); l.textContent=label;
+  const sel=el('select',null,row); sel.setAttribute('aria-label',label);
+  for(const [v,t] of options){ const o=el('option',null,sel); o.value=v; o.textContent=t; }
+  sel.value=get();
+  sel.addEventListener('change',()=>set(sel.value));
+  sel.refresh=()=>{ sel.value=get(); };
+  curRefresh.push(sel);
+  return sel;
+}
+function mkCheck(parent,label,get,set){
+  const row=el('label','chkrow',parent);
+  const c=el('input',null,row); c.type='checkbox'; c.checked=get(); c.setAttribute('aria-label',label);
+  const t=el('span',null,row); t.textContent=label;
+  c.addEventListener('change',()=>set(c.checked));
+  c.refresh=()=>{ c.checked=get(); };
+  curRefresh.push(c);
+  return c;
+}
+function refreshSliders(){ for(const s of sliderRefresh) s.refresh&&s.refresh(); }
+
+let toolOpts; // container for contextual tool options
+function buildSidebar(){
+  side.innerHTML='';
+  sliderRefresh.length=0;
+
+  // ---- Tools
+  const tb=mkGroup('Tools');
+  const grid=el('div',null,tb); grid.id='toolgrid';
+  TOOLBAR_TOOLS.forEach(([id,gl,name],ix)=>{
+    const b=el('button','tool'+(S.tool===id?' on':''),grid);
+    b.dataset.tool=id;
+    const g1=el('span','gl',b); g1.textContent=gl;
+    const g2=el('span',null,b); g2.textContent=name;
+    const k=el('kbd',null,b); k.textContent=TOOL_KEYS[ix];
+    b.addEventListener('click',()=>setTool(id));
+  });
+  toolOpts=el('div','opts',tb);
+  buildToolOpts();
+
+  // ---- Sources
+  const gb=mkGroup('Sources');
+  gb.id='srcPanelBody';
+  const srcList=el('div',null,gb); srcList.id='srcList';
+  const empty=el('div','empty',srcList); empty.id='srcEmpty';
+  empty.textContent='No sources yet — pick a source tool and click the field.';
+
+  // ---- Probes
+  const pb=mkGroup('Probes');
+  const plist=el('div',null,pb); plist.id='probeList';
+  const pempty=el('div','empty',plist); pempty.id='probeEmpty';
+  pempty.textContent='No probes — use the ✛ Probe tool to measure the field.';
+  mkCheck(pb,'Show frequency spectrum',()=>S.showSpectrum,v=>{S.showSpectrum=v; updateProbeVis();});
+
+  // ---- Simulation
+  const sb=mkGroup('Simulation');
+  mkRow(sb,'Resolution (grid W)',96,512,2,()=>S.sim.res,v=>{S.sim.res=Math.round(v); buildGrid(true);},v=>Math.round(v)+' px');
+  mkRow(sb,'Substeps / frame',1,16,1,()=>S.sim.sub,v=>{S.sim.sub=Math.round(v);},v=>''+Math.round(v));
+  mkRow(sb,'Timestep dt',0.02,1.0,0.01,()=>S.sim.dt,v=>{S.sim.dt=v; updateDerived();},v=>fmt(v,3));
+  mkRow(sb,'Wave speed c',0.05,1.2,0.01,()=>S.sim.c,v=>{S.sim.c=v; updateDerived();},v=>fmt(v));
+  mkRow(sb,'Damping σ',0,1.5,0.01,()=>S.sim.sigma,v=>{S.sim.sigma=v; updateDerived();},v=>fmt(v));
+  mkSelect(sb,'Boundaries',[['absorb','Absorbing (one-way)'],['reflect','Reflecting'],['sponge','Sponge layer'],['periodic','Periodic']],
+    ()=>S.sim.bnd,v=>{S.sim.bnd=v; updateDerived();});
+  mkCheck(sb,'Auto-clamp dt (CFL guard)',()=>S.sim.autoClamp,v=>{S.sim.autoClamp=v; updateDerived();});
+  const sw=el('div',null,sb); sw.id='stabilityWrap';
+  el('div',null,sw).id='stabilityBar';
+  const sf=el('div',null,sw.lastChild); sf.id='stabilityFill';
+  const stx=el('div',null,sw); stx.id='stabilityTxt';
+
+  // ---- Display
+  const db=mkGroup('Display');
+  mkSelect(db,'View mode',[['amp','Amplitude (signed)'],['int','Intensity (time-avg)'],['phase','Phase'],
+    ['grad','Gradient |∇u|'],['media','Medium map'],['flow','Energy flow direction']],
+    ()=>S.disp.mode,v=>{S.disp.mode=v;});
+  mkSelect(db,'Color scale',[['div','Diverging (dark)'],['divl','Diverging (light)'],['vir','Viridis'],['infer','Inferno'],['ice','Ice'],['mono','Mono']],
+    ()=>S.disp.scale,v=>{S.disp.scale=v;});
+  mkRow(db,'Exposure (gain)',0.2,6,0.05,()=>S.disp.exposure,v=>{S.disp.exposure=v;},v=>fmt(v)+'×');
+  mkRow(db,'Persistence',0,0.95,0.05,()=>S.disp.persistence,v=>{S.disp.persistence=v;},v=>fmt(v));
+  mkCheck(db,'Highlight structures',()=>S.showStruct,v=>{S.showStruct=v;});
+  updateStabilityUI();
+}
+
+function buildToolOpts(){
+  toolOpts.innerHTML='';
+  const t=S.tool;
+  const show=id=>['wall','absorb','erase'].includes(id);
+  if(['wall','absorb','erase'].includes(t)){
+    const h=el('h4',null,toolOpts); h.textContent='Brush';
+    mkRow(toolOpts,'Brush radius',2,40,1,()=>S.brush,v=>{S.brush=Math.round(v);},v=>Math.round(v)+' px');
+  }
+  if(t==='slit'){
+    const h=el('h4',null,toolOpts); h.textContent='Slit wall (drag across field)';
+    mkRow(toolOpts,'Number of slits',1,8,1,()=>S.slitCount,v=>{S.slitCount=Math.round(v);},v=>''+Math.round(v));
+    mkRow(toolOpts,'Slit width',0.008,0.12,0.002,()=>S.slitWidth,v=>{S.slitWidth=v;},v=>fmt(v,3));
+  }
+  if(t==='lens'||t==='medium'){
+    const h=el('h4',null,toolOpts); h.textContent=t==='lens'?'Lens (drag ellipse)':'Medium region (drag rect)';
+    mkRow(toolOpts,'Refractive index n',1.05,3,0.05,()=>S.refN,v=>{S.refN=v;},v=>fmt(v));
+    el('div','note',toolOpts).textContent='wave speed inside = c / n';
+  }
+  if(t==='obstacle'){
+    el('h4',null,toolOpts).textContent='Obstacle (drag ellipse) — fully reflecting';
+  }
+  if(t==='array'){
+    const h=el('h4',null,toolOpts); h.textContent='Phased array (drag the element line)';
+    mkRow(toolOpts,'Elements',2,16,1,()=>S.arrayN,v=>{S.arrayN=Math.round(v);},v=>''+Math.round(v));
+    mkRow(toolOpts,'Phase step Δφ',0,360,5,()=>S.arrayDphi,v=>{S.arrayDphi=Math.round(v);},v=>Math.round(v)+'°');
+  }
+  if(['point','pulse','line','array'].includes(t)){
+    const h=el('h4',null,toolOpts); h.textContent='New-source defaults';
+    mkRow(toolOpts,'Frequency f',0.01,0.25,0.005,()=>S.defF,v=>{S.defF=v;},v=>fmt(v,3));
+    mkRow(toolOpts,'Amplitude',0.05,2,0.05,()=>S.defAmp,v=>{S.defAmp=v;},v=>fmt(v));
+    mkSelect(toolOpts,'Waveform',[['sine','Sine'],['square','Square'],['triangle','Triangle'],['saw','Sawtooth']],()=>S.defWave,v=>{S.defWave=v;});
+    if(t==='pulse'){
+      mkRow(toolOpts,'Pulse duration',1,40,0.5,()=>S.defDur,v=>{S.defDur=v;},v=>fmt(v,1));
+      mkRow(toolOpts,'Pulse period',5,120,1,()=>S.defPeriod,v=>{S.defPeriod=v;},v=>fmt(v,0));
+    }
+  }
+  if(t==='erase'){
+    el('div','note',toolOpts).textContent='Erases walls/media cells, sources and probes under the brush. Right-drag erases with any tool.';
+  }
+  if(t==='probe'){
+    el('div','note',toolOpts).textContent='Click to drop a probe: live waveform, amplitude, frequency, phase and optional spectrum.';
+  }
+  if(t==='move'){
+    el('div','note',toolOpts).textContent='Drag sources and probes to move them. Click a source in the Sources panel to edit it.';
+  }
+}
+function setTool(id){
+  S.tool=id;
+  document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on',b.dataset.tool===id));
+  buildToolOpts();
+  cv.style.cursor = id==='move'?'grab': id==='erase'?'cell':'crosshair';
+}
+
+//------------------------------------------------ source list UI
+function srcSubText(s){
+  const lam = S.sim.c/Math.max(1e-6,s.f);
+  if(s.kind==='array'){
+    const d=Math.hypot(s.x2-s.x,(s.y2-s.y))*g.H/Math.max(1,s.n-1);
+    const sinT=Math.sin(s.dphi*Math.PI/180)/TAU*lam/Math.max(1e-6,d);
+    const ang=Math.abs(sinT)<=1? Math.asin(sinT)*180/Math.PI : null;
+    return `${s.n}el · Δφ${Math.round(s.dphi)}° · λ≈${lam.toFixed(1)} · steer ${ang===null?'—':ang.toFixed(0)+'°'}`;
+  }
+  const base=`f=${s.f.toFixed(3)} · λ≈${lam.toFixed(1)} · ${s.mode==='pulse'?`pulse ${s.dur.toFixed(0)}/${s.period.toFixed(0)}`:'cont'}`;
+  return base;
+}
+function updateSourceSub(s){
+  const elx=document.getElementById('srcsub_'+s.id);
+  if(elx) elx.textContent=srcSubText(s);
+}
+function renderSourceList(){
+  const list=$('#srcList'); if(!list) return;
+  const scope=[]; curRefresh=scope;
+  try{
+  list.querySelectorAll('.item').forEach(n=>n.remove());
+  $('#srcEmpty').style.display=sources.length?'none':'block';
+  for(const s of sources){
+    const item=el('div','item',list);
+    const head=el('div','ihead'+(S.selSrc===s.id?' sel':''),item);
+    const dot=el('span','dot',head); dot.style.background=s.on?(SRC_COLORS[s.kind]||'#fff'):'#5a6376';
+    const nm=el('span','iname',head); nm.textContent='S'+s.id;
+    const tag=el('span','itag',head); tag.textContent=s.kind+(s.mode==='pulse'?'·pulsed':'');
+    const sub=el('span','isub',head); sub.id='srcsub_'+s.id; sub.textContent=srcSubText(s);
+    const tog=el('button','ibtn'+(s.on?'':' off'),head); tog.textContent=s.on?'⏸':'▶'; tog.title='Toggle active';
+    tog.addEventListener('click',ev=>{ ev.stopPropagation(); s.on=!s.on; renderSourceList(); });
+    const del=el('button','ibtn',head); del.textContent='✕'; del.title='Delete';
+    del.addEventListener('click',ev=>{ ev.stopPropagation(); s.dead=true; sources=sources.filter(x=>x!==s); if(S.selSrc===s.id)S.selSrc=null; renderSourceList(); });
+    head.addEventListener('click',()=>{ S.selSrc = S.selSrc===s.id?null:s.id; renderSourceList(); });
+    if(S.selSrc===s.id){
+      const body=el('div','ibody',item);
+      mkSelect(body,'Drive',[['cont','Continuous'],['pulse','Pulsed']],()=>s.mode,v=>{s.mode=v; s.t0=S.time; updateSourceSub(s);});
+      mkSelect(body,'Waveform',[['sine','Sine'],['square','Square'],['triangle','Triangle'],['saw','Sawtooth']],()=>s.wave,v=>{s.wave=v;});
+      mkRow(body,'Frequency f',0.01,0.25,0.005,()=>s.f,v=>{s.f=v; updateSourceSub(s);},v=>fmt(v,3));
+      mkRow(body,'Amplitude',0.05,2,0.05,()=>s.amp,v=>{s.amp=v;},v=>fmt(v));
+      mkRow(body,'Phase offset',-180,180,5,()=>s.phase,v=>{s.phase=Math.round(v);},v=>Math.round(v)+'°');
+      if(s.mode==='pulse'){
+        mkRow(body,'Pulse duration',1,40,0.5,()=>s.dur,v=>{s.dur=v; updateSourceSub(s);},v=>fmt(v,1));
+        mkRow(body,'Pulse period',5,120,1,()=>s.period,v=>{s.period=v; updateSourceSub(s);},v=>fmt(v,0));
+      }
+      if(s.kind==='array'){
+        mkRow(body,'Elements',2,16,1,()=>s.n,v=>{s.n=Math.round(v); srcCells(s); updateSourceSub(s);},v=>''+Math.round(v));
+        mkRow(body,'Phase step Δφ',0,360,5,()=>s.dphi,v=>{s.dphi=Math.round(v); updateSourceSub(s);},v=>Math.round(v)+'°');
+        const note=el('div','note',body); note.textContent=srcSubText(s);
+      }
+      if(s.kind!=='point'&&s.kind!=='pulse'||true){
+        const note2=el('div','note',body); note2.textContent='λ ≈ '+(S.sim.c/Math.max(1e-6,s.f)).toFixed(1)+' cells · drag the source in the field to move it';
+      }
+    }
+  }
+  } finally { curRefresh=sliderRefresh; }
+}
+
+//------------------------------------------------ probe list UI
+function resetProbe(p){
+  p.buf=new Float32Array(512); p.tbuf=new Float32Array(512); p.head=0; p.count=0;
+  p.rms=0; p.fdom=0; p.phase=0; p.spec=null;
+}
+function buildProbePanel(p){
+  const list=$('#probeList'); if(!list) return;
+  const pe=$('#probeEmpty'); if(pe) pe.style.display='none';
+  const item=el('div','item',list);
+  const head=el('div','ihead',item);
+  const dot=el('span','dot',head); dot.style.background='#ffd166';
+  const nm=el('span','iname',head); nm.textContent='P'+p.id;
+  const sub=el('span','isub',head); sub.textContent=`${p.x.toFixed(2)}, ${p.y.toFixed(2)}`;
+  const del=el('button','ibtn',head); del.textContent='✕'; del.title='Remove probe';
+  del.addEventListener('click',()=>{ p.dead=true; probes=probes.filter(x=>x!==p); item.remove();
+    const pe=$('#probeEmpty'); if(pe && !probes.length) pe.style.display='block'; });
+  const body=el('div','ibody',item);
+  const c=el('canvas','pcv',body); p.canvas=c;
+  const stats=el('div','pstats',body);
+  const sA=el('span',null,stats); const sF=el('span',null,stats); const sP=el('span',null,stats);
+  const c2=el('canvas','pcv',body); c2.style.height='44px'; p.canvas2=c2;
+  updateProbeVis();
+  p.readA=sA; p.readF=sF; p.readP=sP;
+}
+function updateProbeVis(){
+  for(const p of probes) if(p.canvas2) p.canvas2.style.display=S.showSpectrum?'block':'none';
+}
+function updateProbeReadouts(){
+  for(const p of probes){
+    if(!p.readA) continue;
+    p.readA.innerHTML=`A <b>${p.rms.toFixed(3)}</b>`;
+    p.readF.innerHTML=`f̂ <b>${p.count>=256&&p.fdom?p.fdom.toFixed(4):'—'}</b>`;
+    p.readP.innerHTML=`φ <b>${p.count>=256?Math.round(p.phase)+'°':'—'}</b>`;
+  }
+}
+
+//------------------------------------------------ presets
+const PRESETS = {
+  doubleslit: { name:'Double slit', warm:900,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.002, sub:4, bnd:'absorb'},
+    disp:{mode:'amp', scale:'div', exposure:1.7, persistence:0},
+    build(){
+      // plane-wave illumination (vertical line source) → parallel wavefronts hit the wall
+      addSrc({kind:'line', x:0.10,y:0.04, x2:0.10,y2:0.96, f:0.05, amp:0.55});
+      structs.push({id:nextStructId++, shape:'wallgap', type:'wall', x1:0.40,y1:0.05,x2:0.40,y2:0.95, gaps:2, gw:0.055, cells:[], erased:new Set()});
+      addProbe(0.72,0.5);
+    }},
+  singleslit: { name:'Single-slit diffraction', warm:900,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.002, sub:4, bnd:'absorb'},
+    disp:{mode:'amp', scale:'div', exposure:1.7, persistence:0},
+    build(){
+      addSrc({kind:'line', x:0.10,y:0.04, x2:0.10,y2:0.96, f:0.05, amp:0.55});
+      structs.push({id:nextStructId++, shape:'wallgap', type:'wall', x1:0.40,y1:0.05,x2:0.40,y2:0.95, gaps:1, gw:0.040, cells:[], erased:new Set()});
+      addProbe(0.75,0.5);
+    }},
+  twosource: { name:'Two-source interference', warm:700,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.002, sub:4, bnd:'absorb'},
+    disp:{mode:'amp', scale:'div', exposure:2.2, persistence:0},
+    build(){
+      addSrc({kind:'point', x:0.30,y:0.40, f:0.05, amp:0.8});
+      addSrc({kind:'point', x:0.30,y:0.60, f:0.05, amp:0.8});
+      addProbe(0.66,0.5);
+    }},
+  cavity: { name:'Standing-wave cavity', warm:1500,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.0025, sub:4, bnd:'reflect'},
+    disp:{mode:'amp', scale:'div', exposure:2.4, persistence:0},
+    build(){
+      const W=g.W,H=g.H;
+      // closed rectangular cavity (reflecting boundaries + interior walls)
+      const box=(x1,y1,x2,y2)=>{ structs.push({id:nextStructId++, shape:'stroke', type:'wall', r:1.6*400/W,
+        pts:[[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]], cells:[], erased:new Set()}); };
+      box(0.22,0.18,0.78,0.82);
+      // resonant mode (m,n) of the interior: f = c/2 · hypot(m/Lx, n/Ly)
+      const Lx=0.56*W, Ly=0.64*H, m=10, n=4;
+      const f=S.sim.c/2*Math.hypot(m/Lx, n/Ly);
+      addSrc({kind:'point', x:0.27, y:0.5, f, amp:0.6});
+      S._cavityF=f;
+      addProbe(0.62,0.5);
+    }},
+  lens: { name:'Lens focusing', warm:1000,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.002, sub:4, bnd:'absorb'},
+    disp:{mode:'amp', scale:'div', exposure:1.6, persistence:0},
+    build(){
+      addSrc({kind:'line', x:0.06,y:0.18, x2:0.06,y2:0.82, f:0.05, amp:0.6});
+      structs.push({id:nextStructId++, shape:'ellipse', type:'medium', n:1.5,
+        x:0.42,y:0.5, rx:0.062, ry:0.17, cells:[]});
+      addProbe(0.74,0.5);
+    }},
+  refraction: { name:'Refraction at interface', warm:1000,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.002, sub:4, bnd:'absorb'},
+    disp:{mode:'amp', scale:'div', exposure:1.6, persistence:0},
+    build(){
+      addSrc({kind:'line', x:0.08,y:0.02, x2:0.36,y2:0.26, f:0.05, amp:0.6});
+      structs.push({id:nextStructId++, shape:'rect', type:'medium', n:1.5,
+        x:0.52,y:0, w:0.48, h:1.0, cells:[]});
+      addProbe(0.75,0.62);
+    }},
+  array: { name:'Phased-array beam steering', warm:700,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.002, sub:4, bnd:'absorb'},
+    disp:{mode:'amp', scale:'div', exposure:1.7, persistence:0},
+    build(){
+      addSrc({kind:'array', x:0.10,y:0.28, x2:0.10,y2:0.72, f:0.05, amp:0.5, n:9, dphi:140});
+      addProbe(0.62,0.68);
+    }},
+  maze: { name:'Pulse through obstacle field', warm:350,
+    sim:{res:288, dt:0.35, c:0.35, sigma:0.001, sub:4, bnd:'absorb'},
+    disp:{mode:'amp', scale:'div', exposure:2.4, persistence:0},
+    build(){
+      addSrc({kind:'point', mode:'pulse', x:0.08,y:0.5, f:0.07, amp:0.85, dur:6, period:42});
+      const wall=(pts)=>structs.push({id:nextStructId++, shape:'stroke', type:'wall', r:1.6*400/g.W, pts, cells:[], erased:new Set()});
+      wall([[0.28,0.0],[0.28,0.55]]);
+      wall([[0.46,1.0],[0.46,0.42]]);
+      structs.push({id:nextStructId++, shape:'wallgap', type:'wall', x1:0.66,y1:0.10,x2:0.66,y2:0.90, gaps:1, gw:0.022, cells:[], erased:new Set()});
+      structs.push({id:nextStructId++, shape:'ellipse', type:'wall', x:0.82,y:0.68, rx:0.05,ry:0.10, cells:[]});
+      addProbe(0.9,0.5);
+    }},
+};
+function addSrc(o){
+  const s=Object.assign({ id:nextSrcId++, kind:'point', mode:'cont', on:true, x2:o.x||0.5, y2:o.y||0.5,
+    wave:'sine', phase:0, dur:7, period:40, n:9, dphi:220, t0:0, cells:[], f:0.05, amp:0.55 }, o);
+  sources.push(s); srcCells(s); return s;
+}
+function addProbe(x,y){ const p={id:nextProbeId++, x,y}; probes.push(p); resetProbe(p); return p; }
+
+function applyPreset(id, warmOverride){
+  const P=PRESETS[id]; if(!P) return;
+  S.preset=id; $('#presetSel').value=id;
+  Object.assign(S.sim, P.sim);
+  Object.assign(S.disp, P.disp);
+  S.dtEff=S.sim.dt; computeStability();
+  sources=[]; structs=[]; probes=[]; nextSrcId=1; nextStructId=1; nextProbeId=1;
+  S.selSrc=null; S.time=0; S.paused=false; updatePauseBtn();
+  const needRebuild = !g || g.W!==S.sim.res;
+  if(needRebuild) buildGrid(false); else { g.u0.fill(0); g.u1.fill(0); g.u2.fill(0); }
+  resetAux(); resetProbes();
+  P.build();
+  rebuildMasks();
+  const plist=$('#probeList'); if(plist) plist.querySelectorAll('.item').forEach(n=>n.remove());
+  for(const p of probes) buildProbePanel(p);
+  refreshSliders(); renderSourceList(); updateProbeVis();
+  // silent warmup so the scene opens with waves already propagating
+  computeStability();
+  const warm = warmOverride!==undefined ? warmOverride : P.warm;
+  for(let k=0;k<warm;k++) step(S.dtEff);
+  updateAux(Math.min(0.1,warm*S.dtEff*0.02)||0.01);
+  resetProbes();
+}
+
+//------------------------------------------------ top bar wiring
+function updatePauseBtn(){
+  $('#pauseIco').textContent=S.paused?'▶':'⏸';
+  $('#pauseTxt').textContent=S.paused?'Resume':'Pause';
+}
+$('#btnPause').addEventListener('click',()=>{ S.paused=!S.paused; updatePauseBtn(); });
+$('#btnStep').addEventListener('click',()=>{ if(S.paused){ advance(); updateAux(S.dtEff*S.sim.sub); } });
+$('#btnClear').addEventListener('click',()=>{
+  g.u0.fill(0); g.u1.fill(0); g.u2.fill(0); resetAux(); resetProbes();
+});
+$('#btnReset').addEventListener('click',()=>applyPreset(S.preset));
+$('#presetSel').addEventListener('change',e=>applyPreset(e.target.value));
+$('#btnMenu').addEventListener('click',()=>document.body.classList.toggle('sideOpen'));
+$('#presetSel').innerHTML=Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${p.name}</option>`).join('');
+
+document.addEventListener('keydown',e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if(e.code==='Space'){ e.preventDefault(); S.paused=!S.paused; updatePauseBtn(); }
+  else if(e.key==='.'){ if(S.paused){ advance(); updateAux(S.dtEff*S.sim.sub);} }
+  else {
+    const ix=TOOL_KEYS.indexOf(e.key.toLowerCase());
+    if(ix>=0) setTool(TOOLBAR_TOOLS[ix][0]);
+  }
+});
+
+//------------------------------------------------ resize
+const ro=new ResizeObserver(()=>{
+  const st=$('#stage');
+  dpr=Math.min(2,window.devicePixelRatio||1);
+  const w=Math.max(64,st.clientWidth), h=Math.max(64,st.clientHeight);
+  const needNew = cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr);
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  if(needNew||!g||Math.abs(g.H-Math.round(clamp(S.sim.res,64,1024)*h/w))>2) buildGrid(true);
+});
+ro.observe($('#stage'));
+
+//------------------------------------------------ diagnostics hook (for validation)
+window.WL={
+  get S(){return S;}, get sources(){return sources;}, get probes(){return probes;},
+  get structs(){return structs;}, get grid(){return {W:g.W,H:g.H};},
+  get u1(){return g.u1;}, get wall(){return g.wall;}, get invN(){return g.invN;},
+  step(n=1){ for(let k=0;k<n;k++) step(S.dtEff); return S.time; },
+  fieldStats(){ let mx=0,sum=0; const u=g.u1,N=g.W*g.H;
+    for(let i=0;i<N;i++){ const a=Math.abs(u[i]); if(a>mx)mx=a; sum+=u[i]*u[i]; }
+    return {max:+mx.toFixed(4), rms:+Math.sqrt(sum/N).toFixed(5)}; },
+  sampleAt:(nx,ny)=>sampleFieldBilinear(nx,ny),
+  errors:[],
+};
+window.addEventListener('error',e=>{ window.WL.errors.push(String(e.message||e)+'\n'+(e.error&&e.error.stack||'')); });
+window.addEventListener('unhandledrejection',e=>{ window.WL.errors.push(String(e.reason||e)); });
+
+//------------------------------------------------ boot
+buildSidebar();
+setTool('move');
+const firstRes = {clientWidth:800, clientHeight:450};
+cv.width=800*2; cv.height=450*2; dpr=2;
+buildGrid(false);
+applyPreset('doubleslit');
+requestAnimationFrame(ts=>{ lastFrameTs=ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>

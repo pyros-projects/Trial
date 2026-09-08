@@ -6,16 +6,16 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-08 checkout contains 43 submitted HTML builds for twelve tasks across six model folders:
+The 2026-09-08 checkout contains 56 submitted HTML builds for fifteen tasks across six model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
-| `gpt-6_astra` | 12 | 01-12 |
-| `anthropic_opus5` | 5 | 01-05 |
-| `xai_grok4.6` | 10 | 01-08, 10-11 |
-| `zai_glm5.3_flash` | 5 | 01-05 |
-| `google_gemini3.8_flash` | 8 | 01-08 |
-| `alibaba_qwen3.8_flash` | 3 | 01-02, 09 |
+| `gpt-6_astra` | 14 | 01-14 |
+| `anthropic_opus5` | 7 | 01-07 |
+| `xai_grok4.6` | 14 | 01-13, 15 |
+| `zai_glm5.3_flash` | 6 | 01-06 |
+| `google_gemini3.8_flash` | 11 | 01-11 |
+| `alibaba_qwen3.8_flash` | 4 | 01-02, 04, 09 |
 
 These are submitted artifacts, not verified passes. This snapshot includes no evaluator reports or scores. The gallery reads the files that are present, so its totals change as results are added.
 
