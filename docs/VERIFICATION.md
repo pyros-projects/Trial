@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Qwen modular synth: 2026-09-08
+
+Qwen's modular synthesizer brings the collection to **57 HTML builds across fifteen prompts and six models**, with five Qwen submissions. The expanded synth comparison now contains all six models in the configured order. All **25 original files totaling 2,231,144 bytes** remain unchanged; the thumbnail is an exact copy of the inspected supplied `h-02-playing.png`.
+
+Chromium checks against Netlify Dev and production verified the direct implementation link, user-initiated audio start with active voices and nonzero output, and an advancing sequencer playhead. The viewer occupies **1440 × 1057** on desktop and **390 × 765** on mobile; closing it removes the iframe. The six-card comparison and default missing-build filter passed, with no uncaught JavaScript errors or external requests during the smoke checks. These checks establish gallery integration and audio startup, not musical quality or complete task correctness.
+
+The bounded publication review covered all **17 text files** and metadata of all **eight original PNGs**. No confirmed credential or private-identity leak was found. Pseudonymous local paths remain in raw GitHub evidence, which is excluded from the website. Only selected screenshot pixels were visually reviewed.
+
+Production deployment **`6aa009fe492c63bcd69d1538`** publishes **273 files totaling 10,490,475 bytes (10.00 MiB)**. Live HTTPS verification passed for all **57** implementation share pages, source hashes, thumbnails and attachment/sandbox headers, plus all **15** comparison pages and preview images. All six model profiles remain intact, and thirty-four representative private routes returned 404.
+
 ## Thirteen new builds: 2026-09-08
 
 The collection contains **56 HTML builds across fifteen prompts and six models**: Astra 14, Opus 7, Grok 14, GLM 6, Gemini 11, and Qwen 4. This batch adds Qwen 04; Opus 06/07; Gemini 09/10/11; Astra 13/14; Grok 09/12/13/15; and GLM 06. Drone racing, the evolutionary ecosystem, and the digital logic lab now have their first submissions. Prompt IDs still group skipped submissions correctly, including Grok's task 15 without task 14.
