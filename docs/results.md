@@ -152,7 +152,9 @@ The local gallery, a separate port, and an iframe do not provide security isolat
 
 ## Compare results
 
-Each prompt keeps models in the configured order, with three columns above 1100 pixels, two from 581–1100 pixels, and one at 580 pixels or below. The arrows move one model at a time; the range label shows your position in the full lineup. Native horizontal scrolling and touch swipes work too. Focus the comparison row to use Left/Right or Home/End. Missing submissions retain their labeled place, and repeated attempts stay together in one model column.
+**Recorded builds only** is enabled by default. It hides empty model columns, including missing submissions and builds excluded by other filters. Turn it off to show the labeled placeholders. The control is available in the showcase filters and the expanded comparison bar; both share one preference saved in your browser. **Reset** restores the default. Shared comparison links honor this preference while showing all submitted models independently of search, model, and task filters.
+
+Each prompt keeps visible models in the configured order, with three columns above 1100 pixels, two from 581–1100 pixels, and one at 580 pixels or below. The arrows move one model at a time; the range label counts the visible lineup. Native horizontal scrolling and touch swipes work too. Focus the comparison row to use Left/Right or Home/End. Repeated attempts stay together in one model column.
 
 Choose **Expand** to see every entry for one prompt in a full-screen grid. Models flow into as many rows as needed, with three columns on desktop, two from 581–1100 pixels, and one on mobile. Scroll vertically to reach later rows; the expanded view has no horizontal paging. Read the prompt, inspect builds, open live apps, or copy implementation links from there. Closing a nested viewer returns to the comparison; closing the comparison restores the main page's filters, position, and focus. Shared implementation URLs continue to open the selected app directly.
 

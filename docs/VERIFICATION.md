@@ -2,6 +2,14 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Recorded builds only: 2026-09-08
+
+The showcase and expanded comparison now share a **Recorded builds only** checkbox, enabled by default. It removes empty model columns before layout, including both missing submissions and placeholders caused by other filters. Existing builds, repeated attempts, and configured model order remain intact. The preference is saved in the existing browser settings; older settings default to enabled, and Reset restores that default. Shared comparisons honor the preference while retaining their independent model and search selection.
+
+All **seven focused Windows Chromium tests** passed: four new preference tests, two existing placeholder tests, and the responsive model-comparison test. Coverage includes both placeholder types, duplicates, search and empty states, reload persistence, Reset, synchronization between controls, category close/focus behavior, and real exported comparison links with saved filters. JavaScript syntax and whitespace checks passed. The final layout was also inspected against the actual 43-build export at **1440, 768, 390, and 320 pixels**, including both controls and horizontal overflow checks. The [gallery preview](gallery-results-preview.png) shows the new filter.
+
+Production deployment **`6a9ff401a0f119ccb4da974a`** publishes **225 files totaling 7,972,939 bytes (7.60 MiB)**. The published HTML, JavaScript, and stylesheet match the reviewed source hashes. Live Chromium checks passed for default visibility, toggling, persistence, Reset, expanded and shared comparisons, search, empty states, and responsive layouts, with no uncaught errors. This presentation update retains the existing 43-build, twelve-prompt collection.
+
 ## Opus lensing and Astra rhythm game: 2026-09-08
 
 The collection contains **43 HTML builds across twelve prompts and six models**: Astra 12, Opus 5, Grok 10, GLM 5, Gemini 8, and Qwen 3. New submissions are Opus's `05-black-hole-lensing` and Astra's `12-rhythm-bullet-hell`. All **132 original files totaling 24,670,034 bytes** remain unchanged. The two top-level thumbnails are exact copies of the supplied `22-final-high-quality.png` and `24-final-desktop-gameplay.png`, inspected before publication.
