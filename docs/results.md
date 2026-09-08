@@ -6,18 +6,26 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-08 checkout contains 57 submitted HTML builds for fifteen tasks across six model folders:
+The 2026-09-08 checkout contains 68 submitted HTML builds for seventeen tasks across six model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
-| `gpt-6_astra` | 14 | 01-14 |
-| `anthropic_opus5` | 7 | 01-07 |
-| `xai_grok4.6` | 14 | 01-13, 15 |
-| `zai_glm5.3_flash` | 6 | 01-06 |
-| `google_gemini3.8_flash` | 11 | 01-11 |
-| `alibaba_qwen3.8_flash` | 5 | 01-04, 09 |
+| `gpt-6_astra` | 16 | 01-16 |
+| `anthropic_opus5` | 8 | 01-08 |
+| `xai_grok4.6` | 17 | 01-17 |
+| `zai_glm5.3_flash` | 7 | 01-07 |
+| `google_gemini3.8_flash` | 14 | 01-14 |
+| `alibaba_qwen3.8_flash` | 6 | 01-05, 09 |
 
 These are submitted artifacts, not verified passes. This snapshot includes no evaluator reports or scores. The gallery reads the files that are present, so its totals change as results are added.
+
+## Build notices
+
+Maintain short observations in the `buildNotices` object in [appsettings.json](../gallery/static/appsettings.json), keyed by the exact `model-folder/run-folder` ID. Each entry has a `type` (`runtime-error` or `slow-start`) and a plain-text `message` of 1–500 characters, without control characters. Optional `scope: "public"` limits a notice to the public showcase; the default `"all"` shows it in both galleries. The existing entries demonstrate a slow shader startup, a JavaScript error, and a storage access blocked by the public sandbox.
+
+Cards show a short attention label. Build details show the explanation, and direct implementation links open it as a collapsible overlay. Collapsing the notice keeps the app's dimensions and running state intact. Switching models displays that build's own notice. Refresh reloads the settings.
+
+These are manually maintained observations: update or remove an entry when its build or observed behavior changes. Invalid entries are ignored individually. The entire settings file is published with the site, so these messages contain public descriptions. Submitted HTML, raw metadata, and evidence remain separate.
 
 ## Start the local gallery
 

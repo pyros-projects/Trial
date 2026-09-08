@@ -5,7 +5,8 @@
   const score = value => value == null ? '—' : Number(value).toFixed(1);
   const bytes = value => value == null ? 'Unknown' : value < 1024 ? `${value} B` : value < 1048576 ? `${(value/1024).toFixed(1)} KiB` : `${(value/1048576).toFixed(1)} MiB`;
   const label = track => track === 'real-apps' ? 'REAL APPLICATION' : 'HTML EXPERIENCE';
-  const state = {data:null, modelSettings:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, tab:'preview', promptText:'', promptToken:0, loading:false};
+  const state = {data:null, modelSettings:new Map(), buildNotices:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, tab:'preview', promptText:'', promptToken:0, loading:false};
+  const noticeLabels={'runtime-error':'Runtime error','slow-start':'May take minutes to load'};
   const headings = {
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
     catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and real applications. The brief, the checks and the delivery requirements are all here.'],
@@ -27,7 +28,7 @@
     const orderB=state.modelSettings.get(b.model_key)?.order??Infinity;
     return (orderA===orderB?0:orderA-orderB)||modelName(a).localeCompare(modelName(b))||a.model_key.localeCompare(b.model_key);
   }
-  async function readModelSettings() {
+  async function readGallerySettings() {
     const response=await fetch('/appsettings.json',{cache:'no-store'});
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     const config=await response.json();
@@ -39,7 +40,36 @@
       }
       settings.set(model.key,{label:model.label.trim(),color:model.color,order});
     });
-    return settings;
+    const notices=new Map();const configured=config.buildNotices;
+    if(configured&&typeof configured==='object'&&!Array.isArray(configured)){
+      for(const [id,notice] of Object.entries(configured)){
+        if(!id.trim()||id.length>250||/[\u0000-\u001f\u007f]/.test(id)||!notice||typeof notice!=='object'||Array.isArray(notice))continue;
+        if(typeof notice.type!=='string'||!Object.hasOwn(noticeLabels,notice.type)||typeof notice.message!=='string')continue;
+        const message=notice.message.trim();const scope=notice.scope===undefined?'all':notice.scope;
+        if(!message||message.length>500||/[\u0000-\u001f\u007f]/.test(notice.message)||!['all','public'].includes(scope))continue;
+        notices.set(id,{type:notice.type,message,scope});
+      }
+    }
+    return {models:settings,notices};
+  }
+  function buildNotice(row) {
+    const notice=state.buildNotices.get(row.id);
+    return notice&&(notice.scope!=='public'||isPublic())?notice:null;
+  }
+  function noticeHeading(notice) {
+    return `<span class="notice-icon" aria-hidden="true">!</span><span>Attention: ${noticeLabels[notice.type]}</span>`;
+  }
+  function cardBuildNotice(row) {
+    const notice=buildNotice(row);if(!notice)return '';
+    return `<div class="build-notice card-build-notice" data-notice-type="${notice.type}" role="note">${noticeHeading(notice)}</div>`;
+  }
+  function detailBuildNotice(row) {
+    const notice=buildNotice(row);if(!notice)return '';
+    return `<aside class="build-notice detail-build-notice" data-notice-type="${notice.type}" aria-label="Build notice"><strong>${noticeHeading(notice)}</strong><p class="build-notice-message">${escape(notice.message)}</p></aside>`;
+  }
+  function liveBuildNotice(row) {
+    const notice=buildNotice(row);if(!notice)return '';
+    return `<div class="live-notice-anchor"><details id="live-build-notice" class="live-info build-notice live-build-notice" data-notice-type="${notice.type}" open><summary>${noticeHeading(notice)}</summary><p class="build-notice-message">${escape(notice.message)}</p></details></div>`;
   }
   function modelProfile(row) {
     const profile=state.data?.model_profiles?.[row.model_key];
@@ -188,7 +218,7 @@
     const a=row.artifact;const status=row.score==null?'Not scored':`${score(row.score)} / 100`;
     const image=a.screenshot_url?`<img src="${escape(a.screenshot_url)}" alt="${escape(modelName(row))}: ${escape(row.task_title)}" loading="lazy" decoding="async" width="1280" height="800">`:`<div class="card-placeholder"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><span class="visual-label">${a.kind==='html'?'READY TO EXPLORE':a.exists?'SOURCE AVAILABLE':'NO ARTIFACT'}</span></div>`;
     const footer=repeated?escape(row.run_id):!isPublic()&&row.report_binding!=='none'?checksSummary(row):`${bytes(a.bytes)} · ${a.demo?'Session demo':a.kind==='html'?'HTML build':'Source project'}`;
-    return `<article class="run-card"><div class="card-model">${modelIdentity(row)}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div><div class="card-bottom"><span class="check-summary">${footer}</span><div class="card-actions">${copyLinkButton(row,'copy-link')}<button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></div></article>`;
+    return `<article class="run-card"><div class="card-model">${modelIdentity(row)}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div>${cardBuildNotice(row)}<div class="card-bottom"><span class="check-summary">${footer}</span><div class="card-actions">${copyLinkButton(row,'copy-link')}<button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></div></article>`;
   }
   const groupKey=row=>row.task_id||`unassigned:${row.id}`;
   function promptGroup(key,runs,expanded=false,allModels=false) {
@@ -321,11 +351,12 @@
     try{
       const [inventory,settings]=await Promise.allSettled([
         fetch('/api/data',{cache:'no-store'}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}),
-        readModelSettings()
+        readGallerySettings()
       ]);
       if(inventory.status==='rejected')throw inventory.reason;
       const data=inventory.value;if(!Array.isArray(data.results)||!Array.isArray(data.catalog))throw new Error('Invalid gallery response');
-      state.modelSettings=settings.status==='fulfilled'?settings.value:new Map();
+      state.modelSettings=settings.status==='fulfilled'?settings.value.models:new Map();
+      state.buildNotices=settings.status==='fulfilled'?settings.value.notices:new Map();
       data.results=data.results.map(row=>({...row,tags:Array.isArray(row.tags)?row.tags:[]}));
       const first=state.data===null;state.data=data;
       document.querySelector('.nav-button[data-view="leaderboard"]').hidden=isPublic();
@@ -416,7 +447,7 @@
     document.querySelectorAll('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===state.tab)));
     const a=row.artifact;
     $('#viewer-actions').innerHTML=`${copyLinkButton(row)}${row.prompts.prompt?`<button class="button quiet" data-open-prompt="${escape(row.task_id)}">Prompt</button>`:''}${a.source_url?`<a class="button quiet" href="${escape(sourceLink(a))}" download>Source ↓</a>`:''}${a.url&&!isPublic()?`<a class="button quiet" href="${escape(a.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:''}`;
-    $('#viewer-content').innerHTML=state.tab==='preview'?previewContent(row):state.tab==='evidence'?evidenceContent(row):detailsContent(row);
+    $('#viewer-content').innerHTML=detailBuildNotice(row)+(state.tab==='preview'?previewContent(row):state.tab==='evidence'?evidenceContent(row):detailsContent(row));
   }
   function resizeFrame() {
     const frame=$('#artifact-frame');if(!frame)return;
@@ -463,7 +494,7 @@
     $('#viewer').classList.add('is-live');
     $('#viewer').style.setProperty('--model-color',modelColor(row));
     $('#viewer-title').textContent=`${row.task_title} · ${modelName(row)}`;
-    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button>${liveModelControl(row)}<span class="live-title">${escape(row.task_title)}</span><div class="live-tools">${row.artifact.demo?`<button id="reset-demo" class="button" title="Discard changes and start a fresh demo">Reset demo</button>`:""}${liveSetup(row)}${liveGuidance(row)}${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label></div><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
+    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button>${liveModelControl(row)}<span class="live-title">${escape(row.task_title)}</span><div class="live-tools">${row.artifact.demo?`<button id="reset-demo" class="button" title="Discard changes and start a fresh demo">Reset demo</button>`:""}${liveSetup(row)}${liveGuidance(row)}${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label></div><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div>${liveBuildNotice(row)}<div id="preview-area" class="preview-area live-area"></div>`;
     $('#viewport-size').value=viewport;
     const frame=document.createElement('iframe');frame.id='artifact-frame';frame.title=`Live ${row.task_title}`;
     frame.setAttribute('sandbox',row.artifact.demo?'allow-scripts allow-downloads':isPublic()?'allow-scripts allow-downloads allow-modals allow-pointer-lock':'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-pointer-lock allow-popups');

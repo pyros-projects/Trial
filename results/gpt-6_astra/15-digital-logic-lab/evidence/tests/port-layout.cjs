@@ -1,0 +1,3 @@
+const {execFileSync}=require('node:child_process');const assert=require('node:assert/strict');
+const script=`JSON.stringify(Array.from(document.querySelectorAll('.port')).filter(p=>p.getAttribute('aria-label').startsWith('XOR input')).map(p=>({label:p.getAttribute('aria-label'),y:p.getBoundingClientRect().y})))`;
+const raw=execFileSync('agent-browser',['--session','bitwise','eval',script],{encoding:'utf8'}).trim();const values=JSON.parse(JSON.parse(raw));assert.equal(values.length,2);assert.ok(Math.abs(values[0].y-values[1].y)>8,'Separate input ports must have distinct usable pointer targets');console.log('PASS distinct interactive gate port positions',values);

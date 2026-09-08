@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cinder Reliquary</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23120e0b'/><circle cx='8' cy='8' r='4' fill='%23e2a14a'/></svg>">
+<style>
+:root {
+  --bg: #120e0b;
+  --panel: #1c1612;
+  --panel2: #261d16;
+  --ink: #eddcc4;
+  --muted: #9b8770;
+  --amber: #e2a14a;
+  --copper: #c56a3a;
+  --verde: #3f8f7a;
+  --blood: #a43428;
+  --bone: #d8c7a8;
+  --line: #3a2c22;
+  --good: #7cb389;
+  --warn: #d4a04a;
+  --bad: #c45b4a;
+  --display: Palatino, "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+  --mono: "Cascadia Mono", "Consolas", "Lucida Console", ui-monospace, monospace;
+  --fs: 15px;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: var(--fs)/1.35 var(--mono); }
+body.hi-contrast { --ink: #fff4e3; --muted: #d7c4a6; --panel: #000; --bg: #000; }
+body.hi-contrast #view { filter: contrast(1.18) saturate(1.05); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: linear-gradient(#3a2a1e, #2a1d14); border: 1px solid #6a4a32; color: var(--bone); padding: 8px 12px; border-radius: 8px; cursor: pointer; letter-spacing: .04em; }
+button:hover, button:focus-visible { outline: 2px solid var(--amber); border-color: var(--amber); }
+button.primary { background: linear-gradient(#8a4a22, #5a2e14); border-color: #c4783a; color: #fff3d8; }
+button.ghost { background: transparent; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+input, select { background: #140f0c; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+#app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; min-height: 100dvh; }
+#topbar { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); background: linear-gradient(#241910, #160f0c); }
+#brand { font-family: var(--display); color: var(--amber); letter-spacing: .14em; font-size: 13px; text-transform: uppercase; }
+#live { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+#stage { display: grid; grid-template-columns: 1fr minmax(280px, 340px); min-height: 0; }
+#viewwrap { position: relative; min-width: 0; min-height: 0; background: #070504; }
+#view { width: 100%; height: 100%; display: block; cursor: crosshair; background: #070504; }
+#touch { display: none; position: absolute; inset: auto 8px 8px 8px; grid-template-columns: auto 1fr auto; gap: 8px; pointer-events: none; }
+#touch .pad, #touch .acts { pointer-events: auto; display: grid; gap: 4px; }
+#touch .pad { grid-template-columns: 44px 44px 44px; }
+#side { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-left: 1px solid var(--line); background: var(--panel); min-height: 0; overflow: auto; }
+.panel { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
+.panel h2 { margin: 0 0 6px; font-family: var(--display); font-size: 14px; color: var(--amber); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+#vitals .row, .statrow { display: flex; justify-content: space-between; gap: 8px; }
+.bar { height: 8px; background: #2a1c14; border-radius: 4px; overflow: hidden; margin: 4px 0 8px; border: 1px solid #3d281c; }
+.bar > i { display: block; height: 100%; background: linear-gradient(90deg, #7a1e18, #d06040); }
+.bar.xp > i { background: linear-gradient(90deg, #2a5a4a, #5ec49a); }
+#log { flex: 1; min-height: 110px; overflow: auto; font-size: 12px; color: var(--bone); }
+#log div { border-bottom: 1px dashed #32251c; padding: 2px 0; }
+#inv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.slot { background: #140f0c; border: 1px solid #3c2c22; border-radius: 6px; padding: 5px 6px; cursor: pointer; min-height: 42px; }
+.slot:hover, .slot:focus { border-color: var(--amber); }
+.slot b { display: block; color: var(--ink); font-size: 12px; }
+.slot span { color: var(--muted); font-size: 10px; }
+#prompt { color: var(--amber); font-size: 12px; min-height: 18px; }
+#minimap { width: 100%; height: 72px; image-rendering: pixelated; background: #0a0706; border-radius: 6px; border: 1px solid var(--line); }
+#bot { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-top: 1px solid var(--line); background: #1a140f; }
+.screen { position: fixed; inset: 0; background: rgba(8,6,4,.86); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+.screen.open { display: flex; }
+.card { width: min(760px, 100%); max-height: 92dvh; overflow: auto; background: linear-gradient(#2a1e16, #17110d); border: 1px solid #7a5233; border-radius: 16px; padding: 22px; box-shadow: 0 24px 80px #000a, inset 0 0 0 1px #3a281c; }
+.card h1 { font-family: var(--display); margin: 0 0 4px; font-size: 42px; color: var(--amber); letter-spacing: .06em; }
+.sub { color: var(--muted); margin-bottom: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.classbtn { text-align: left; min-height: 120px; }
+.classbtn.active { outline: 2px solid var(--amber); }
+.hint { color: var(--muted); font-size: 12px; }
+.tt { position: absolute; z-index: 15; max-width: 260px; background: #1a140f; border: 1px solid var(--amber); color: var(--ink); padding: 8px; border-radius: 8px; pointer-events: none; font-size: 12px; display: none; }
+#diagbox { display: none; font-size: 11px; }
+#diagbox.open { display: block; }
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+label.chk { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+.keys { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12px; }
+kbd { background: #2a2018; border: 1px solid #5a4030; border-bottom-width: 2px; padding: 0 5px; border-radius: 4px; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #2a1c12; border: 1px solid var(--amber); padding: 8px 14px; border-radius: 8px; display: none; z-index: 30; }
+.ornament { height: 3px; background: linear-gradient(90deg, transparent, var(--copper), var(--amber), var(--copper), transparent); margin: 8px 0 14px; }
+@media (max-width: 820px) {
+  #stage { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  #side { border-left: 0; border-top: 1px solid var(--line); max-height: 42dvh; }
+  #touch { display: grid; }
+  .grid3 { grid-template-columns: 1fr; }
+  #brand { display: none; }
+  #live { font-size: 10px; white-space: normal; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div id="brand">Cinder Reliquary</div>
+    <div id="live" aria-live="polite">—</div>
+    <div>
+      <button type="button" id="btnPause" aria-label="Pause menu">Menu</button>
+    </div>
+  </header>
+  <div id="stage">
+    <div id="viewwrap">
+      <canvas id="view" tabindex="0" aria-label="Dungeon view"></canvas>
+      <div id="touch">
+        <div class="pad">
+          <span></span><button type="button" data-dir="0,-1" aria-label="Move north">N</button><span></span>
+          <button type="button" data-dir="-1,0" aria-label="Move west">W</button>
+          <button type="button" id="btnWaitTouch" aria-label="Wait">·</button>
+          <button type="button" data-dir="1,0" aria-label="Move east">E</button>
+          <span></span><button type="button" data-dir="0,1" aria-label="Move south">S</button><span></span>
+        </div>
+        <div></div>
+        <div class="acts">
+          <button type="button" id="btnLookT" aria-label="Inspect">Look</button>
+          <button type="button" id="btnInvT" aria-label="Inventory">Pack</button>
+          <button type="button" id="btnSkillT" aria-label="Use skill">Skill</button>
+        </div>
+      </div>
+    </div>
+    <aside id="side">
+      <div class="panel" id="vitals">
+        <h2 id="heroName">Warden</h2>
+        <div class="row"><span>Health</span><span id="hpText">0/0</span></div>
+        <div class="bar" id="hpBar"><i></i></div>
+        <div class="row"><span>XP</span><span id="xpText">1</span></div>
+        <div class="bar xp" id="xpBar"><i></i></div>
+        <div class="statrow"><span>ATK/ACC/ARM</span><span id="statText">—</span></div>
+        <div class="statrow"><span>Status</span><span id="statusText">none</span></div>
+        <div class="statrow"><span>Objective</span><span id="objText">Descend</span></div>
+      </div>
+      <div class="panel">
+        <h2>Minimap</h2>
+        <canvas id="minimap" width="320" height="92" aria-label="Minimap"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Pack &amp; Steel</h2>
+        <div id="equip"></div>
+        <div id="inv"></div>
+      </div>
+      <div class="panel" style="flex:1;display:flex;flex-direction:column;">
+        <h2>Reliquary Log</h2>
+        <div id="prompt"></div>
+        <div id="log" role="log"></div>
+      </div>
+      <div class="panel" id="diagbox">
+        <h2>Diagnostics</h2>
+        <div class="checks" id="diagChecks"></div>
+      </div>
+    </aside>
+  </div>
+  <footer id="bot">
+    <button type="button" id="btnWait" aria-label="Wait a turn">Wait</button>
+    <button type="button" id="btnLook" aria-label="Inspect mode">Inspect</button>
+    <button type="button" id="btnSkill" aria-label="Target skill">Skill</button>
+    <button type="button" id="btnGet" aria-label="Pick up item">Get</button>
+    <button type="button" id="btnDoor" aria-label="Open or close door">Door</button>
+    <button type="button" id="btnDown" aria-label="Descend stairs">Descend</button>
+    <button type="button" id="btnHelp" aria-label="Keyboard help">Help</button>
+  </footer>
+</div>
+<div id="tt" class="tt"></div>
+<div id="toast" class="toast"></div>
+
+<div id="scrMenu" class="screen open" role="dialog" aria-label="Main menu">
+  <div class="card">
+    <h1>Cinder Reliquary</h1>
+    <div class="sub">A buried chapel. A lantern. A debt in the dark.</div>
+    <div class="ornament"></div>
+    <p class="hint">Turn-based tactics in a seeded dungeon. Walls and closed doors occlude. Enemies hunt by sight, not omniscience.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;">
+      <button type="button" class="primary" id="btnContinue" aria-label="Continue saved run">Continue</button>
+      <button type="button" class="primary" id="btnNew" aria-label="New run">New Run</button>
+      <button type="button" id="btnDaily" aria-label="Daily seed run">Daily Seed</button>
+      <button type="button" id="btnImport" aria-label="Import run JSON">Import</button>
+      <button type="button" id="btnSettings" aria-label="Open settings">Settings</button>
+      <button type="button" id="btnHelpMenu" aria-label="Open help">Help</button>
+      <button type="button" id="btnRecords" aria-label="Local records">Records</button>
+    </div>
+    <input id="importFile" type="file" accept="application/json,.json" hidden>
+    <pre id="recordBox" class="hint" style="white-space:pre-wrap;"></pre>
+  </div>
+</div>
+
+<div id="scrNew" class="screen" role="dialog" aria-label="New run">
+  <div class="card">
+    <h1>Take a lantern</h1>
+    <p class="hint">Choose a loadout. The first chamber is never an empty corridor.</p>
+    <div class="grid3" id="classPick"></div>
+    <div class="ornament"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <label>Seed <input id="seedIn" aria-label="Run seed" spellcheck="false"></label>
+      <label>Style
+        <select id="styleIn" aria-label="Generation style">
+          <option value="auto">Auto by floor</option>
+          <option value="fortress">Fortress</option>
+          <option value="cavern">Caverns</option>
+          <option value="crypt">Crypt</option>
+          <option value="overgrown">Overgrown ruins</option>
+          <option value="arena">Compact test arena</option>
+        </select>
+      </label>
+      <label>Difficulty
+        <select id="diffIn" aria-label="Difficulty">
+          <option value="forgiving">Forgiving</option>
+          <option value="standard" selected>Standard</option>
+          <option value="harsh">Harsh</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="permIn"> Permadeath</label>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;">
+      <button type="button" class="primary" id="btnStart" aria-label="Start run">Enter the reliquary</button>
+      <button type="button" id="btnBackMenu" aria-label="Back to menu">Back</button>
+    </div>
+  </div>
+</div>
+
+<div id="scrPause" class="screen" role="dialog" aria-label="Pause menu">
+  <div class="card">
+    <h1>Paused</h1>
+    <p class="hint" id="pauseHint">The chapel holds its breath. Enemies will not act.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <button type="button" class="primary" id="btnResume" aria-label="Resume game">Resume</button>
+      <button type="button" id="btnSave" aria-label="Save run">Save</button>
+      <button type="button" id="btnLoad" aria-label="Load run">Load</button>
+      <button type="button" id="btnExport" aria-label="Export run JSON">Export</button>
+      <button type="button" id="btnReplay" aria-label="Replay action log">Replay</button>
+      <button type="button" id="btnRestartFloor" aria-label="Restart this floor">Restart Floor</button>
+      <button type="button" id="btnAbandon" aria-label="Abandon run">Abandon</button>
+      <button type="button" id="btnPauseSettings" aria-label="Settings">Settings</button>
+      <button type="button" id="btnDiag" aria-label="Toggle diagnostics">Diagnostics</button>
+    </div>
+  </div>
+</div>
+
+<div id="scrSettings" class="screen" role="dialog" aria-label="Settings">
+  <div class="card">
+    <h1>Rites &amp; Preferences</h1>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <label>Animation speed <input id="setAnim" type="range" min="0" max="3" step="1" value="2" aria-label="Animation speed"></label>
+      <label>Text size <input id="setText" type="range" min="13" max="20" value="15" aria-label="Text size"></label>
+      <label>Master volume <input id="setVol" type="range" min="0" max="100" value="70" aria-label="Master volume"></label>
+      <label>Seed (current) <input id="setSeed" aria-label="Current seed display" readonly></label>
+      <label class="chk"><input type="checkbox" id="setContrast"> High contrast</label>
+      <label class="chk"><input type="checkbox" id="setMotion"> Reduced motion</label>
+      <label class="chk"><input type="checkbox" id="setPerm"> Permadeath</label>
+    </div>
+    <h2 style="font-family:var(--display);color:var(--amber);margin:14px 0 6px;">Key remapping</h2>
+    <p class="hint">Click an action, then press a key. Esc cancels.</p>
+    <div id="remapList" class="keys"></div>
+    <div style="margin-top:12px;"><button type="button" id="btnSetClose" aria-label="Close settings">Close</button></div>
+  </div>
+</div>
+
+<div id="scrHelp" class="screen" role="dialog" aria-label="Help">
+  <div class="card">
+    <h1>How the chapel moves</h1>
+    <div class="keys">
+      <div><kbd>WASD</kbd> <kbd>HJKL</kbd> <kbd>arrows</kbd> move</div>
+      <div><kbd>.</kbd> wait · <kbd>G</kbd> get · <kbd>C</kbd> door</div>
+      <div><kbd>F</kbd> skill / ranged · <kbd>I</kbd> inspect pack</div>
+      <div><kbd>Q</kbd> look · <kbd>&gt;</kbd> descend · <kbd>Tab</kbd> target</div>
+      <div><kbd>1–9</kbd> use item · <kbd>Esc</kbd> pause</div>
+      <div><kbd>?</kbd> help · <kbd>`</kbd> diagnostics</div>
+      <div>Click a visible tile to preview a path; click again to walk it.</div>
+      <div>Closed doors block sight. Enemies forget what they cannot see.</div>
+    </div>
+    <p class="hint" style="margin-top:12px;">Tooltips on tiles and pack slots expose accuracy, damage, and status math.</p>
+    <button type="button" id="btnHelpClose" aria-label="Close help">Close</button>
+  </div>
+</div>
+
+<div id="scrEnd" class="screen" role="dialog" aria-label="Run summary">
+  <div class="card">
+    <h1 id="endTitle">Silence</h1>
+    <p id="endBody"></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="primary" id="btnAgain" aria-label="New run from summary">New Run</button>
+      <button type="button" id="btnEndReplay" aria-label="Replay this run">Replay</button>
+      <button type="button" id="btnEndMenu" aria-label="Return to menu">Menu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+"use strict";
+const T = { VOID:0, WALL:1, FLOOR:2, DOOR:3, OPEN:4, LOCK:5, STAIRS:6, WATER:7, SPIKE:8, GRASS:9, PILLAR:10, ALTAR:11, CHEST:12, BARREL:13, ACID:14, RUBBLE:15, RUG:16, MOSS:17 };
+const TN = Object.keys(T).reduce((m,k)=>{m[T[k]]=k;return m;},{});
+const BLOCK_WALK = new Set([T.VOID,T.WALL,T.DOOR,T.LOCK,T.PILLAR]);
+const BLOCK_SEE = new Set([T.WALL,T.DOOR,T.LOCK,T.PILLAR]);
+const HAZARD = new Set([T.SPIKE,T.ACID,T.WATER]);
+const D8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+const D4 = [[1,0],[-1,0],[0,1],[0,-1]];
+const SAVE_KEY = "cinder-reliquary-v2";
+const REC_KEY = "cinder-reliquary-records";
+const SET_KEY = "cinder-reliquary-settings";
+const SCHEMA = 2;
+
+const CLASSES = {
+  warden: { id:"warden", name:"Warden", hp:30, acc:7, eva:4, str:5, armor:3, fov:5, skill:"bash",
+    blurb:"Shield-line fighter. Bash stuns. Starts with mail and a key.",
+    items:["heart-tincture","iron-key"], eq:{weapon:"reliquary-mace", armor:"mail-shirt", charm:"warding-charm"} },
+  seeker: { id:"seeker", name:"Seeker", hp:22, acc:9, eva:6, str:4, armor:1, fov:7, skill:"shot",
+    blurb:"Lantern-archer. Aimed shot at range. Knives for the close dark.",
+    items:["ash-knife","ash-knife","heart-tincture"], eq:{weapon:"ash-bow", armor:"hide-coat", charm:"hunter-eye"} },
+  binder: { id:"binder", name:"Binder", hp:24, acc:8, eva:5, str:3, armor:1, fov:6, skill:"bind",
+    blurb:"Rite-worker. Bind roots a foe. Veil and oil for control.",
+    items:["veil-powder","heart-tincture","lantern-oil"], eq:{weapon:"thorn-rod", armor:"ash-wrap", charm:"quiet-bell"} }
+};
+
+const ITEMS = {
+  "heart-tincture": { name:"Heart Tincture", kind:"use", slot:null, desc:"Restore 10 HP.", use:"heal" },
+  "ash-knife": { name:"Ash Knife", kind:"use", slot:null, desc:"Throw 1–5 tiles: 5 damage, 80% acc.", use:"throw" },
+  "cinder-flask": { name:"Cinder Flask", kind:"use", slot:null, desc:"3×3 fire, 4 dmg + burn 3.", use:"flask" },
+  "veil-powder": { name:"Veil Powder", kind:"use", slot:null, desc:"Blind adjacent foes 3 turns.", use:"veil" },
+  "lantern-oil": { name:"Lantern Oil", kind:"use", slot:null, desc:"+2 FOV for 24 turns.", use:"oil" },
+  "iron-key": { name:"Iron Key", kind:"use", slot:null, desc:"Unlock an adjacent locked door or vault.", use:"key" },
+  "warp-shard": { name:"Warp Shard", kind:"use", slot:null, desc:"Teleport to a visible floor tile.", use:"warp" },
+  "bandage": { name:"Linen Bandage", kind:"use", slot:null, desc:"Clear bleed and restore 4 HP.", use:"bandage" },
+  "reliquary-mace": { name:"Reliquary Mace", kind:"eq", slot:"weapon", bonus:{str:2, acc:1}, desc:"Melee +2 STR +1 ACC." },
+  "ash-bow": { name:"Ash Bow", kind:"eq", slot:"weapon", bonus:{range:5, acc:2}, desc:"Ranged 5, +2 ACC. Basic attacks at range." },
+  "thorn-rod": { name:"Thorn Rod", kind:"eq", slot:"weapon", bonus:{str:1, acc:1}, desc:"Melee +1 STR. Bind synergy." },
+  "mail-shirt": { name:"Mail Shirt", kind:"eq", slot:"armor", bonus:{armor:2, hp:2}, desc:"+2 armor, +2 HP." },
+  "hide-coat": { name:"Hide Coat", kind:"eq", slot:"armor", bonus:{armor:1, eva:1}, desc:"+1 armor, +1 evade." },
+  "ash-wrap": { name:"Ash Wrap", kind:"eq", slot:"armor", bonus:{armor:1}, desc:"+1 armor." },
+  "warding-charm": { name:"Warding Charm", kind:"eq", slot:"charm", bonus:{armor:1}, desc:"+1 armor vs crits halved visually." },
+  "hunter-eye": { name:"Hunter's Eye", kind:"eq", slot:"charm", bonus:{acc:1, fov:1}, desc:"+1 ACC, +1 FOV." },
+  "quiet-bell": { name:"Quiet Bell", kind:"eq", slot:"charm", bonus:{eva:2}, desc:"+2 evade." }
+};
+
+const ENEMIES = {
+  grub: { name:"Ash Grub", ch:"g", hp:8, acc:6, eva:3, str:3, armor:0, fov:5, xp:6, ai:"pursue", glyph:"pursue" },
+  bow: { name:"Emberbow", ch:"b", hp:9, acc:8, eva:5, str:3, armor:0, fov:7, xp:9, ai:"ranged", range:5, glyph:"ranged" },
+  shade: { name:"Nave Shade", ch:"s", hp:10, acc:7, eva:7, str:3, armor:0, fov:6, xp:10, ai:"flank" },
+  sentinel: { name:"Chapel Guard", ch:"G", hp:14, acc:7, eva:3, str:4, armor:2, fov:6, xp:12, ai:"guard" },
+  rat: { name:"Cinder Rat", ch:"r", hp:6, acc:6, eva:8, str:2, armor:0, fov:6, xp:5, ai:"flee" },
+  caller: { name:"Ash Caller", ch:"C", hp:12, acc:6, eva:4, str:2, armor:1, fov:6, xp:14, ai:"summon" },
+  spit: { name:"Vat Spitling", ch:"p", hp:11, acc:7, eva:4, str:3, armor:1, fov:6, xp:11, ai:"deny" },
+  hound: { name:"Pack Hound", ch:"h", hp:9, acc:7, eva:5, str:3, armor:0, fov:6, xp:8, ai:"pack" },
+  wisp: { name:"Bound Wisp", ch:"w", hp:4, acc:5, eva:6, str:2, armor:0, fov:4, xp:2, ai:"pursue", summoned:true },
+  abbot: { name:"Ash Abbot", ch:"A", hp:55, acc:9, eva:4, str:6, armor:3, fov:8, xp:80, ai:"boss", boss:true }
+};
+
+const SKILLS = {
+  bash: { name:"Shield Bash", desc:"Melee: 70% stun 1 turn, +1 dmg.", range:1 },
+  shot: { name:"Aimed Shot", desc:"Ranged 6: +15% acc, 1.2× dmg. Cooldown 2.", range:6 },
+  bind: { name:"Root Bind", desc:"Range 4: root 2 turns. Cooldown 3.", range:4 }
+};
+
+let G = null;
+let remapWait = null;
+const $ = (id) => document.getElementById(id);
+const view = $("view"), ctx = view.getContext("2d");
+const mini = $("minimap"), mctx = mini.getContext("2d");
+const tt = $("tt");
+let DPR = 1, Wpx = 800, Hpx = 600, TS = 36;
+let cam = {x:0,y:0, tx:0, ty:0};
+let hover = {x:-1,y:-1};
+let lastFrame = 0, fps = 60, fpsAcc = 0, fpsN = 0;
+let particles = [];
+let floaters = [];
+let anims = [];
+let audioCtx = null;
+let keysHeld = {};
+let pathPreview = [];
+let confirmPath = null;
+
+function hashStr(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function makeRng(seed) {
+  let a = (seed >>> 0) || 1;
+  const r = () => {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+  r.int = (n) => (r() * n) | 0;
+  r.pick = (arr) => arr[r.int(arr.length)];
+  r.range = (lo, hi) => lo + r.int(hi - lo + 1);
+  r.chance = (p) => r() < p;
+  r.state = () => a >>> 0;
+  r.set = (v) => { a = v >>> 0; };
+  return r;
+}
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+function cheb(ax,ay,bx,by){ return Math.max(Math.abs(ax-bx), Math.abs(ay-by)); }
+function manh(ax,ay,bx,by){ return Math.abs(ax-bx)+Math.abs(ay-by); }
+function dir8(dx,dy){ const s=Math.max(Math.abs(dx),Math.abs(dy))||1; return [Math.sign(dx), Math.sign(dy), s]; }
+function inB(x,y){ return G && x>=0 && y>=0 && x<G.W && y<G.H; }
+function tileAt(x,y){ return inB(x,y) ? G.tiles[y][x] : T.WALL; }
+function setTile(x,y,v){ if (inB(x,y)) G.tiles[y][x]=v; }
+function walkable(x,y, ignoreEnt){
+  const t = tileAt(x,y);
+  if (BLOCK_WALK.has(t)) return false;
+  const e = entAt(x,y);
+  if (e && e !== ignoreEnt && e.hp > 0) return false;
+  return true;
+}
+function walkTerrain(x,y){
+  return !BLOCK_WALK.has(tileAt(x,y));
+}
+function seeBlock(x,y){ return BLOCK_SEE.has(tileAt(x,y)); }
+function entAt(x,y){
+  if (!G) return null;
+  for (const e of G.ents) if (e.hp>0 && e.x===x && e.y===y) return e;
+  return null;
+}
+function itemAt(x,y){
+  if (!G) return null;
+  for (const it of G.ground) if (it.x===x && it.y===y) return it;
+  return null;
+}
+function los(x0,y0,x1,y1){
+  let dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+  let sx = x0<x1?1:-1, sy = y0<y1?1:-1;
+  let err = dx-dy, x=x0, y=y0;
+  while (true) {
+    if (x===x1 && y===y1) return true;
+    const e2 = 2*err;
+    let nx=x, ny=y;
+    if (e2 > -dy) { err -= dy; nx = x+sx; }
+    if (e2 < dx) { err += dx; ny = y+sy; }
+    if (!(nx===x1 && ny===y1) && seeBlock(nx,ny)) return false;
+    if (nx!==x && ny!==y && seeBlock(x,ny) && seeBlock(nx,y)) return false;
+    x=nx; y=ny;
+  }
+}
+function computeFOV(ox, oy, radius) {
+  const vis = new Set();
+  vis.add(ox+","+oy);
+  for (let y=oy-radius; y<=oy+radius; y++) for (let x=ox-radius; x<=ox+radius; x++) {
+    if (!inB(x,y)) continue;
+    if (cheb(ox,oy,x,y) > radius) continue;
+    if (los(ox,oy,x,y)) vis.add(x+","+y);
+  }
+  return vis;
+}
+function astar(sx,sy,tx,ty, opts){
+  opts = opts || {};
+  const avoidHaz = !!opts.avoidHaz;
+  const ignore = opts.ignore || null;
+  const maxN = (G.W*G.H)|0;
+  const start = sy*G.W+sx, goal = ty*G.W+tx;
+  if (start===goal) return [[sx,sy]];
+  const open = [start];
+  const came = new Map();
+  const gsc = new Map([[start,0]]);
+  const fsc = new Map([[start, manh(sx,sy,tx,ty)]]);
+  const closed = new Set();
+  while (open.length) {
+    let bi=0, bv=1e9;
+    for (let i=0;i<open.length;i++) { const f=fsc.get(open[i])||1e9; if (f<bv){bv=f;bi=i;} }
+    const cur = open.splice(bi,1)[0];
+    if (cur===goal) {
+      const path=[]; let c=cur;
+      while (c!==undefined) { path.push([c%G.W, (c/G.W)|0]); c=came.get(c); }
+      path.reverse(); return path;
+    }
+    closed.add(cur);
+    const cx=cur%G.W, cy=(cur/G.W)|0;
+    for (const [dx,dy] of D8) {
+      const nx=cx+dx, ny=cy+dy;
+      if (!inB(nx,ny)) continue;
+      if (dx && dy && (BLOCK_WALK.has(tileAt(cx,ny)) || BLOCK_WALK.has(tileAt(nx,cy)))) continue;
+      const pass = (nx===tx && ny===ty) ? walkTerrain(nx,ny) : walkable(nx,ny, ignore);
+      if (!pass && !(nx===tx && ny===ty && entAt(nx,ny))) continue;
+      if (avoidHaz && HAZARD.has(tileAt(nx,ny)) && !(nx===tx&&ny===ty)) continue;
+      const id=ny*G.W+nx;
+      if (closed.has(id)) continue;
+      const step = (dx&&dy)?1.4:1;
+      const ng = (gsc.get(cur)||0)+step;
+      if (ng < (gsc.get(id)??1e9)) {
+        came.set(id, cur); gsc.set(id, ng); fsc.set(id, ng+manh(nx,ny,tx,ty));
+        if (!open.includes(id)) open.push(id);
+      }
+    }
+    if (closed.size > maxN) break;
+  }
+  return null;
+}
+function dijkstra(tx,ty, passFn){
+  const dist = new Float32Array(G.W*G.H); dist.fill(1e9);
+  const q=[[tx,ty]]; dist[ty*G.W+tx]=0;
+  for (let i=0;i<q.length;i++){
+    const [x,y]=q[i], d=dist[y*G.W+x];
+    for (const [dx,dy] of D4) {
+      const nx=x+dx, ny=y+dy;
+      if (!inB(nx,ny) || !passFn(nx,ny)) continue;
+      const id=ny*G.W+nx;
+      if (dist[id] > d+1) { dist[id]=d+1; q.push([nx,ny]); }
+    }
+  }
+  return dist;
+}
+function flood(sx,sy, pass){
+  const seen=new Set(); const q=[[sx,sy]]; seen.add(sx+","+sy);
+  while (q.length){
+    const [x,y]=q.pop();
+    for (const [dx,dy] of D4) {
+      const nx=x+dx,ny=y+dy, k=nx+","+ny;
+      if (!inB(nx,ny) || seen.has(k) || !pass(nx,ny)) continue;
+      seen.add(k); q.push([nx,ny]);
+    }
+  }
+  return seen;
+}
+function regionsWalk(){
+  const seen=new Set(); const regs=[];
+  for (let y=0;y<G.H;y++) for (let x=0;x<G.W;x++) {
+    const k=x+","+y;
+    if (seen.has(k) || !walkTerrain(x,y) && tileAt(x,y)!==T.DOOR && tileAt(x,y)!==T.LOCK) continue;
+    const pass=(ax,ay)=> walkTerrain(ax,ay) || tileAt(ax,ay)===T.DOOR || tileAt(ax,ay)===T.LOCK;
+    if (!pass(x,y)) continue;
+    const r=flood(x,y,pass);
+    r.forEach(v=>seen.add(v));
+    regs.push(r);
+  }
+  return regs;
+}
+
+function grid(w,h,v){ const g=new Array(h); for(let y=0;y<h;y++){ g[y]=new Array(w); for(let x=0;x<w;x++) g[y][x]=v; } return g; }
+function carveRoom(tiles, r){
+  for (let y=r.y; y<r.y+r.h; y++) for (let x=r.x; x<r.x+r.w; x++) tiles[y][x]=T.FLOOR;
+}
+function carveLine(tiles, x0,y0,x1,y1){
+  let x=x0,y=y0;
+  while (x!==x1) { tiles[y][x]=T.FLOOR; x += x1>x?1:-1; }
+  while (y!==y1) { tiles[y][x]=T.FLOOR; y += y1>y?1:-1; }
+  tiles[y1][x1]=T.FLOOR;
+}
+function placeDoors(tiles, rooms, W, H){
+  for (const r of rooms) {
+    const edges=[];
+    for (let x=r.x; x<r.x+r.w; x++) { edges.push([x,r.y-1],[x,r.y+r.h]); }
+    for (let y=r.y; y<r.y+r.h; y++) { edges.push([r.x-1,y],[r.x+r.w,y]); }
+    for (const [x,y] of edges) {
+      if (x<=0||y<=0||x>=W-1||y>=H-1) continue;
+      if (tiles[y][x]!==T.FLOOR) continue;
+      const n = (tiles[y-1][x]===T.WALL?1:0)+(tiles[y+1][x]===T.WALL?1:0)+(tiles[y][x-1]===T.WALL?1:0)+(tiles[y][x+1]===T.WALL?1:0);
+      if (n>=2 && n<=3) tiles[y][x]=T.DOOR;
+    }
+  }
+}
+
+function genFortress(rng, W, H, flavor){
+  const tiles = grid(W,H,T.WALL);
+  const rooms=[];
+  const n = rng.range(7, 11);
+  for (let i=0;i<80 && rooms.length<n;i++){
+    const w=rng.range(5,10), h=rng.range(4,8);
+    const x=rng.range(1,W-w-2), y=rng.range(1,H-h-2);
+    const r={x,y,w,h};
+    if (rooms.some(o=>!(r.x+r.w+1<o.x || o.x+o.w+1<r.x || r.y+r.h+1<o.y || o.y+o.h+1<r.y))) continue;
+    rooms.push(r); carveRoom(tiles, r);
+  }
+  if (rooms.length<4) return null;
+  rooms.sort((a,b)=> (b.w*b.h)-(a.w*a.h));
+  const start = rooms[0];
+  if (start.w<7 || start.h<6) { start.w=Math.min(9, W-start.x-2); start.h=Math.min(7, H-start.y-2); carveRoom(tiles,start); }
+  const cents = rooms.map(r=>({r, x:(r.x+r.w/2)|0, y:(r.y+r.h/2)|0}));
+  const used=[0];
+  while (used.length<cents.length){
+    let best=-1, bd=1e9, bi=0;
+    for (const u of used) for (let i=0;i<cents.length;i++) if (!used.includes(i)) {
+      const d=manh(cents[u].x,cents[u].y,cents[i].x,cents[i].y);
+      if (d<bd){bd=d;best=i;bi=u;}
+    }
+    if (best<0) break;
+    carveLine(tiles, cents[bi].x,cents[bi].y,cents[best].x,cents[best].y);
+    used.push(best);
+  }
+  for (let k=0;k<2;k++){
+    const a=rng.int(cents.length), b=rng.int(cents.length);
+    if (a!==b) carveLine(tiles, cents[a].x,cents[a].y,cents[b].x,cents[b].y);
+  }
+  placeDoors(tiles, rooms, W, H);
+  if (flavor==="crypt") {
+    const nave = rooms[0];
+    for (let y=nave.y+1; y<nave.y+nave.h-1; y+=2)
+      for (let x=nave.x+2; x<nave.x+nave.w-2; x+=3)
+        if (tiles[y][x]===T.FLOOR) tiles[y][x]=T.PILLAR;
+    for (const r of rooms.slice(1,4)) {
+      const sx=r.x+1, sy=r.y+1;
+      if (tiles[sy][sx]===T.FLOOR) tiles[sy][sx]=T.ALTAR;
+    }
+  }
+  if (flavor==="overgrown") {
+    for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++) {
+      if (tiles[y][x]===T.FLOOR && rng.chance(0.08)) tiles[y][x]=T.MOSS;
+      if (tiles[y][x]===T.FLOOR && rng.chance(0.04)) tiles[y][x]=T.GRASS;
+      if (tiles[y][x]===T.WALL && rng.chance(0.03) && tiles[y][x-1]===T.FLOOR) tiles[y][x]=T.RUBBLE;
+    }
+  }
+  return {tiles, rooms, start};
+}
+
+function genCavern(rng, W, H){
+  let tiles = grid(W,H,T.WALL);
+  for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++) tiles[y][x] = rng.chance(0.47) ? T.FLOOR : T.WALL;
+  for (let i=0;i<5;i++){
+    const n=grid(W,H,T.WALL);
+    for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++){
+      let c=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) if (tiles[y+dy][x+dx]===T.WALL) c++;
+      n[y][x] = c>=5 ? T.WALL : T.FLOOR;
+    }
+    tiles=n;
+  }
+  const comps=[]; const seen=new Set();
+  for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++){
+    const k=x+","+y; if (seen.has(k) || tiles[y][x]!==T.FLOOR) continue;
+    const q=[[x,y]]; const cells=[]; seen.add(k);
+    while(q.length){
+      const [cx,cy]=q.pop(); cells.push([cx,cy]);
+      for (const [dx,dy] of D4){
+        const nx=cx+dx,ny=cy+dy, kk=nx+","+ny;
+        if (nx<=0||ny<=0||nx>=W-1||ny>=H-1||seen.has(kk)||tiles[ny][nx]!==T.FLOOR) continue;
+        seen.add(kk); q.push([nx,ny]);
+      }
+    }
+    comps.push(cells);
+  }
+  comps.sort((a,b)=>b.length-a.length);
+  if (!comps.length || comps[0].length<40) return null;
+  for (let i=1;i<comps.length;i++){
+    const a=comps[0][0], b=comps[i][0];
+    carveLine(tiles, a[0],a[1], b[0],b[1]);
+  }
+  for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++) if (tiles[y][x]===T.FLOOR && rng.chance(0.05)) tiles[y][x]=T.WATER;
+  const open=comps[0];
+  const rooms=[{x:open[0][0]-2,y:open[0][1]-2,w:6,h:6, cells:open}];
+  return {tiles, rooms, start:rooms[0], open};
+}
+
+function genArena(rng, W, H){
+  W=Math.max(W,20); H=Math.max(H,16);
+  const tiles=grid(W,H,T.WALL);
+  for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++) tiles[y][x]=T.FLOOR;
+  for (let y=1;y<H-1;y++) tiles[y][8]=T.WALL;
+  tiles[4][8]=T.DOOR;
+  for (let x=9;x<15;x++) tiles[8][x]=T.WALL;
+  tiles[8][12]=T.DOOR;
+  for (let y=2;y<7;y++) tiles[y][14]=T.WALL;
+  tiles[5][14]=T.LOCK;
+  tiles[3][3]=T.RUG; tiles[3][4]=T.RUG; tiles[4][3]=T.ALTAR;
+  tiles[10][4]=T.CHEST; tiles[6][11]=T.SPIKE; tiles[11][8]=T.BARREL;
+  tiles[H-3][W-3]=T.STAIRS;
+  const rooms=[{x:1,y:1,w:7,h:7},{x:9,y:1,w:5,h:6},{x:1,y:9,w:W-3,h:H-11}];
+  return {tiles, rooms, start:rooms[0], arena:true};
+}
+
+function styleForFloor(floor, override){
+  if (override && override!=="auto") return override;
+  return ["fortress","overgrown","cavern","crypt","fortress"][clamp(floor-1,0,4)];
+}
+
+function decorateAndPopulate(gen, rng, floor, style, diff){
+  const tiles=gen.tiles, W=tiles[0].length, H=tiles.length;
+  const rooms=gen.rooms || [];
+  const isWalk= (x,y)=> tiles[y] && !BLOCK_WALK.has(tiles[y][x]);
+  let open=[];
+  for (let y=1;y<H-1;y++) for (let x=1;x<W-1;x++) if (isWalk(x,y)) open.push([x,y]);
+  if (open.length<12) return null;
+  const startRoom = gen.start || rooms[0];
+  function inRoom(r,x,y){ return r && x>=r.x && y>=r.y && x<r.x+r.w && y<r.y+r.h; }
+  let spawn=null;
+  if (startRoom && startRoom.w) {
+    const cx=(startRoom.x+startRoom.w/2)|0, cy=(startRoom.y+startRoom.h/2)|0;
+    const cand=[];
+    for (let y=startRoom.y;y<startRoom.y+startRoom.h;y++) for (let x=startRoom.x;x<startRoom.x+startRoom.w;x++)
+      if (isWalk(x,y) && tiles[y][x]!==T.STAIRS) cand.push([x,y, manh(x,y,cx,cy)]);
+    cand.sort((a,b)=>a[2]-b[2]);
+    if (cand.length) spawn={x:cand[0][0], y:cand[0][1]};
+  }
+  if (!spawn) {
+    const p=open[0]; spawn={x:p[0],y:p[1]};
+  }
+  if (style==="arena") spawn={x:2,y:3};
+
+  function farthestFrom(sx,sy){
+    let best=open[0], bd=-1;
+    for (const [x,y] of open) {
+      if (cheb(x,y,sx,sy)<3) continue;
+      const d=manh(x,y,sx,sy);
+      if (d>bd && tiles[y][x]===T.FLOOR) { bd=d; best=[x,y]; }
+    }
+    return best;
+  }
+  const st = farthestFrom(spawn.x, spawn.y);
+  tiles[st[1]][st[0]] = T.STAIRS;
+
+  if (startRoom && startRoom.w) {
+    const spots=[];
+    for (let y=startRoom.y;y<startRoom.y+startRoom.h;y++) for (let x=startRoom.x;x<startRoom.x+startRoom.w;x++)
+      if (isWalk(x,y) && (x!==spawn.x || y!==spawn.y) && tiles[y][x]!==T.STAIRS) spots.push([x,y]);
+    if (spots.length) {
+      const [cx,cy]=spots[rng.int(spots.length)];
+      if (tiles[cy][cx]===T.FLOOR) tiles[cy][cx]=T.CHEST;
+    }
+    if (spots.length>3) {
+      const [ax,ay]=spots[1];
+      if (tiles[ay][ax]===T.FLOOR) tiles[ay][ax]=T.ALTAR;
+    }
+  }
+
+  const vaultRoom = rooms[rooms.length-1];
+  if (vaultRoom && vaultRoom!==startRoom && rng.chance(0.7) && style!=="arena") {
+    const vx=vaultRoom.x+1, vy=vaultRoom.y+1;
+    if (isWalk(vx,vy)) tiles[vy][vx]=T.CHEST;
+    for (let y=vaultRoom.y-1;y<=vaultRoom.y+vaultRoom.h;y++)
+      for (let x=vaultRoom.x-1;x<=vaultRoom.x+vaultRoom.w;x++)
+        if (tiles[y] && tiles[y][x]===T.DOOR) tiles[y][x]=T.LOCK;
+  }
+
+  const traps = 1 + (floor>2?1:0);
+  for (let i=0;i<traps;i++){
+    const [x,y]=rng.pick(open);
+    if (cheb(x,y,spawn.x,spawn.y)>4 && tiles[y][x]===T.FLOOR) tiles[y][x]= rng.chance(0.5)?T.SPIKE:T.BARREL;
+  }
+
+  const ground=[];
+  const lootPool=["heart-tincture","ash-knife","cinder-flask","lantern-oil","warp-shard","bandage","iron-key"];
+  const lootN = 2 + (floor>1?1:0);
+  for (let i=0;i<lootN;i++){
+    const [x,y]=rng.pick(open);
+    if (cheb(x,y,spawn.x,spawn.y)>=1 && tiles[y][x]!==T.STAIRS)
+      ground.push({id:rng.pick(lootPool), x,y});
+  }
+  if (style!=="arena") {
+    const near=open.filter(([x,y])=>cheb(x,y,spawn.x,spawn.y)>=2 && cheb(x,y,spawn.x,spawn.y)<=4);
+    if (near.length) {
+      const [x,y]=rng.pick(near);
+      ground.push({id:"heart-tincture", x,y});
+    }
+  } else {
+    ground.push({id:"ash-knife", x:5, y:3});
+    ground.push({id:"heart-tincture", x:2, y:6});
+  }
+
+  const ents=[];
+  function addE(type,x,y, extra){
+    const d=ENEMIES[type];
+    const hpMul = diff==="harsh"?1.25: diff==="forgiving"?0.85:1;
+    const e={ id:ents.length+2, kind:"enemy", type, name:d.name, x,y, hp:Math.max(1,(d.hp*hpMul)|0), maxHp:0, acc:d.acc, eva:d.eva, str:d.str, armor:d.armor, fov:d.fov, xp:d.xp, ai:d.ai, range:d.range||1, status:{}, cd:0, lastKnown:null, intent:null, post:{x,y}, summons:0 };
+    e.maxHp=e.hp;
+    if (extra) Object.assign(e, extra);
+    ents.push(e);
+  }
+  if (style==="arena") {
+    addE("bow", 11, 3);
+    addE("grub", 16, 10);
+    addE("shade", 4, 11);
+  } else {
+    const table = floor>=5 ? ["grub","bow","shade","sentinel","caller","spit","hound","rat"]
+      : floor>=3 ? ["grub","bow","shade","sentinel","spit","hound","rat"]
+      : ["grub","bow","rat","hound","shade"];
+    let n = Math.min(10, 3+floor + (diff==="harsh"?2:0));
+    if (diff==="forgiving") n=Math.max(2,n-1);
+    let tries=0;
+    while (ents.length<n && tries++<200) {
+      const [x,y]=rng.pick(open);
+      if (cheb(x,y,spawn.x,spawn.y)<6) continue;
+      if (tiles[y][x]===T.STAIRS) continue;
+      if (ents.some(e=>e.x===x&&e.y===y)) continue;
+      addE(rng.pick(table), x, y);
+    }
+    if (floor>=5) {
+      const [bx,by]=farthestFrom(spawn.x,spawn.y);
+      addE("abbot", bx, by, {ai:"boss"});
+    }
+  }
+  return {spawn, stairs:{x:st[0],y:st[1]}, ground, ents};
+}
+
+function validateGen(tiles, spawn, ents, stairs){
+  const H=tiles.length, W=tiles[0].length;
+  const pass=(x,y)=>{
+    const t=tiles[y][x];
+    return !BLOCK_WALK.has(t) || t===T.DOOR || t===T.LOCK;
+  };
+  const unlocked=(x,y)=>{
+    const t=tiles[y][x];
+    return !BLOCK_WALK.has(t) || t===T.DOOR;
+  };
+  if (!pass(spawn.x,spawn.y) || HAZARD.has(tiles[spawn.y][spawn.x])) return {ok:false, reason:"bad spawn"};
+  const reach = (()=>{
+    const seen=new Set(); const q=[[spawn.x,spawn.y]]; seen.add(spawn.x+","+spawn.y);
+    while(q.length){
+      const [x,y]=q.pop();
+      for (const [dx,dy] of D4){
+        const nx=x+dx,ny=y+dy,k=nx+","+ny;
+        if (nx<0||ny<0||nx>=W||ny>=H||seen.has(k)||!unlocked(nx,ny)) continue;
+        seen.add(k); q.push([nx,ny]);
+      }
+    }
+    return seen;
+  })();
+  if (!reach.has(stairs.x+","+stairs.y)) return {ok:false, reason:"stairs unreachable"};
+  for (const e of ents) {
+    if (cheb(e.x,e.y,spawn.x,spawn.y) < 3) return {ok:false, reason:"enemy too close"};
+    const d = ENEMIES[e.type];
+    const rngAtk = (d && d.range) ? d.range : 1;
+    if (cheb(e.x,e.y,spawn.x,spawn.y) <= rngAtk) {
+      let blocked=false;
+      let x0=e.x,y0=e.y,x1=spawn.x,y1=spawn.y;
+      let dx=Math.abs(x1-x0), dy=Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx-dy,x=x0,y=y0;
+      while (!(x===x1&&y===y1)) {
+        const e2=2*err; let nx=x,ny=y;
+        if (e2>-dy){err-=dy;nx=x+sx;}
+        if (e2<dx){err+=dx;ny=y+sy;}
+        if (!(nx===x1&&ny===y1) && BLOCK_SEE.has(tiles[ny][nx])) {blocked=true;break;}
+        x=nx;y=ny;
+      }
+      if (!blocked) return {ok:false, reason:"spawn in attack LOS"};
+    }
+  }
+  return {ok:true, reason:"ok", reach:reach.size};
+}
+
+function generateFloor(seed, floor, style, diff){
+  style = styleForFloor(floor, style);
+  const size = style==="arena" ? [22,16] : style==="cavern" ? [44,34] : [42,32];
+  for (let attempt=0; attempt<40; attempt++){
+    const rng = makeRng(hashStr(seed+"|"+floor+"|"+style+"|"+attempt));
+    let gen;
+    if (style==="cavern") gen=genCavern(rng, size[0], size[1]);
+    else if (style==="arena") gen=genArena(rng, size[0], size[1]);
+    else gen=genFortress(rng, size[0], size[1], style==="crypt"||style==="overgrown"?style:"fortress");
+    if (!gen) continue;
+    const pop = decorateAndPopulate(gen, rng, floor, style, diff);
+    if (!pop) continue;
+    const v = validateGen(gen.tiles, pop.spawn, pop.ents, pop.stairs);
+    if (!v.ok) continue;
+    return { W:gen.tiles[0].length, H:gen.tiles.length, tiles:gen.tiles, rooms:gen.rooms, spawn:pop.spawn, stairs:pop.stairs, ground:pop.ground, ents:pop.ents, style, validation:v, attempt };
+  }
+  const rng = makeRng(hashStr(seed+"|fb|"+floor));
+  const gen = genArena(rng, 22, 16);
+  const pop = decorateAndPopulate(gen, rng, floor, "arena", diff);
+  return { W:gen.tiles[0].length, H:gen.tiles.length, tiles:gen.tiles, rooms:gen.rooms, spawn:pop.spawn, stairs:pop.stairs, ground:pop.ground, ents:pop.ents, style:"arena", validation:{ok:true, reason:"fallback arena"}, attempt:-1 };
+}
+
+function defaultSettings(){
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return { anim: reduce?0:2, text:15, vol:0.7, contrast:false, motion:reduce, keymap: Object.assign({}, defaultKeys) };
+}
+const defaultKeys = {
+  north:"w", south:"s", west:"a", east:"d",
+  wait:".", get:"g", door:"c", skill:"f", look:"q", inv:"i", descend:">", pause:"escape", help:"?", diag:"`",
+  n2:"k", s2:"j", w2:"h", e2:"l"
+};
+function loadSettings(){
+  try {
+    const s = JSON.parse(localStorage.getItem(SET_KEY));
+    if (!s || typeof s!=="object") return defaultSettings();
+    return Object.assign(defaultSettings(), s, {keymap: Object.assign({}, defaultKeys, s.keymap||{})});
+  } catch(e) { return defaultSettings(); }
+}
+function saveSettings(s){ try { localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch(e){} }
+
+function dailySeed(){
+  const d = new Date();
+  const ds = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  return "daily-"+ds;
+}
+
+function applyEq(p){
+  const b={str:0,acc:0,armor:0,eva:0,fov:0,hp:0,range:0};
+  for (const sl of ["weapon","armor","charm"]) {
+    const id=p.eq[sl]; if (!id) continue;
+    const it=ITEMS[id]; if (!it||!it.bonus) continue;
+    for (const k of Object.keys(it.bonus)) b[k]=(b[k]||0)+it.bonus[k];
+  }
+  p.b=b;
+  p.maxHp = p.baseHp + b.hp + (p.level-1)*4;
+  if (p.hp>p.maxHp) p.hp=p.maxHp;
+}
+function playerFov(){ return G.player.baseFov + (G.player.b.fov||0) + (G.player.status.oil?2:0); }
+function playerAcc(){ return G.player.baseAcc + G.player.b.acc - (G.player.status.blind?3:0); }
+function playerStr(){ return G.player.baseStr + G.player.b.str; }
+function playerArm(){ return G.player.baseArm + G.player.b.armor; }
+function playerEva(){ return G.player.baseEva + G.player.b.eva; }
+function playerRange(){ return G.player.b.range || 1; }
+
+function log(msg, cls){
+  G.log.unshift({t:G.turn, msg, cls:cls||""});
+  if (G.log.length>200) G.log.pop();
+  renderLog();
+}
+function renderLog(){
+  $("log").innerHTML = (G?G.log:[]).slice(0,40).map(e=>`<div>${e.msg}</div>`).join("");
+}
+function toast(msg){
+  const el=$("toast"); el.textContent=msg; el.style.display="block";
+  setTimeout(()=>{ el.style.display="none"; }, 2200);
+}
+
+function makePlayer(clsId, diff){
+  const c=CLASSES[clsId];
+  const hpB = diff==="forgiving"?6: diff==="harsh"?-2:0;
+  const p={
+    id:1, kind:"player", name:c.name, cls:clsId, x:0,y:0,
+    baseHp:c.hp+hpB, hp:c.hp+hpB, maxHp:c.hp+hpB, level:1, xp:0, next:20,
+    baseAcc:c.acc, baseEva:c.eva, baseStr:c.str, baseArm:c.armor, baseFov:c.fov,
+    skill:c.skill, skillCd:0, eq:Object.assign({}, c.eq), inv:c.items.slice(),
+    status:{}, gold:0, kills:0, score:0
+  };
+  applyEq(p); p.hp=p.maxHp;
+  return p;
+}
+
+function snapshotFloor(){
+  return JSON.parse(JSON.stringify({
+    tiles:G.tiles, ground:G.ground, ents:G.ents.filter(e=>e.kind==="enemy"),
+    playerPos:{x:G.player.x,y:G.player.y}, playerHp:G.player.hp, rng:G.rng.state(),
+    explored:Array.from(G.explored), vis:Array.from(G.vis)
+  }));
+}
+
+function startRun(opts){
+  opts = opts || {};
+  const settings = loadSettings();
+  if (opts.instant) settings.anim = 0;
+  const seed = String(opts.seed || $("seedIn").value || ("relic-"+((Math.random()*1e9)|0)));
+  const cls = opts.cls || G && G.selectedCls || "warden";
+  const diff = opts.diff || $("diffIn").value || "standard";
+  const perm = opts.permadeath != null ? opts.permadeath : $("permIn").checked;
+  const style = opts.style || $("styleIn").value || "auto";
+  const floor = opts.floor || 1;
+  const map = generateFloor(seed, floor, style, diff);
+  const player = makePlayer(cls, diff);
+  player.x=map.spawn.x; player.y=map.spawn.y;
+  const rng = makeRng(hashStr(seed+"|play"));
+  G = {
+    seed, floor, maxFloor:5, style: map.style, stylePref:style, diff, permadeath:perm,
+    W:map.W, H:map.H, tiles:map.tiles, rooms:map.rooms, stairs:map.stairs,
+    ground:map.ground, ents:[player].concat(map.ents), player,
+    turn:0, phase:"input", paused:false, screen:"play",
+    vis:new Set(), explored:new Set(), known:[],
+    rng, log:[], actionLog:[], selected:"move", look:false, targetMode:null,
+    autoPath:[], settings, validation:map.validation, genAttempt:map.attempt,
+    floorSnap:null, recordsDirty:false, replaying:!!opts.replay, dead:false, won:false,
+    selectedCls:cls, senses:[], nextId: 100, epoch: (G && G.epoch || 0) + 1,
+    diag:{walk:false, region:false, fov:false, path:false, intent:false, turns:false, occ:false, rng:false, gen:false},
+    objective: floor>=5 ? "Slay the Ash Abbot" : "Find the descending stair"
+  };
+  G.nextId = 2 + map.ents.length;
+  refreshFOV();
+  G.floorSnap = snapshotFloor();
+  G.player.score = 0;
+  closeScreens();
+  log("Lantern lifted. Seed <b>"+seed+"</b>, "+map.style+" nave.");
+  log("Objective: "+G.objective);
+  sfx("start");
+  fit();
+  renderAll();
+  tryAutoSave();
+}
+
+function refreshFOV(){
+  const p=G.player;
+  G.vis = computeFOV(p.x,p.y, playerFov() + (p.status.blind?-2:0));
+  G.vis.forEach(k=>G.explored.add(k));
+  for (const e of G.ents) {
+    if (e.kind!=="enemy"||e.hp<=0) continue;
+    if (G.vis.has(e.x+","+e.y)) {
+      if (!G.known.includes(e.id)) G.known.push(e.id);
+    }
+  }
+}
+
+function canAct(){ return G && G.screen==="play" && G.phase==="input" && !G.paused && !G.dead && !G.won; }
+
+function bumpHazard(who){
+  const t=tileAt(who.x,who.y);
+  if (t===T.SPIKE) { damage(who, 3, "spikes", false); log((who.kind==="player"?"You step":who.name+" steps")+" on spikes."); }
+  if (t===T.ACID) { addStatus(who,"burn",2); damage(who,2,"acid",false); }
+  if (t===T.WATER) { if (who.status.burn) { delete who.status.burn; log("Water douses flame."); } }
+}
+
+function addStatus(who, k, n){ who.status[k]=(who.status[k]||0)+n; }
+function tickStatus(who){
+  for (const k of Object.keys(who.status)) {
+    if (k==="burn") damage(who, 2, "burn", false);
+    if (k==="bleed") damage(who, 1, "bleed", false);
+    who.status[k]--;
+    if (who.status[k]<=0) delete who.status[k];
+  }
+}
+
+function hitRoll(atkAcc, defEva, rng){
+  const chance = clamp(0.45 + (atkAcc-defEva)*0.05, 0.15, 0.95);
+  const r = rng();
+  const crit = r > 0.93;
+  const hit = r < chance || crit;
+  return {hit, crit, chance};
+}
+function dmgRoll(str, armor, crit, rng){
+  const raw = str + rng.range(0,3);
+  let d = Math.max(1, raw - armor);
+  if (crit) d = Math.ceil(d*1.5);
+  return d;
+}
+function damage(who, n, src, crit){
+  who.hp = Math.max(0, who.hp-n);
+  floaters.push({x:who.x,y:who.y, text:(crit?"!":"")+(-n), life:1, col: who.kind==="player"?"#e08070":"#f0d080"});
+  burst(who.x, who.y, who.kind==="player"? "#a43428":"#e2a14a");
+  if (who.hp<=0) die(who, src);
+}
+function die(who, src){
+  if (who.kind==="player") {
+    G.dead=true; G.phase="dead";
+    log("You fall. The lantern gutters.");
+    sfx("death");
+    finishRun(false);
+    return;
+  }
+  log(who.name+" dies.");
+  G.player.kills++;
+  G.player.xp += who.xp||1;
+  G.player.gold += 1;
+  if (G.rng.chance(0.35)) G.ground.push({id:G.rng.pick(["heart-tincture","ash-knife","bandage","cinder-flask"]), x:who.x,y:who.y});
+  while (G.player.xp >= G.player.next) {
+    G.player.xp -= G.player.next;
+    G.player.level++;
+    G.player.next = 16 + G.player.level*8;
+    G.player.baseHp += 4; G.player.baseStr += 1; G.player.baseAcc += 1;
+    applyEq(G.player); G.player.hp=G.player.maxHp;
+    log("You rise to lantern "+G.player.level+".");
+    sfx("level");
+  }
+  if (who.ai==="boss" || who.type==="abbot") {
+    log("The Ash Abbot collapses. The reliquary opens.");
+    G.objective="Claim the stair and leave";
+  }
+}
+
+function attackMelee(att, def){
+  const rng=G.rng;
+  const acc = att.kind==="player"?playerAcc():(att.acc - (att.status && att.status.blind ? 3 : 0));
+  const eva = def.kind==="player"?playerEva():(def.eva + (def.status && def.status.blind ? 0 : 0));
+  const str = att.kind==="player"?playerStr():att.str;
+  const arm = def.kind==="player"?playerArm():def.armor;
+  const {hit,crit,chance}=hitRoll(acc,eva,rng);
+  if (!hit) { log((att.kind==="player"?"You miss":att.name+" misses")+" ("+((chance*100)|0)+"%)."); sfx("miss"); return; }
+  const d=dmgRoll(str, arm, crit, rng);
+  log((att.kind==="player"?"You strike":att.name+" strikes")+" for "+d+(crit?" crit":"")+".");
+  sfx("hit");
+  damage(def,d,"melee",crit);
+}
+
+function attackRanged(att, def){
+  if (!los(att.x,att.y,def.x,def.y)) { log("No line of fire."); return false; }
+  const rng=G.rng;
+  const acc = (att.kind==="player"?playerAcc():(att.acc - (att.status && att.status.blind ? 3 : 0))) - 1;
+  const eva = def.kind==="player"?playerEva():def.eva;
+  const str = att.kind==="player"?playerStr():att.str;
+  const arm = def.kind==="player"?playerArm():def.armor;
+  const {hit,crit,chance}=hitRoll(acc,eva,rng);
+  burst(def.x,def.y,"#d4a04a");
+  if (!hit) { log("The shot misses ("+((chance*100)|0)+"%)."); sfx("miss"); return true; }
+  const d=dmgRoll(str, arm, crit, rng);
+  log("A bolt hits "+(def.kind==="player"?"you":def.name)+" for "+d+".");
+  sfx("bow");
+  damage(def,d,"ranged",crit);
+  return true;
+}
+
+function interactTile(x,y){
+  const t=tileAt(x,y);
+  if (t===T.DOOR) { setTile(x,y,T.OPEN); log("The door yawns."); sfx("door"); return true; }
+  if (t===T.OPEN) { if (!entAt(x,y) && !itemAt(x,y)) { setTile(x,y,T.DOOR); log("You close the door."); return true; } }
+  if (t===T.LOCK) { log("Locked. Need an iron key."); return false; }
+  if (t===T.CHEST) {
+    setTile(x,y,T.FLOOR);
+    const loot=G.rng.pick(["heart-tincture","cinder-flask","warp-shard","iron-key","lantern-oil"]);
+    G.player.inv.push(loot);
+    log("Chest yields "+ITEMS[loot].name+".");
+    sfx("loot"); return true;
+  }
+  if (t===T.ALTAR) { G.player.hp=Math.min(G.player.maxHp, G.player.hp+6); addStatus(G.player,"ward",8); log("The altar warms your blood."); sfx("altar"); return true; }
+  if (t===T.BARREL) { setTile(x,y,T.FLOOR); explode(x,y,3); log("The barrel bursts."); return true; }
+  if (t===T.STAIRS) return descend();
+  return false;
+}
+
+function explode(x,y,r){
+  for (const e of G.ents) if (e.hp>0 && cheb(e.x,e.y,x,y)<=1) damage(e,r,"blast",false);
+  setTile(x,y,T.FLOOR);
+  burst(x,y,"#e07030");
+}
+
+function descend(){
+  if (tileAt(G.player.x,G.player.y)!==T.STAIRS) { log("No stair here."); return false; }
+  if (G.floor>=G.maxFloor) {
+    const bossAlive = G.ents.some(e=>e.hp>0 && e.type==="abbot");
+    if (bossAlive) { log("The Abbot still bars the way."); return false; }
+    G.won=true; finishRun(true); return true;
+  }
+  log("You descend.");
+  sfx("stairs");
+  const keep = { seed:G.seed, cls:G.player.cls, diff:G.diff, permadeath:G.permadeath, style:G.stylePref, floor:G.floor+1,
+    player: JSON.parse(JSON.stringify(G.player)), actionLog:G.actionLog, turn:G.turn, rng:G.rng.state() };
+  const map = generateFloor(keep.seed, keep.floor, keep.style, keep.diff);
+  G.floor=keep.floor; G.W=map.W; G.H=map.H; G.tiles=map.tiles; G.rooms=map.rooms; G.stairs=map.stairs;
+  G.ground=map.ground; G.style=map.style; G.validation=map.validation;
+  G.player.x=map.spawn.x; G.player.y=map.spawn.y;
+  G.ents=[G.player].concat(map.ents);
+  G.vis=new Set(); G.explored=new Set(); G.known=[]; G.autoPath=[];
+  G.rng.set(keep.rng);
+  G.objective = G.floor>=5 ? "Slay the Ash Abbot" : "Find the descending stair";
+  refreshFOV();
+  G.floorSnap = snapshotFloor();
+  log("Floor "+G.floor+" — "+G.style+".");
+  return true;
+}
+
+function pickup(){
+  const it=itemAt(G.player.x,G.player.y);
+  if (!it) { log("Nothing to take."); return false; }
+  G.player.inv.push(it.id);
+  G.ground = G.ground.filter(g=>g!==it);
+  log("Taken: "+ITEMS[it.id].name+".");
+  sfx("loot");
+  return true;
+}
+
+function useItem(idx, tile){
+  const id=G.player.inv[idx];
+  if (!id) return false;
+  const it=ITEMS[id];
+  if (it.kind==="eq") {
+    const old=G.player.eq[it.slot];
+    G.player.eq[it.slot]=id;
+    G.player.inv.splice(idx,1);
+    if (old) G.player.inv.push(old);
+    applyEq(G.player);
+    log("Equipped "+it.name+".");
+    return true;
+  }
+  const p=G.player;
+  let used=false;
+  if (it.use==="heal") { p.hp=Math.min(p.maxHp,p.hp+10); log("The tincture knits flesh."); used=true; }
+  else if (it.use==="bandage") { delete p.status.bleed; p.hp=Math.min(p.maxHp,p.hp+4); used=true; log("You bind the wound."); }
+  else if (it.use==="oil") { addStatus(p,"oil",24); used=true; log("The lantern flares."); }
+  else if (it.use==="veil") {
+    let n=0;
+    for (const e of G.ents) if (e.kind==="enemy"&&e.hp>0&&cheb(e.x,e.y,p.x,p.y)<=1) { addStatus(e,"blind",3); n++; }
+    used=true; log("Powder veils the air"+(n?(" ("+n+" foes)"):"")+".");
+  }
+  else if (it.use==="key") {
+    let ok=false;
+    for (const [dx,dy] of D4) {
+      if (tileAt(p.x+dx,p.y+dy)===T.LOCK) { setTile(p.x+dx,p.y+dy,T.OPEN); ok=true; }
+    }
+    if (!ok) { log("No lock adjacent."); return false; }
+    log("The lock yields."); used=true;
+  }
+  else if (it.use==="throw" || it.use==="flask" || it.use==="warp") {
+    if (!tile) { G.targetMode={kind:it.use, idx}; G.selected="target"; $("prompt").textContent="Target a tile."; return false; }
+    if (it.use==="throw") {
+      const e=entAt(tile.x,tile.y);
+      if (!e || !G.vis.has(e.x+","+e.y) || cheb(p.x,p.y,e.x,e.y)>5 || !los(p.x,p.y,e.x,e.y)) { log("Invalid throw."); return false; }
+      if (G.rng()<0.8) damage(e,5,"throw",false); else log("Knife clatters.");
+      used=true;
+    } else if (it.use==="flask") {
+      if (!G.vis.has(tile.x+","+tile.y)) return false;
+      for (let y=tile.y-1;y<=tile.y+1;y++) for (let x=tile.x-1;x<=tile.x+1;x++) {
+        if (!walkTerrain(x,y)) continue;
+        if (tileAt(x,y)===T.FLOOR) setTile(x,y,T.ACID);
+        const e=entAt(x,y); if (e) { damage(e,4,"fire",false); addStatus(e,"burn",3); }
+      }
+      used=true;
+    } else if (it.use==="warp") {
+      if (!G.vis.has(tile.x+","+tile.y) || !walkable(tile.x,tile.y,p)) { log("Cannot warp there."); return false; }
+      p.x=tile.x; p.y=tile.y; used=true; log("The chapel folds.");
+    }
+  }
+  if (used) { G.player.inv.splice(idx,1); sfx("use"); return true; }
+  return false;
+}
+
+function useSkill(tile){
+  const p=G.player, sk=SKILLS[p.skill];
+  if (p.skillCd>0) { log("Skill cooling ("+p.skillCd+")."); return false; }
+  if (!tile) { G.targetMode={kind:"skill"}; G.selected="skill"; $("prompt").textContent=sk.name+": choose a target."; return false; }
+  const e=entAt(tile.x,tile.y);
+  if (!e || e.kind!=="enemy" || !G.vis.has(e.x+","+e.y)) { log("No foe there."); return false; }
+  if (cheb(p.x,p.y,e.x,e.y)>sk.range || !los(p.x,p.y,e.x,e.y)) { log("Out of reach."); return false; }
+  if (p.skill==="bash") { attackMelee(p,e); if (e.hp>0 && G.rng()<0.7) { addStatus(e,"stun",1); log("Stunned."); } p.skillCd=2; }
+  else if (p.skill==="shot") { p.baseAcc+=3; attackRanged(p,e); p.baseAcc-=3; p.skillCd=2; }
+  else if (p.skill==="bind") { addStatus(e,"root",2); log("Roots seize "+e.name+"."); p.skillCd=3; }
+  G.targetMode=null; G.selected="move";
+  return true;
+}
+
+function tryMove(dx,dy){
+  const p=G.player, nx=p.x+dx, ny=p.y+dy;
+  if (!inB(nx,ny)) return false;
+  if (dx && dy && (BLOCK_WALK.has(tileAt(p.x,ny)) || BLOCK_WALK.has(tileAt(nx,p.y)))) return false;
+  const t=tileAt(nx,ny);
+  if (t===T.DOOR || t===T.LOCK) { const ok=interactTile(nx,ny); return ok && t!==T.LOCK; }
+  const e=entAt(nx,ny);
+  if (e && e.kind==="enemy") { attackMelee(p,e); return true; }
+  if (!walkTerrain(nx,ny)) return false;
+  p.x=nx; p.y=ny;
+  bumpHazard(p);
+  const it=itemAt(p.x,p.y);
+  if (it) $("prompt").textContent="Here: "+ITEMS[it.id].name+" (G to take)";
+  return true;
+}
+
+function stepToward(e, tx, ty){
+  if (e.status.root || e.status.stun) return false;
+  const path = astar(e.x,e.y,tx,ty,{ignore:e, avoidHaz:true}) || astar(e.x,e.y,tx,ty,{ignore:e});
+  if (!path || path.length<2) return false;
+  const [nx,ny]=path[1];
+  if (nx===G.player.x && ny===G.player.y) { attackMelee(e, G.player); e.intent={kind:"attack", tx:nx,ty:ny}; return true; }
+  if (!walkable(nx,ny,e)) { e.intent={kind:"wait", tx:e.x, ty:e.y}; return false; }
+  e.x=nx; e.y=ny; bumpHazard(e); e.intent={kind:"move", tx:nx, ty:ny};
+  return true;
+}
+function stepAway(e, ox, oy){
+  let best=null, bd=-1;
+  for (const [dx,dy] of D8) {
+    const nx=e.x+dx, ny=e.y+dy;
+    if (!walkable(nx,ny,e)) continue;
+    if (dx&&dy && (BLOCK_WALK.has(tileAt(e.x,ny))||BLOCK_WALK.has(tileAt(nx,e.y)))) continue;
+    const d=cheb(nx,ny,ox,oy);
+    if (d>bd) { bd=d; best=[nx,ny]; }
+  }
+  if (best) { e.x=best[0]; e.y=best[1]; e.intent={kind:"flee", tx:best[0], ty:best[1]}; return true; }
+  return false;
+}
+function wander(e){
+  const opts=D4.filter(([dx,dy])=>walkable(e.x+dx,e.y+dy,e));
+  if (!opts.length) return;
+  const [dx,dy]=opts[G.rng.int(opts.length)];
+  e.x+=dx; e.y+=dy; e.intent={kind:"wander", tx:e.x, ty:e.y};
+}
+
+function enemySees(e){
+  if (e.status.blind) return false;
+  if (cheb(e.x,e.y,G.player.x,G.player.y) > e.fov) return false;
+  return los(e.x,e.y,G.player.x,G.player.y);
+}
+
+function enemyAct(e){
+  if (e.hp<=0) return;
+  if (e.status.stun) { e.intent={kind:"stun", tx:e.x, ty:e.y}; return; }
+  const sees = enemySees(e);
+  if (sees) e.lastKnown = {x:G.player.x, y:G.player.y, turn:G.turn};
+  else if (e.lastKnown && G.turn - e.lastKnown.turn > 7) e.lastKnown=null;
+  const tgt = sees ? G.player : (e.lastKnown || null);
+  if (e.cd>0) e.cd--;
+  const ai=e.ai;
+  if (ai==="guard") {
+    if (sees && cheb(e.x,e.y,G.player.x,G.player.y)<=7) {
+      if (cheb(e.x,e.y,G.player.x,G.player.y)===1) attackMelee(e,G.player);
+      else stepToward(e, G.player.x, G.player.y);
+    } else if (e.x!==e.post.x || e.y!==e.post.y) stepToward(e, e.post.x, e.post.y);
+    else e.intent={kind:"guard", tx:e.x, ty:e.y};
+    return;
+  }
+  if (ai==="flee" && e.hp < e.maxHp*0.4 && sees) { stepAway(e, G.player.x, G.player.y); return; }
+  if (ai==="ranged") {
+    if (sees && los(e.x,e.y,G.player.x,G.player.y)) {
+      const d=cheb(e.x,e.y,G.player.x,G.player.y);
+      if (d===1) { if (!stepAway(e,G.player.x,G.player.y)) attackMelee(e,G.player); }
+      else if (d<= (e.range||5)) attackRanged(e,G.player);
+      else if (tgt) stepToward(e,tgt.x,tgt.y);
+    } else if (tgt) stepToward(e,tgt.x,tgt.y); else wander(e);
+    return;
+  }
+  if (ai==="flank" && sees) {
+    const px=G.player.x, py=G.player.y;
+    let best=null, sc=1e9;
+    for (const [dx,dy] of D8) {
+      const tx=px+dx, ty=py+dy;
+      if (!walkTerrain(tx,ty)) continue;
+      const s = manh(e.x,e.y,tx,ty) - (entAt(tx,ty)?0:1) + (dx&&dy?0:2);
+      if (s<sc) { sc=s; best=[tx,ty]; }
+    }
+    if (cheb(e.x,e.y,px,py)===1) attackMelee(e,G.player);
+    else if (best) stepToward(e,best[0],best[1]);
+    return;
+  }
+  if (ai==="summon") {
+    if (sees && e.cd<=0 && e.summons<2) {
+      for (const [dx,dy] of D4) {
+        const nx=e.x+dx, ny=e.y+dy;
+        if (walkable(nx,ny,e)) {
+          const w=Object.assign({}, ENEMIES.wisp, {id:++G.nextId, kind:"enemy", type:"wisp", x:nx,y:ny, hp:ENEMIES.wisp.hp, maxHp:ENEMIES.wisp.hp, acc:5,eva:6,str:2,armor:0,fov:4,xp:2,ai:"pursue", range:1, status:{}, cd:0, lastKnown:null, intent:null, post:{x:nx,y:ny}, summons:0});
+          G.ents.push(w); e.summons++; e.cd=4; log(e.name+" binds a wisp.");
+          e.intent={kind:"summon", tx:nx, ty:ny}; return;
+        }
+      }
+    }
+    if (tgt) { if (sees && cheb(e.x,e.y,G.player.x,G.player.y)===1) attackMelee(e,G.player); else stepToward(e,tgt.x,tgt.y); }
+    else wander(e); return;
+  }
+  if (ai==="deny") {
+    if (sees && e.cd<=0 && cheb(e.x,e.y,G.player.x,G.player.y)<=5) {
+      const tx=G.player.x, ty=G.player.y;
+      if (walkTerrain(tx,ty) && tileAt(tx,ty)===T.FLOOR) setTile(tx,ty,T.ACID);
+      e.cd=3; log(e.name+" spat acid."); e.intent={kind:"deny", tx, ty}; return;
+    }
+    if (tgt) stepToward(e,tgt.x,tgt.y); else wander(e); return;
+  }
+  if (ai==="pack") {
+    const allies=G.ents.filter(a=>a.ai==="pack" && a.hp>0 && a!==e);
+    if (sees && cheb(e.x,e.y,G.player.x,G.player.y)===1) { attackMelee(e,G.player); return; }
+    if (tgt) {
+      let tx=tgt.x, ty=tgt.y;
+      if (allies.length) {
+        const ax=allies.reduce((s,a)=>s+a.x,0)/allies.length, ay=allies.reduce((s,a)=>s+a.y,0)/allies.length;
+        tx = Math.round((tgt.x+ax)/2); ty=Math.round((tgt.y+ay)/2);
+      }
+      stepToward(e,tx,ty);
+    } else wander(e); return;
+  }
+  if (ai==="boss") {
+    if (sees && e.cd<=0 && G.rng.chance(0.4)) {
+      e.cd=3;
+      for (const [dx,dy] of D4) {
+        const nx=e.x+dx, ny=e.y+dy;
+        if (walkable(nx,ny,e) && e.summons<3) {
+          const w=Object.assign({}, ENEMIES.wisp, {id:++G.nextId, kind:"enemy", type:"wisp", x:nx,y:ny, hp:5, maxHp:5, acc:6,eva:5,str:3,armor:0,fov:5,xp:2,ai:"pursue",range:1,status:{},cd:0,lastKnown:null,intent:null,post:{x:nx,y:ny},summons:0});
+          G.ents.push(w); e.summons++;
+        }
+      }
+      log("The Abbot rings the ash-bell."); e.intent={kind:"rite", tx:e.x, ty:e.y}; return;
+    }
+    if (sees && cheb(e.x,e.y,G.player.x,G.player.y)<=2) {
+      if (cheb(e.x,e.y,G.player.x,G.player.y)===1) attackMelee(e,G.player);
+      else attackRanged(e,G.player);
+    } else if (tgt) stepToward(e,tgt.x,tgt.y);
+    return;
+  }
+  if (tgt) {
+    if (sees && cheb(e.x,e.y,G.player.x,G.player.y)===1) { attackMelee(e,G.player); e.intent={kind:"attack",tx:G.player.x,ty:G.player.y}; }
+    else stepToward(e, tgt.x, tgt.y);
+  } else wander(e);
+}
+
+function envTick(){
+  for (let y=0;y<G.H;y++) for (let x=0;x<G.W;x++) {
+    if (tileAt(x,y)===T.ACID && G.rng.chance(0.08)) setTile(x,y,T.FLOOR);
+  }
+}
+
+function finishPlayerTurn(){
+  envTick();
+  const foes = G.ents.filter(e=>e.kind==="enemy" && e.hp>0).sort((a,b)=>a.id-b.id);
+  let heard = false;
+  if (!G.paused) {
+    for (const e of foes) {
+      if (G.paused || G.dead) break;
+      const ox=e.x, oy=e.y;
+      enemyAct(e);
+      if (!heard && !G.vis.has(e.x+","+e.y) && (e.x!==ox||e.y!==oy) && cheb(e.x,e.y,G.player.x,G.player.y)<=6) {
+        heard = true;
+        G.senses.push({x:e.x,y:e.y, life:8, msg:"claws"});
+        log("You hear movement in the dark.");
+      }
+    }
+  }
+  for (const e of G.ents) if (e.hp>0) tickStatus(e);
+  if (G.player.skillCd>0) G.player.skillCd--;
+  G.turn++;
+  G.ents = G.ents.filter(e=>e.kind==="player" || e.hp>0);
+  refreshFOV();
+  const newly = [];
+  for (const e of G.ents) if (e.kind==="enemy"&&e.hp>0&&G.vis.has(e.x+","+e.y) && !G.known.includes(e.id)) newly.push(e);
+  if (newly.length && G.autoPath.length) {
+    G.autoPath=[]; log("You halt — something new in the lantern.");
+  }
+  G.phase="input";
+  G.player.score = G.player.gold*5 + G.player.kills*10 + G.floor*80 + G.player.level*20 - G.turn;
+  renderAll();
+  tryAutoSave();
+  continueAuto();
+}
+
+function commit(act){
+  if (!canAct() && !(G && G.replaying && G.phase==="input")) return false;
+  if (G.paused) return false;
+  G.phase="resolve";
+  G.selected="move";
+  let ok=false;
+  const p=G.player;
+  if (act.type==="move") ok=tryMove(act.dx, act.dy);
+  else if (act.type==="wait") { ok=true; log("You wait."); }
+  else if (act.type==="get") ok=pickup();
+  else if (act.type==="door") {
+    ok=false;
+    for (const [dx,dy] of D4) { if (interactTile(p.x+dx,p.y+dy)) { ok=true; break; } }
+    if (!ok) log("No door.");
+  }
+  else if (act.type==="interact") ok=interactTile(act.x, act.y);
+  else if (act.type==="descend") ok=descend();
+  else if (act.type==="use") ok=useItem(act.idx, act.tile);
+  else if (act.type==="skill") ok=useSkill(act.tile);
+  else if (act.type==="attack") {
+    const e=entAt(act.x,act.y);
+    if (e && cheb(p.x,p.y,e.x,e.y)===1) { attackMelee(p,e); ok=true; }
+    else if (e && playerRange()>1 && cheb(p.x,p.y,e.x,e.y)<=playerRange() && los(p.x,p.y,e.x,e.y)) { ok=attackRanged(p,e); }
+  }
+  if (!ok) { G.phase="input"; return false; }
+  if (!G.replaying) G.actionLog.push(act);
+  const delay = G.settings.motion || G.settings.anim===0 || G.replaying ? 0 : [0,40,90,160][G.settings.anim]||80;
+  const epoch = G.epoch;
+  if (delay) {
+    G.phase="anim";
+    setTimeout(()=>{ if (G && G.epoch===epoch && !G.dead) finishPlayerTurn(); }, delay);
+  } else finishPlayerTurn();
+  return true;
+}
+
+function continueAuto(){
+  if (!canAct() || !G.autoPath.length) return;
+  const [nx,ny]=G.autoPath[0];
+  const t=tileAt(nx,ny);
+  if (HAZARD.has(t) || t===T.DOOR || t===T.LOCK || !walkTerrain(nx,ny) || entAt(nx,ny)) { G.autoPath=[]; log("Path interrupted."); return; }
+  const dx=nx-G.player.x, dy=ny-G.player.y;
+  if (Math.abs(dx)>1 || Math.abs(dy)>1) { G.autoPath=[]; return; }
+  G.autoPath.shift();
+  commit({type:"move", dx, dy});
+}
+
+function clickTile(x,y, dbl){
+  if (!G || G.screen!=="play") return;
+  if (G.look) { inspectAt(x,y, true); return; }
+  if (G.targetMode) {
+    const tm=G.targetMode;
+    if (tm.kind==="skill") commit({type:"skill", tile:{x,y}});
+    else commit({type:"use", idx:tm.idx, tile:{x,y}});
+    G.targetMode=null;
+    return;
+  }
+  if (!canAct()) return;
+  if (!G.vis.has(x+","+y) && !G.explored.has(x+","+y)) return;
+  const e=entAt(x,y);
+  if (e && e.kind==="enemy" && G.vis.has(x+","+y)) {
+    if (cheb(G.player.x,G.player.y,x,y)===1) { commit({type:"attack", x,y}); return; }
+    if (playerRange()>1 && cheb(G.player.x,G.player.y,x,y)<=playerRange()) { commit({type:"attack", x,y}); return; }
+  }
+  if (x===G.player.x && y===G.player.y) {
+    if (tileAt(x,y)===T.STAIRS) commit({type:"descend"});
+    else commit({type:"wait"});
+    return;
+  }
+  const path = astar(G.player.x,G.player.y,x,y,{avoidHaz:true}) || astar(G.player.x,G.player.y,x,y,{});
+  if (!path || path.length<2) return;
+  if (confirmPath && confirmPath.x===x && confirmPath.y===y) {
+    G.autoPath = path.slice(1);
+    confirmPath=null;
+    continueAuto();
+  } else {
+    confirmPath={x,y}; pathPreview=path;
+    $("prompt").textContent="Path "+(path.length-1)+" steps. Click again to walk (halts on new danger).";
+  }
+}
+
+function inspectAt(x,y, sticky){
+  const bits=[];
+  bits.push(`<b>${x},${y}</b> ${TN[tileAt(x,y)]||"?"}`);
+  const e=entAt(x,y);
+  if (e && (e.kind==="player" || G.vis.has(e.x+","+e.y))) {
+    if (e.kind==="player") bits.push(`You · HP ${e.hp}/${e.maxHp} · ACC ${playerAcc()} EVA ${playerEva()} STR ${playerStr()} ARM ${playerArm()}<br>Hit vs typical 6 EVA: ${((clamp(0.45+(playerAcc()-6)*0.05,0.15,0.95))*100)|0}%`);
+    else bits.push(`${e.name} (${e.ai}) HP ${e.hp}/${e.maxHp} ACC ${e.acc} ARM ${e.armor}<br>Intent ${e.intent?e.intent.kind:"?"} · ${e.lastKnown?"last saw you t"+e.lastKnown.turn:"no memory"}`);
+  } else if (e && e.kind==="enemy") bits.push("Something unseen occupies this tile.");
+  const it=itemAt(x,y);
+  if (it && (G.vis.has(x+","+y)||G.explored.has(x+","+y))) bits.push(ITEMS[it.id].name+": "+ITEMS[it.id].desc);
+  if (HAZARD.has(tileAt(x,y))) bits.push("Hazard — stepping costs a wound or status.");
+  showTT(bits.join("<br>"));
+}
+
+function showTT(html){ tt.innerHTML=html; tt.style.display="block"; }
+function hideTT(){ tt.style.display="none"; }
+
+function finishRun(win){
+  G.paused=true;
+  const rec = loadRecords();
+  const row = { seed:G.seed, score:G.player.score, floor:G.floor, kills:G.player.kills, turn:G.turn, win, cls:G.player.cls, date:new Date().toISOString() };
+  rec.runs = (rec.runs||[]).slice(0,24);
+  rec.runs.unshift(row);
+  if (!rec.best || row.score > rec.best.score) rec.best=row;
+  if (G.seed.startsWith("daily-")) rec.daily = rec.daily||{}, rec.daily[G.seed]=row;
+  try { localStorage.setItem(REC_KEY, JSON.stringify(rec)); } catch(e){}
+  if (G.permadeath) { try { localStorage.removeItem(SAVE_KEY); } catch(e){} }
+  $("endTitle").textContent = win ? "The lantern leaves the crypt" : "The dark keeps you";
+  $("endBody").innerHTML = `Score <b>${G.player.score}</b> · Floor ${G.floor} · Turns ${G.turn} · Kills ${G.player.kills} · Seed ${G.seed}`;
+  $("scrEnd").classList.add("open");
+  G.screen="end";
+}
+
+function loadRecords(){ try { return JSON.parse(localStorage.getItem(REC_KEY))||{}; } catch(e){ return {}; } }
+
+function serialize(){
+  if (!G) return null;
+  return {
+    v:SCHEMA, seed:G.seed, floor:G.floor, stylePref:G.stylePref, style:G.style, diff:G.diff, permadeath:G.permadeath,
+    turn:G.turn, rng:G.rng.state(), tiles:G.tiles, ground:G.ground,
+    ents:G.ents.filter(e=>e.kind==="enemy"), player:G.player, stairs:G.stairs,
+    explored:[...G.explored], known:G.known, actionLog:G.actionLog, log:G.log.slice(0,80),
+    objective:G.objective, W:G.W, H:G.H, selectedCls:G.player.cls
+  };
+}
+function migrate(data){
+  if (!data || typeof data!=="object") throw new Error("empty");
+  if (data.v > SCHEMA) throw new Error("future save");
+  if (!data.player || !data.tiles || !data.seed) throw new Error("corrupt save");
+  if (!data.v) data.v=1;
+  if (!data.objective) data.objective="Find the descending stair";
+  if (!Array.isArray(data.actionLog)) data.actionLog=[];
+  return data;
+}
+function applySave(data){
+  data = migrate(data);
+  const player=data.player;
+  applyEq(player);
+  G = {
+    seed:data.seed, floor:data.floor, maxFloor:5, style:data.style, stylePref:data.stylePref||"auto",
+    diff:data.diff||"standard", permadeath:!!data.permadeath,
+    W:data.W, H:data.H, tiles:data.tiles, rooms:[], stairs:data.stairs, ground:data.ground||[],
+    ents:[player].concat(data.ents||[]), player,
+    turn:data.turn||0, phase:"input", paused:false, screen:"play",
+    vis:new Set(), explored:new Set(data.explored||[]), known:data.known||[],
+    rng:makeRng(1), log:data.log||[], actionLog:data.actionLog||[], selected:"move", look:false, targetMode:null,
+    autoPath:[], settings:loadSettings(), validation:{ok:true, reason:"loaded"}, genAttempt:0,
+    floorSnap:null, replaying:false, dead:false, won:false, selectedCls:player.cls, senses:[], nextId: 100,
+    epoch: (G && G.epoch || 0) + 1,
+    diag:{walk:false, region:false, fov:false, path:false, intent:false, turns:false, occ:false, rng:false, gen:false},
+    objective:data.objective
+  };
+  G.rng.set(data.rng||hashStr(data.seed));
+  G.nextId = Math.max(100, ...G.ents.map(e=>e.id||0))+1;
+  refreshFOV();
+  G.floorSnap = snapshotFloor();
+  closeScreens();
+  log("Restored turn "+G.turn+".");
+  fit(); renderAll();
+}
+
+function tryAutoSave(){
+  if (!G || G.dead || G.replaying) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); } catch(e){}
+}
+
+function replayLog(){
+  if (!G || !G.actionLog.length) { toast("No action log"); return; }
+  const acts=G.actionLog.slice();
+  const meta={seed:G.seed, cls:G.player.cls, diff:G.diff, permadeath:false, style:G.stylePref, floor:1, replay:true};
+  startRun(meta);
+  G.replaying=true; G.settings.anim=0;
+  for (const a of acts) {
+    G.phase="input"; G.paused=false;
+    commit(a);
+    while (G.phase==="anim") finishPlayerTurn();
+  }
+  G.replaying=false;
+  log("Replay complete ("+acts.length+" acts).");
+  toast("Replay finished at turn "+G.turn);
+}
+
+function closeScreens(){
+  ["scrMenu","scrNew","scrPause","scrSettings","scrHelp","scrEnd"].forEach(id=>$ (id).classList.remove("open"));
+  if (G) { G.screen="play"; G.paused=false; }
+}
+function openScreen(id){
+  if (G && id!=="scrPause" && id!=="scrSettings" && id!=="scrHelp") {}
+  if (G && G.screen==="play") G.paused=true;
+  $(id).classList.add("open");
+  if (G) G.screen = id==="scrPause"?"pause": id==="scrSettings"?"settings": id==="scrHelp"?"help": G.screen;
+}
+
+function fit(){
+  DPR = Math.min(2.5, window.devicePixelRatio || 1);
+  const r = view.getBoundingClientRect();
+  Wpx = Math.max(200, r.width); Hpx = Math.max(200, r.height);
+  view.width = (Wpx*DPR)|0; view.height=(Hpx*DPR)|0;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  TS = clamp(Math.floor(Math.min(Wpx, Hpx) / 14), 26, 44);
+}
+
+function burst(x,y,col){
+  if (G && G.settings.motion) return;
+  for (let i=0;i<8;i++) particles.push({x:x+.5, y:y+.5, vx:(Math.random()-.5)*.25, vy:(Math.random()-.5)*.25, col, life:1});
+}
+
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if (audioCtx.state==="suspended") audioCtx.resume();
+}
+function sfx(kind){
+  if (!audioCtx || !G) return;
+  const v = (G.settings.vol||0) * 0.08;
+  if (v<=0) return;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  const map={hit:180, miss:90, door:120, loot:420, use:360, start:220, death:70, level:520, stairs:160, altar:300, bow:500};
+  o.frequency.value = map[kind]||200;
+  o.type = kind==="hit"||kind==="death" ? "sawtooth" : "square";
+  g.gain.value=v; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.12);
+  o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.13);
+}
+
+function tileColor(t, vis, seen){
+  const dim = vis?1: seen?0.38:0.08;
+  const pal = {
+    [T.WALL]:[58,42,32], [T.FLOOR]:[86,68,52], [T.DOOR]:[92,58,28], [T.OPEN]:[120,86,48],
+    [T.LOCK]:[70,70,90], [T.STAIRS]:[190,150,70], [T.WATER]:[40,70,90], [T.SPIKE]:[90,50,50],
+    [T.GRASS]:[48,80,50], [T.PILLAR]:[70,60,50], [T.ALTAR]:[160,140,90], [T.CHEST]:[140,100,40],
+    [T.BARREL]:[90,60,30], [T.ACID]:[80,140,50], [T.RUBBLE]:[70,60,50], [T.RUG]:[90,40,40], [T.MOSS]:[50,80,48], [T.VOID]:[8,6,5]
+  };
+  const c=pal[t]||[20,16,12];
+  return `rgb(${(c[0]*dim)|0},${(c[1]*dim)|0},${(c[2]*dim)|0})`;
+}
+
+function drawTile(x,y,px,py, vis, seen){
+  const t=tileAt(x,y);
+  ctx.fillStyle = tileColor(t, vis, seen);
+  ctx.fillRect(px,py,TS,TS);
+  const h=((x*13+y*7)&7);
+  if (t===T.WALL && (vis||seen)) {
+    ctx.fillStyle = vis ? "#3a281c" : "#1a120e";
+    ctx.fillRect(px,py,TS,TS);
+    ctx.strokeStyle="rgba(18,10,6,.55)";
+    ctx.beginPath();
+    ctx.moveTo(px, py+TS*0.5); ctx.lineTo(px+TS, py+TS*0.5);
+    ctx.moveTo(px+((x+y)%2?TS*0.5:0), py); ctx.lineTo(px+((x+y)%2?TS*0.5:0), py+TS*0.5);
+    ctx.moveTo(px+((x+y)%2?0:TS*0.5), py+TS*0.5); ctx.lineTo(px+((x+y)%2?0:TS*0.5), py+TS);
+    ctx.stroke();
+    ctx.fillStyle="rgba(90,60,40,.2)"; ctx.fillRect(px+1,py+1,TS-2,3);
+  }
+  if ((t===T.FLOOR||t===T.RUG||t===T.MOSS||t===T.GRASS) && vis) {
+    ctx.strokeStyle="rgba(20,12,8,.35)"; ctx.strokeRect(px+0.5,py+0.5,TS-1,TS-1);
+    ctx.fillStyle="rgba(0,0,0,.12)"; ctx.fillRect(px+3+(h%3), py+4, TS*0.18, 2);
+    if (t===T.MOSS) { ctx.fillStyle="rgba(60,110,70,.35)"; ctx.fillRect(px+4,py+4,TS-8,TS-8); }
+    if (t===T.GRASS) { ctx.fillStyle="rgba(70,120,60,.4)"; ctx.fillRect(px+6,py+8,4,10); }
+    if (t===T.RUG) { ctx.fillStyle="rgba(120,40,40,.35)"; ctx.fillRect(px+2,py+2,TS-4,TS-4); }
+  }
+  if (t===T.DOOR || t===T.LOCK) {
+    ctx.fillStyle = t===T.LOCK ? "#3a3a52" : "#6a3a18";
+    ctx.fillRect(px+TS*0.22, py+2, TS*0.56, TS-4);
+    ctx.strokeStyle="#2a180c";
+    ctx.beginPath(); ctx.moveTo(px+TS*0.5, py+3); ctx.lineTo(px+TS*0.5, py+TS-3); ctx.stroke();
+    ctx.fillStyle=t===T.LOCK?"#c0c8e0":"#c4a060"; ctx.beginPath(); ctx.arc(px+TS*0.68, py+TS*0.52, 3,0,7); ctx.fill();
+  }
+  if (t===T.OPEN) { ctx.fillStyle="#5a3a20"; ctx.fillRect(px+2,py+2,6,TS-4); ctx.fillStyle="rgba(90,60,30,.4)"; ctx.fillRect(px+8,py+2,4,TS-4); }
+  if (t===T.STAIRS) {
+    ctx.fillStyle="#2a2010"; ctx.fillRect(px+4,py+4,TS-8,TS-8);
+    ctx.strokeStyle="#e2c36a"; ctx.beginPath();
+    for (let i=1;i<5;i++) { ctx.moveTo(px+6, py+TS-4-i*6); ctx.lineTo(px+TS-6, py+TS-4-i*6); }
+    ctx.stroke();
+  }
+  if (t===T.PILLAR) { ctx.fillStyle="#2a2018"; ctx.beginPath(); ctx.arc(px+TS/2,py+TS/2, TS*0.28,0,6.3); ctx.fill(); ctx.strokeStyle="#8a7050"; ctx.stroke(); }
+  if (t===T.CHEST) { ctx.fillStyle="#c4a04a"; ctx.fillRect(px+7,py+11,TS-14,TS-18); ctx.fillStyle="#2a1c10"; ctx.fillRect(px+7,py+18,TS-14,3); ctx.fillStyle="#e2c36a"; ctx.fillRect(px+TS/2-2,py+16,4,6); }
+  if (t===T.ALTAR) { ctx.fillStyle="#ddd0a0"; ctx.fillRect(px+5,py+14,TS-10,8); ctx.fillRect(px+TS/2-4,py+6,8,12); ctx.fillStyle="#e2a14a"; ctx.fillRect(px+TS/2-2,py+4,4,4); }
+  if (t===T.SPIKE) { ctx.fillStyle="#c08070"; ctx.beginPath(); ctx.moveTo(px+8,py+TS-6); ctx.lineTo(px+TS/2,py+8); ctx.lineTo(px+TS-8,py+TS-6); ctx.fill(); }
+  if (t===T.BARREL) { ctx.fillStyle="#8a5a28"; ctx.beginPath(); ctx.ellipse(px+TS/2,py+TS/2, TS*0.28, TS*0.34, 0,0,7); ctx.fill(); ctx.strokeStyle="#2a180c"; ctx.stroke(); }
+  if (t===T.WATER || t===T.ACID) {
+    ctx.fillStyle = t===T.ACID ? "rgba(120,200,70,.45)" : "rgba(60,110,140,.5)";
+    ctx.fillRect(px+2,py+2,TS-4,TS-4);
+    ctx.strokeStyle="rgba(255,255,255,.15)"; ctx.beginPath(); ctx.arc(px+TS*0.4,py+TS*0.45,4,0,7); ctx.stroke();
+  }
+}
+
+function drawEntity(e, px, py, vis){
+  if (e.kind!=="player" && !vis) return;
+  const cx=px+TS/2, cy=py+TS/2;
+  if (e.kind==="player") {
+    ctx.fillStyle="#1a1008"; ctx.beginPath(); ctx.ellipse(cx, cy+TS*0.18, TS*0.22, TS*0.28, 0,0,7); ctx.fill();
+    ctx.fillStyle="#c4a070"; ctx.beginPath(); ctx.arc(cx, cy-TS*0.08, TS*0.14, 0,7); ctx.fill();
+    ctx.fillStyle="#e2a14a"; ctx.beginPath(); ctx.arc(cx+TS*0.18, cy+TS*0.02, TS*0.08, 0,7); ctx.fill();
+    ctx.strokeStyle="rgba(226,161,74,.35)"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy, TS*0.48,0,7); ctx.stroke(); ctx.lineWidth=1;
+    return;
+  }
+  const col = {grub:"#7a5a38", bow:"#4a6a78", shade:"#3a2a4a", sentinel:"#6a6a70", rat:"#5a4030", caller:"#6a3a58", spit:"#4a7a40", hound:"#6a4028", wisp:"#c0d0e8", abbot:"#a43428"}[e.type]||"#888";
+  ctx.fillStyle=col;
+  ctx.beginPath();
+  if (e.ai==="ranged") { ctx.moveTo(cx,cy-TS*0.28); ctx.lineTo(cx+TS*0.2,cy+TS*0.24); ctx.lineTo(cx-TS*0.2,cy+TS*0.24); }
+  else if (e.ai==="boss") { ctx.arc(cx,cy, TS*0.32,0,7); }
+  else ctx.ellipse(cx, cy+2, TS*0.22, TS*0.26, 0,0,7);
+  ctx.fill();
+  ctx.fillStyle="#eddcc4"; ctx.font=(Math.max(10, TS*0.32))+"px serif"; ctx.textAlign="center";
+  ctx.fillText((ENEMIES[e.type]||{}).ch || "?", cx, cy+4);
+  ctx.textAlign="left";
+  const ratio=e.hp/e.maxHp;
+  ctx.fillStyle="#3a2018"; ctx.fillRect(px+4, py+2, TS-8, 3);
+  ctx.fillStyle=ratio>0.5?"#7cb389":"#c45b4a"; ctx.fillRect(px+4, py+2, (TS-8)*ratio, 3);
+}
+
+function render(){
+  if (!G) {
+    ctx.fillStyle="#120e0b"; ctx.fillRect(0,0,Wpx,Hpx);
+    return;
+  }
+  const p=G.player;
+  cam.tx = p.x*TS - Wpx/2 + TS/2;
+  cam.ty = p.y*TS - Hpx/2 + TS/2;
+  const sm = G.settings.motion ? 1 : 0.22;
+  cam.x += (cam.tx-cam.x)*sm; cam.y += (cam.ty-cam.y)*sm;
+  ctx.fillStyle="#070504"; ctx.fillRect(0,0,Wpx,Hpx);
+  const x0=Math.max(0, (cam.x/TS)|0), y0=Math.max(0,(cam.y/TS)|0);
+  const x1=Math.min(G.W, x0 + ((Wpx/TS)|0)+3), y1=Math.min(G.H, y0+((Hpx/TS)|0)+3);
+  for (let y=y0;y<y1;y++) for (let x=x0;x<x1;x++) {
+    const vis=G.vis.has(x+","+y), seen=G.explored.has(x+","+y);
+    drawTile(x,y, x*TS-cam.x, y*TS-cam.y, vis, seen);
+    if (vis) {
+      const d=cheb(x,y,p.x,p.y);
+      ctx.fillStyle=`rgba(226,161,74,${clamp(0.16-d*0.02,0,0.14)})`;
+      ctx.fillRect(x*TS-cam.x, y*TS-cam.y, TS, TS);
+    }
+  }
+  if (pathPreview.length) {
+    ctx.fillStyle="rgba(226,161,74,.28)";
+    for (const [x,y] of pathPreview) ctx.fillRect(x*TS-cam.x+8, y*TS-cam.y+8, TS-16, TS-16);
+  }
+  for (const it of G.ground) {
+    const vis=G.vis.has(it.x+","+it.y), seen=G.explored.has(it.x+","+it.y);
+    if (!vis && !seen) continue;
+    const px=it.x*TS-cam.x+TS*0.3, py=it.y*TS-cam.y+TS*0.3;
+    ctx.fillStyle= vis?"#e2a14a":"#6a5030";
+    ctx.fillRect(px,py, TS*0.4, TS*0.4);
+  }
+  for (const e of G.ents) {
+    if (e.hp<=0) continue;
+    drawEntity(e, e.x*TS-cam.x, e.y*TS-cam.y, G.vis.has(e.x+","+e.y));
+  }
+  for (const s of G.senses) {
+    ctx.strokeStyle=`rgba(180,180,220,${s.life/10})`;
+    ctx.beginPath(); ctx.arc(s.x*TS-cam.x+TS/2, s.y*TS-cam.y+TS/2, 8,0,7); ctx.stroke();
+    s.life--;
+  }
+  G.senses = G.senses.filter(s=>s.life>0);
+  if (hover.x>=0) {
+    ctx.strokeStyle="#e2a14a"; ctx.strokeRect(hover.x*TS-cam.x+.5, hover.y*TS-cam.y+.5, TS-1, TS-1);
+  }
+  drawDiags();
+  for (let i=particles.length-1;i>=0;i--) {
+    const q=particles[i];
+    ctx.globalAlpha=q.life; ctx.fillStyle=q.col;
+    ctx.fillRect((q.x*TS-cam.x), (q.y*TS-cam.y), 3,3);
+    q.x+=q.vx; q.y+=q.vy; q.life-=0.04; ctx.globalAlpha=1;
+    if (q.life<=0) particles.splice(i,1);
+  }
+  for (let i=floaters.length-1;i>=0;i--) {
+    const f=floaters[i];
+    ctx.fillStyle=f.col; ctx.globalAlpha=f.life; ctx.font="12px serif";
+    ctx.fillText(f.text, f.x*TS-cam.x+8, f.y*TS-cam.y - (1-f.life)*16);
+    ctx.globalAlpha=1; f.life-=0.03; if (f.life<=0) floaters.splice(i,1);
+  }
+  const g=ctx.createRadialGradient(Wpx/2,Hpx/2, Wpx*0.2, Wpx/2,Hpx/2, Wpx*0.72);
+  g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,0.45)");
+  ctx.fillStyle=g; ctx.fillRect(0,0,Wpx,Hpx);
+}
+
+function drawDiags(){
+  if (!G) return;
+  const D=G.diag;
+  if (D.walk) {
+    for (let y=0;y<G.H;y++) for (let x=0;x<G.W;x++) if (walkTerrain(x,y)) {
+      ctx.fillStyle="rgba(80,200,120,.18)"; ctx.fillRect(x*TS-cam.x,y*TS-cam.y,TS,TS);
+    }
+  }
+  if (D.region) {
+    const regs=regionsWalk();
+    regs.forEach((r,i)=>{
+      ctx.fillStyle=`hsla(${i*47},60%,50%,.2)`;
+      r.forEach(k=>{ const [x,y]=k.split(",").map(Number); ctx.fillRect(x*TS-cam.x,y*TS-cam.y,TS,TS); });
+    });
+  }
+  if (D.fov) {
+    G.vis.forEach(k=>{ const [x,y]=k.split(",").map(Number); ctx.fillStyle="rgba(255,230,120,.12)"; ctx.fillRect(x*TS-cam.x,y*TS-cam.y,TS,TS); });
+  }
+  if (D.path) {
+    for (const e of G.ents) if (e.kind==="enemy"&&e.hp>0&&e.lastKnown) {
+      ctx.strokeStyle="rgba(80,160,255,.7)"; ctx.beginPath();
+      ctx.moveTo(e.x*TS-cam.x+TS/2, e.y*TS-cam.y+TS/2);
+      ctx.lineTo(e.lastKnown.x*TS-cam.x+TS/2, e.lastKnown.y*TS-cam.y+TS/2); ctx.stroke();
+    }
+  }
+  if (D.intent) {
+    ctx.fillStyle="#eddcc4"; ctx.font="10px monospace";
+    for (const e of G.ents) if (e.kind==="enemy"&&e.hp>0&&e.intent)
+      ctx.fillText(e.intent.kind, e.x*TS-cam.x+2, e.y*TS-cam.y-2);
+  }
+  if (D.occ) {
+    ctx.fillStyle="rgba(255,0,0,.25)";
+    for (const e of G.ents) if (e.hp>0) ctx.fillRect(e.x*TS-cam.x, e.y*TS-cam.y, TS, TS);
+  }
+}
+
+function renderMini(){
+  const w=mini.width, h=mini.height;
+  mctx.fillStyle="#0a0706"; mctx.fillRect(0,0,w,h);
+  if (!G) return;
+  const sx=w/G.W, sy=h/G.H;
+  for (let y=0;y<G.H;y++) for (let x=0;x<G.W;x++) {
+    if (!G.explored.has(x+","+y)) continue;
+    const vis=G.vis.has(x+","+y);
+    mctx.fillStyle = tileAt(x,y)===T.WALL ? "#3a2a20" : vis? "#8a6a48" : "#2a2018";
+    if (tileAt(x,y)===T.STAIRS) mctx.fillStyle="#e2a14a";
+    mctx.fillRect((x*sx)|0,(y*sy)|0, Math.ceil(sx), Math.ceil(sy));
+  }
+  mctx.fillStyle="#fff"; mctx.fillRect((G.player.x*sx)|0,(G.player.y*sy)|0, Math.max(2,sx), Math.max(2,sy));
+  mctx.fillStyle="#c45b4a";
+  for (const e of G.ents) if (e.kind==="enemy"&&e.hp>0&&G.vis.has(e.x+","+e.y))
+    mctx.fillRect((e.x*sx)|0,(e.y*sy)|0, Math.max(2,sx), Math.max(2,sy));
+}
+
+function renderHUD(){
+  if (!G) { $("live").textContent="Menu"; return; }
+  const p=G.player;
+  $("heroName").textContent = p.name+"  ·  "+G.style+" F"+G.floor;
+  $("hpText").textContent = p.hp+"/"+p.maxHp;
+  $("hpBar").firstElementChild.style.width = (100*p.hp/p.maxHp)+"%";
+  $("xpText").textContent = "Lv "+p.level+"  "+p.xp+"/"+p.next;
+  $("xpBar").firstElementChild.style.width = (100*p.xp/p.next)+"%";
+  $("statText").textContent = playerStr()+"/"+playerAcc()+"/"+playerArm();
+  const st=Object.keys(p.status).map(k=>k+" "+p.status[k]).join(", ") || "none";
+  $("statusText").textContent=st;
+  $("objText").textContent=G.objective;
+  const visE = G.ents.filter(e=>e.kind==="enemy"&&e.hp>0&&G.vis.has(e.x+","+e.y)).length;
+  $("live").textContent = `FPS ${fps|0} · F${G.floor} seed ${G.seed} · T${G.turn} · HP ${p.hp}/${p.maxHp} Lv${p.level} · visE ${visE} · ${st} · ${G.objective} · act ${G.selected}${G.targetMode?"/"+G.targetMode.kind:""} · ${G.replaying?"replay":"live"} · ${G.paused?"paused":G.phase} · save ok`;
+  $("equip").innerHTML = ["weapon","armor","charm"].map(sl=>{
+    const id=p.eq[sl]; const it=id&&ITEMS[id];
+    return `<div class="slot" data-eq="${sl}" title="${it?it.desc:""}"><b>${sl}</b><span>${it?it.name:"—"}</span></div>`;
+  }).join("");
+  $("inv").innerHTML = p.inv.map((id,i)=>{
+    const it=ITEMS[id];
+    return `<button type="button" class="slot" data-inv="${i}" aria-label="Use ${it.name}"><b>${i+1}. ${it.name}</b><span>${it.desc}</span></button>`;
+  }).join("") || "<span class='hint'>Empty pack</span>";
+  renderLog();
+}
+
+function renderAll(){ render(); renderMini(); renderHUD(); }
+
+function screenToTile(ev){
+  const r=view.getBoundingClientRect();
+  const x=((ev.clientX-r.left)+cam.x)/TS, y=((ev.clientY-r.top)+cam.y)/TS;
+  return {x:Math.floor(x), y:Math.floor(y)};
+}
+
+function onKey(ev){
+  if (remapWait) {
+    ev.preventDefault();
+    if (ev.key!=="Escape") {
+      G ? G.settings.keymap[remapWait]=ev.key.toLowerCase() : null;
+      const s=loadSettings(); s.keymap=s.keymap||{}; s.keymap[remapWait]=ev.key.toLowerCase();
+      if (G) G.settings.keymap[remapWait]=ev.key.toLowerCase();
+      saveSettings(G?G.settings:s);
+    }
+    remapWait=null; fillRemap(); return;
+  }
+  const tag=(ev.target&&ev.target.tagName)||"";
+  if (tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+  const k=ev.key.length===1?ev.key.toLowerCase():ev.key.toLowerCase();
+  if (k==="escape") {
+    if ($("scrHelp").classList.contains("open") || $("scrSettings").classList.contains("open")) { $("scrHelp").classList.remove("open"); $("scrSettings").classList.remove("open"); if (G){G.paused=false;G.screen="play";} return; }
+    if (!G || G.screen==="play") { if (G){G.paused=true; G.screen="pause";} $("scrPause").classList.add("open"); }
+    else if (G.screen==="pause") { closeScreens(); }
+    return;
+  }
+  if (k==="?" || (ev.shiftKey && k==="/")) { $("scrHelp").classList.add("open"); if (G){G.paused=true; G.screen="help";} return; }
+  if (!G || G.screen!=="play") return;
+  const km=G.settings.keymap;
+  if (k==="`" || k===km.diag) { $("diagbox").classList.toggle("open"); return; }
+  if (k===km.look) { G.look=!G.look; G.selected=G.look?"look":"move"; $("prompt").textContent=G.look?"Inspect: click a tile.":""; return; }
+  if (k===km.inv) { toast("Pack slots are listed in the side panel."); return; }
+  if (!canAct() && k!==km.pause) return;
+  const dirs = {
+    [km.north]:[0,-1], [km.south]:[0,1], [km.west]:[-1,0], [km.east]:[1,0],
+    arrowup:[0,-1], arrowdown:[0,1], arrowleft:[-1,0], arrowright:[1,0],
+    [km.n2]:[0,-1], [km.s2]:[0,1], [km.w2]:[-1,0], [km.e2]:[1,0],
+    "8":[0,-1],"2":[0,1],"4":[-1,0],"6":[1,0]
+  };
+  if (dirs[k]) { commit({type:"move", dx:dirs[k][0], dy:dirs[k][1]}); ev.preventDefault(); return; }
+  if (k===km.wait || k==="." || k==="x") commit({type:"wait"});
+  else if (k===km.get) commit({type:"get"});
+  else if (k===km.door) commit({type:"door"});
+  else if (k===km.skill) useSkill();
+  else if (k===km.descend || k===">") commit({type:"descend"});
+  else if (k==="tab") { ev.preventDefault(); cycleTarget(); }
+  else if (k>="1"&&k<="9") commit({type:"use", idx:(+k)-1});
+}
+
+function cycleTarget(){
+  const vis=G.ents.filter(e=>e.kind==="enemy"&&e.hp>0&&G.vis.has(e.x+","+e.y));
+  if (!vis.length) return;
+  const e=vis[G.turn%vis.length];
+  hover={x:e.x,y:e.y}; inspectAt(e.x,e.y);
+}
+
+function fillClasses(){
+  $("classPick").innerHTML = Object.values(CLASSES).map(c=>`
+    <button type="button" class="classbtn${c.id==="warden"?" active":""}" data-cls="${c.id}" aria-label="Select ${c.name}"><b>${c.name}</b><div class="hint">${c.blurb}</div></button>`).join("");
+  window._selCls = window._selCls || "warden";
+}
+function fillRemap(){
+  const km=(G?G.settings:loadSettings()).keymap;
+  $("remapList").innerHTML = Object.keys(defaultKeys).map(a=>`<button type="button" data-act="${a}" aria-label="Remap ${a}">${a}: <kbd>${km[a]}</kbd></button>`).join("");
+}
+function fillDiag(){
+  const names=[["walk","Walkability"],["region","Regions"],["fov","FOV"],["path","AI paths"],["intent","AI intent"],["turns","Turn queue"],["occ","Occupancy"],["rng","RNG state"],["gen","Gen validation"]];
+  $("diagChecks").innerHTML = names.map(([k,n])=>`<label class="chk"><input type="checkbox" data-diag="${k}"> ${n}</label>`).join("");
+}
+
+function applySettingsUI(){
+  const s=G?G.settings:loadSettings();
+  $("setAnim").value=s.anim; $("setText").value=s.text; $("setVol").value=(s.vol*100)|0;
+  $("setContrast").checked=s.contrast; $("setMotion").checked=s.motion; $("setPerm").checked=G?G.permadeath:false;
+  $("setSeed").value=G?G.seed:"";
+  document.documentElement.style.setProperty("--fs", s.text+"px");
+  document.body.classList.toggle("hi-contrast", s.contrast);
+}
+
+function bindUI(){
+  fillClasses(); fillDiag(); fillRemap();
+  $("seedIn").value = "nave-"+((hashStr(String(Date.now()))%99999)+10000);
+  $("classPick").addEventListener("click", e=>{
+    const b=e.target.closest("[data-cls]"); if (!b) return;
+    document.querySelectorAll(".classbtn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    if (!G) window._selCls=b.dataset.cls; else G.selectedCls=b.dataset.cls;
+    window._selCls=b.dataset.cls;
+  });
+  $("btnNew").onclick=()=>{ $("scrMenu").classList.remove("open"); $("scrNew").classList.add("open"); };
+  $("btnBackMenu").onclick=()=>{ $("scrNew").classList.remove("open"); $("scrMenu").classList.add("open"); };
+  $("btnStart").onclick=()=>{
+    const cls=window._selCls||"warden";
+    startRun({seed:$("seedIn").value, cls, diff:$("diffIn").value, permadeath:$("permIn").checked, style:$("styleIn").value, floor:1});
+  };
+  $("btnDaily").onclick=()=>{
+    $("seedIn").value=dailySeed(); $("styleIn").value="auto";
+    startRun({seed:dailySeed(), cls:window._selCls||"seeker", diff:"standard", permadeath:false, style:"auto"});
+  };
+  $("btnContinue").onclick=()=>{
+    try {
+      const raw=localStorage.getItem(SAVE_KEY); if (!raw) { toast("No save"); return; }
+      applySave(JSON.parse(raw));
+    } catch (err) { toast("Save unreadable: "+err.message); }
+  };
+  $("btnImport").onclick=()=>$("importFile").click();
+  $("importFile").onchange=()=>{
+    const f=$("importFile").files[0]; if (!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try { applySave(JSON.parse(r.result)); } catch(err){ toast("Import failed: "+err.message); } };
+    r.readAsText(f);
+  };
+  $("btnSettings").onclick=()=>{ applySettingsUI(); fillRemap(); $("scrSettings").classList.add("open"); };
+  $("btnPauseSettings").onclick=()=>{ applySettingsUI(); fillRemap(); $("scrSettings").classList.add("open"); };
+  $("btnSetClose").onclick=()=>$("scrSettings").classList.remove("open");
+  $("btnHelp").onclick=$("btnHelpMenu").onclick=()=>$("scrHelp").classList.add("open");
+  $("btnHelpClose").onclick=()=>$("scrHelp").classList.remove("open");
+  $("btnRecords").onclick=()=>{
+    const rec=loadRecords();
+    $("recordBox").textContent = rec.best ? ("Best "+rec.best.score+" · "+rec.best.cls+" · "+rec.best.seed) : "No records yet.";
+  };
+  $("btnPause").onclick=()=>{ if (!G) { $("scrMenu").classList.add("open"); return; } G.paused=true; G.screen="pause"; $("scrPause").classList.add("open"); };
+  $("btnResume").onclick=()=>closeScreens();
+  $("btnSave").onclick=()=>{ tryAutoSave(); toast("Saved"); };
+  $("btnLoad").onclick=()=>{ try { applySave(JSON.parse(localStorage.getItem(SAVE_KEY))); } catch(e){ toast("No valid save"); } };
+  $("btnExport").onclick=()=>{
+    const text=JSON.stringify(serialize(), null, 0);
+    const a=document.createElement("a");
+    a.href="data:application/json;charset=utf-8,"+encodeURIComponent(text);
+    a.download="cinder-run.json"; a.click();
+  };
+  $("btnReplay").onclick=()=>{ closeScreens(); replayLog(); };
+  $("btnRestartFloor").onclick=()=>{
+    if (!G || G.permadeath) { toast("Permadeath forbids floor restart"); return; }
+    if (!G.floorSnap) return;
+    const s=G.floorSnap;
+    G.tiles=JSON.parse(JSON.stringify(s.tiles)); G.ground=JSON.parse(JSON.stringify(s.ground));
+    G.ents=[G.player].concat(JSON.parse(JSON.stringify(s.ents)));
+    G.player.x=s.playerPos.x; G.player.y=s.playerPos.y; G.player.hp=s.playerHp;
+    G.rng.set(s.rng); G.autoPath=[]; refreshFOV(); closeScreens(); log("Floor restored.");
+  };
+  $("btnAbandon").onclick=()=>{ G=null; closeScreens(); $("scrMenu").classList.add("open"); };
+  $("btnAgain").onclick=()=>{ $("scrEnd").classList.remove("open"); $("scrNew").classList.add("open"); };
+  $("btnEndMenu").onclick=()=>{ G=null; $("scrEnd").classList.remove("open"); $("scrMenu").classList.add("open"); };
+  $("btnEndReplay").onclick=()=>{ $("scrEnd").classList.remove("open"); replayLog(); };
+  $("btnWait").onclick=$("btnWaitTouch").onclick=()=>commit({type:"wait"});
+  $("btnLook").onclick=$("btnLookT").onclick=()=>{ if(!G)return; G.look=!G.look; G.selected=G.look?"look":"move"; };
+  $("btnSkill").onclick=$("btnSkillT").onclick=()=>useSkill();
+  $("btnGet").onclick=()=>commit({type:"get"});
+  $("btnDoor").onclick=()=>commit({type:"door"});
+  $("btnDown").onclick=()=>commit({type:"descend"});
+  $("btnInvT").onclick=()=>toast("Pack is on the right / below.");
+  $("btnDiag").onclick=()=>{ $("diagbox").classList.toggle("open"); };
+  document.querySelector("#touch .pad").addEventListener("click", e=>{
+    const b=e.target.closest("[data-dir]"); if (!b) return;
+    const [dx,dy]=b.dataset.dir.split(",").map(Number); commit({type:"move", dx, dy});
+  });
+  $("inv").addEventListener("click", e=>{
+    const b=e.target.closest("[data-inv]"); if (!b) return;
+    commit({type:"use", idx:+b.dataset.inv});
+  });
+  $("inv").addEventListener("pointerover", e=>{
+    const b=e.target.closest("[data-inv]"); if (!b||!G) return;
+    const it=ITEMS[G.player.inv[+b.dataset.inv]]; if (it) showTT(`<b>${it.name}</b><br>${it.desc}`);
+  });
+  $("diagChecks").addEventListener("change", e=>{
+    const k=e.target.dataset.diag; if (k&&G) G.diag[k]=e.target.checked;
+  });
+  $("remapList").addEventListener("click", e=>{
+    const b=e.target.closest("[data-act]"); if (!b) return;
+    remapWait=b.dataset.act; toast("Press a key for "+remapWait);
+  });
+  ["setAnim","setText","setVol","setContrast","setMotion","setPerm"].forEach(id=>{
+    $(id).addEventListener("input", ()=>{
+      const s=G?G.settings:loadSettings();
+      s.anim=+$("setAnim").value; s.text=+$("setText").value; s.vol=+$("setVol").value/100;
+      s.contrast=$("setContrast").checked; s.motion=$("setMotion").checked;
+      if (G) { G.settings=s; G.permadeath=$("setPerm").checked; }
+      saveSettings(s); applySettingsUI();
+    });
+  });
+  view.addEventListener("pointermove", ev=>{
+    if (!G) return;
+    const t=screenToTile(ev); hover=t;
+    tt.style.left=(ev.clientX+12)+"px"; tt.style.top=(ev.clientY+12)+"px";
+    if (G.look || G.targetMode) inspectAt(t.x,t.y);
+    else if (inB(t.x,t.y) && G.vis.has(t.x+","+t.y)) {
+      pathPreview = astar(G.player.x,G.player.y,t.x,t.y,{avoidHaz:true}) || [];
+      inspectAt(t.x,t.y);
+    } else hideTT();
+  });
+  view.addEventListener("pointerleave", ()=>{ hover={x:-1,y:-1}; hideTT(); });
+  view.addEventListener("click", ev=>{
+    ensureAudio();
+    if (!G) return;
+    const t=screenToTile(ev);
+    clickTile(t.x,t.y);
+    view.focus();
+  });
+  document.addEventListener("pointerdown", ensureAudio, {once:false});
+  window.addEventListener("keydown", (ev)=>{ ensureAudio(); onKey(ev); });
+  window.addEventListener("resize", ()=>{ fit(); renderAll(); });
+  document.addEventListener("visibilitychange", ()=>{ if (document.hidden && G && G.screen==="play") { G.paused=true; $("scrPause").classList.add("open"); G.screen="pause"; } });
+  const hasSave=!!localStorage.getItem(SAVE_KEY);
+  $("btnContinue").disabled=!hasSave;
+}
+
+function loop(t){
+  const dt=t-lastFrame; lastFrame=t;
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc>400) { fps=1000/(fpsAcc/fpsN); fpsAcc=0; fpsN=0; $("live").textContent=$("live").textContent.replace(/FPS \d+/, "FPS "+(fps|0)); }
+  render();
+  if (G && G.diag.turns) {
+    ctx.fillStyle="#eddcc4"; ctx.font="12px monospace";
+    ctx.fillText("phase "+G.phase+(G.paused?" PAUSED":""), 8, 16);
+  }
+  if (G && G.diag.rng) {
+    ctx.fillStyle="#eddcc4"; ctx.font="12px monospace";
+    ctx.fillText("rng "+G.rng.state()+" att "+G.genAttempt+" "+(G.validation&&G.validation.reason), 8, 32);
+  }
+  if (G && G.diag.gen && G.validation) {
+    ctx.fillStyle=G.validation.ok?"#7cb389":"#c45b4a";
+    ctx.fillText("gen "+G.validation.reason+" reach "+(G.validation.reach||"?"), 8, 48);
+  }
+  requestAnimationFrame(loop);
+}
+
+window.__RL = {
+  version: SCHEMA,
+  getState() {
+    if (!G) return {screen:"menu"};
+    const visE=G.ents.filter(e=>e.kind==="enemy"&&e.hp>0&&G.vis.has(e.x+","+e.y)).map(e=>({id:e.id,type:e.type,x:e.x,y:e.y,hp:e.hp,ai:e.ai,intent:e.intent,lastKnown:e.lastKnown,status:e.status}));
+    const ai=G.ents.filter(e=>e.kind==="enemy"&&e.hp>0).map(e=>({id:e.id,type:e.type,x:e.x,y:e.y,hp:e.hp,ai:e.ai,intent:e.intent,lastKnown:e.lastKnown, visible:G.vis.has(e.x+","+e.y), status:e.status}));
+    const occ={};
+    for (const e of G.ents) if (e.hp>0) occ[e.x+","+e.y]=e.id;
+    return {
+      seed:G.seed, floor:G.floor, style:G.style, turn:G.turn, phase:G.phase, paused:G.paused, screen:G.screen,
+      player:{x:G.player.x,y:G.player.y,hp:G.player.hp,maxHp:G.player.maxHp,level:G.player.level,inv:G.player.inv.slice(), eq:G.player.eq, status:G.player.status, cls:G.player.cls},
+      visE, ai, vis:[...G.vis], explored:G.explored.size, objective:G.objective, selected:G.selected,
+      replay:G.replaying, save:true, log:G.log.slice(0,8), stairs:G.stairs,
+      validation:G.validation, rng:G.rng.state(), occupancy:occ, actionLog:G.actionLog.length,
+      tilesSample: tileAt(G.player.x,G.player.y)
+    };
+  },
+  start(opts){ startRun(opts||{}); return this.getState(); },
+  act(a){ return commit(a); },
+  flush(){ if (G && G.phase==="anim" && !G.dead) { G.epoch++; finishPlayerTurn(); } },
+  pause(v){ if (!G) return; G.paused=!!v; if (G.paused) { G.screen="pause"; $("scrPause").classList.add("open"); } else closeScreens(); },
+  diag(k,v){ if (G) G.diag[k]=v; $("diagbox").classList.add("open"); },
+  preset(name){
+    const instant=true;
+    if (name==="arena") return startRun({seed:"arena-check", cls:"warden", style:"arena", floor:1, diff:"standard", permadeath:false, instant});
+    if (name==="late") return startRun({seed:"crypt-late", cls:"warden", style:"crypt", floor:4, diff:"standard", permadeath:false, instant});
+    if (name==="boss") return startRun({seed:"abbot-gate", cls:"warden", style:"fortress", floor:5, diff:"forgiving", permadeath:false, instant});
+  },
+  save(){ tryAutoSave(); return serialize(); },
+  load(){ applySave(JSON.parse(localStorage.getItem(SAVE_KEY))); return this.getState(); },
+  exportJSON(){ return JSON.stringify(serialize()); },
+  importJSON(s){ applySave(JSON.parse(s)); return this.getState(); },
+  replay(){ replayLog(); },
+  daily: dailySeed,
+  records: loadRecords
+};
+
+bindUI();
+applySettingsUI();
+fit();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

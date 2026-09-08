@@ -1105,6 +1105,214 @@ window.probe=async origin=>{
         expect(self.page.locator('.run-card')).to_have_count(2)
         self.assertEqual(self.errors,[])
 
+    def test_build_notices_validate_escape_and_refresh_without_losing_model_settings(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        ids = [key + '/01-fluid-simulation-main' for key in keys]
+        repeated = self.results / keys[0] / '01-fluid-simulation-extra'
+        repeated.mkdir()
+        shutil.copyfile(self.results / ids[0] / 'index.html', repeated / 'index.html')
+        config = json.loads((server.STATIC_ROOT / 'appsettings.json').read_text(encoding='utf-8'))
+        message = '<img src=x onerror="window.__noticeXss=1"> & "quoted" <script>window.__noticeXss=2</script>'
+        config['buildNotices'] = {
+            ids[0]: {'type': 'runtime-error', 'message': message},
+            ids[1]: {'type': 'slow-start', 'message': 'W' * 500},
+            ids[2]: {'type': 'unknown', 'message': 'Invalid type must not appear'},
+            ids[3]: {'type': 'runtime-error', 'message': '   '},
+            ids[4]: {'type': 'runtime-error', 'message': 'X' * 501},
+            keys[0] + '/removed-run': {'type': 'runtime-error', 'message': 'Stale notice must not appear'},
+        }
+        self.model_settings(json.dumps(config))
+        self.navigate_direct()
+        expect(self.page.locator('#cards .run-card')).to_have_count(6)
+        expect(self.page.locator('#cards .card-build-notice')).to_have_count(2)
+        expect(self.page.locator('#error-banner')).not_to_be_visible()
+        self.assertEqual(self.page.locator('#cards .model-column').evaluate_all('nodes=>nodes.map(node=>node.dataset.model)'), keys)
+        first = self.page.locator('#cards .run-card').filter(has=self.page.locator(f'[data-open-run="{ids[0]}"]'))
+        extra = self.page.locator('#cards .run-card').filter(has=self.page.locator(f'[data-open-run="{keys[0]}/01-fluid-simulation-extra"]'))
+        expect(extra.locator('.card-build-notice')).to_have_count(0)
+        expect(first.locator('.model-name')).to_have_text('Astra fixture')
+        expect(first.locator('.card-build-notice')).to_have_attribute('data-notice-type', 'runtime-error')
+        expect(first.locator('.card-build-notice').get_by_text('Attention: Runtime error', exact=True)).to_be_visible()
+        expect(self.page.locator(f'#cards .model-column[data-model="{keys[1]}"] .card-build-notice').get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
+        expect(self.page.locator('#cards')).not_to_contain_text('Stale notice must not appear')
+        first.locator('.card-open').click()
+        self.page.locator('[data-tab="details"]').click()
+        detail = self.page.locator('.detail-build-notice')
+        expect(detail).to_have_attribute('data-notice-type', 'runtime-error')
+        expect(detail).to_contain_text('Attention: Runtime error')
+        expect(detail).to_contain_text(message)
+        expect(detail.locator('img,script,a')).to_have_count(0)
+        self.assertTrue(self.page.evaluate('window.__noticeXss === undefined'))
+        self.page.locator('#close-viewer').click()
+        config['buildNotices'][ids[0]] = {'type': 'slow-start', 'message': 'Updated startup note'}
+        del config['buildNotices'][ids[1]]
+        for invalid in [None, {'type': 'runtime-error', 'message': 42},
+                        {'type': 'runtime-error', 'message': 'First line\nSecond line'},
+                        {'type': 'runtime-error', 'message': 'Control character\x7f'},
+                        {'type': 'runtime-error', 'message': 'Invalid scope', 'scope': 'private'}]:
+            with self.subTest(invalid=invalid):
+                config['buildNotices'][ids[2]] = invalid
+                self.model_settings(json.dumps(config))
+                with self.page.expect_response('**/appsettings.json') as settings_response:
+                    self.page.locator('#refresh').click()
+                self.assertEqual(settings_response.value.json()['buildNotices'][ids[2]], invalid)
+                expect(self.page.locator('#refresh')).to_be_enabled()
+                expect(self.page.locator('#cards .card-build-notice')).to_have_count(1)
+                expect(first.locator('.card-build-notice')).to_have_attribute('data-notice-type', 'slow-start')
+                expect(self.page.locator('#error-banner')).not_to_be_visible()
+                expect(self.page.locator('#cards .run-card')).to_have_count(6)
+        first.locator('.card-open').click()
+        self.page.locator('[data-tab="details"]').click()
+        expect(detail).to_contain_text('Updated startup note')
+        expect(detail).not_to_contain_text(message)
+        self.page.locator('#close-viewer').click()
+        config['buildNotices'] = []
+        self.model_settings(json.dumps(config))
+        self.page.locator('#refresh').click()
+        expect(self.page.locator('#cards .card-build-notice')).to_have_count(0)
+        expect(self.page.locator('#cards .run-card')).to_have_count(6)
+        expect(first.locator('.model-name')).to_have_text('Astra fixture')
+        expect(self.page.locator('#error-banner')).not_to_be_visible()
+        self.assertEqual(self.errors, [])
+
+    def test_live_build_notice_preserves_frame_across_dismissals_sizes_and_model_switches(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        ids = [key + '/01-fluid-simulation-main' for key in keys]
+        (self.results / keys[0] / 'model.toml').write_text('harness = "Fixture CLI"\nsetting = "Fixture setting"\n', encoding='utf-8')
+        config = json.loads((server.STATIC_ROOT / 'appsettings.json').read_text(encoding='utf-8'))
+        message = 'Runtime fixture <img src=x onerror="window.__noticeXss=1"> ' + 'W' * 300
+        config['buildNotices'] = {
+            ids[0]: {'type': 'runtime-error', 'message': message},
+            ids[1]: {'type': 'slow-start', 'message': 'First shader initialization may take several minutes.'},
+        }
+        self.model_settings(json.dumps(config))
+        self.page.goto(self.base + '/#play/' + ids[0])
+        notice = self.page.locator('details#live-build-notice.live-build-notice')
+        summary = notice.locator('summary')
+        expect(notice).to_have_js_property('open', True)
+        expect(notice).to_have_attribute('data-notice-type', 'runtime-error')
+        expect(summary.get_by_text('Attention: Runtime error', exact=True)).to_be_visible()
+        expect(notice.locator('.build-notice-message')).to_have_text(message)
+        expect(notice.locator('img,script,a')).to_have_count(0)
+        summary.click()
+        expect(notice).to_have_js_property('open', False)
+        frame = self.page.frame_locator('#artifact-frame')
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 1')
+        original = self.page.locator('#artifact-frame').element_handle()
+        for width in (1440, 768, 390, 320):
+            with self.subTest(width=width):
+                self.page.set_viewport_size({'width': width, 'height': 844})
+                before = self.page.locator('#artifact-frame').bounding_box()
+                summary.click()
+                expect(notice).to_have_js_property('open', True)
+                panel = notice.locator('.build-notice-message')
+                expect(panel).to_be_visible()
+                bounds = panel.bounding_box()
+                self.assertGreaterEqual(bounds['x'], 0)
+                self.assertGreaterEqual(bounds['y'], 0)
+                self.assertLessEqual(bounds['x'] + bounds['width'], width)
+                self.assertLessEqual(bounds['y'] + bounds['height'], 844)
+                self.assertTrue(self.page.locator('.live-bar').evaluate('node=>node.scrollWidth<=node.clientWidth'))
+                self.assertEqual(before, self.page.locator('#artifact-frame').bounding_box())
+                self.page.keyboard.press('Escape')
+                expect(notice).to_have_js_property('open', False)
+                expect(self.page.locator('#viewer')).to_be_visible()
+                self.assertTrue(original.evaluate('node=>node.isConnected'))
+                expect(frame.locator('#increment')).to_have_text('Count: 1')
+                self.assertEqual(before, self.page.locator('#artifact-frame').bounding_box())
+        summary.click()
+        self.page.locator('.live-setup summary').click()
+        expect(notice).to_have_js_property('open', False)
+        expect(self.page.locator('.live-setup')).to_have_js_property('open', True)
+        self.page.locator('#close-live-setup').click()
+        summary.click()
+        expect(notice).to_have_js_property('open', True)
+        expect(self.page.locator('.live-setup')).to_have_js_property('open', False)
+        self.page.locator('.live-guide summary').click()
+        expect(notice).to_have_js_property('open', False)
+        expect(self.page.locator('.live-guide')).to_have_js_property('open', True)
+        self.page.locator('#close-live-guide').click()
+        summary.click()
+        expect(notice).to_have_js_property('open', True)
+        expect(self.page.locator('.live-guide')).to_have_js_property('open', False)
+        bounds = self.page.locator('#artifact-frame').bounding_box()
+        self.page.mouse.click(bounds['x'] + 10, bounds['y'] + bounds['height'] - 15)
+        expect(notice).to_have_js_property('open', False)
+        self.assertTrue(original.evaluate('node=>node.isConnected'))
+        frame.locator('#increment').click()
+        expect(frame.locator('#increment')).to_have_text('Count: 2')
+        self.assertTrue(self.page.evaluate('window.__noticeXss === undefined'))
+        self.page.locator('#live-model').select_option(ids[1])
+        expect(notice).to_have_js_property('open', True)
+        expect(notice).to_have_attribute('data-notice-type', 'slow-start')
+        expect(summary.get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
+        expect(notice.locator('.build-notice-message')).to_have_text('First shader initialization may take several minutes.')
+        self.assertFalse(original.evaluate('node=>node.isConnected'))
+        expect(frame.locator('#build-model')).to_have_text(keys[1])
+        expect(frame.locator('#increment')).to_have_text('Count: 0')
+        self.page.locator('#live-model').select_option(ids[2])
+        expect(notice).to_have_count(0)
+        expect(frame.locator('#build-model')).to_have_text(keys[2])
+        self.page.locator('#close-live').focus()
+        self.page.keyboard.press('Escape')
+        expect(self.page.locator('#viewer')).not_to_be_visible()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.assertEqual(self.errors, [])
+
+    def test_public_build_notices_scope_share_and_export_privacy(self):
+        from playwright.sync_api import expect
+        keys = self.comparison_fixture()
+        ids = [key + '/01-fluid-simulation-main' for key in keys]
+        config = json.loads((server.STATIC_ROOT / 'appsettings.json').read_text(encoding='utf-8'))
+        config['buildNotices'] = {
+            ids[0]: {'type': 'runtime-error', 'message': 'Public sandbox blocks this submitted persistence path.', 'scope': 'public'},
+            ids[1]: {'type': 'slow-start', 'message': 'Shader initialization may take several minutes.'},
+        }
+        self.model_settings(json.dumps(config))
+        private = 'PRIVATE_RUN_METADATA_MUST_NOT_BECOME_A_BUILD_NOTICE'
+        run = self.results / keys[0] / '01-fluid-simulation-main'
+        (run / 'metadata.json').write_text(json.dumps({'task_id': '01-fluid-simulation', 'notes': private,
+                                                    'buildNotices': {ids[2]: {'type': 'runtime-error', 'message': private}}}), encoding='utf-8')
+        (run / 'evidence').mkdir()
+        (run / 'evidence/private.txt').write_text(private, encoding='utf-8')
+        self.navigate_direct()
+        expect(self.page.locator(f'#cards .model-column[data-model="{keys[0]}"] .card-build-notice')).to_have_count(0)
+        expect(self.page.locator('#cards .card-build-notice')).to_have_count(1)
+        self.page.goto(self.base + '/#play/' + ids[0])
+        expect(self.page.frame_locator('#artifact-frame').locator('#increment')).to_have_text('Count: 0')
+        expect(self.page.locator('#live-build-notice')).to_have_count(0)
+        self.page.locator('#close-live').click()
+        origin, data = self.public_export()
+        self.assertNotIn(private, json.dumps(data))
+        output = Path(self.temp.name) / 'dist/site'
+        self.assertEqual(list(output.rglob('metadata.json')), [])
+        self.assertEqual(list(output.rglob('private.txt')), [])
+        row = next(row for row in data['results'] if row['id'] == ids[0])
+        self.page.goto(origin + row['share_url'])
+        notice = self.page.locator('#live-build-notice')
+        expect(notice).to_have_js_property('open', True)
+        expect(notice).to_have_attribute('data-notice-type', 'runtime-error')
+        expect(notice.locator('summary').get_by_text('Attention: Runtime error', exact=True)).to_be_visible()
+        expect(notice.locator('.build-notice-message')).to_have_text('Public sandbox blocks this submitted persistence path.')
+        expect(self.page.frame_locator('#artifact-frame').locator('#increment')).to_have_text('Count: 0')
+        self.assertNotIn('allow-same-origin', self.page.locator('#artifact-frame').get_attribute('sandbox'))
+        self.page.locator('#close-live').click()
+        expect(self.page.locator('#cards .card-build-notice')).to_have_count(2)
+        expect(self.page.locator('#cards')).not_to_contain_text(private)
+        self.assertEqual(self.page.locator('#cards .model-column').evaluate_all('nodes=>nodes.map(node=>node.dataset.model)'), keys)
+        row = next(row for row in data['results'] if row['id'] == ids[1])
+        self.page.goto(origin + row['share_url'])
+        expect(notice).to_have_js_property('open', True)
+        expect(notice.locator('summary').get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
+        expect(notice.locator('.build-notice-message')).to_have_text('Shader initialization may take several minutes.')
+        self.page.locator('#live-model').select_option(ids[2])
+        expect(notice).to_have_count(0)
+        expect(self.page.frame_locator('#artifact-frame').locator('#build-model')).to_have_text(keys[2])
+        self.assertEqual(self.errors, [])
+
     def test_model_profiles_display_refresh_and_follow_live_model_without_restarting_app(self):
         from playwright.sync_api import expect
         self.fixture()

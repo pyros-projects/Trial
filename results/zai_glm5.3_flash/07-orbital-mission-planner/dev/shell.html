@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Orbital Sandbox — Mission Planner</title>
+<style>
+/*STYLE*/
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <button id="btnDrawerL" class="icon-btn drawer-btn" title="Simulation panel">☰</button>
+    <span id="brand">◆ ORBITAL SANDBOX</span>
+    <select id="scenarioSel" title="Scenario"></select>
+    <span class="spacer"></span>
+    <button id="btnAddCraft" class="tool-btn" title="Insert a spacecraft on a circular orbit">＋ Craft</button>
+    <button id="btnPlaceNode" class="tool-btn" title="Add maneuver node on the predicted path (N)">＋ Node</button>
+    <button id="btnHelp" class="tool-btn" title="Help">?</button>
+    <button id="btnDrawerR" class="icon-btn drawer-btn" title="Mission panel">☰</button>
+  </header>
+
+  <main id="main">
+    <aside id="leftPanel" class="panel">
+      <div class="pane-scroll">
+        <section>
+          <h3>Time</h3>
+          <div class="btn-row">
+            <button id="btnPlay" class="ctl" title="Run / Pause (Space)">▶</button>
+            <button id="btnStep" class="ctl" title="Single step (.)">⏭</button>
+            <button id="btnRestart" class="ctl" title="Restart scenario (R)">⟲</button>
+            <button id="btnRewind" class="ctl" title="Rewind to checkpoint (V)">⏮</button>
+            <button id="btnCkpt" class="ctl" title="Save checkpoint (C)">⚑</button>
+          </div>
+          <div class="slider-row">
+            <label>Time warp</label>
+            <input id="warp" type="range"><span id="warpVal" class="val"></span>
+          </div>
+        </section>
+
+        <section>
+          <h3>Integrator</h3>
+          <div class="slider-row">
+            <label>Timestep Δt</label>
+            <input id="dt" type="range"><span id="dtVal" class="val"></span>
+          </div>
+          <div class="field-row">
+            <label for="intSel">Method</label>
+            <select id="intSel">
+              <option value="vv">Leapfrog / velocity Verlet</option>
+              <option value="rk4">RK4 (fixed)</option>
+              <option value="dp54">Dormand–Prince 5(4) adaptive</option>
+            </select>
+          </div>
+          <div class="field-row" id="tolRow" style="display:none">
+            <label for="tolInput">Tolerance</label>
+            <input id="tolInput" type="number" step="1" min="1e-12" value="1e-8">
+          </div>
+          <div class="slider-row">
+            <label>Grav. constant G</label>
+            <input id="G" type="range"><span id="GVal" class="val"></span>
+          </div>
+          <div class="field-row">
+            <label for="collSel">Collisions</label>
+            <select id="collSel">
+              <option value="merge">Merge / impact</option>
+              <option value="bounce">Elastic bounce</option>
+              <option value="pass">Pass through</option>
+            </select>
+          </div>
+        </section>
+
+        <section>
+          <h3>Prediction</h3>
+          <div class="slider-row">
+            <label>Horizon</label>
+            <input id="horizon" type="range"><span id="horizonVal" class="val"></span>
+          </div>
+          <div class="field-row">
+            <label for="resInput">Resolution</label>
+            <input id="resInput" type="number" min="50" max="20000" step="50" value="2400">
+          </div>
+        </section>
+
+        <section>
+          <h3>Display</h3>
+          <div class="slider-row">
+            <label>Trail window</label>
+            <input id="trail" type="range"><span id="trailVal" class="val"></span>
+          </div>
+          <div class="slider-row">
+            <label>Body scale</label>
+            <input id="bodyScale" type="range"><span id="bodyScaleVal" class="val"></span>
+          </div>
+          <div class="tgl-grid">
+            <label><input id="tglTrails" type="checkbox" checked> Trails</label>
+            <label><input id="tglPred" type="checkbox" checked> Predictions</label>
+            <label><input id="tglVel" type="checkbox" checked> Velocity vectors</label>
+            <label><input id="tglAcc" type="checkbox"> Acceleration</label>
+            <label><input id="tglOrbit" type="checkbox" checked> Orbital guides</label>
+            <label><input id="tglSOI" type="checkbox"> Spheres of influence</label>
+            <label><input id="tglPot" type="checkbox"> Potential field</label>
+            <label><input id="tglEnc" type="checkbox" checked> Encounters</label>
+            <label><input id="tglErr" type="checkbox"> Error graph</label>
+            <label><input id="tglLabels" type="checkbox" checked> Labels</label>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <div id="canvasWrap">
+      <canvas id="cv"></canvas>
+      <div id="hud">
+        <div><span class="hk">FPS</span><span id="hFps">—</span></div>
+        <div><span class="hk">MET</span><span id="hMet">—</span></div>
+        <div><span class="hk">Warp</span><span id="hWarp">—</span></div>
+        <div><span class="hk">Steps/f</span><span id="hSteps">—</span></div>
+        <div><span class="hk">Bodies</span><span id="hBodies">—</span></div>
+        <div><span class="hk">ΔE/E₀</span><span id="hEnergy">—</span></div>
+        <div><span class="hk">Frame</span><span id="hFrame">—</span></div>
+        <div><span class="hk">State</span><span id="hPause">—</span></div>
+      </div>
+      <div id="eventLine"></div>
+      <div id="helpCard" class="hidden">
+        <div class="help-head"><b>Orbital Sandbox</b><button id="btnCloseHelp" class="ctl">✕</button></div>
+        <p>N-body gravity with a velocity-Verlet (symplectic), RK4, or adaptive Dormand–Prince integrator. Every body pulls on every other; spacecraft are (nearly) massless test particles.</p>
+        <p><b>Mouse / touch</b> — drag empty space: pan · wheel / pinch: zoom · click a body: select.<br>
+        <b>While paused</b> — drag a selected spacecraft's ▲ position or its velocity-arrow tip to edit the state; the prediction re-plots live.<br>
+        <b>Maneuvers</b> — “＋ Node” then click the predicted path; edit prograde/radial ΔV in the Mission panel. Nodes fire automatically when the clock reaches them.</p>
+        <p><b>Keys</b> — Space pause · . step · R restart · C checkpoint · V rewind · F follow · N node · 1/2/3 frames · +/− warp</p>
+        <p><b>Frames</b> — Inertial, body-centered, and co-rotating (two-body) frames transform trails, predictions, and velocity vectors coherently. In the rotating frame the co-orbiting moon appears stationary.</p>
+      </div>
+    </div>
+
+    <aside id="rightPanel" class="panel">
+      <div class="pane-scroll">
+        <section>
+          <h3>Reference frame</h3>
+          <div id="frameSeg" class="seg">
+            <button data-mode="inertial" class="active">Inertial</button>
+            <button data-mode="body">Body</button>
+            <button data-mode="rot">Rotating</button>
+          </div>
+          <div class="field-row" id="frameCenterRow" style="display:none">
+            <label for="frameCenterSel">Center</label>
+            <select id="frameCenterSel"></select>
+          </div>
+          <div class="field-row" id="framePartnerRow" style="display:none">
+            <label for="framePartnerSel">Co-rotates with</label>
+            <select id="framePartnerSel"></select>
+          </div>
+        </section>
+
+        <section id="bodyPane">
+          <h3>Selected body</h3>
+          <div class="sel-head"><b id="selName">—</b><span id="selType" class="tag"></span></div>
+          <div class="field-grid">
+            <label>mass</label><input id="bMass" type="number" step="any">
+            <label>radius</label><input id="bRadius" type="number" step="any">
+            <label>x</label><input id="bX" type="number" step="any">
+            <label>y</label><input id="bY" type="number" step="any">
+            <label>Vx</label><input id="bVx" type="number" step="any">
+            <label>Vy</label><input id="bVy" type="number" step="any">
+          </div>
+          <div class="btn-row">
+            <button id="btnFocus" class="ctl" title="Center camera">Focus</button>
+            <button id="btnFollow" class="ctl" title="Track with camera (F)">Follow</button>
+            <button id="btnDelCraft" class="ctl danger" title="Remove spacecraft">Delete</button>
+          </div>
+          <div id="telemetry" class="tele"></div>
+        </section>
+
+        <section>
+          <h3>Maneuver nodes</h3>
+          <div id="nodeList" class="node-list"></div>
+          <div id="nodeEditor" class="disabled">
+            <div class="sel-head"><b id="ndCraftName">node</b></div>
+            <div class="field-row">
+              <label for="ndT">Burn time</label>
+              <input id="ndT" type="number" step="any"><span id="ndTrel" class="val"></span>
+            </div>
+            <div class="slider-row">
+              <label>ΔV prograde</label>
+              <input id="ndPro" type="range" min="-2" max="2" step="0.001"><span class="val" id="ndProVal"></span>
+            </div>
+            <div class="slider-row">
+              <label>ΔV radial</label>
+              <input id="ndRad" type="range" min="-2" max="2" step="0.001"><span class="val" id="ndRadVal"></span>
+            </div>
+            <div class="field-grid">
+              <label>ΔVx</label><input id="ndDvx" type="number" step="any">
+              <label>ΔVy</label><input id="ndDvy" type="number" step="any">
+            </div>
+            <div class="btn-row">
+              <span class="tag">|ΔV| <b id="ndMag">0</b></span>
+              <button id="ndFlip" class="ctl" title="Reverse direction">⇄</button>
+              <button id="ndDelete" class="ctl danger">Delete</button>
+            </div>
+            <div id="ndCompare"></div>
+          </div>
+        </section>
+
+        <section>
+          <h3>System</h3>
+          <div class="tele">
+            <div class="tele-row"><span>conservation</span><b id="hErr2">—</b></div>
+            <div class="tele-row"><span>merges</span><b id="hMerges">0</b></div>
+            <div class="tele-row"><span>checkpoints</span><b id="hCkpts">0</b></div>
+          </div>
+        </section>
+      </div>
+    </aside>
+    <div id="scrim"></div>
+  </main>
+
+  <footer id="timebar">
+    <button id="tbPlay" class="ctl big" title="Run / Pause (Space)">▶</button>
+    <button id="tbStep" class="ctl" title="Step (.)">⏭</button>
+    <button id="tbWarpDown" class="ctl" title="Slower (−)">−</button>
+    <button id="tbWarpUp" class="ctl" title="Faster (+)">＋</button>
+    <button id="tbRewind" class="ctl" title="Rewind (V)">⏮</button>
+    <button id="tbRestart" class="ctl" title="Restart (R)">⟲</button>
+    <button id="tbFrame" class="ctl wide" title="Cycle frame (1/2/3)">Frame: Inertial</button>
+  </footer>
+</div>
+<script>
+/*SCRIPT*/
+</script>
+</body>
+</html>

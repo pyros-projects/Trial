@@ -2,6 +2,26 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Build notices and eleven new submissions: 2026-09-08
+
+The collection contains **68 HTML builds across seventeen prompts and six models**: Astra 16, Opus 8, Grok 17, GLM 7, Gemini 14, and Qwen 6. New submissions cover Qwen 05; Opus 08; Gemini 12/13/14; Astra 15/16; Grok 14/16/17; and GLM 07. The roguelike and echo-loop puzzler now have their first entries. All **428 original files totaling 86,428,910 bytes** remain unchanged. Eleven thumbnails are exact copies of individually inspected supplied images, whose viewport sizes and renderers vary.
+
+Curated `buildNotices` in the existing public settings file bind to exact run IDs. Cards show an attention label; build details and the maximized viewer show the explanation. The viewer's collapsible overlay preserves iframe dimensions and state, follows model changes, and works with direct implementation links. A public-only scope describes sandbox-specific behavior. No submitted HTML, runtime policy, scanner, or public metadata allowlist was changed.
+
+All **40 focused tests passed**: three new notice browser tests, six existing gallery browser tests, and thirty-one static-export/deployment checks. Coverage includes repeated-run isolation, invalid settings, literal hostile text, refresh, public scope, source/privacy boundaries, shared links, model changes, native dismissal controls, and frame preservation at **1440, 768, 390, and 320 pixels**. Static review identified a clipped keyboard focus outline; the final stylesheet uses an inset ring. JavaScript syntax and whitespace checks passed.
+
+The new runtime observations are retained with their original submissions:
+
+- **Opus 08:** one isolated Chrome run compiled its shader in **47.2 seconds**, then rendered Bloom and responded to Play/Pause. A separate user observation reported approximately three minutes. Its notice describes potentially lengthy initialization.
+- **Qwen 05:** the rendering loop references an undefined `syncMode`, producing repeated JavaScript errors even though a scene can appear.
+- **Grok 16:** an uncaught startup `localStorage` read is blocked by the public opaque sandbox. The notice appears only in the public gallery; the downloaded HTML has a different storage context.
+
+The bounded publication review scanned all **169 text files**, including the complete 21,535,770-byte Astra roguelike log, and metadata of all **259 original PNGs**. No confirmed credentials, private-identity linkage, or private endpoints were found. Pseudonymous local paths remain in raw GitHub evidence, which is excluded from Netlify. Selected thumbnail pixels were reviewed; the remaining evidence images were not exhaustively inspected.
+
+Production deployment **`6aa02e09ffff7bc1ba180358`** publishes **310 files totaling 12,493,358 bytes (11.91 MiB)**. Live HTTPS checks passed for all **68** implementation share pages, original source hashes, thumbnails and attachment/sandbox headers, plus all **17** comparison pages and preview images. The published JavaScript, CSS, settings, and three configured notices match the reviewed files; all six profiles remain intact. Forty-five representative private routes returned 404. Production visual checks confirmed the three card labels and the collapsible notice overlay at four viewport widths, without iframe replacement or resizing.
+
+Seven production previews were exercised at desktop and mobile sizes, including Opus after initialization. All occupied the full **1440 × 1057** or **390 × 765** app area and removed their iframe on close. The documented Qwen and Grok runtime errors reproduced; no other uncaught exceptions or external requests appeared during these checks. This is a gallery integration record, not a complete evaluation of the submitted applications.
+
 ## Qwen modular synth: 2026-09-08
 
 Qwen's modular synthesizer brings the collection to **57 HTML builds across fifteen prompts and six models**, with five Qwen submissions. The expanded synth comparison now contains all six models in the configured order. All **25 original files totaling 2,231,144 bytes** remain unchanged; the thumbnail is an exact copy of the inspected supplied `h-02-playing.png`.
