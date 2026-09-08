@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="color-scheme" content="dark"/>
+<title>Storm Glass — Weather &amp; Storm Laboratory</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23080d12'/%3E%3Cpath d='M3 11c1-3 3-5 5-5s3 1 5 4' fill='none' stroke='%237ec8d4' stroke-width='1.2'/%3E%3Ccircle cx='11' cy='5' r='1.4' fill='%23c9a36a'/%3E%3C/svg%3E"/>
+<style>
+:root {
+  --void: #070b10;
+  --ink: #0c1218;
+  --panel: rgba(12, 18, 24, 0.88);
+  --glass: rgba(18, 28, 36, 0.72);
+  --line: rgba(126, 200, 212, 0.28);
+  --line-strong: #7ec8d4;
+  --brass: #c9a36a;
+  --brass-dim: #8a6d3e;
+  --paper: #e7e0d0;
+  --mute: #8b97a3;
+  --rain: #6ea8d8;
+  --ok: #7dce9a;
+  --warn: #e08a4f;
+  --danger: #e05a4a;
+  --shadow: 0 18px 50px rgba(0,0,0,.48);
+  --serif: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif;
+  --sans: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --panel-w: 22.5rem;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  background: var(--void); color: var(--paper);
+  font: 12.5px/1.4 var(--sans);
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+#view {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%; display: block;
+  background: #05080c; cursor: grab;
+}
+#view.painting { cursor: crosshair; }
+#view.flying { cursor: move; }
+#fatal {
+  display: none; position: fixed; inset: 0; z-index: 50;
+  align-items: center; justify-content: center;
+  padding: 2rem; background: var(--void); text-align: center;
+}
+#fatal.show { display: flex; flex-direction: column; }
+#fatal h1 { font-family: var(--serif); font-weight: 400; color: var(--brass); margin: 0 0 12px; }
+#fatal pre { text-align: left; max-width: 46rem; white-space: pre-wrap; color: #e8c9a0; background: #110b08; border: 1px solid var(--brass-dim); padding: 1rem; font-size: 11px; }
+#hud {
+  position: fixed; z-index: 6; pointer-events: none;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  min-width: 16.5rem; max-width: min(26rem, calc(100vw - 2rem));
+  padding: 10px 12px 11px;
+  background: linear-gradient(165deg, rgba(14,22,28,.82), rgba(7,10,14,.62));
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--brass);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.brand h1 {
+  margin: 0; font: italic 400 1.22rem/1 var(--serif);
+  color: var(--paper); letter-spacing: .02em;
+  text-shadow: 0 0 22px rgba(126,200,212,.25);
+}
+.brand em { font-style: normal; font-family: var(--mono); font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--brass); }
+#hud-grid {
+  display: grid; grid-template-columns: auto 1fr; gap: 1px 10px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--mute);
+}
+#hud-grid b { color: var(--paper); font-weight: 500; }
+#hud-grid .ok { color: var(--ok); }
+#hud-grid .warn { color: var(--warn); }
+#hud-grid .pause { color: var(--brass); }
+#warn {
+  display: none; margin-top: 7px; padding: 5px 7px;
+  border: 1px solid rgba(224,138,79,.45); color: var(--warn);
+  font-family: var(--mono); font-size: 10px;
+}
+#warn.show { display: block; }
+#insets {
+  position: fixed; z-index: 5;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  display: flex; gap: 8px; pointer-events: auto;
+}
+.inset {
+  background: var(--glass); border: 1px solid var(--line);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.inset header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 3px 7px; font-family: var(--mono); font-size: 9px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--brass);
+  border-bottom: 1px solid var(--line); background: rgba(0,0,0,.25);
+}
+.inset canvas { display: block; width: 220px; height: 132px; cursor: crosshair; }
+#panel {
+  position: fixed; z-index: 7; top: 0; right: 0; bottom: 0;
+  width: min(var(--panel-w), 100vw);
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+  backdrop-filter: blur(14px);
+  transform: translateX(0); transition: transform .2s ease;
+}
+#panel.collapsed { transform: translateX(calc(100% - 42px)); }
+#panel-toggle {
+  position: absolute; left: -36px; top: 12px;
+  width: 36px; height: 36px; border-radius: 8px 0 0 8px;
+  background: var(--panel); border: 1px solid var(--line); border-right: 0;
+  color: var(--brass);
+}
+#panel-scroll { overflow: auto; padding: 12px 12px 28px; flex: 1; min-height: 0; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.btn, .icon-btn {
+  background: #172028; border: 1px solid var(--line); color: var(--paper);
+  border-radius: 7px; padding: 6px 10px;
+}
+.btn:hover, .icon-btn:hover { border-color: var(--line-strong); }
+.btn:focus-visible, .icon-btn:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 2px solid var(--line-strong); outline-offset: 1px;
+}
+.btn.primary { background: #16343a; border-color: #2f6d72; color: var(--line-strong); }
+.btn.warm { background: #2a2416; border-color: #6d5a2f; color: var(--brass); }
+.btn.danger { background: #2a1616; border-color: #6d2f2f; color: #ffb3b3; }
+.btn[aria-pressed="true"] { background: #1d3b36; color: var(--ok); }
+label.field, .field {
+  display: flex; flex-direction: column; gap: 3px;
+  color: var(--mute); font-size: 11px; min-width: 0; flex: 1;
+}
+label.field span.val, .val { color: var(--paper); font-family: var(--mono); font-size: 10px; }
+label.inline {
+  display: flex; align-items: center; gap: 6px; color: var(--mute); font-size: 11px;
+}
+select, input[type="number"], input[type="text"] {
+  background: #10171d; border: 1px solid var(--line); border-radius: 6px;
+  padding: 5px 7px; color: var(--paper);
+}
+input[type="range"] { width: 100%; accent-color: var(--brass); }
+h2 {
+  margin: 14px 0 7px; font: 400 11px var(--mono);
+  letter-spacing: .16em; text-transform: uppercase; color: var(--brass);
+  border-bottom: 1px solid var(--line); padding-bottom: 4px;
+}
+h2:first-child { margin-top: 0; }
+#probe-read {
+  font-family: var(--mono); font-size: 10.5px; color: var(--mute);
+  background: #0a1014; border: 1px solid var(--line); padding: 7px 8px; border-radius: 6px;
+  white-space: pre-wrap; min-height: 7.2em;
+}
+#probe-chart { width: 100%; height: 72px; display: block; background: #0a1014; border: 1px solid var(--line); border-radius: 6px; }
+.hint { color: var(--mute); font-size: 10.5px; line-height: 1.45; margin: 0 0 8px; }
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.tools button { font-size: 11px; padding: 6px 7px; text-align: left; }
+.tools button[aria-pressed="true"] { outline: 1px solid var(--line-strong); background: #16343a; }
+#file-load { display: none; }
+@media (max-width: 820px) {
+  #panel {
+    top: auto; left: 0; right: 0; bottom: 0; width: 100%;
+    max-height: 42vh; border-left: 0; border-top: 1px solid var(--line);
+    transform: none;
+  }
+  #panel.collapsed { transform: translateY(calc(100% - 44px)); max-height: none; }
+  #panel-toggle { left: auto; right: 10px; top: -36px; border-radius: 8px 8px 0 0; border-right: 1px solid var(--line); border-bottom: 0; }
+  #insets { bottom: calc(42vh + 8px); flex-wrap: wrap; }
+  .inset canvas { width: 132px; height: 80px; }
+  #hud { max-width: calc(100vw - 1.2rem); }
+}
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Three-dimensional weather scene"></canvas>
+<div id="fatal" role="alert"><h1>Storm Glass cannot start</h1><p id="fatal-msg">WebGL2 is required.</p><pre id="fatal-log"></pre></div>
+<div id="hud">
+  <div class="brand"><h1>Storm Glass</h1><em>laboratory</em></div>
+  <div id="hud-grid"></div>
+  <div id="warn"></div>
+</div>
+<div id="insets">
+  <div class="inset">
+    <header>Map <span id="map-label">cloud</span></header>
+    <canvas id="map" width="440" height="264" aria-label="Plan-view weather map"></canvas>
+  </div>
+  <div class="inset">
+    <header>Column / slice <span id="slice-label">probe</span></header>
+    <canvas id="slice" width="440" height="264" aria-label="Vertical cross-section"></canvas>
+  </div>
+</div>
+<aside id="panel">
+  <button id="panel-toggle" class="icon-btn" type="button" aria-label="Collapse or expand control panel">☰</button>
+  <div id="panel-scroll">
+    <h2>Transport</h2>
+    <div class="row">
+      <button id="btn-pause" class="btn primary" type="button" aria-pressed="false" aria-label="Pause or resume simulation">Pause</button>
+      <button id="btn-step" class="btn" type="button" aria-label="Advance one simulation step">Step</button>
+      <button id="btn-reset" class="btn" type="button" aria-label="Reset simulation with current seed">Reset</button>
+      <button id="btn-lightning" class="btn warm" type="button" aria-label="Trigger lightning">Lightning</button>
+    </div>
+    <label class="field">Preset
+      <select id="sel-preset" aria-label="Weather preset"></select>
+    </label>
+    <div class="row">
+      <label class="field">Visualization
+        <select id="sel-viz" aria-label="Visualization mode"></select>
+      </label>
+      <label class="field">Camera
+        <select id="sel-camera" aria-label="Camera preset"></select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="field">Quality
+        <select id="sel-quality" aria-label="Quality preset">
+          <option value="draft">Draft</option>
+          <option value="balanced" selected>Balanced</option>
+          <option value="high">High</option>
+          <option value="adaptive">Adaptive</option>
+        </select>
+      </label>
+      <label class="field">Grid
+        <select id="sel-res" aria-label="Simulation resolution">
+          <option value="16">16²</option>
+          <option value="24" selected>24²</option>
+          <option value="32">32²</option>
+          <option value="40">40²</option>
+        </select>
+      </label>
+      <label class="field">Layers
+        <select id="sel-layers" aria-label="Vertical layers">
+          <option value="8">8</option>
+          <option value="12" selected>12</option>
+          <option value="16">16</option>
+          <option value="20">20</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="field">Seed
+        <input id="inp-seed" type="number" min="1" max="999999" value="1847" aria-label="Deterministic seed"/>
+      </label>
+      <label class="inline"><input id="chk-arrows" type="checkbox"/> Arrows</label>
+      <label class="inline"><input id="chk-slice" type="checkbox" checked/> Slice plane</label>
+      <label class="inline"><input id="chk-stream" type="checkbox" checked/> Streamlines</label>
+    </div>
+    <p class="hint">Left-drag orbits in Navigate. Choose a brush to paint fields on the map or 3D terrain. Click places a probe. WASD flies in Free-look.</p>
+
+    <h2>Intervention</h2>
+    <div class="row">
+      <label class="field">Pointer
+        <select id="sel-pointer" aria-label="Pointer mode">
+          <option value="orbit">Navigate</option>
+          <option value="probe">Probe</option>
+          <option value="brush">Brush</option>
+          <option value="fly">Free-look</option>
+        </select>
+      </label>
+      <label class="field">Wind dir °
+        <input id="rng-wdir" type="range" min="0" max="360" step="1" value="270"/>
+        <span class="val" id="rng-wdir-v">270</span>
+      </label>
+    </div>
+    <div class="tools" id="tools"></div>
+    <div class="row">
+      <label class="field">Brush radius
+        <input id="rng-radius" type="range" min="1" max="10" step="0.1" value="2.4"/>
+        <span class="val" id="rng-radius-v">2.4</span>
+      </label>
+      <label class="field">Strength
+        <input id="rng-strength" type="range" min="0.05" max="2" step="0.05" value="0.7"/>
+        <span class="val" id="rng-strength-v">0.70</span>
+      </label>
+    </div>
+
+    <h2>Atmosphere</h2>
+    <div id="param-sliders"></div>
+
+    <h2>Render</h2>
+    <div id="render-sliders"></div>
+
+    <h2>Probe</h2>
+    <div id="probe-read">Click the scene or map to place a probe.</div>
+    <canvas id="probe-chart" width="420" height="72" aria-label="Probe time series"></canvas>
+    <p class="hint" id="keys">Space pause · . step · R reset · L lightning · [ ] radius · P probe · B brush · F fly</p>
+
+    <h2>Archive</h2>
+    <div class="row">
+      <button id="btn-save" class="btn" type="button" aria-label="Save simulation state">Save JSON</button>
+      <button id="btn-load" class="btn" type="button" aria-label="Load simulation state">Load JSON</button>
+      <button id="btn-csv" class="btn" type="button" aria-label="Export probe history as CSV">Probe CSV</button>
+      <button id="btn-png" class="btn" type="button" aria-label="Export current view as PNG">View PNG</button>
+    </div>
+    <input id="file-load" type="file" accept="application/json,.json"/>
+  </div>
+</aside>
+<script>
+(function () {
+  'use strict';
+
+  var fatalEl = document.getElementById('fatal');
+  function fatal(msg, log) {
+    fatalEl.classList.add('show');
+    document.getElementById('fatal-msg').textContent = msg;
+    document.getElementById('fatal-log').textContent = log || '';
+  }
+
+  var canvas = document.getElementById('view');
+  var gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: true });
+  if (!gl) {
+    fatal('WebGL2 is unavailable. Storm Glass needs a WebGL2 context for volumetric clouds and terrain.');
+    return;
+  }
+
+  /* ---------- math ---------- */
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function hypot3(x, y, z) { return Math.sqrt(x * x + y * y + z * z); }
+  function deg(r) { return r * 180 / Math.PI; }
+  function rad(d) { return d * Math.PI / 180; }
+
+  function m4() { return new Float32Array(16); }
+  function ident(o) {
+    o[0]=1;o[1]=0;o[2]=0;o[3]=0;o[4]=0;o[5]=1;o[6]=0;o[7]=0;o[8]=0;o[9]=0;o[10]=1;o[11]=0;o[12]=0;o[13]=0;o[14]=0;o[15]=1;
+    return o;
+  }
+  function persp(o, fovy, aspect, near, far) {
+    var f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    o[0]=f/aspect;o[1]=0;o[2]=0;o[3]=0;o[4]=0;o[5]=f;o[6]=0;o[7]=0;o[8]=0;o[9]=0;o[10]=(far+near)*nf;o[11]=-1;o[12]=0;o[13]=0;o[14]=2*far*near*nf;o[15]=0;
+    return o;
+  }
+  function lookAt(o, ex, ey, ez, cx, cy, cz, ux, uy, uz) {
+    var zx = ex - cx, zy = ey - cy, zz = ez - cz;
+    var zl = 1 / Math.max(1e-8, hypot3(zx, zy, zz)); zx *= zl; zy *= zl; zz *= zl;
+    var xx = uy * zz - uz * zy, xy = uz * zx - ux * zz, xz = ux * zy - uy * zx;
+    var xl = 1 / Math.max(1e-8, hypot3(xx, xy, xz)); xx *= xl; xy *= xl; xz *= xl;
+    var yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    o[0]=xx;o[1]=yx;o[2]=zx;o[3]=0;o[4]=xy;o[5]=yy;o[6]=zy;o[7]=0;o[8]=xz;o[9]=yz;o[10]=zz;o[11]=0;
+    o[12]=-(xx*ex+xy*ey+xz*ez); o[13]=-(yx*ex+yy*ey+yz*ez); o[14]=-(zx*ex+zy*ey+zz*ez); o[15]=1;
+    return o;
+  }
+  function mul4(o, a, b) {
+    var a00=a[0],a01=a[1],a02=a[2],a03=a[3],a10=a[4],a11=a[5],a12=a[6],a13=a[7],a20=a[8],a21=a[9],a22=a[10],a23=a[11],a30=a[12],a31=a[13],a32=a[14],a33=a[15];
+    var i, b0, b1, b2, b3;
+    for (i = 0; i < 4; i++) {
+      b0=b[i*4]; b1=b[i*4+1]; b2=b[i*4+2]; b3=b[i*4+3];
+      o[i*4]=b0*a00+b1*a10+b2*a20+b3*a30;
+      o[i*4+1]=b0*a01+b1*a11+b2*a21+b3*a31;
+      o[i*4+2]=b0*a02+b1*a12+b2*a22+b3*a32;
+      o[i*4+3]=b0*a03+b1*a13+b2*a23+b3*a33;
+    }
+    return o;
+  }
+
+  function mulberry(seed) {
+    var s = seed >>> 0;
+    return function () {
+      s += 0x6D2B79F5;
+      var t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function fbm2(rng) {
+    var grads = [];
+    var i;
+    for (i = 0; i < 256; i++) grads.push({ x: rng() * 2 - 1, y: rng() * 2 - 1 });
+    function g(ix, iy) { return grads[(ix * 131 + iy * 17) & 255]; }
+    function n(x, y) {
+      var x0 = Math.floor(x), y0 = Math.floor(y);
+      var fx = x - x0, fy = y - y0;
+      var ux = smooth(fx), uy = smooth(fy);
+      var a = g(x0, y0), b = g(x0 + 1, y0), c = g(x0, y0 + 1), d = g(x0 + 1, y0 + 1);
+      var n00 = a.x * fx + a.y * fy;
+      var n10 = b.x * (fx - 1) + b.y * fy;
+      var n01 = c.x * fx + c.y * (fy - 1);
+      var n11 = d.x * (fx - 1) + d.y * (fy - 1);
+      return lerp(lerp(n00, n10, ux), lerp(n01, n11, ux), uy);
+    }
+    return function (x, y) {
+      var s = 0, a = 1, f = 1, k;
+      for (k = 0; k < 5; k++) { s += n(x * f, y * f) * a; a *= 0.5; f *= 2; }
+      return s;
+    };
+  }
+
+  /* ---------- catalogs ---------- */
+  var PRESETS = [
+    { id: 'cumulus', name: 'Fair-weather cumulus' },
+    { id: 'seabreeze', name: 'Sea breeze' },
+    { id: 'mountain', name: 'Mountain rain' },
+    { id: 'squall', name: 'Squall line' },
+    { id: 'supercell', name: 'Rotating supercell' },
+    { id: 'cyclone', name: 'Tropical cyclone' },
+    { id: 'front', name: 'Cold front' },
+    { id: 'heatisland', name: 'Heat island thunderstorm' },
+    { id: 'snowband', name: 'Snow band' },
+    { id: 'stress', name: 'Numerical stress test' }
+  ];
+  var VIZ = [
+    { id: 'cinematic', name: 'Cinematic weather' },
+    { id: 'temp', name: 'Temperature' },
+    { id: 'humid', name: 'Humidity' },
+    { id: 'cloud', name: 'Cloud water' },
+    { id: 'precip', name: 'Precipitation rate' },
+    { id: 'pressure', name: 'Pressure / buoyancy' },
+    { id: 'hwind', name: 'Horizontal wind' },
+    { id: 'vert', name: 'Vertical motion' },
+    { id: 'vort', name: 'Vorticity' },
+    { id: 'terrain', name: 'Terrain height' },
+    { id: 'surface', name: 'Surface moisture' }
+  ];
+  var TOOLS = [
+    { id: 'heat', name: 'Heat' },
+    { id: 'cool', name: 'Cool' },
+    { id: 'moist', name: 'Inject moisture' },
+    { id: 'dry', name: 'Dry' },
+    { id: 'wind', name: 'Wind impulse' },
+    { id: 'pressure', name: 'Pressure pulse' },
+    { id: 'seed', name: 'Seed cloud' },
+    { id: 'raise', name: 'Raise terrain' },
+    { id: 'lower', name: 'Lower terrain' },
+    { id: 'ocean', name: 'Ocean' },
+    { id: 'lake', name: 'Lake' },
+    { id: 'forest', name: 'Forest' },
+    { id: 'city', name: 'City heat island' }
+  ];
+  var CAMERAS = [
+    { id: 'overview', name: 'Overview orbit' },
+    { id: 'chase', name: 'Storm chase' },
+    { id: 'top', name: 'Top-down' },
+    { id: 'rim', name: 'Sunset rim' },
+    { id: 'eye', name: 'Eye of the storm' },
+    { id: 'slice', name: 'Cross-section fly' }
+  ];
+  var PARAMS = [
+    { id: 'dt', name: 'Timestep', min: 0.02, max: 0.35, step: 0.01, val: 0.1 },
+    { id: 'substeps', name: 'Substeps', min: 1, max: 4, step: 1, val: 1 },
+    { id: 'wind', name: 'Wind strength', min: 0, max: 2.4, step: 0.02, val: 0.7 },
+    { id: 'coriolis', name: 'Coriolis / rotation', min: 0, max: 1.2, step: 0.02, val: 0.18 },
+    { id: 'lapse', name: 'Temperature lapse', min: 0.2, max: 2.4, step: 0.02, val: 0.95 },
+    { id: 'humid', name: 'Ambient humidity', min: 0, max: 1.4, step: 0.02, val: 0.72 },
+    { id: 'evap', name: 'Evaporation', min: 0, max: 1.5, step: 0.02, val: 0.55 },
+    { id: 'cond', name: 'Condensation threshold', min: 0.4, max: 1.4, step: 0.02, val: 0.86 },
+    { id: 'precip', name: 'Precipitation rate', min: 0, max: 2, step: 0.02, val: 0.7 },
+    { id: 'buoy', name: 'Buoyancy', min: 0, max: 2.2, step: 0.02, val: 0.9 },
+    { id: 'diff', name: 'Diffusion', min: 0, max: 0.12, step: 0.002, val: 0.018 },
+    { id: 'terrain', name: 'Terrain influence', min: 0, max: 2, step: 0.02, val: 1 },
+    { id: 'lightning', name: 'Lightning probability', min: 0, max: 2, step: 0.02, val: 0.7 }
+  ];
+  var RPARAMS = [
+    { id: 'rscale', name: 'Render resolution', min: 0.4, max: 1.25, step: 0.05, val: 0.85 },
+    { id: 'cloudQ', name: 'Cloud quality', min: 16, max: 96, step: 2, val: 40 },
+    { id: 'pdens', name: 'Precipitation density', min: 0.2, max: 2, step: 0.05, val: 1 },
+    { id: 'exposure', name: 'Exposure', min: 0.4, max: 2.2, step: 0.02, val: 1 },
+    { id: 'tod', name: 'Time of day', min: 0, max: 24, step: 0.05, val: 16.2 },
+    { id: 'sliceX', name: 'Slice position', min: 0, max: 1, step: 0.01, val: 0.5 }
+  ];
+
+  /* ---------- simulation ---------- */
+  var ST = {
+    ocean: 0, lake: 1, land: 2, forest: 3, city: 4
+  };
+  var sim = {
+    nx: 24, ny: 24, nz: 12, n: 0,
+    u: null, v: null, w: null, T: null, qv: null, qc: null, qr: null, p: null,
+    tmp: null, buoy: null, vort: null,
+    h: null, stype: null, sm: null, wet: null,
+    rng: null, seed: 1847, time: 0, steps: 0, precipTot: 0
+  };
+  var params = {};
+  PARAMS.forEach(function (p) { params[p.id] = p.val; });
+  RPARAMS.forEach(function (p) { params[p.id] = p.val; });
+
+  function alloc(nx, ny, nz) {
+    sim.nx = nx; sim.ny = ny; sim.nz = nz;
+    sim.n = nx * ny * nz;
+    var n = sim.n, s = nx * ny;
+    function f(k) { return new Float32Array(k); }
+    sim.u = f(n); sim.v = f(n); sim.w = f(n); sim.T = f(n);
+    sim.qv = f(n); sim.qc = f(n); sim.qr = f(n); sim.p = f(n);
+    sim.tmp = f(n); sim.buoy = f(n); sim.vort = f(n);
+    sim.h = f(s); sim.stype = f(s); sim.sm = f(s); sim.wet = f(s);
+  }
+
+  function I(i, j, k) { return i + sim.nx * (j + sim.ny * k); }
+  function SI(i, j) { return i + sim.nx * j; }
+  function wrapI(i, n) { i %= n; return i < 0 ? i + n : i; }
+  function envT(k) { return 1.05 - params.lapse * (k / Math.max(1, sim.nz - 1)) * 0.55; }
+  function qsat(T, k) {
+    var z = k / Math.max(1, sim.nz - 1);
+    return Math.max(0.02, 0.22 * Math.exp(2.8 * (T - 0.55) - 2.2 * z) * params.humid);
+  }
+
+  function sample3(arr, x, y, z) {
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz;
+    x = (x % nx + nx) % nx;
+    y = (y % ny + ny) % ny;
+    z = clamp(z, 0, nz - 1.001);
+    var i0 = x | 0, j0 = y | 0, k0 = z | 0;
+    var i1 = (i0 + 1) % nx, j1 = (j0 + 1) % ny, k1 = Math.min(k0 + 1, nz - 1);
+    var fx = x - i0, fy = y - j0, fz = z - k0;
+    var a = arr[I(i0, j0, k0)], b = arr[I(i1, j0, k0)], c = arr[I(i0, j1, k0)], d = arr[I(i1, j1, k0)];
+    var e = arr[I(i0, j0, k1)], f = arr[I(i1, j0, k1)], g = arr[I(i0, j1, k1)], h = arr[I(i1, j1, k1)];
+    var i = lerp(lerp(a, b, fx), lerp(c, d, fx), fy);
+    var j = lerp(lerp(e, f, fx), lerp(g, h, fx), fy);
+    return lerp(i, j, fz);
+  }
+  function sampleH(x, y) {
+    var nx = sim.nx, ny = sim.ny;
+    x = clamp(x, 0, nx - 1.001); y = clamp(y, 0, ny - 1.001);
+    var i0 = x | 0, j0 = y | 0, i1 = Math.min(i0 + 1, nx - 1), j1 = Math.min(j0 + 1, ny - 1);
+    var fx = x - i0, fy = y - j0;
+    return lerp(lerp(sim.h[SI(i0, j0)], sim.h[SI(i1, j0)], fx), lerp(sim.h[SI(i0, j1)], sim.h[SI(i1, j1)], fx), fy);
+  }
+  function kTerrain(i, j) {
+    return clamp((sim.h[SI(i, j)] * (sim.nz - 1)) | 0, 0, sim.nz - 2);
+  }
+
+  function advect(src, dst, dt) {
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, i, j, k, n, x, y, z;
+    for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      n = I(i, j, k);
+      x = i - sim.u[n] * dt * nx * 0.12;
+      y = j - sim.v[n] * dt * ny * 0.12;
+      z = k - sim.w[n] * dt * nz * 0.18;
+      dst[n] = sample3(src, x, y, z);
+    }
+  }
+  function copyF(a, b) { b.set(a); }
+  function diffuse(arr, amount) {
+    if (amount <= 0) return;
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, tmp = sim.tmp, i, j, k, n, s;
+    var a = clamp(amount, 0, 0.2);
+    for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      n = I(i, j, k);
+      s = arr[I(wrapI(i - 1, nx), j, k)] + arr[I(wrapI(i + 1, nx), j, k)] +
+          arr[I(i, wrapI(j - 1, ny), k)] + arr[I(i, wrapI(j + 1, ny), k)] +
+          arr[I(i, j, Math.max(0, k - 1))] + arr[I(i, j, Math.min(nz - 1, k + 1))];
+      tmp[n] = arr[n] + a * (s / 6 - arr[n]);
+    }
+    copyF(tmp, arr);
+  }
+
+  function stepOnce(dt) {
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, n, i, j, k, kt, zf, tenv, qs, cond, rain, evr, B, div;
+    var wdir = params._wdir == null ? 270 : params._wdir;
+    var Ugeo = Math.cos(rad(wdir)) * params.wind;
+    var Vgeo = Math.sin(rad(wdir)) * params.wind;
+    var f = params.coriolis * 0.35;
+    var tmp = sim.tmp;
+
+    advect(sim.u, tmp, dt); copyF(tmp, sim.u);
+    advect(sim.v, tmp, dt); copyF(tmp, sim.v);
+    advect(sim.w, tmp, dt); copyF(tmp, sim.w);
+    advect(sim.T, tmp, dt); copyF(tmp, sim.T);
+    advect(sim.qv, tmp, dt); copyF(tmp, sim.qv);
+    advect(sim.qc, tmp, dt); copyF(tmp, sim.qc);
+    advect(sim.qr, tmp, dt); copyF(tmp, sim.qr);
+    advect(sim.p, tmp, dt); copyF(tmp, sim.p);
+
+    diffuse(sim.u, params.diff); diffuse(sim.v, params.diff); diffuse(sim.w, params.diff * 0.8);
+    diffuse(sim.T, params.diff * 0.6); diffuse(sim.qv, params.diff * 0.5);
+
+    for (k = 0; k < nz; k++) {
+      zf = k / Math.max(1, nz - 1);
+      tenv = envT(k);
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        n = I(i, j, k);
+        kt = kTerrain(i, j);
+        if (k < kt) {
+          sim.u[n] = 0; sim.v[n] = 0; sim.w[n] = 0;
+          sim.qc[n] *= 0.5; sim.qr[n] *= 0.5;
+          continue;
+        }
+        sim.u[n] += (Ugeo * (0.35 + 0.65 * zf) - sim.u[n]) * (k === kt ? 0.18 : 0.04) * dt;
+        sim.v[n] += (Vgeo * (0.35 + 0.65 * zf) - sim.v[n]) * (k === kt ? 0.18 : 0.04) * dt;
+        var du = sim.u[I(wrapI(i + 1, nx), j, k)] - sim.u[I(wrapI(i - 1, nx), j, k)];
+        var dv = sim.v[I(i, wrapI(j + 1, ny), k)] - sim.v[I(i, wrapI(j - 1, ny), k)];
+        sim.u[n] += f * sim.v[n] * dt;
+        sim.v[n] -= f * sim.u[n] * dt;
+        B = params.buoy * ((sim.T[n] - tenv) * 1.6 + 0.45 * (sim.qv[n] - qsat(tenv, k) * 0.45) - 1.1 * sim.qc[n] - 1.4 * sim.qr[n]);
+        sim.buoy[n] = B;
+        sim.w[n] += B * dt * 0.55;
+        if (k === kt) {
+          var dhdx = (sim.h[SI(wrapI(i + 1, nx), j)] - sim.h[SI(wrapI(i - 1, nx), j)]) * 0.5 * nx;
+          var dhdy = (sim.h[SI(i, wrapI(j + 1, ny))] - sim.h[SI(i, wrapI(j - 1, ny))]) * 0.5 * ny;
+          sim.w[n] += params.terrain * (sim.u[n] * dhdx + sim.v[n] * dhdy) * 0.35;
+        }
+        if (k >= nz - 2) sim.w[n] *= 0.72;
+        sim.w[n] *= 0.995;
+        qs = qsat(sim.T[n], k) * params.cond;
+        if (sim.qv[n] > qs) {
+          cond = (sim.qv[n] - qs) * 0.45;
+          sim.qv[n] -= cond; sim.qc[n] += cond; sim.T[n] += cond * 0.55;
+        } else if (sim.qc[n] > 0) {
+          evr = Math.min(sim.qc[n], (qs - sim.qv[n]) * 0.12);
+          sim.qc[n] -= evr; sim.qv[n] += evr; sim.T[n] -= evr * 0.4;
+        }
+        if (sim.qc[n] > 0.07) {
+          rain = (sim.qc[n] - 0.07) * params.precip * 0.35;
+          sim.qc[n] -= rain; sim.qr[n] += rain;
+        }
+        if (sim.qr[n] > 0 && sim.qv[n] < qs * 0.85) {
+          evr = Math.min(sim.qr[n], (qs * 0.85 - sim.qv[n]) * 0.08);
+          sim.qr[n] -= evr; sim.qv[n] += evr; sim.T[n] -= evr * 0.3;
+        }
+        if (k === kt) {
+          var st = sim.stype[SI(i, j)];
+          var wind = Math.hypot(sim.u[n], sim.v[n]);
+          var ev = params.evap * sim.sm[SI(i, j)] * (0.35 + wind) * Math.max(0.05, sim.T[n] - 0.15) * 0.08;
+          if (st <= ST.lake) ev *= 1.8;
+          if (st === ST.forest) ev *= 1.25;
+          if (st === ST.city) { ev *= 0.45; sim.T[n] += 0.12 * dt; }
+          sim.qv[n] += ev * dt;
+          if (st > ST.lake) sim.sm[SI(i, j)] = clamp(sim.sm[SI(i, j)] - ev * dt * 0.15 + sim.wet[SI(i, j)] * 0.02, 0, 1);
+          else sim.sm[SI(i, j)] = clamp(0.85 + 0.1 * (st === ST.ocean ? 1 : 0.4), 0, 1);
+        }
+        sim.T[n] += (tenv - sim.T[n]) * 0.012 * dt;
+        sim.qv[n] = clamp(sim.qv[n], 0, 1.6);
+        sim.qc[n] = clamp(sim.qc[n], 0, 1.2);
+        sim.qr[n] = clamp(sim.qr[n], 0, 1.2);
+        sim.u[n] = clamp(sim.u[n], -6, 6);
+        sim.v[n] = clamp(sim.v[n], -6, 6);
+        sim.w[n] = clamp(sim.w[n], -4, 4);
+        sim.vort[n] = (sim.v[I(wrapI(i + 1, nx), j, k)] - sim.v[I(wrapI(i - 1, nx), j, k)]) - (sim.u[I(i, wrapI(j + 1, ny), k)] - sim.u[I(i, wrapI(j - 1, ny), k)]);
+      }
+    }
+
+    /* rain fall */
+    for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) tmp[I(i, j, k)] = 0;
+    var fall = 2.4 * params.precip * dt * nz * 0.15;
+    for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      n = I(i, j, k);
+      var nk = k - fall;
+      if (nk <= kTerrain(i, j)) {
+        sim.wet[SI(i, j)] = clamp(sim.wet[SI(i, j)] + sim.qr[n] * 0.45, 0, 1);
+        sim.precipTot += sim.qr[n] / (nx * ny);
+        tmp[n] += sim.qr[n] * 0.15;
+      } else {
+        var kk = clamp(nk, 0, nz - 1);
+        tmp[I(i, j, kk | 0)] += sim.qr[n] * (1 - (kk % 1));
+        tmp[I(i, j, Math.min(nz - 1, (kk | 0) + 1))] += sim.qr[n] * (kk % 1);
+      }
+    }
+    copyF(tmp, sim.qr);
+    for (i = 0; i < nx * ny; i++) sim.wet[i] *= 0.992;
+
+    /* pressure relaxation / divergence damping */
+    var it, dx = 1;
+    for (it = 0; it < 6; it++) {
+      for (k = 1; k < nz - 1; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        n = I(i, j, k);
+        if (k <= kTerrain(i, j)) { sim.p[n] = 0; continue; }
+        div = (sim.u[I(wrapI(i + 1, nx), j, k)] - sim.u[I(wrapI(i - 1, nx), j, k)]) * 0.5 +
+              (sim.v[I(i, wrapI(j + 1, ny), k)] - sim.v[I(i, wrapI(j - 1, ny), k)]) * 0.5 +
+              (sim.w[I(i, j, k + 1)] - sim.w[I(i, j, k - 1)]) * 0.5;
+        tmp[n] = (
+          sim.p[I(wrapI(i - 1, nx), j, k)] + sim.p[I(wrapI(i + 1, nx), j, k)] +
+          sim.p[I(i, wrapI(j - 1, ny), k)] + sim.p[I(i, wrapI(j + 1, ny), k)] +
+          sim.p[I(i, j, k - 1)] + sim.p[I(i, j, k + 1)] - div * 0.85
+        ) / 6;
+      }
+      for (k = 1; k < nz - 1; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        if (k > kTerrain(i, j)) sim.p[I(i, j, k)] = tmp[I(i, j, k)];
+      }
+    }
+    for (k = 1; k < nz - 1; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      n = I(i, j, k);
+      if (k <= kTerrain(i, j)) continue;
+      sim.u[n] -= (sim.p[I(wrapI(i + 1, nx), j, k)] - sim.p[I(wrapI(i - 1, nx), j, k)]) * 0.35;
+      sim.v[n] -= (sim.p[I(i, wrapI(j + 1, ny), k)] - sim.p[I(i, wrapI(j - 1, ny), k)]) * 0.35;
+      sim.w[n] -= (sim.p[I(i, j, k + 1)] - sim.p[I(i, j, k - 1)]) * 0.35;
+    }
+
+    sim.time += dt;
+    sim.steps += 1;
+  }
+
+  function means() {
+    var n = sim.n, i, sT = 0, sqv = 0, sqc = 0, sqr = 0, sw = 0, su = 0, cloud = 0, wmax = 0, vmax = 0, spd;
+    for (i = 0; i < n; i++) {
+      sT += sim.T[i]; sqv += sim.qv[i]; sqc += sim.qc[i]; sqr += sim.qr[i];
+      sw += sim.w[i];
+      if (sim.qc[i] > 0.04) cloud++;
+      if (sim.w[i] > wmax) wmax = sim.w[i];
+      spd = Math.hypot(sim.u[i], sim.v[i], sim.w[i]);
+      if (spd > vmax) vmax = spd;
+      su += spd;
+    }
+    return {
+      T: sT / n, qv: sqv / n, qc: sqc / n, qr: sqr / n, w: sw / n,
+      cloudCover: cloud / n, maxUpdraft: wmax, maxWind: vmax, meanWind: su / n
+    };
+  }
+
+  function resample(nx, ny, nz) {
+    var old = {
+      nx: sim.nx, ny: sim.ny, nz: sim.nz,
+      u: sim.u, v: sim.v, w: sim.w, T: sim.T, qv: sim.qv, qc: sim.qc, qr: sim.qr, p: sim.p,
+      h: sim.h, stype: sim.stype, sm: sim.sm, wet: sim.wet
+    };
+    function s3(arr, i, j, k) {
+      var x = (i + 0.5) * old.nx / nx - 0.5;
+      var y = (j + 0.5) * old.ny / ny - 0.5;
+      var z = (k + 0.5) * old.nz / nz - 0.5;
+      var nx0 = old.nx, ny0 = old.ny, nz0 = old.nz;
+      x = (x % nx0 + nx0) % nx0; y = (y % ny0 + ny0) % ny0; z = clamp(z, 0, nz0 - 1.001);
+      var i0 = x | 0, j0 = y | 0, k0 = z | 0;
+      var i1 = (i0 + 1) % nx0, j1 = (j0 + 1) % ny0, k1 = Math.min(k0 + 1, nz0 - 1);
+      var fx = x - i0, fy = y - j0, fz = z - k0;
+      function at(ii, jj, kk) { return arr[ii + nx0 * (jj + ny0 * kk)]; }
+      return lerp(lerp(lerp(at(i0,j0,k0), at(i1,j0,k0), fx), lerp(at(i0,j1,k0), at(i1,j1,k0), fx), fy),
+                  lerp(lerp(at(i0,j0,k1), at(i1,j0,k1), fx), lerp(at(i0,j1,k1), at(i1,j1,k1), fx), fy), fz);
+    }
+    function s2(arr, i, j) {
+      var x = i * (old.nx - 1) / Math.max(1, nx - 1);
+      var y = j * (old.ny - 1) / Math.max(1, ny - 1);
+      var i0 = x | 0, j0 = y | 0, i1 = Math.min(i0 + 1, old.nx - 1), j1 = Math.min(j0 + 1, old.ny - 1);
+      var fx = x - i0, fy = y - j0;
+      return lerp(lerp(arr[i0 + old.nx * j0], arr[i1 + old.nx * j0], fx), lerp(arr[i0 + old.nx * j1], arr[i1 + old.nx * j1], fx), fy);
+    }
+    alloc(nx, ny, nz);
+    var i, j, k;
+    for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      var id = I(i, j, k);
+      sim.u[id] = s3(old.u, i, j, k); sim.v[id] = s3(old.v, i, j, k); sim.w[id] = s3(old.w, i, j, k);
+      sim.T[id] = s3(old.T, i, j, k); sim.qv[id] = s3(old.qv, i, j, k); sim.qc[id] = s3(old.qc, i, j, k);
+      sim.qr[id] = s3(old.qr, i, j, k); sim.p[id] = s3(old.p, i, j, k);
+    }
+    for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      var s = SI(i, j);
+      sim.h[s] = s2(old.h, i, j); sim.stype[s] = Math.round(s2(old.stype, i, j));
+      sim.sm[s] = s2(old.sm, i, j); sim.wet[s] = s2(old.wet, i, j);
+    }
+    rebuildTerrain();
+    rebuildVolume();
+  }
+
+  /* ---------- presets ---------- */
+  function fillBase(rng, noise) {
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, i, j, k, n, s, zf;
+    for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      s = SI(i, j);
+      var x = i / nx, y = j / ny;
+      var elev = 0.12 + 0.18 * noise(x * 3.1, y * 3.1) + 0.08 * noise(x * 8, y * 8);
+      sim.h[s] = clamp(elev, 0.02, 0.85);
+      sim.stype[s] = ST.land;
+      sim.sm[s] = 0.35; sim.wet[s] = 0;
+    }
+    for (k = 0; k < nz; k++) {
+      zf = k / Math.max(1, nz - 1);
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        n = I(i, j, k);
+        sim.u[n] = params.wind * 0.4; sim.v[n] = 0; sim.w[n] = 0;
+        sim.T[n] = envT(k) + (rng() - 0.5) * 0.03;
+        sim.qv[n] = qsat(sim.T[n], k) * (0.55 + 0.2 * (1 - zf));
+        sim.qc[n] = 0; sim.qr[n] = 0; sim.p[n] = 0;
+      }
+    }
+    sim.time = 0; sim.steps = 0; sim.precipTot = 0;
+  }
+
+  var PARAM_DEFAULTS = {};
+  PARAMS.forEach(function (p) { PARAM_DEFAULTS[p.id] = p.val; });
+
+  function applyPreset(id) {
+    Object.keys(PARAM_DEFAULTS).forEach(function (k) { params[k] = PARAM_DEFAULTS[k]; });
+    params._wdir = 270;
+    ui.preset = id;
+    var rng = mulberry(sim.seed);
+    var noise = fbm2(rng);
+    fillBase(rng, noise);
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, i, j, k, n, s, x, y, zf, r, ang;
+    function H(i, j) { return SI(wrapI(i, nx), wrapI(j, ny)); }
+
+    if (id === 'cumulus') {
+      params.wind = 0.35; params.humid = 0.62; params.buoy = 0.7; params.precip = 0.35; params.lapse = 0.85;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        x = i / nx; y = j / ny;
+        if (noise(x * 6, y * 6) > 0.18) {
+          for (k = 2; k < nz - 3; k++) {
+            n = I(i, j, k);
+            sim.T[n] += 0.08 * Math.max(0, 1 - Math.abs(k / nz - 0.35) * 4);
+            sim.qv[n] += 0.08; sim.qc[n] += 0.05 * Math.max(0, noise(x * 6, y * 6));
+          }
+        }
+      }
+    } else if (id === 'seabreeze') {
+      params.wind = 0.15; params.humid = 0.8; params.buoy = 0.85; params.evap = 0.9;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        s = SI(i, j); x = i / nx;
+        if (x < 0.42) { sim.h[s] = 0.02; sim.stype[s] = ST.ocean; sim.sm[s] = 1; }
+        else { sim.h[s] = 0.08 + 0.04 * noise(x * 4, j / ny * 4); sim.stype[s] = ST.land; sim.sm[s] = 0.28; }
+        for (k = 0; k < 3; k++) {
+          n = I(i, j, k);
+          if (x > 0.42) sim.T[n] += 0.16; else sim.T[n] -= 0.04;
+          if (x < 0.42) sim.qv[n] += 0.12;
+        }
+      }
+    } else if (id === 'mountain') {
+      params.wind = 0.95; params.humid = 0.88; params.terrain = 1.35; params.precip = 0.9; params._wdir = 0;
+      document.getElementById('rng-wdir').value = 0;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        s = SI(i, j); x = i / nx; y = j / ny;
+        var ridge = Math.exp(-Math.pow((x - 0.45) / 0.1, 2)) * (0.55 + 0.12 * noise(x * 3, y * 5));
+        sim.h[s] = 0.04 + ridge;
+        if (x < 0.22) { sim.h[s] = 0.02; sim.stype[s] = ST.ocean; sim.sm[s] = 1; }
+        else sim.stype[s] = ST.land;
+        for (k = 0; k < nz; k++) {
+          n = I(i, j, k);
+          sim.u[n] = 1.1; sim.qv[n] += 0.12 * (1 - k / nz);
+          if (x > 0.3 && x < 0.55 && k > 3 && k < nz - 2) sim.qc[n] += ridge * 0.25;
+        }
+      }
+    } else if (id === 'squall') {
+      params.wind = 0.7; params.buoy = 1.1; params.precip = 1.1; params.humid = 0.8; params._wdir = 20;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        x = i / nx;
+        for (k = 0; k < nz; k++) {
+          n = I(i, j, k);
+          if (x < 0.38) { sim.T[n] -= 0.18; sim.u[n] = 0.9; }
+          else { sim.T[n] += 0.1; sim.qv[n] += 0.14; sim.u[n] = 0.2; }
+          if (Math.abs(x - 0.4) < 0.07 && k > 2) {
+            sim.qc[n] += 0.22 * (1 - Math.abs(x - 0.4) / 0.07);
+            sim.w[n] += 0.8; sim.qr[n] += 0.08;
+          }
+        }
+      }
+    } else if (id === 'supercell') {
+      params.wind = 1.1; params.coriolis = 0.35; params.buoy = 1.25; params.humid = 0.9; params.precip = 0.85;
+      for (k = 0; k < nz; k++) {
+        zf = k / Math.max(1, nz - 1);
+        for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+          n = I(i, j, k); x = i / nx; y = j / ny;
+          sim.u[n] = 0.3 + 1.4 * zf; sim.v[n] = 0.6 * zf;
+          r = Math.hypot(x - 0.45, y - 0.5);
+          if (r < 0.18) {
+            sim.T[n] += 0.2 * (1 - r / 0.18) * Math.max(0, 1 - Math.abs(zf - 0.3) * 3);
+            sim.qv[n] += 0.16; sim.qc[n] += 0.12 * (1 - r / 0.18);
+            sim.w[n] += 0.9 * (1 - r / 0.18);
+            ang = Math.atan2(y - 0.5, x - 0.45);
+            sim.u[n] += -Math.sin(ang) * 0.7; sim.v[n] += Math.cos(ang) * 0.7;
+          }
+        }
+      }
+    } else if (id === 'cyclone') {
+      params.wind = 0.4; params.coriolis = 0.85; params.humid = 1.05; params.evap = 1.2; params.precip = 1;
+      params.buoy = 0.95;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        s = SI(i, j); sim.h[s] = 0.02; sim.stype[s] = ST.ocean; sim.sm[s] = 1;
+        x = i / nx - 0.5; y = j / ny - 0.5; r = Math.hypot(x, y); ang = Math.atan2(y, x);
+        var vt = r < 0.06 ? r / 0.06 * 1.6 : Math.max(0.15, 0.55 / (r + 0.08));
+        for (k = 0; k < nz; k++) {
+          n = I(i, j, k); zf = k / Math.max(1, nz - 1);
+          sim.u[n] = -Math.sin(ang) * vt * (1 - 0.4 * zf) - x * 0.5;
+          sim.v[n] = Math.cos(ang) * vt * (1 - 0.4 * zf) - y * 0.5;
+          sim.T[n] += 0.12 * Math.exp(-r * 8) * (1 - zf);
+          sim.qv[n] += 0.18;
+          if (r > 0.07 && r < 0.22 && k > 1) { sim.qc[n] += 0.28 * Math.exp(-Math.pow((r - 0.12) / 0.06, 2)); sim.w[n] += 0.45; sim.qr[n] += 0.06; }
+          if (r < 0.05) { sim.w[n] -= 0.2; sim.qc[n] *= 0.2; }
+          sim.p[n] -= 0.35 * Math.exp(-r * 10);
+        }
+      }
+    } else if (id === 'front') {
+      params.wind = 0.55; params.humid = 0.78; params.buoy = 0.9; params._wdir = 30;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        x = i / nx + 0.15 * (j / ny - 0.5);
+        for (k = 0; k < nz; k++) {
+          n = I(i, j, k);
+          var side = Math.tanh((x - 0.5) * 14);
+          sim.T[n] += -0.16 * side; sim.qv[n] += 0.1 * (1 - side) * 0.5;
+          sim.u[n] = 0.35 - 0.25 * side;
+          if (Math.abs(x - 0.5) < 0.08 && k > 2) { sim.qc[n] += 0.18; sim.w[n] += 0.55; }
+        }
+      }
+    } else if (id === 'heatisland') {
+      params.wind = 0.25; params.buoy = 1.2; params.humid = 0.82; params.precip = 0.8; params.evap = 0.45;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        s = SI(i, j); x = i / nx - 0.5; y = j / ny - 0.5; r = Math.hypot(x, y);
+        if (r < 0.16) { sim.stype[s] = ST.city; sim.sm[s] = 0.12; sim.h[s] = 0.08; }
+        else if (r < 0.28) { sim.stype[s] = ST.land; sim.sm[s] = 0.3; }
+        if (i < 3) { sim.stype[s] = ST.ocean; sim.h[s] = 0.02; sim.sm[s] = 1; }
+        for (k = 0; k < 4; k++) {
+          n = I(i, j, k);
+          if (r < 0.16) sim.T[n] += 0.22;
+          sim.qv[n] += 0.1;
+        }
+        if (r < 0.12) for (k = 3; k < nz - 2; k++) { sim.qc[I(i, j, k)] += 0.1; sim.w[I(i, j, k)] += 0.5; }
+      }
+    } else if (id === 'snowband') {
+      params.wind = 0.7; params.lapse = 1.3; params.humid = 0.75; params.precip = 0.65; params.buoy = 0.55; params._wdir = 80;
+      document.getElementById('rng-wdir').value = 80;
+      params.tod = 9.5;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        s = SI(i, j); y = j / ny;
+        if (y < 0.38) { sim.h[s] = 0.02; sim.stype[s] = ST.lake; sim.sm[s] = 1; }
+        else { sim.h[s] = 0.1 + 0.08 * noise(i / nx * 5, y * 5); sim.stype[s] = ST.land; }
+        for (k = 0; k < nz; k++) {
+          n = I(i, j, k); sim.T[n] -= 0.22; sim.v[n] = 0.7;
+          if (y > 0.32 && y < 0.55 && k > 2) { sim.qc[n] += 0.2; sim.qr[n] += 0.1; }
+        }
+      }
+    } else if (id === 'stress') {
+      params.wind = 2.1; params.buoy = 2; params.precip = 1.8; params.humid = 1.2; params.dt = 0.22;
+      params.coriolis = 1; params.terrain = 1.8; params.diff = 0.004; params.lightning = 1.6;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        s = SI(i, j); x = i / nx; y = j / ny;
+        sim.h[s] = 0.15 + 0.55 * Math.abs(Math.sin(x * 9) * Math.cos(y * 7));
+        sim.stype[s] = x < 0.2 ? ST.ocean : ST.land;
+        for (k = 0; k < nz; k++) {
+          n = I(i, j, k);
+          sim.u[n] = 2.2 * Math.sin(y * 12); sim.v[n] = 1.4 * Math.cos(x * 10);
+          sim.w[n] = 1.2 * Math.sin(x * 8 + y * 6);
+          sim.T[n] += 0.25 * Math.sin(k); sim.qv[n] += 0.3; sim.qc[n] += 0.25; sim.qr[n] += 0.12;
+        }
+      }
+    }
+    syncParamUI();
+    rebuildTerrain();
+    rebuildVolume();
+  }
+
+  /* ---------- GL helpers ---------- */
+  function compile(vs, fs, label) {
+    function sh(type, src) {
+      var s = gl.createShader(type);
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error((label || 'shader') + ' ' + gl.getShaderInfoLog(s));
+      return s;
+    }
+    var p = gl.createProgram();
+    gl.attachShader(p, sh(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error((label || 'program') + ' ' + gl.getProgramInfoLog(p));
+    var u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS), i, inf;
+    for (i = 0; i < n; i++) { inf = gl.getActiveUniform(p, i); u[inf.name] = gl.getUniformLocation(p, inf.name); }
+    return { p: p, u: u };
+  }
+  function buf(data, loc, size, stride) {
+    var b = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    if (loc >= 0) {
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride || 0, 0);
+    }
+    return b;
+  }
+
+  var vsSky = `#version 300 es
+  in vec2 a;
+  out vec2 vUv;
+  void main(){ vUv=a*0.5+0.5; gl_Position=vec4(a,0.0,1.0); }`;
+  var fsSky = `#version 300 es
+  precision highp float;
+  in vec2 vUv; out vec4 o;
+  uniform vec3 uSun; uniform float uTod; uniform float uExp;
+  void main(){
+    vec3 up = normalize(vec3((vUv.x-0.5)*2.0, 1.0, (0.35-vUv.y)*1.6));
+    float h = clamp(vUv.y,0.0,1.0);
+    vec3 day = mix(vec3(0.55,0.72,0.92), vec3(0.12,0.28,0.55), h);
+    vec3 dusk = mix(vec3(0.85,0.45,0.22), vec3(0.08,0.07,0.18), h);
+    vec3 night = mix(vec3(0.05,0.07,0.14), vec3(0.01,0.02,0.06), h);
+    float dayn = smoothstep(5.5, 8.0, uTod) * (1.0-smoothstep(17.5, 20.0, uTod));
+    float duskn = smoothstep(16.0,18.0,uTod)*(1.0-smoothstep(19.5,21.5,uTod)) + smoothstep(4.5,6.0,uTod)*(1.0-smoothstep(7.0,8.5,uTod));
+    vec3 col = mix(night, day, dayn);
+    col = mix(col, dusk, duskn);
+    float sun = pow(max(0.0, dot(normalize(up), normalize(uSun))), 48.0);
+    col += vec3(1.0,0.92,0.7) * sun * 0.85;
+    float moon = pow(max(0.0, dot(normalize(up), normalize(-uSun))), 80.0);
+    col += vec3(0.7,0.78,0.95) * moon * (1.0-dayn) * 0.6;
+    o = vec4(col * uExp, 1.0);
+  }`;
+
+  var vsTerr = `#version 300 es
+  in vec3 aP; in vec3 aN; in vec4 aC;
+  uniform mat4 uMVP; uniform mat4 uN;
+  out vec3 vN; out vec3 vW; out vec4 vC;
+  void main(){
+    vW = aP; vN = mat3(uN)*aN; vC = aC;
+    gl_Position = uMVP * vec4(aP,1.0);
+  }`;
+  var fsTerr = `#version 300 es
+  precision highp float;
+  in vec3 vN; in vec3 vW; in vec4 vC;
+  uniform vec3 uSun; uniform vec3 uCam; uniform float uExp; uniform float uFlash; uniform int uViz;
+  out vec4 o;
+  void main(){
+    vec3 n = normalize(vN);
+    float ndl = clamp(dot(n, normalize(uSun)), 0.0, 1.0);
+    float wrap = ndl * 0.75 + 0.25;
+    vec3 col = vC.rgb;
+    col *= (0.22 + 0.78 * wrap);
+    col += vec3(1.0,0.95,0.8) * uFlash * 0.25 * wrap;
+    float dist = length(uCam - vW);
+    float haze = 1.0 - exp(-dist * 0.045);
+    vec3 fog = mix(vec3(0.45,0.58,0.72), vec3(0.08,0.1,0.16), clamp(uSun.y*0.5+0.5,0.0,1.0));
+    if (vC.a > 0.85) {
+      vec3 wn = normalize(n + vec3(sin(vW.x*14.0+vW.z)*0.15, 0.4, cos(vW.z*11.0)*0.15));
+      col = mix(col, vec3(0.12,0.28,0.34), 0.35);
+      col += vec3(0.25,0.45,0.5) * pow(clamp(dot(wn, normalize(uSun)),0.0,1.0), 12.0) * 0.35;
+    }
+    col = mix(col, fog, haze * 0.72);
+    o = vec4(col * uExp, 1.0);
+  }`;
+
+  var vsFS = `#version 300 es
+  in vec2 a; out vec2 vUv;
+  void main(){ vUv=a*0.5+0.5; gl_Position=vec4(a,0.0,1.0);} `;
+  var fsCloud = `#version 300 es
+  precision highp float;
+  precision highp sampler3D;
+  precision highp sampler2D;
+  in vec2 vUv; out vec4 o;
+  uniform sampler3D uVol; uniform sampler2D uH;
+  uniform vec3 uCam; uniform vec3 uSun;
+  uniform mat4 uInvP; uniform mat4 uInvV;
+  uniform float uExp; uniform float uSteps; uniform float uFlash; uniform int uViz;
+  uniform vec3 uBmin; uniform vec3 uBmax;
+  vec3 dirFromUv(vec2 uv){
+    vec4 c = uInvP * vec4(uv*2.0-1.0, 1.0, 1.0);
+    c /= c.w;
+    vec4 w = uInvV * vec4(c.xyz, 0.0);
+    return normalize(w.xyz);
+  }
+  bool hitBox(vec3 ro, vec3 rd, vec3 b0, vec3 b1, out float t0, out float t1){
+    vec3 inv = 1.0 / rd;
+    vec3 tmi = (b0 - ro) * inv;
+    vec3 tma = (b1 - ro) * inv;
+    vec3 tmin = min(tmi, tma);
+    vec3 tmax = max(tmi, tma);
+    t0 = max(max(tmin.x, tmin.y), tmin.z);
+    t1 = min(min(tmax.x, tmax.y), tmax.z);
+    return t1 > max(t0, 0.0);
+  }
+  vec3 fieldColor(float f, int viz){
+    if (viz==1) return mix(vec3(0.15,0.25,0.8), vec3(0.9,0.2,0.12), clamp(f,0.0,1.0));
+    if (viz==2) return mix(vec3(0.15,0.12,0.1), vec3(0.3,0.7,1.0), clamp(f,0.0,1.0));
+    if (viz==3) return vec3(f);
+    if (viz==4) return mix(vec3(0.05), vec3(0.2,0.7,1.0), clamp(f,0.0,1.0));
+    if (viz==5) return mix(vec3(0.2,0.15,0.7), vec3(1.0,0.85,0.2), clamp(f,0.0,1.0));
+    if (viz==6) return mix(vec3(0.1,0.2,0.5), vec3(1.0,0.4,0.1), clamp(f,0.0,1.0));
+    if (viz==7) return mix(vec3(0.2,0.1,0.6), vec3(0.2,1.0,0.4), clamp(f*0.5+0.5,0.0,1.0));
+    if (viz==8) return mix(vec3(0.1), vec3(1.0,0.3,0.9), clamp(abs(f),0.0,1.0));
+    return vec3(0.92,0.94,0.98);
+  }
+  void main(){
+    vec3 rd = dirFromUv(vUv);
+    vec3 ro = uCam;
+    float t0, t1;
+    if (!hitBox(ro, rd, uBmin, uBmax, t0, t1)) { o = vec4(0.0); return; }
+    t0 = max(t0, 0.0);
+    float steps = max(8.0, uSteps);
+    float dt = (t1 - t0) / steps;
+    vec3 acc = vec3(0.0); float alpha = 0.0;
+    vec3 bsz = uBmax - uBmin;
+    for (int i=0;i<96;i++){
+      if (float(i) >= steps || alpha > 0.97) break;
+      float t = t0 + (float(i)+0.5)*dt;
+      vec3 p = ro + rd * t;
+      vec3 uvw = (p - uBmin) / bsz;
+      if (uvw.x<0.0||uvw.y<0.0||uvw.z<0.0||uvw.x>1.0||uvw.y>1.0||uvw.z>1.0) continue;
+      float terr = texture(uH, uvw.xz).r;
+      if (uvw.y < terr + 0.012) continue;
+      vec3 tuv = vec3(uvw.x, uvw.z, uvw.y);
+      vec4 s = texture(uVol, tuv);
+      float d = s.r;
+      if (d < 0.02) continue;
+      float dens = d * dt * 2.8;
+      vec3 ldir = normalize(uSun);
+      float tsh = 0.0;
+      vec3 sp = p;
+      for (int k=0;k<4;k++){
+        sp += ldir * 0.35;
+        vec3 su = (sp - uBmin) / bsz;
+        if (su.x<0.0||su.y>1.0||su.z<0.0||su.x>1.0||su.z>1.0) break;
+        tsh += texture(uVol, vec3(su.x, su.z, su.y)).r;
+      }
+      float trans = exp(-tsh * 1.1);
+      vec3 albedo = fieldColor(s.g > 0.001 ? s.g : d, uViz);
+      vec3 lit = albedo * (0.18 + 0.82 * trans) * (0.7 + 0.3 * uFlash);
+      acc += (1.0 - alpha) * dens * lit;
+      alpha += (1.0 - alpha) * (1.0 - exp(-dens));
+    }
+    o = vec4(acc * uExp, alpha);
+  }`;
+
+  var vsPts = `#version 300 es
+  in vec3 aP; in vec2 aA;
+  uniform mat4 uMVP; uniform float uSize;
+  out float vA; out float vSnow;
+  void main(){
+    vec4 p = uMVP * vec4(aP,1.0);
+    gl_Position = p;
+    gl_PointSize = uSize * aA.x * (120.0 / max(1.2, p.w));
+    vA = aA.x; vSnow = aA.y;
+  }`;
+  var fsPts = `#version 300 es
+  precision mediump float;
+  in float vA; in float vSnow; out vec4 o;
+  void main(){
+    vec2 c = gl_PointCoord-vec2(0.5);
+    float r = length(c);
+    if (r>0.5) discard;
+    vec3 col = mix(vec3(0.55,0.72,0.9), vec3(0.92,0.95,1.0), vSnow);
+    o = vec4(col, (1.0-r*1.6) * vA * 0.85);
+  }`;
+
+  var vsLine = `#version 300 es
+  in vec3 aP; in vec3 aC;
+  uniform mat4 uMVP; out vec3 vC;
+  void main(){ vC=aC; gl_Position=uMVP*vec4(aP,1.0); }`;
+  var fsLine = `#version 300 es
+  precision mediump float; in vec3 vC; out vec4 o;
+  void main(){ o=vec4(vC,1.0); }`;
+
+  var prog = {};
+  try {
+    prog.sky = compile(vsSky, fsSky, 'sky');
+    prog.terr = compile(vsTerr, fsTerr, 'terrain');
+    prog.cloud = compile(vsFS, fsCloud, 'cloud');
+    prog.pts = compile(vsPts, fsPts, 'points');
+    prog.line = compile(vsLine, fsLine, 'line');
+  } catch (err) {
+    fatal('A shader failed to compile.', String(err && err.message ? err.message : err));
+    return;
+  }
+
+  var quad = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+
+  var volTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_3D, volTex);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+
+  var hTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, hTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  var terr = { vao: gl.createVertexArray(), vbo: gl.createBuffer(), n: 0 };
+  var volBytes = null, hBytes = null, fieldBytes = null;
+
+  var WORLD = 14, WORLDZ = 5.6;
+  function worldX(i) { return (i / (sim.nx - 1) - 0.5) * WORLD; }
+  function worldZ(j) { return (j / (sim.ny - 1) - 0.5) * WORLD; }
+  function worldY(h) { return h * WORLDZ; }
+
+  function rebuildTerrain() {
+    var nx = sim.nx, ny = sim.ny;
+    var meshN = Math.max(nx, 48);
+    var mx = meshN, my = meshN;
+    var verts = new Float32Array(mx * my * 2 * 3 * 10);
+    var p = 0, ix, iy;
+    function height(u, v) {
+      return sampleH(u * (nx - 1), v * (ny - 1));
+    }
+    function stypeAt(u, v) {
+      var i = clamp((u * (nx - 1)) | 0, 0, nx - 1);
+      var j = clamp((v * (ny - 1)) | 0, 0, ny - 1);
+      return sim.stype[SI(i, j)];
+    }
+    function wetAt(u, v) {
+      var i = clamp((u * (nx - 1)) | 0, 0, nx - 1);
+      var j = clamp((v * (ny - 1)) | 0, 0, ny - 1);
+      return sim.wet[SI(i, j)];
+    }
+    function color(st, h, wet, viz) {
+      var c;
+      if (st <= ST.lake) c = st === ST.ocean ? [0.07, 0.22, 0.28, 0.95] : [0.1, 0.28, 0.32, 0.9];
+      else if (st === ST.forest) c = [0.14, 0.28, 0.14, 0.2];
+      else if (st === ST.city) c = [0.28, 0.26, 0.24, 0.15];
+      else c = [0.32 + h * 0.25, 0.28 + h * 0.18, 0.18, 0.2];
+      c[0] *= 1 - wet * 0.35; c[1] *= 1 - wet * 0.28; c[2] *= 1 - wet * 0.1;
+      if (ui.viz === 'terrain') {
+        var t = h;
+        c = [t, t * 0.7, 0.15, st <= ST.lake ? 0.9 : 0.2];
+      } else if (ui.viz === 'surface') {
+        var m = sim.sm[SI(clamp((h*0)|0,0,nx-1), 0)];
+        m = wet * 0.5 + 0.5 * (st <= ST.lake ? 1 : 0.3);
+        c = [0.15, 0.25 + m * 0.5, 0.2 + m * 0.5, st <= ST.lake ? 0.9 : 0.2];
+      }
+      return c;
+    }
+    function pushTri(u0,v0,u1,v1,u2,v2) {
+      var h0 = height(u0,v0), h1 = height(u1,v1), h2 = height(u2,v2);
+      var p0x = (u0-0.5)*WORLD, p0y = worldY(h0), p0z = (v0-0.5)*WORLD;
+      var p1x = (u1-0.5)*WORLD, p1y = worldY(h1), p1z = (v1-0.5)*WORLD;
+      var p2x = (u2-0.5)*WORLD, p2y = worldY(h2), p2z = (v2-0.5)*WORLD;
+      var ax=p1x-p0x, ay=p1y-p0y, az=p1z-p0z, bx=p2x-p0x, by=p2y-p0y, bz=p2z-p0z;
+      var nxn=ay*bz-az*by, nyn=az*bx-ax*bz, nzn=ax*by-ay*bx;
+      var nl=Math.max(1e-6, hypot3(nxn,nyn,nzn)); nxn/=nl; nyn/=nl; nzn/=nl;
+      var st = stypeAt((u0+u1+u2)/3, (v0+v1+v2)/3);
+      var c = color(st, (h0+h1+h2)/3, (wetAt(u0,v0)+wetAt(u1,v1)+wetAt(u2,v2))/3);
+      function vert(x,y,z) {
+        verts[p++]=x; verts[p++]=y; verts[p++]=z;
+        verts[p++]=nxn; verts[p++]=nyn; verts[p++]=nzn;
+        verts[p++]=c[0]; verts[p++]=c[1]; verts[p++]=c[2]; verts[p++]=c[3];
+      }
+      vert(p0x,p0y,p0z); vert(p1x,p1y,p1z); vert(p2x,p2y,p2z);
+    }
+    for (iy = 0; iy < my - 1; iy++) for (ix = 0; ix < mx - 1; ix++) {
+      var u0 = ix / (mx - 1), v0 = iy / (my - 1), u1 = (ix + 1) / (mx - 1), v1 = (iy + 1) / (my - 1);
+      pushTri(u0,v0,u1,v0,u1,v1);
+      pushTri(u0,v0,u1,v1,u0,v1);
+    }
+    terr.n = p / 10;
+    gl.bindVertexArray(terr.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, terr.vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, p), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 40, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 40, 12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 40, 24);
+    gl.bindVertexArray(null);
+
+    var hb = hBytes;
+    if (!hb || hb.length !== nx * ny) hb = hBytes = new Uint8Array(nx * ny);
+    for (iy = 0; iy < ny; iy++) for (ix = 0; ix < nx; ix++) hb[ix + nx * iy] = clamp(sim.h[SI(ix, iy)] * 255, 0, 255);
+    gl.bindTexture(gl.TEXTURE_2D, hTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, nx, ny, 0, gl.RED, gl.UNSIGNED_BYTE, hb);
+  }
+
+  function fieldForViz() {
+    var id = ui.viz;
+    if (id === 'temp') return sim.T;
+    if (id === 'humid') return sim.qv;
+    if (id === 'cloud' || id === 'cinematic') return sim.qc;
+    if (id === 'precip') return sim.qr;
+    if (id === 'pressure') return sim.buoy;
+    if (id === 'hwind') return sim.u;
+    if (id === 'vert') return sim.w;
+    if (id === 'vort') return sim.vort;
+    return sim.qc;
+  }
+
+  function rebuildVolume() {
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, n = sim.n;
+    var src = fieldForViz();
+    var i, mn = 1e9, mx = -1e9, v;
+    for (i = 0; i < n; i++) { v = src[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+    var span = Math.max(1e-5, mx - mn);
+    var k, j, x, dest, qc, packed;
+    var rgba = fieldBytes;
+    if (!rgba || rgba.length !== n * 4) rgba = fieldBytes = new Uint8Array(n * 4);
+    for (k = 0; k < nz; k++) for (j = 0; j < ny; j++) for (x = 0; x < nx; x++) {
+      i = I(x, j, k);
+      dest = i * 4;
+      qc = clamp(sim.qc[i] * 3.2, 0, 1);
+      if (ui.viz === 'cinematic') {
+        rgba[dest] = clamp(qc * 255, 0, 255);
+        rgba[dest + 1] = 0;
+      } else {
+        packed = clamp(((src[i] - mn) / span) * 255, 0, 255);
+        rgba[dest] = packed;
+        rgba[dest + 1] = packed;
+      }
+      rgba[dest + 2] = 0;
+      rgba[dest + 3] = 255;
+    }
+    gl.bindTexture(gl.TEXTURE_3D, volTex);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA8, nx, ny, nz, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+  }
+
+  /* particles */
+  var PMAX = 5000;
+  var parts = { x: new Float32Array(PMAX), y: new Float32Array(PMAX), z: new Float32Array(PMAX), a: new Float32Array(PMAX), s: new Float32Array(PMAX), n: 0 };
+  var pbuf = gl.createBuffer();
+  var pdata = new Float32Array(PMAX * 5);
+  function spawnPrecip() {
+    var want = Math.min(PMAX, (800 * params.pdens) | 0);
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, tries = 80, spawned = 0;
+    while (parts.n < want && spawned < tries) {
+      spawned++;
+      var i = (Math.random() * nx) | 0, j = (Math.random() * ny) | 0, k = 1 + ((Math.random() * (nz - 2)) | 0);
+      var qr = sim.qr[I(i, j, k)] + sim.qc[I(i, j, k)] * 0.15;
+      if (qr < 0.04) continue;
+      var id = parts.n++;
+      parts.x[id] = worldX(i + Math.random());
+      parts.z[id] = worldZ(j + Math.random());
+      parts.y[id] = worldY((k + Math.random()) / nz);
+      parts.a[id] = clamp(qr * 2, 0.2, 1);
+      parts.s[id] = sim.T[I(i, j, k)] < 0.42 ? 1 : 0;
+    }
+    var n, u, v, w, gi, gj, gk, fall;
+    for (n = 0; n < parts.n; n++) {
+      gi = clamp(((parts.x[n] / WORLD + 0.5) * (nx - 1)), 0, nx - 1);
+      gj = clamp(((parts.z[n] / WORLD + 0.5) * (ny - 1)), 0, ny - 1);
+      gk = clamp(parts.y[n] / WORLDZ * (nz - 1), 0, nz - 1);
+      u = sample3(sim.u, gi, gj, gk); v = sample3(sim.v, gi, gj, gk);
+      fall = parts.s[n] ? 0.35 : 1.1;
+      parts.x[n] += u * 0.08; parts.z[n] += v * 0.08; parts.y[n] -= fall * 0.06;
+      parts.a[n] *= 0.992;
+      if (parts.y[n] < worldY(sampleH(gi, gj)) || parts.a[n] < 0.05) {
+        parts.n--; parts.x[n] = parts.x[parts.n]; parts.y[n] = parts.y[parts.n]; parts.z[n] = parts.z[parts.n]; parts.a[n] = parts.a[parts.n]; parts.s[n] = parts.s[parts.n]; n--;
+      }
+    }
+  }
+
+  /* lightning */
+  var bolts = [];
+  var flash = 0;
+  function spawnBolt(manual) {
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, best = -1, bi = 0, bj = 0, bk = 0, i, j, k, sc;
+    for (k = nz - 4; k >= 3; k--) for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      sc = sim.qc[I(i, j, k)] * Math.max(0, sim.w[I(i, j, k)]) * (0.5 + k / nz);
+      if (sc > best) { best = sc; bi = i; bj = j; bk = k; }
+    }
+    if (!manual && best < 0.08) return false;
+    var pts = [];
+    var x = worldX(bi), z = worldZ(bj), y = worldY(bk / nz * 0.95 + 0.2);
+    var tx = x + (Math.random() - 0.5) * 1.2, tz = z + (Math.random() - 0.5) * 1.2;
+    var ty = worldY(sampleH(bi, bj));
+    var segs = 10, s, px = x, py = y, pz = z;
+    pts.push(px, py, pz);
+    for (s = 1; s <= segs; s++) {
+      var t = s / segs;
+      px = lerp(x, tx, t) + (Math.random() - 0.5) * 0.35;
+      py = lerp(y, ty, t);
+      pz = lerp(z, tz, t) + (Math.random() - 0.5) * 0.35;
+      pts.push(px, py, pz);
+    }
+    bolts.push({ pts: pts, life: 1, x: x, y: y, z: z });
+    flash = 1;
+    thunder(Math.hypot(x - cam.ex, y - cam.ey, z - cam.ez));
+    return true;
+  }
+
+  /* audio */
+  var actx = null;
+  function ensureAudio() {
+    if (actx) return actx;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+    return actx;
+  }
+  function thunder(dist) {
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    var delay = clamp(dist / 42, 0.05, 2.8);
+    var dur = 1.4 + Math.random() * 0.8;
+    var buf = ctx.createBuffer(1, (ctx.sampleRate * dur) | 0, ctx.sampleRate);
+    var d = buf.getChannelData(0), i, n = d.length;
+    for (i = 0; i < n; i++) {
+      var t = i / n;
+      var env = Math.exp(-t * 3.2) * (0.6 + 0.4 * Math.sin(t * 17));
+      d[i] = (Math.random() * 2 - 1) * env * clamp(1.4 / (dist * 0.15 + 1), 0.08, 0.7);
+    }
+    var src = ctx.createBufferSource(); src.buffer = buf;
+    var fil = ctx.createBiquadFilter(); fil.type = 'lowpass'; fil.frequency.value = 220 + Math.random() * 180;
+    src.connect(fil); fil.connect(ctx.destination);
+    src.start(ctx.currentTime + delay);
+  }
+
+  /* camera */
+  var cam = { yaw: 0.7, pitch: 0.42, dist: 16.5, tx: 0, ty: 1.6, tz: 0, fov: 55, mode: 'orbit', ex: 0, ey: 0, ez: 0 };
+  function applyCameraPreset(id) {
+    cam.mode = 'orbit';
+    document.getElementById('sel-pointer').value = 'orbit';
+    if (id === 'overview') { cam.yaw = 0.7; cam.pitch = 0.42; cam.dist = 16.5; cam.tx = 0; cam.ty = 1.6; cam.tz = 0; cam.fov = 55; }
+    else if (id === 'chase') { cam.yaw = 2.6; cam.pitch = 0.18; cam.dist = 8.5; cam.tx = 1.2; cam.ty = 1.1; cam.tz = 0.4; cam.fov = 62; }
+    else if (id === 'top') { cam.yaw = 0; cam.pitch = 1.2; cam.dist = 18; cam.tx = 0; cam.ty = 0.4; cam.tz = 0; cam.fov = 50; }
+    else if (id === 'rim') { cam.yaw = -0.4; cam.pitch = 0.12; cam.dist = 13; cam.tx = 0; cam.ty = 1.2; cam.tz = 0; cam.fov = 58; params.tod = 18.4; syncParamUI(); }
+    else if (id === 'eye') { cam.yaw = 0.2; cam.pitch = 0.55; cam.dist = 7; cam.tx = 0; cam.ty = 2.2; cam.tz = 0; cam.fov = 70; }
+    else if (id === 'slice') { cam.yaw = 0; cam.pitch = 0.05; cam.dist = 12; cam.tx = 0; cam.ty = 2.0; cam.tz = 0; cam.fov = 48; }
+    ui.pointer = 'orbit';
+  }
+  function camEye() {
+    if (cam.mode === 'fly') return;
+    cam.ex = cam.tx + Math.cos(cam.pitch) * Math.sin(cam.yaw) * cam.dist;
+    cam.ey = cam.ty + Math.sin(cam.pitch) * cam.dist;
+    cam.ez = cam.tz + Math.cos(cam.pitch) * Math.cos(cam.yaw) * cam.dist;
+  }
+
+  var proj = m4(), view = m4(), mvp = m4(), invP = m4(), invV = m4(), nmat = m4();
+  function invert4(out, m) {
+    var a00=m[0],a01=m[1],a02=m[2],a03=m[3],a10=m[4],a11=m[5],a12=m[6],a13=m[7],a20=m[8],a21=m[9],a22=m[10],a23=m[11],a30=m[12],a31=m[13],a32=m[14],a33=m[15];
+    var b00=a00*a11-a01*a10, b01=a00*a12-a02*a10, b02=a00*a13-a03*a10, b03=a01*a12-a02*a11, b04=a01*a13-a03*a11, b05=a02*a13-a03*a12;
+    var b06=a20*a31-a21*a30, b07=a20*a32-a22*a30, b08=a20*a33-a23*a30, b09=a21*a32-a22*a31, b10=a21*a33-a23*a31, b11=a22*a33-a23*a32;
+    var det=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+    if (!det) return ident(out);
+    det=1/det;
+    out[0]=(a11*b11-a12*b10+a13*b09)*det; out[1]=(a02*b10-a01*b11-a03*b09)*det; out[2]=(a31*b05-a32*b04+a33*b03)*det; out[3]=(a22*b04-a21*b05-a23*b03)*det;
+    out[4]=(a12*b08-a10*b11-a13*b07)*det; out[5]=(a00*b11-a02*b08+a03*b07)*det; out[6]=(a32*b02-a30*b05-a33*b01)*det; out[7]=(a20*b05-a22*b02+a23*b01)*det;
+    out[8]=(a10*b10-a11*b08+a13*b06)*det; out[9]=(a01*b08-a00*b10-a03*b06)*det; out[10]=(a30*b04-a31*b02+a33*b00)*det; out[11]=(a21*b02-a20*b04-a23*b00)*det;
+    out[12]=(a11*b07-a10*b09-a12*b06)*det; out[13]=(a00*b09-a01*b07+a02*b06)*det; out[14]=(a31*b01-a30*b03-a32*b00)*det; out[15]=(a20*b03-a21*b01+a22*b00)*det;
+    return out;
+  }
+
+  var lineBuf = gl.createBuffer();
+  var lineData = new Float32Array(20000);
+
+  /* UI state */
+  var ui = {
+    paused: false, preset: 'mountain', viz: 'cinematic', tool: 'heat', pointer: 'orbit',
+    quality: 'balanced', arrows: false, slice: true, stream: true, probe: null, lastPaint: 0
+  };
+  var probeHist = [];
+  var fps = 0, frames = 0, fpsT = 0, lastT = 0, adaptiveDrop = 0;
+  var keys = {};
+  var dpr = 1, viewW = 0, viewH = 0;
+
+  function fillSelect(el, items) {
+    el.innerHTML = items.map(function (it) { return '<option value="' + it.id + '">' + it.name + '</option>'; }).join('');
+  }
+  fillSelect(document.getElementById('sel-preset'), PRESETS);
+  fillSelect(document.getElementById('sel-viz'), VIZ);
+  fillSelect(document.getElementById('sel-camera'), CAMERAS);
+  document.getElementById('sel-preset').value = 'mountain';
+
+  var toolsEl = document.getElementById('tools');
+  TOOLS.forEach(function (t) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn'; b.textContent = t.name;
+    b.dataset.tool = t.id; b.setAttribute('aria-label', t.name); b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', function () {
+      ui.tool = t.id; ui.pointer = 'brush';
+      document.getElementById('sel-pointer').value = 'brush';
+      canvas.classList.add('painting');
+      Array.prototype.forEach.call(toolsEl.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    });
+    toolsEl.appendChild(b);
+  });
+
+  function addSliders(host, list) {
+    list.forEach(function (p) {
+      var lab = document.createElement('label');
+      lab.className = 'field';
+      lab.innerHTML = p.name + '<input id="p-' + p.id + '" type="range" min="' + p.min + '" max="' + p.max + '" step="' + p.step + '" value="' + p.val + '" aria-label="' + p.name + '"/><span class="val" id="p-' + p.id + '-v">' + p.val + '</span>';
+      host.appendChild(lab);
+      lab.querySelector('input').addEventListener('input', function () {
+        params[p.id] = parseFloat(this.value);
+        document.getElementById('p-' + p.id + '-v').textContent = (+this.value).toFixed(p.step < 1 ? 2 : 0);
+        if (p.id === 'rscale') resize(true);
+      });
+    });
+  }
+  addSliders(document.getElementById('param-sliders'), PARAMS);
+  addSliders(document.getElementById('render-sliders'), RPARAMS);
+
+  function syncParamUI() {
+    PARAMS.concat(RPARAMS).forEach(function (p) {
+      var el = document.getElementById('p-' + p.id);
+      if (!el) return;
+      el.value = params[p.id];
+      document.getElementById('p-' + p.id + '-v').textContent = (+params[p.id]).toFixed(p.step < 1 ? 2 : 0);
+    });
+    var wd = params._wdir == null ? 270 : params._wdir;
+    document.getElementById('rng-wdir').value = wd;
+    document.getElementById('rng-wdir-v').textContent = String(wd | 0);
+  }
+
+  document.getElementById('rng-wdir').addEventListener('input', function () {
+    params._wdir = parseFloat(this.value); document.getElementById('rng-wdir-v').textContent = this.value;
+  });
+  document.getElementById('rng-radius').addEventListener('input', function () { document.getElementById('rng-radius-v').textContent = (+this.value).toFixed(1); });
+  document.getElementById('rng-strength').addEventListener('input', function () { document.getElementById('rng-strength-v').textContent = (+this.value).toFixed(2); });
+
+  document.getElementById('sel-preset').addEventListener('change', function () { ui.preset = this.value; applyPreset(ui.preset); });
+  document.getElementById('sel-viz').addEventListener('change', function () { ui.viz = this.value; rebuildVolume(); rebuildTerrain(); });
+  document.getElementById('sel-camera').addEventListener('change', function () { applyCameraPreset(this.value); });
+  document.getElementById('sel-pointer').addEventListener('change', function () {
+    ui.pointer = this.value;
+    cam.mode = this.value === 'fly' ? 'fly' : 'orbit';
+    canvas.classList.toggle('painting', this.value === 'brush' || this.value === 'probe');
+    canvas.classList.toggle('flying', this.value === 'fly');
+  });
+  document.getElementById('sel-quality').addEventListener('change', function () { setQuality(this.value, false); });
+  document.getElementById('sel-res').addEventListener('change', function () { resample(+this.value, +this.value, sim.nz); });
+  document.getElementById('sel-layers').addEventListener('change', function () { resample(sim.nx, sim.ny, +this.value); });
+  document.getElementById('chk-arrows').addEventListener('change', function () { ui.arrows = this.checked; });
+  document.getElementById('chk-slice').addEventListener('change', function () { ui.slice = this.checked; });
+  document.getElementById('chk-stream').addEventListener('change', function () { ui.stream = this.checked; });
+  document.getElementById('inp-seed').addEventListener('change', function () { sim.seed = (+this.value) || 1847; });
+
+  document.getElementById('btn-pause').addEventListener('click', togglePause);
+  document.getElementById('btn-step').addEventListener('click', function () { ui.paused = true; updatePauseBtn(); var s = Math.max(1, params.substeps | 0); var i; for (i = 0; i < s; i++) stepOnce(params.dt); rebuildVolume(); recordProbe(); });
+  document.getElementById('btn-reset').addEventListener('click', function () { sim.seed = (+document.getElementById('inp-seed').value) || sim.seed; applyPreset(ui.preset); probeHist = []; });
+  document.getElementById('btn-lightning').addEventListener('click', function () { ensureAudio(); spawnBolt(true); });
+  document.getElementById('panel-toggle').addEventListener('click', function () { document.getElementById('panel').classList.toggle('collapsed'); });
+
+  function togglePause() {
+    ui.paused = !ui.paused; updatePauseBtn();
+  }
+  function updatePauseBtn() {
+    var b = document.getElementById('btn-pause');
+    b.textContent = ui.paused ? 'Resume' : 'Pause';
+    b.setAttribute('aria-pressed', ui.paused ? 'true' : 'false');
+  }
+
+  function setQuality(q, running) {
+    ui.quality = q;
+    var spec = { draft: { nx: 16, nz: 8, cloud: 24, pd: 0.55, rs: 0.55 }, balanced: { nx: 24, nz: 12, cloud: 40, pd: 1, rs: 0.85 }, high: { nx: 32, nz: 16, cloud: 64, pd: 1.4, rs: 1 } }[q];
+    if (q === 'adaptive') spec = { nx: sim.nx, nz: sim.nz, cloud: params.cloudQ, pd: params.pdens, rs: params.rscale };
+    if (spec && q !== 'adaptive') {
+      params.cloudQ = spec.cloud; params.pdens = spec.pd; params.rscale = spec.rs;
+      document.getElementById('sel-res').value = String(spec.nx);
+      document.getElementById('sel-layers').value = String(spec.nz);
+      syncParamUI();
+      if (spec.nx !== sim.nx || spec.nz !== sim.nz) resample(spec.nx, spec.nx, spec.nz);
+      else resize(true);
+    }
+  }
+
+  /* brush */
+  function applyBrush(gx, gy, tool, radius, strength) {
+    var nx = sim.nx, ny = sim.ny, nz = sim.nz, i, j, k, n, s, d, wgt, dirx, diry;
+    var wdirB = params._wdir == null ? 270 : params._wdir;
+    dirx = Math.cos(rad(wdirB)); diry = Math.sin(rad(wdirB));
+    var r = radius;
+    var i0 = Math.max(0, (gx - r - 1) | 0), i1 = Math.min(nx - 1, (gx + r + 1) | 0);
+    var j0 = Math.max(0, (gy - r - 1) | 0), j1 = Math.min(ny - 1, (gy + r + 1) | 0);
+    for (j = j0; j <= j1; j++) for (i = i0; i <= i1; i++) {
+      d = Math.hypot(i - gx, j - gy);
+      if (d > r) continue;
+      wgt = Math.exp(- (d * d) / (r * r * 0.45)) * strength;
+      s = SI(i, j);
+      for (k = 0; k < nz; k++) {
+        n = I(i, j, k);
+        var near = k <= kTerrain(i, j) + 3;
+        if (tool === 'heat' && near) sim.T[n] += 0.22 * wgt;
+        else if (tool === 'cool' && near) sim.T[n] -= 0.22 * wgt;
+        else if (tool === 'moist') sim.qv[n] += 0.18 * wgt;
+        else if (tool === 'dry') { sim.qv[n] = Math.max(0, sim.qv[n] - 0.18 * wgt); sim.qc[n] = Math.max(0, sim.qc[n] - 0.1 * wgt); }
+        else if (tool === 'wind') { sim.u[n] += dirx * 1.4 * wgt; sim.v[n] += diry * 1.4 * wgt; }
+        else if (tool === 'pressure') { sim.p[n] -= 0.4 * wgt; sim.w[n] += 0.35 * wgt * (1 - k / nz); }
+        else if (tool === 'seed' && k > 1 && k < nz - 2) { sim.qc[n] += 0.22 * wgt; sim.qv[n] += 0.08 * wgt; }
+      }
+      if (tool === 'raise') sim.h[s] = clamp(sim.h[s] + 0.08 * wgt, 0, 0.95);
+      if (tool === 'lower') sim.h[s] = clamp(sim.h[s] - 0.08 * wgt, 0, 0.95);
+      if (tool === 'ocean') { sim.stype[s] = ST.ocean; sim.h[s] = Math.min(sim.h[s], 0.03); sim.sm[s] = 1; }
+      if (tool === 'lake') { sim.stype[s] = ST.lake; sim.h[s] = Math.min(sim.h[s], 0.04); sim.sm[s] = 1; }
+      if (tool === 'forest') { sim.stype[s] = ST.forest; sim.sm[s] = Math.max(sim.sm[s], 0.55); }
+      if (tool === 'city') { sim.stype[s] = ST.city; sim.sm[s] = Math.min(sim.sm[s], 0.2); }
+      if (tool === 'moist') sim.sm[s] = clamp(sim.sm[s] + 0.2 * wgt, 0, 1);
+      if (tool === 'dry') sim.sm[s] = clamp(sim.sm[s] - 0.2 * wgt, 0, 1);
+    }
+  }
+
+  function placeProbe(gx, gy) {
+    ui.probe = { i: clamp(gx | 0, 0, sim.nx - 1), j: clamp(gy | 0, 0, sim.ny - 1) };
+    probeHist = [];
+    recordProbe();
+  }
+  function column(i, j) {
+    var k, n, out = [];
+    for (k = 0; k < sim.nz; k++) {
+      n = I(i, j, k);
+      out.push({ k: k, T: sim.T[n], qv: sim.qv[n], qc: sim.qc[n], qr: sim.qr[n], p: sim.p[n], u: sim.u[n], v: sim.v[n], w: sim.w[n], buoy: sim.buoy[n] });
+    }
+    return out;
+  }
+  function recordProbe() {
+    if (!ui.probe) return;
+    var col = column(ui.probe.i, ui.probe.j);
+    var mid = col[(sim.nz / 3) | 0];
+    var sumQc = 0, k;
+    for (k = 0; k < col.length; k++) sumQc += col[k].qc;
+    probeHist.push({ t: sim.time, T: mid.T, qv: mid.qv, p: mid.p, wind: Math.hypot(mid.u, mid.v), qc: sumQc / col.length, qr: mid.qr, w: mid.w });
+    if (probeHist.length > 240) probeHist.shift();
+    var el = document.getElementById('probe-read');
+    var sfc = col[kTerrain(ui.probe.i, ui.probe.j)];
+    var top = col[col.length - 2];
+    el.textContent =
+      'Probe (' + ui.probe.i + ', ' + ui.probe.j + ')  z-layers ' + sim.nz + '\n' +
+      'T sfc/mid/top  ' + sfc.T.toFixed(3) + '  ' + mid.T.toFixed(3) + '  ' + top.T.toFixed(3) + '\n' +
+      'qv / qc / qr   ' + mid.qv.toFixed(3) + '  ' + mid.qc.toFixed(3) + '  ' + mid.qr.toFixed(3) + '\n' +
+      'wind uvw       ' + mid.u.toFixed(2) + '  ' + mid.v.toFixed(2) + '  ' + mid.w.toFixed(2) + '\n' +
+      'p / buoy       ' + mid.p.toFixed(3) + '  ' + mid.buoy.toFixed(3);
+    drawProbeChart();
+  }
+  function drawProbeChart() {
+    var c = document.getElementById('probe-chart'), ctx = c.getContext('2d');
+    var w = c.width, h = c.height;
+    ctx.fillStyle = '#0a1014'; ctx.fillRect(0, 0, w, h);
+    if (probeHist.length < 2) return;
+    function series(key, color) {
+      var i, mn = 1e9, mx = -1e9;
+      for (i = 0; i < probeHist.length; i++) { var v = probeHist[i][key]; if (v < mn) mn = v; if (v > mx) mx = v; }
+      if (mx - mn < 1e-6) { mx += 0.05; mn -= 0.05; }
+      ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+      for (i = 0; i < probeHist.length; i++) {
+        var x = i / (probeHist.length - 1) * w;
+        var y = h - (probeHist[i][key] - mn) / (mx - mn) * (h - 6) - 3;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    series('T', '#e08a4f'); series('qv', '#6ea8d8'); series('qc', '#e7e0d0'); series('w', '#7dce9a');
+  }
+
+  /* picking */
+  function ndcFromEvent(ev, target) {
+    var r = target.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) / r.width * 2 - 1, y: 1 - (ev.clientY - r.top) / r.height * 2, px: ev.clientX - r.left, py: ev.clientY - r.top, w: r.width, h: r.height };
+  }
+  function pickGridFromMap(ev) {
+    var r = document.getElementById('map').getBoundingClientRect();
+    var u = clamp((ev.clientX - r.left) / r.width, 0, 1);
+    var v = clamp((ev.clientY - r.top) / r.height, 0, 1);
+    return { gx: u * (sim.nx - 1), gy: (1 - v) * (sim.ny - 1) };
+  }
+  function pickGridFrom3D(ev) {
+    var ndc = ndcFromEvent(ev, canvas);
+    camEye();
+    var rd4 = [ndc.x, ndc.y, 1, 1];
+    /* unproject with invP * invV */
+    function xf(m, x, y, z, w) {
+      return [m[0]*x+m[4]*y+m[8]*z+m[12]*w, m[1]*x+m[5]*y+m[9]*z+m[13]*w, m[2]*x+m[6]*y+m[10]*z+m[14]*w, m[3]*x+m[7]*y+m[11]*z+m[15]*w];
+    }
+    var c = xf(invP, ndc.x, ndc.y, 1, 1); c[0]/=c[3]; c[1]/=c[3]; c[2]/=c[3];
+    var d = xf(invV, c[0], c[1], c[2], 0);
+    var rd = [d[0], d[1], d[2]]; var L = hypot3(rd[0], rd[1], rd[2]) || 1; rd[0]/=L; rd[1]/=L; rd[2]/=L;
+    var t, best = null;
+    for (t = 0.5; t < 40; t += 0.15) {
+      var px = cam.ex + rd[0] * t, py = cam.ey + rd[1] * t, pz = cam.ez + rd[2] * t;
+      var gx = (px / WORLD + 0.5) * (sim.nx - 1);
+      var gy = (pz / WORLD + 0.5) * (sim.ny - 1);
+      if (gx < 0 || gy < 0 || gx > sim.nx - 1 || gy > sim.ny - 1) continue;
+      var h = worldY(sampleH(gx, gy));
+      if (py <= h + 0.12) { best = { gx: gx, gy: gy }; break; }
+    }
+    return best;
+  }
+
+  var dragging = null;
+  canvas.addEventListener('pointerdown', function (ev) {
+    ensureAudio();
+    try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+    var mode = ui.pointer;
+    if (ev.button === 1 || ev.altKey) mode = 'pan';
+    if (ev.button === 2) mode = 'orbit';
+    if (mode === 'brush' || mode === 'probe') {
+      var hit = pickGridFrom3D(ev);
+      if (hit) {
+        if (mode === 'probe') placeProbe(hit.gx, hit.gy);
+        else applyBrush(hit.gx, hit.gy, ui.tool, +document.getElementById('rng-radius').value, +document.getElementById('rng-strength').value);
+      }
+      dragging = { mode: mode, x: ev.clientX, y: ev.clientY };
+      return;
+    }
+    dragging = { mode: mode === 'fly' ? 'look' : (mode === 'pan' ? 'pan' : 'orbit'), x: ev.clientX, y: ev.clientY };
+  });
+  canvas.addEventListener('pointermove', function (ev) {
+    if (!dragging) return;
+    var dx = ev.clientX - dragging.x, dy = ev.clientY - dragging.y;
+    dragging.x = ev.clientX; dragging.y = ev.clientY;
+    if (dragging.mode === 'orbit') { cam.yaw += dx * 0.005; cam.pitch = clamp(cam.pitch + dy * 0.004, 0.05, 1.45); }
+    else if (dragging.mode === 'pan') {
+      cam.tx -= Math.cos(cam.yaw) * dx * 0.01 + Math.sin(cam.yaw) * dy * 0.01;
+      cam.tz += Math.sin(cam.yaw) * dx * 0.01 - Math.cos(cam.yaw) * dy * 0.01;
+    } else if (dragging.mode === 'look') { cam.yaw += dx * 0.005; cam.pitch = clamp(cam.pitch + dy * 0.004, -1.2, 1.2); }
+    else if (dragging.mode === 'brush' || dragging.mode === 'probe') {
+      var hit = pickGridFrom3D(ev);
+      if (hit && dragging.mode === 'brush') applyBrush(hit.gx, hit.gy, ui.tool, +document.getElementById('rng-radius').value, +document.getElementById('rng-strength').value);
+    }
+  });
+  canvas.addEventListener('pointerup', function () { dragging = null; });
+  canvas.addEventListener('pointercancel', function () { dragging = null; });
+  canvas.addEventListener('wheel', function (ev) {
+    ev.preventDefault();
+    cam.dist = clamp(cam.dist * (ev.deltaY > 0 ? 1.08 : 0.92), 3, 36);
+  }, { passive: false });
+  canvas.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+
+  document.getElementById('map').addEventListener('pointerdown', function (ev) {
+    ensureAudio();
+    try { this.setPointerCapture(ev.pointerId); } catch (e) {}
+    var g = pickGridFromMap(ev);
+    if (ui.pointer === 'probe' || ev.shiftKey) placeProbe(g.gx, g.gy);
+    else { ui.pointer = ui.pointer === 'orbit' ? 'brush' : ui.pointer; applyBrush(g.gx, g.gy, ui.tool, +document.getElementById('rng-radius').value, +document.getElementById('rng-strength').value); }
+    dragging = { mode: 'map', x: ev.clientX, y: ev.clientY };
+  });
+  document.getElementById('map').addEventListener('pointermove', function (ev) {
+    if (!dragging || dragging.mode !== 'map') return;
+    var g = pickGridFromMap(ev);
+    applyBrush(g.gx, g.gy, ui.tool, +document.getElementById('rng-radius').value, +document.getElementById('rng-strength').value);
+  });
+  document.getElementById('map').addEventListener('pointerup', function () { dragging = null; });
+
+  window.addEventListener('keydown', function (ev) {
+    keys[ev.key.toLowerCase()] = true;
+    if (ev.key === ' ') { ev.preventDefault(); togglePause(); }
+    else if (ev.key === '.') { document.getElementById('btn-step').click(); }
+    else if (ev.key === 'r' || ev.key === 'R') document.getElementById('btn-reset').click();
+    else if (ev.key === 'l' || ev.key === 'L') document.getElementById('btn-lightning').click();
+    else if (ev.key === 'p' || ev.key === 'P') { document.getElementById('sel-pointer').value = 'probe'; document.getElementById('sel-pointer').dispatchEvent(new Event('change')); }
+    else if (ev.key === 'b' || ev.key === 'B') { document.getElementById('sel-pointer').value = 'brush'; document.getElementById('sel-pointer').dispatchEvent(new Event('change')); }
+    else if (ev.key === 'f' || ev.key === 'F') { document.getElementById('sel-pointer').value = 'fly'; document.getElementById('sel-pointer').dispatchEvent(new Event('change')); }
+    else if (ev.key === '[') { var r = document.getElementById('rng-radius'); r.value = String(Math.max(1, +r.value - 0.3)); r.dispatchEvent(new Event('input')); }
+    else if (ev.key === ']') { var r2 = document.getElementById('rng-radius'); r2.value = String(Math.min(10, +r2.value + 0.3)); r2.dispatchEvent(new Event('input')); }
+  });
+  window.addEventListener('keyup', function (ev) { keys[ev.key.toLowerCase()] = false; });
+
+  function flyCam(dt) {
+    if (cam.mode !== 'fly') return;
+    var sp = 4.2 * dt;
+    var fx = Math.sin(cam.yaw) * Math.cos(cam.pitch), fy = Math.sin(cam.pitch), fz = Math.cos(cam.yaw) * Math.cos(cam.pitch);
+    var rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
+    if (keys['w']) { cam.ex += fx * sp; cam.ey += fy * sp; cam.ez += fz * sp; }
+    if (keys['s']) { cam.ex -= fx * sp; cam.ey -= fy * sp; cam.ez -= fz * sp; }
+    if (keys['a']) { cam.ex -= rx * sp; cam.ez -= rz * sp; }
+    if (keys['d']) { cam.ex += rx * sp; cam.ez += rz * sp; }
+    if (keys['q']) cam.ey -= sp; if (keys['e']) cam.ey += sp;
+    cam.tx = cam.ex + fx; cam.ty = cam.ey + fy; cam.tz = cam.ez + fz;
+  }
+
+  /* map / slice draw */
+  function colormap(viz, f) {
+    f = clamp(f, 0, 1);
+    if (viz === 'temp') return [f, 0.25 + 0.2 * (1 - f), 1 - f];
+    if (viz === 'humid' || viz === 'cloud' || viz === 'precip') return [0.15 + 0.2 * f, 0.35 + 0.5 * f, 0.4 + 0.6 * f];
+    if (viz === 'vert') return [0.2, 0.4 + 0.6 * f, 0.3];
+    if (viz === 'hwind') return [f, 0.4, 1 - f];
+    if (viz === 'vort') return [0.6 * f, 0.2, 0.8 * f];
+    if (viz === 'terrain') return [f * 0.7, 0.45, 0.2];
+    if (viz === 'surface') return [0.1, 0.25 + f * 0.5, 0.3 + f * 0.4];
+    if (viz === 'pressure') return [0.3 + 0.7 * f, 0.25, 0.7 - 0.4 * f];
+    return [0.55 + 0.4 * f, 0.6 + 0.35 * f, 0.7];
+  }
+  function drawMap() {
+    var c = document.getElementById('map'), ctx = c.getContext('2d');
+    var nx = sim.nx, ny = sim.ny, img = ctx.createImageData(nx, ny), i, j, s, k, n, f, col, p;
+    var srcId = ui.viz;
+    document.getElementById('map-label').textContent = srcId;
+    var mn = 1e9, mx = -1e9;
+    var acc = new Float32Array(nx * ny);
+    for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      s = SI(i, j);
+      if (srcId === 'terrain') f = sim.h[s];
+      else if (srcId === 'surface') f = sim.sm[s] * 0.6 + sim.wet[s] * 0.4;
+      else {
+        f = 0;
+        for (k = 0; k < sim.nz; k++) {
+          n = I(i, j, k);
+          if (srcId === 'temp') f += sim.T[n];
+          else if (srcId === 'humid') f += sim.qv[n];
+          else if (srcId === 'precip') f += sim.qr[n];
+          else if (srcId === 'pressure') f += sim.buoy[n];
+          else if (srcId === 'hwind') f += Math.hypot(sim.u[n], sim.v[n]);
+          else if (srcId === 'vert') f += sim.w[n];
+          else if (srcId === 'vort') f += Math.abs(sim.vort[n]);
+          else f += sim.qc[n];
+        }
+        f /= sim.nz;
+      }
+      acc[s] = f; if (f < mn) mn = f; if (f > mx) mx = f;
+    }
+    var span = Math.max(1e-5, mx - mn);
+    for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+      s = SI(i, j); f = (acc[s] - mn) / span;
+      col = colormap(srcId, f);
+      p = (i + (ny - 1 - j) * nx) * 4;
+      img.data[p] = col[0] * 255; img.data[p+1] = col[1] * 255; img.data[p+2] = col[2] * 255; img.data[p+3] = 255;
+    }
+    var tmpc = drawMap._c || (drawMap._c = document.createElement('canvas'));
+    tmpc.width = nx; tmpc.height = ny;
+    tmpc.getContext('2d').putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmpc, 0, 0, c.width, c.height);
+    if (ui.stream) {
+      ctx.strokeStyle = 'rgba(231,224,208,.45)'; ctx.lineWidth = 1;
+      var sl, t, px, py, gi, gj, kmid = (sim.nz / 3) | 0;
+      for (sl = 0; sl < 10; sl++) {
+        px = (sl + 0.4) / 10 * (nx - 1); py = 2 + (sl % 3) * (ny / 4);
+        ctx.beginPath();
+        for (t = 0; t < 28; t++) {
+          gi = wrapI(px | 0, nx); gj = wrapI(py | 0, ny);
+          var uu = sim.u[I(gi, gj, kmid)], vv = sim.v[I(gi, gj, kmid)];
+          var sx = px / (nx - 1) * c.width, sy = (1 - py / (ny - 1)) * c.height;
+          if (t === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+          px += uu * 0.45; py += vv * 0.45;
+        }
+        ctx.stroke();
+      }
+    }
+    if (ui.probe) {
+      ctx.strokeStyle = '#c9a36a'; ctx.lineWidth = 2;
+      ctx.strokeRect(ui.probe.i / (nx - 1) * c.width - 4, (1 - ui.probe.j / (ny - 1)) * c.height - 4, 8, 8);
+    }
+  }
+  function drawSlice() {
+    var c = document.getElementById('slice'), ctx = c.getContext('2d');
+    var nx = sim.nx, nz = sim.nz, ny = sim.ny;
+    var j = ui.probe ? ui.probe.j : clamp((params.sliceX * (ny - 1)) | 0, 0, ny - 1);
+    document.getElementById('slice-label').textContent = 'j=' + j;
+    var img = ctx.createImageData(nx, nz), i, k, n, f, col, p, mn = 1e9, mx = -1e9;
+    var acc = new Float32Array(nx * nz);
+    for (k = 0; k < nz; k++) for (i = 0; i < nx; i++) {
+      n = I(i, j, k);
+      if (ui.viz === 'temp') f = sim.T[n];
+      else if (ui.viz === 'humid') f = sim.qv[n];
+      else if (ui.viz === 'precip') f = sim.qr[n];
+      else if (ui.viz === 'pressure') f = sim.buoy[n];
+      else if (ui.viz === 'hwind') f = Math.hypot(sim.u[n], sim.v[n]);
+      else if (ui.viz === 'vert') f = sim.w[n];
+      else if (ui.viz === 'vort') f = sim.vort[n];
+      else if (ui.viz === 'terrain') f = sim.h[SI(i, j)];
+      else if (ui.viz === 'surface') f = k === 0 ? sim.sm[SI(i, j)] : 0;
+      else f = sim.qc[n];
+      acc[i + nx * k] = f; if (f < mn) mn = f; if (f > mx) mx = f;
+    }
+    var span = Math.max(1e-5, mx - mn);
+    for (k = 0; k < nz; k++) for (i = 0; i < nx; i++) {
+      f = (acc[i + nx * k] - mn) / span;
+      col = colormap(ui.viz, f);
+      p = (i + (nz - 1 - k) * nx) * 4;
+      img.data[p] = col[0]*255; img.data[p+1]=col[1]*255; img.data[p+2]=col[2]*255; img.data[p+3]=255;
+      if (k <= kTerrain(i, j)) { img.data[p]=40; img.data[p+1]=36; img.data[p+2]=30; }
+    }
+    var tmpc = drawSlice._c || (drawSlice._c = document.createElement('canvas'));
+    tmpc.width = nx; tmpc.height = nz;
+    tmpc.getContext('2d').putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#0a1014'; ctx.fillRect(0,0,c.width,c.height);
+    ctx.drawImage(tmpc, 0, 0, c.width, c.height);
+    if (ui.probe) {
+      ctx.fillStyle = '#c9a36a';
+      ctx.fillRect(ui.probe.i / (nx - 1) * c.width - 1, 0, 2, c.height);
+    }
+  }
+
+  /* persistence */
+  function exportState() {
+    function arr(a) { return Array.prototype.slice.call(a); }
+    return {
+      version: 1, kind: 'storm-glass-state',
+      seed: sim.seed, nx: sim.nx, ny: sim.ny, nz: sim.nz,
+      time: sim.time, steps: sim.steps, precipTot: sim.precipTot,
+      preset: ui.preset, viz: ui.viz, params: Object.assign({}, params),
+      fields: {
+        u: arr(sim.u), v: arr(sim.v), w: arr(sim.w), T: arr(sim.T), qv: arr(sim.qv),
+        qc: arr(sim.qc), qr: arr(sim.qr), p: arr(sim.p),
+        h: arr(sim.h), stype: arr(sim.stype), sm: arr(sim.sm), wet: arr(sim.wet)
+      }
+    };
+  }
+  function finiteArr(a, n) {
+    if (!Array.isArray(a) || a.length !== n) return false;
+    var i; for (i = 0; i < n; i++) if (typeof a[i] !== 'number' || !isFinite(a[i])) return false;
+    return true;
+  }
+  function importState(obj) {
+    if (!obj || obj.kind !== 'storm-glass-state' || obj.version !== 1) throw new Error('Unrecognized state file');
+    var nx = obj.nx | 0, ny = obj.ny | 0, nz = obj.nz | 0;
+    if (nx < 8 || ny < 8 || nz < 4 || nx > 64 || ny > 64 || nz > 32) throw new Error('Grid size out of range');
+    var n = nx * ny * nz, s = nx * ny, f = obj.fields;
+    if (!f || !finiteArr(f.u, n) || !finiteArr(f.T, n) || !finiteArr(f.qc, n) || !finiteArr(f.h, s)) throw new Error('Fields missing or non-finite');
+    ['u','v','w','T','qv','qc','qr','p'].forEach(function (k) { if (!finiteArr(f[k], n)) throw new Error('Bad field ' + k); });
+    ['h','stype','sm','wet'].forEach(function (k) { if (!finiteArr(f[k], s)) throw new Error('Bad field ' + k); });
+    alloc(nx, ny, nz);
+    sim.u.set(f.u); sim.v.set(f.v); sim.w.set(f.w); sim.T.set(f.T); sim.qv.set(f.qv); sim.qc.set(f.qc); sim.qr.set(f.qr); sim.p.set(f.p);
+    sim.h.set(f.h); sim.stype.set(f.stype); sim.sm.set(f.sm); sim.wet.set(f.wet);
+    sim.seed = obj.seed | 0; sim.time = +obj.time || 0; sim.steps = obj.steps | 0; sim.precipTot = +obj.precipTot || 0;
+    if (obj.params) Object.keys(params).forEach(function (k) { if (typeof obj.params[k] === 'number' && isFinite(obj.params[k])) params[k] = obj.params[k]; });
+    if (obj.preset) ui.preset = obj.preset;
+    document.getElementById('sel-preset').value = ui.preset;
+    document.getElementById('sel-res').value = String(nx);
+    document.getElementById('sel-layers').value = String(nz);
+    document.getElementById('inp-seed').value = String(sim.seed);
+    syncParamUI(); rebuildTerrain(); rebuildVolume();
+  }
+  function download(name, blob) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
+  }
+  document.getElementById('btn-save').addEventListener('click', function () {
+    download('storm-glass-state.json', new Blob([JSON.stringify(exportState())], { type: 'application/json' }));
+  });
+  document.getElementById('btn-load').addEventListener('click', function () { document.getElementById('file-load').click(); });
+  document.getElementById('file-load').addEventListener('change', function () {
+    var file = this.files && this.files[0]; this.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try { importState(JSON.parse(String(reader.result))); warnUser(''); }
+      catch (e) { warnUser('Rejected imported state: ' + (e.message || e)); }
+    };
+    reader.readAsText(file);
+  });
+  document.getElementById('btn-csv').addEventListener('click', function () {
+    var lines = ['time,T,qv,p,wind,qc,qr,w'];
+    probeHist.forEach(function (r) { lines.push([r.t, r.T, r.qv, r.p, r.wind, r.qc, r.qr, r.w].join(',')); });
+    download('probe-history.csv', new Blob([lines.join('\n')], { type: 'text/csv' }));
+  });
+  document.getElementById('btn-png').addEventListener('click', function () {
+    canvas.toBlob(function (blob) { if (blob) download('storm-glass-view.png', blob); }, 'image/png');
+  });
+
+  function saveSettings() {
+    try {
+      localStorage.setItem('stormglass-settings', JSON.stringify({
+        seed: sim.seed, preset: ui.preset, viz: ui.viz, quality: ui.quality, pointer: ui.pointer,
+        params: params, collapsed: document.getElementById('panel').classList.contains('collapsed')
+      }));
+    } catch (e) {}
+  }
+  function loadSettings() {
+    try {
+      var s = JSON.parse(localStorage.getItem('stormglass-settings') || 'null');
+      if (!s) return;
+      if (s.params) Object.keys(params).forEach(function (k) { if (typeof s.params[k] === 'number') params[k] = s.params[k]; });
+      if (s.viz) { ui.viz = s.viz; document.getElementById('sel-viz').value = s.viz; }
+      if (s.quality) { ui.quality = s.quality; document.getElementById('sel-quality').value = s.quality; }
+      if (s.collapsed) document.getElementById('panel').classList.add('collapsed');
+    } catch (e) {}
+  }
+
+  /* HUD */
+  var stickyWarn = '';
+  function warnUser(msg) { stickyWarn = msg || ''; updateHud(); }
+  function cfl() {
+    var m = means();
+    return m.maxWind * params.dt * Math.max(sim.nx, sim.nz) * 0.12;
+  }
+  function updateHud() {
+    var m = means();
+    var cf = cfl();
+    var unstable = cf > 0.95 || (sim.nx * sim.ny * sim.nz > 28000 && params.dt > 0.18);
+    var warn = document.getElementById('warn');
+    if (stickyWarn) { warn.classList.add('show'); warn.textContent = stickyWarn; }
+    else if (unstable) { warn.classList.add('show'); warn.textContent = cf > 0.95 ? 'CFL high — reduce timestep or wind before the solver overshoots.' : 'Fine grid + large timestep is stiff; drop dt or resolution.'; }
+    else { warn.classList.remove('show'); warn.textContent = ''; }
+    var probe = ui.probe ? ('(' + ui.probe.i + ',' + ui.probe.j + ')') : 'none';
+    function cell(k, v, cls) {
+      return '<span>' + k + '</span><b class="' + (cls || '') + '">' + v + '</b>';
+    }
+    document.getElementById('hud-grid').innerHTML =
+      cell('fps', fps.toFixed(0)) +
+      cell('grid', sim.nx + '×' + sim.ny + '×' + sim.nz) +
+      cell('time', sim.time.toFixed(1) + ' s') +
+      cell('dt / CFL', params.dt.toFixed(2) + ' / ' + cf.toFixed(2), cf > 0.95 ? 'warn' : 'ok') +
+      cell('cloud', (m.cloudCover * 100).toFixed(1) + '%') +
+      cell('precip Σ', sim.precipTot.toFixed(1)) +
+      cell('w↑ max', m.maxUpdraft.toFixed(2)) +
+      cell('wind max', m.maxWind.toFixed(2)) +
+      cell('preset', ui.preset) +
+      cell('viz', ui.viz) +
+      cell('probe', probe) +
+      cell('state', ui.paused ? 'paused' : 'running', ui.paused ? 'pause' : 'ok');
+  }
+
+  /* resize */
+  function resize(force) {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    var w = Math.max(1, canvas.clientWidth | 0), h = Math.max(1, canvas.clientHeight | 0);
+    var rs = clamp(params.rscale, 0.4, 1.25);
+    var W = Math.max(64, (w * dpr * rs) | 0), H = Math.max(64, (h * dpr * rs) | 0);
+    if (!force && W === viewW && H === viewH) return;
+    viewW = W; viewH = H; canvas.width = W; canvas.height = H;
+    gl.viewport(0, 0, W, H);
+  }
+  window.addEventListener('resize', function () { resize(true); });
+
+  /* render */
+  var vizIndex = { cinematic: 0, temp: 1, humid: 2, cloud: 3, precip: 4, pressure: 5, hwind: 6, vert: 7, vort: 8, terrain: 9, surface: 10 };
+  function sunDir() {
+    var tod = params.tod, elev = (tod - 6) / 12 * Math.PI;
+    if (tod < 5 || tod > 21) elev = -0.4;
+    return [Math.cos(elev) * 0.7, Math.sin(elev), Math.cos(elev) * 0.4];
+  }
+  function draw() {
+    resize(false);
+    camEye();
+    var aspect = viewW / Math.max(1, viewH);
+    persp(proj, rad(cam.fov), aspect, 0.12, 80);
+    lookAt(view, cam.ex, cam.ey, cam.ez, cam.tx, cam.ty, cam.tz, 0, 1, 0);
+    mul4(mvp, proj, view);
+    invert4(invP, proj); invert4(invV, view);
+    ident(nmat); nmat.set(view); nmat[12]=0; nmat[13]=0; nmat[14]=0;
+    var sun = sunDir();
+    gl.viewport(0, 0, viewW, viewH);
+    gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    gl.useProgram(prog.sky.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform3f(prog.sky.u.uSun, sun[0], sun[1], sun[2]);
+    gl.uniform1f(prog.sky.u.uTod, params.tod); gl.uniform1f(prog.sky.u.uExp, params.exposure);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(prog.terr.p);
+    gl.bindVertexArray(terr.vao);
+    gl.uniformMatrix4fv(prog.terr.u.uMVP, false, mvp);
+    gl.uniformMatrix4fv(prog.terr.u.uN, false, nmat);
+    gl.uniform3f(prog.terr.u.uSun, sun[0], sun[1], sun[2]);
+    gl.uniform3f(prog.terr.u.uCam, cam.ex, cam.ey, cam.ez);
+    gl.uniform1f(prog.terr.u.uExp, params.exposure);
+    gl.uniform1f(prog.terr.u.uFlash, flash);
+    gl.uniform1i(prog.terr.u.uViz, vizIndex[ui.viz] || 0);
+    gl.drawArrays(gl.TRIANGLES, 0, terr.n);
+    gl.bindVertexArray(null);
+
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    gl.useProgram(prog.cloud.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_3D, volTex);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, hTex);
+    gl.uniform1i(prog.cloud.u.uVol, 0); gl.uniform1i(prog.cloud.u.uH, 1);
+    gl.uniform3f(prog.cloud.u.uCam, cam.ex, cam.ey, cam.ez);
+    gl.uniform3f(prog.cloud.u.uSun, sun[0], sun[1], sun[2]);
+    gl.uniformMatrix4fv(prog.cloud.u.uInvP, false, invP);
+    gl.uniformMatrix4fv(prog.cloud.u.uInvV, false, invV);
+    gl.uniform1f(prog.cloud.u.uExp, params.exposure);
+    gl.uniform1f(prog.cloud.u.uSteps, params.cloudQ);
+    gl.uniform1f(prog.cloud.u.uFlash, flash);
+    gl.uniform1i(prog.cloud.u.uViz, vizIndex[ui.viz] || 0);
+    gl.uniform3f(prog.cloud.u.uBmin, -WORLD * 0.5, 0, -WORLD * 0.5);
+    gl.uniform3f(prog.cloud.u.uBmax, WORLD * 0.5, WORLDZ, WORLD * 0.5);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    spawnPrecip();
+    if (parts.n > 0) {
+      var i, o;
+      for (i = 0; i < parts.n; i++) {
+        o = i * 5; pdata[o]=parts.x[i]; pdata[o+1]=parts.y[i]; pdata[o+2]=parts.z[i]; pdata[o+3]=parts.a[i]; pdata[o+4]=parts.s[i];
+      }
+      gl.useProgram(prog.pts.p);
+      gl.bindBuffer(gl.ARRAY_BUFFER, pbuf);
+      gl.bufferData(gl.ARRAY_BUFFER, pdata.subarray(0, parts.n * 5), gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12);
+      gl.uniformMatrix4fv(prog.pts.u.uMVP, false, mvp);
+      gl.uniform1f(prog.pts.u.uSize, 4.2 * params.pdens);
+      gl.drawArrays(gl.POINTS, 0, parts.n);
+    }
+
+    var ln = 0;
+    function pushL(x,y,z,r,g,b) { lineData[ln++]=x; lineData[ln++]=y; lineData[ln++]=z; lineData[ln++]=r; lineData[ln++]=g; lineData[ln++]=b; }
+    var b, s;
+    for (b = bolts.length - 1; b >= 0; b--) {
+      bolts[b].life -= 0.08;
+      if (bolts[b].life <= 0) { bolts.splice(b, 1); continue; }
+      var pts = bolts[b].pts, a = bolts[b].life;
+      for (s = 0; s < pts.length - 3; s += 3) {
+        pushL(pts[s], pts[s+1], pts[s+2], 0.9*a+0.3, 0.95*a+0.4, 1);
+        pushL(pts[s+3], pts[s+4], pts[s+5], 0.9*a+0.3, 0.95*a+0.4, 1);
+      }
+    }
+    if (ui.slice) {
+      var sx = (params.sliceX - 0.5) * WORLD;
+      pushL(sx, 0.05, -WORLD*0.5, 0.8, 0.65, 0.3); pushL(sx, WORLDZ, -WORLD*0.5, 0.8, 0.65, 0.3);
+      pushL(sx, WORLDZ, -WORLD*0.5, 0.8, 0.65, 0.3); pushL(sx, WORLDZ, WORLD*0.5, 0.8, 0.65, 0.3);
+      pushL(sx, WORLDZ, WORLD*0.5, 0.8, 0.65, 0.3); pushL(sx, 0.05, WORLD*0.5, 0.8, 0.65, 0.3);
+      pushL(sx, 0.05, WORLD*0.5, 0.8, 0.65, 0.3); pushL(sx, 0.05, -WORLD*0.5, 0.8, 0.65, 0.3);
+    }
+    if (ui.arrows) {
+      var nx = sim.nx, ny = sim.ny, step = Math.max(2, (nx / 8) | 0), i, j, k = (sim.nz / 3) | 0, n;
+      for (j = 0; j < ny; j += step) for (i = 0; i < nx; i += step) {
+        n = I(i, j, k);
+        var x = worldX(i), z = worldZ(j), y = worldY(sim.h[SI(i, j)] + 0.08);
+        pushL(x, y, z, 0.95, 0.8, 0.4);
+        pushL(x + sim.u[n] * 0.7, y + sim.w[n] * 0.5, z + sim.v[n] * 0.7, 0.95, 0.55, 0.2);
+      }
+    }
+    if (ui.probe) {
+      var px = worldX(ui.probe.i), pz = worldZ(ui.probe.j);
+      pushL(px, 0, pz, 1, 0.85, 0.4); pushL(px, WORLDZ, pz, 1, 0.85, 0.4);
+    }
+    if (ln > 0) {
+      gl.useProgram(prog.line.p);
+      gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, lineData.subarray(0, ln), gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+      gl.uniformMatrix4fv(prog.line.u.uMVP, false, mvp);
+      gl.drawArrays(gl.LINES, 0, ln / 6);
+    }
+    gl.depthMask(true); gl.disable(gl.BLEND);
+    flash *= 0.86;
+  }
+
+  function lightningTick(dt) {
+    var m = means();
+    var intensity = clamp(m.cloudCover * 1.6 + Math.max(0, m.maxUpdraft) * 0.55 + m.qc * 4 + m.qr * 2, 0, 6);
+    if (!ui.paused && intensity > 0.25 && Math.random() < params.lightning * intensity * dt * 0.22) spawnBolt(false);
+  }
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    if (!lastT) lastT = now;
+    var dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    frames++; fpsT += dt;
+    if (fpsT >= 0.4) { fps = frames / fpsT; frames = 0; fpsT = 0; }
+    flyCam(dt);
+    if (!ui.paused) {
+      var sub = Math.max(1, params.substeps | 0), i, h = params.dt / sub;
+      if (cfl() > 1.2) h *= 0.5;
+      for (i = 0; i < sub; i++) stepOnce(h);
+      if ((sim.steps & 1) === 0) { rebuildVolume(); recordProbe(); }
+      lightningTick(dt);
+      if ((sim.steps % 8) === 0) rebuildTerrain();
+    }
+    if (ui.quality === 'adaptive') {
+      if (fps && fps < 22) { params.rscale = Math.max(0.45, params.rscale * 0.96); params.cloudQ = Math.max(16, params.cloudQ - 1); adaptiveDrop++; }
+      else if (fps > 50 && params.rscale < 1) { params.rscale = Math.min(1, params.rscale * 1.01); }
+    }
+    draw();
+    if ((sim.steps % 4) === 0) { drawMap(); drawSlice(); updateHud(); }
+    if ((sim.steps % 40) === 0) saveSettings();
+  }
+
+  /* diagnostics */
+  window.StormLab = {
+    getDiagnostics: function () {
+      var m = means();
+      return {
+        fps: fps, nx: sim.nx, ny: sim.ny, nz: sim.nz, simTime: sim.time, dt: params.dt, cfl: cfl(),
+        cloudCover: m.cloudCover, precipTotal: sim.precipTot, maxUpdraft: m.maxUpdraft, maxWind: m.maxWind,
+        meanT: m.T, meanQv: m.qv, meanQc: m.qc, meanQr: m.qr, meanW: m.w,
+        preset: ui.preset, viz: ui.viz, probe: ui.probe, paused: ui.paused, seed: sim.seed, steps: sim.steps,
+        pointer: ui.pointer, quality: ui.quality, flash: flash, bolts: bolts.length, parts: parts.n,
+        view: [viewW, viewH], dpr: dpr, webgl: gl.getParameter(gl.VERSION)
+      };
+    },
+    sample: function (i, j, k) {
+      i = wrapI(i, sim.nx); j = wrapI(j, sim.ny); k = clamp(k | 0, 0, sim.nz - 1);
+      var n = I(i, j, k);
+      return { u: sim.u[n], v: sim.v[n], w: sim.w[n], T: sim.T[n], qv: sim.qv[n], qc: sim.qc[n], qr: sim.qr[n], p: sim.p[n], buoy: sim.buoy[n] };
+    },
+    column: column,
+    means: means,
+    applyBrush: applyBrush,
+    placeProbe: placeProbe,
+    setPreset: function (id) { ui.preset = id; document.getElementById('sel-preset').value = id; applyPreset(id); },
+    setViz: function (id) { ui.viz = id; document.getElementById('sel-viz').value = id; rebuildVolume(); rebuildTerrain(); },
+    pause: function (v) { ui.paused = !!v; updatePauseBtn(); },
+    step: function () { document.getElementById('btn-step').click(); },
+    reset: function () { document.getElementById('btn-reset').click(); },
+    lightning: function () { return spawnBolt(true); },
+    exportState: exportState,
+    importState: importState,
+    getProbeHistory: function () { return probeHist.slice(); },
+    params: params,
+    sim: sim
+  };
+
+  /* boot */
+  loadSettings();
+  alloc(24, 24, 12);
+  sim.seed = (+document.getElementById('inp-seed').value) || 1847;
+  applyPreset('mountain');
+  applyCameraPreset('overview');
+  resize(true);
+  updatePauseBtn();
+  drawMap(); drawSlice(); updateHud();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

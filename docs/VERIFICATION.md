@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Grok completes the HTML track: 2026-09-08
+
+The collection contains **73 HTML builds across all twenty HTML prompts and six models**: Astra 17, Opus 9, Grok 20, GLM 7, Gemini 14, and Qwen 6. New submissions are Grok's weather laboratory, node graphics studio, and city traffic simulator; Astra's echo-loop puzzler; and Opus's sand sandbox. Grok now has one submission for every HTML prompt. All **265 original files totaling 42,256,107 bytes** remain unchanged. Four thumbnails are exact copies of visually inspected supplied images. Grok's node studio has a fresh capture of the final HTML in the public sandbox at **1440 × 1057**, because its supplied desktop images predate visible source changes. No screenshot pixels or submitted HTML were edited.
+
+All five new apps launched through their implementation share links on Netlify Dev and production, with no uncaught JavaScript errors or external requests during the bounded checks. Native input exercised movement and echo creation in Astra's puzzler, advancing animation and Pause in Grok's node studio, and Pause, Step, and resume in the other three simulations. The viewer iframe filled **1440 × 1057** on desktop and **390 × 765** after a narrow resize, and closing the viewer removed it. These checks cover gallery integration and brief interaction, not complete application correctness or an exhaustive audit of each app's mobile layout. No additional build notices were warranted by these observations.
+
+The five affected expanded comparisons show their recorded builds in the configured model order, with missing entries hidden by default. The sand comparison now includes five models. All **73** exported HTML hashes match the originals, every build has a valid thumbnail, and all **20** populated comparisons have a share page and a **1200 × 630** preview image. An exact file inventory check confirmed the export contains only the expected public files.
+
+The bounded publication review covered all **99 original text files** and metadata of all **166 original PNGs**. No confirmed credentials, private-identity linkage, or private endpoints were found. Pseudonymous local paths remain in raw GitHub evidence, which is excluded from Netlify. Selected thumbnail pixels were inspected; the remaining evidence images were not exhaustively reviewed.
+
+Production deployment **`6aa03fb3076b8a0066950964`** publishes **331 files totaling 13,440,462 bytes (12.82 MiB)**. Live HTTPS checks passed for all **73** original source hashes, implementation share pages, thumbnails, and attachment/sandbox headers, plus all **20** comparison pages and preview images. The public JavaScript, CSS, settings, three existing notices, and six model profiles match the reviewed export. **Fifty** representative private routes returned 404.
+
 ## Build notices and eleven new submissions: 2026-09-08
 
 The collection contains **68 HTML builds across seventeen prompts and six models**: Astra 16, Opus 8, Grok 17, GLM 7, Gemini 14, and Qwen 6. New submissions cover Qwen 05; Opus 08; Gemini 12/13/14; Astra 15/16; Grok 14/16/17; and GLM 07. The roguelike and echo-loop puzzler now have their first entries. All **428 original files totaling 86,428,910 bytes** remain unchanged. Eleven thumbnails are exact copies of individually inspected supplied images, whose viewport sizes and renderers vary.

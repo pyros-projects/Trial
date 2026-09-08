@@ -1,0 +1,2830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Harbor Desk — City Traffic &amp; Transit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect fill='%2312160e' width='16' height='16'/%3E%3Crect fill='%23e3b14a' x='3' y='7' width='10' height='2'/%3E%3Ccircle fill='%232e9a86' cx='8' cy='5' r='2'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #12160e;
+  --bg2: #1b2214;
+  --panel: #1e2618;
+  --panel2: #252e1d;
+  --ink: #d5ddc6;
+  --muted: #8a9378;
+  --line: #3a4630;
+  --amber: #e3b14a;
+  --amber2: #c48922;
+  --teal: #2e9a86;
+  --teal2: #1c6e60;
+  --red: #d94b3d;
+  --good: #7cb342;
+  --shadow: 0 10px 28px rgba(0,0,0,.45);
+  --font-ui: "Trebuchet MS", "Gill Sans", "Century Gothic", "Lucida Grande", sans-serif;
+  --font-hud: "Cascadia Mono", "Consolas", "Lucida Console", "Andale Mono", monospace;
+  --font-map: Palatino, "Palatino Linotype", "Book Antiqua", "Times New Roman", serif;
+  --hud-h: 52px;
+  --tool-w: 72px;
+  --side-w: 320px;
+  --bot-h: 74px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-ui); overflow: hidden; }
+body {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #2a3820 0%, transparent 55%),
+    radial-gradient(800px 400px at 110% 110%, #1a2c28 0%, transparent 50%),
+    var(--bg);
+}
+button, select, input { font-family: inherit; color: inherit; }
+button {
+  background: linear-gradient(#2c3624, #1c2418);
+  border: 1px solid #445236;
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 6px 9px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+button:hover { border-color: var(--amber); }
+button:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+button.active, button[aria-pressed="true"] {
+  background: linear-gradient(#5a4318, #3a2c10);
+  border-color: var(--amber);
+  color: #ffe7a8;
+}
+button.danger { border-color: #7a3028; }
+button.teal { border-color: var(--teal2); }
+input[type="range"] { width: 100%; accent-color: var(--amber); }
+select, input[type="text"], input[type="number"] {
+  background: #141a10; border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px;
+}
+.app {
+  display: grid;
+  height: 100%;
+  grid-template-rows: var(--hud-h) 1fr var(--bot-h);
+  grid-template-columns: var(--tool-w) 1fr var(--side-w);
+  grid-template-areas:
+    "hud hud hud"
+    "tools map side"
+    "bot bot bot";
+}
+#hud {
+  grid-area: hud;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 12px;
+  background: linear-gradient(#242c1c, #181f14);
+  border-bottom: 1px solid #4a3a18;
+  box-shadow: 0 2px 0 #0c0f0a;
+  overflow: auto hidden;
+  white-space: nowrap;
+}
+.brand {
+  font-family: var(--font-map);
+  font-size: 15px; letter-spacing: .08em; color: var(--amber);
+  padding-right: 10px; border-right: 1px solid var(--line);
+}
+.brand small { display: block; font-family: var(--font-ui); font-size: 9px; letter-spacing: .18em; color: var(--muted); }
+.stat { display: flex; flex-direction: column; min-width: 72px; }
+.stat b {
+  font-family: var(--font-hud); font-size: 13px; color: var(--amber);
+  text-shadow: 0 0 10px rgba(227,177,74,.35); font-variant-numeric: tabular-nums;
+}
+.stat span { font-size: 9px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.stat.warn b { color: var(--red); }
+.stat.ok b { color: var(--teal); }
+#tools {
+  grid-area: tools;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 6px;
+  background: #161c12;
+  border-right: 1px solid var(--line);
+  overflow: auto;
+}
+#tools button {
+  width: 100%; min-height: 44px; padding: 4px 2px;
+  font-size: 10px; line-height: 1.15; letter-spacing: .02em;
+}
+#tools button .g { display: block; font-size: 16px; margin-bottom: 2px; }
+#mapwrap {
+  grid-area: map; position: relative; min-width: 0; min-height: 0; background: #1a4a32;
+}
+#map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; display: block; }
+#toast {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  background: #11180c; border: 1px solid var(--amber2); color: #ffe7a8;
+  padding: 6px 12px; border-radius: 20px; font-size: 12px; pointer-events: none;
+  opacity: 0; transition: opacity .2s;
+}
+#toast.show { opacity: 1; }
+#hint {
+  position: absolute; left: 10px; top: 10px; font-size: 11px; color: #dfe8cc;
+  background: rgba(16,22,12,.72); padding: 6px 8px; border-radius: 6px; max-width: 280px;
+  pointer-events: none; border: 1px solid rgba(227,177,74,.25);
+}
+#side {
+  grid-area: side;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+}
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 9px 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tabs button.active { color: var(--amber); background: var(--panel2); box-shadow: inset 0 -2px 0 var(--amber); }
+.pane { display: none; padding: 10px; overflow: auto; flex: 1; font-size: 12px; }
+.pane.active { display: block; }
+.pane h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); font-weight: 600; }
+.row { display: flex; justify-content: space-between; gap: 8px; margin: 6px 0; align-items: center; }
+.row label { color: var(--muted); }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; }
+.kv b { font-family: var(--font-hud); font-weight: 500; color: #f3e2b0; }
+.charts { display: grid; gap: 8px; }
+.chartbox { background: #12180e; border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+.chartbox canvas { width: 100%; height: 56px; display: block; }
+.chartbox .cap { font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+#bot {
+  grid-area: bot;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(#1c2416, #141a10);
+  border-top: 1px solid var(--line);
+  overflow: auto hidden;
+}
+.grp { display: flex; gap: 6px; align-items: center; padding-right: 10px; border-right: 1px solid var(--line); }
+.grp label { font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+#inspector { background: #141b10; border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-top: 8px; min-height: 80px; }
+.phase-row { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
+.sw { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.chip { font-size: 10px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); }
+#help {
+  position: absolute; inset: 8% 10%; background: #1b2316; border: 1px solid var(--amber2);
+  border-radius: 12px; padding: 18px 22px; overflow: auto; display: none; z-index: 5;
+  box-shadow: var(--shadow); max-width: 720px; margin: auto; height: min(70%, 560px);
+}
+#help.show { display: block; }
+#help h2 { font-family: var(--font-map); color: var(--amber); margin: 0 0 8px; }
+#modalbg { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: none; z-index: 4; }
+#modalbg.show { display: block; }
+.filehide { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (max-width: 900px) {
+  :root { --tool-w: 58px; --side-w: 0px; --bot-h: 96px; }
+  .app { grid-template-areas: "hud hud" "tools map" "bot bot"; grid-template-columns: var(--tool-w) 1fr; }
+  #side {
+    position: absolute; right: 0; top: var(--hud-h); bottom: var(--bot-h); width: min(92vw, 320px);
+    transform: translateX(105%); transition: transform .2s; z-index: 3; box-shadow: var(--shadow);
+  }
+  #side.open { transform: none; }
+  #tools button { font-size: 9px; min-height: 40px; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header id="hud" aria-label="Live simulation overlay">
+    <div class="brand">Harbor Desk<small>TRAFFIC &amp; TRANSIT</small></div>
+    <div class="stat" title="Frames per second"><span>FPS</span><b id="h-fps">—</b></div>
+    <div class="stat"><span>Sim time</span><b id="h-time">07:30</b></div>
+    <div class="stat"><span>Speed</span><b id="h-spd">4×</b></div>
+    <div class="stat"><span>Active</span><b id="h-act">0</b></div>
+    <div class="stat"><span>Completed</span><b id="h-done">0</b></div>
+    <div class="stat"><span>Avg TT</span><b id="h-tt">—</b></div>
+    <div class="stat"><span>Net speed</span><b id="h-v">—</b></div>
+    <div class="stat"><span>Queue</span><b id="h-q">0</b></div>
+    <div class="stat ok"><span>Ridership</span><b id="h-ride">0</b></div>
+    <div class="stat"><span>Tool</span><b id="h-tool">Select</b></div>
+    <div class="stat warn"><span>Incidents</span><b id="h-inc">0</b></div>
+    <div class="stat" id="h-pause-wrap"><span>State</span><b id="h-pause">RUN</b></div>
+  </header>
+  <nav id="tools" aria-label="Editor tools">
+    <button type="button" data-tool="select" class="active" aria-pressed="true" aria-label="Select tool" title="Select / pan (1)"><span class="g">◇</span>Select</button>
+    <button type="button" data-tool="road" aria-label="Draw roads" title="Draw roads (2)"><span class="g">═</span>Road</button>
+    <button type="button" data-tool="erase" aria-label="Erase" title="Erase (3)"><span class="g">⌫</span>Erase</button>
+    <button type="button" data-tool="oneway" aria-label="One-way tool" title="Toggle one-way"><span class="g">→</span>One-way</button>
+    <button type="button" data-tool="lanes" aria-label="Lane count" title="Cycle lanes"><span class="g">☰</span>Lanes</button>
+    <button type="button" data-tool="signal" aria-label="Traffic signal" title="Signal"><span class="g">●</span>Signal</button>
+    <button type="button" data-tool="roundabout" aria-label="Roundabout" title="Roundabout"><span class="g">◉</span>Circle</button>
+    <button type="button" data-tool="turns" aria-label="Turn restrictions" title="Turn bans"><span class="g">↱</span>Turns</button>
+    <button type="button" data-tool="zone" aria-label="Land-use zone" title="Zones (4)"><span class="g">▦</span>Zone</button>
+    <button type="button" data-tool="park" aria-label="Parking destination" title="Parking"><span class="g">P</span>Park</button>
+    <button type="button" data-tool="stop" aria-label="Bus stop" title="Bus stop (5)"><span class="g">▤</span>Stop</button>
+    <button type="button" data-tool="route" aria-label="Transit route" title="Transit route"><span class="g">B</span>Route</button>
+    <button type="button" data-tool="closure" aria-label="Road closure" title="Close road"><span class="g">✖</span>Close</button>
+    <button type="button" data-tool="incident" aria-label="Place incident" title="Incident"><span class="g">⚠</span>Incident</button>
+    <button type="button" id="btn-side" aria-label="Toggle inspector panel" hidden>Panel</button>
+  </nav>
+  <div id="mapwrap">
+    <canvas id="map" aria-label="City map"></canvas>
+    <div id="hint">Hold Space to pan · Wheel zoom · Click-drag to draw roads · P pause</div>
+    <div id="toast" role="status"></div>
+    <div id="modalbg"></div>
+    <aside id="help" aria-label="Help">
+      <h2>Harbor Desk</h2>
+      <p>Build a road graph, then watch vehicles route, queue, and obey signals. Transit ridership comes from real boarding at stops.</p>
+      <p><b>Draw</b> roads with the Road tool — click to place vertices, double-click or Enter to finish, or drag continuously. Crossings split automatically. Snap to nodes and mid-block.</p>
+      <p><b>Keys:</b> P pause · Period single-step · 1–5 tools · Ctrl+Z / Ctrl+Y undo · Delete · Ctrl+S export JSON · Esc cancel.</p>
+      <p><b>Signals</b> auto-time from queues, or edit phases on a selected junction. One-way and turn bans are enforced by routing.</p>
+      <button type="button" id="help-close">Close</button>
+    </aside>
+  </div>
+  <aside id="side" aria-label="Inspector and analytics">
+    <div class="tabs" role="tablist">
+      <button type="button" class="active" data-tab="inspect" aria-label="Inspect tab">Inspect</button>
+      <button type="button" data-tab="charts" aria-label="Charts tab">Charts</button>
+      <button type="button" data-tab="layers" aria-label="Overlays tab">Layers</button>
+      <button type="button" data-tab="demand" aria-label="Demand tab">Demand</button>
+    </div>
+    <div class="pane active" id="tab-inspect">
+      <h3>Selection</h3>
+      <div id="inspector">Click the map to inspect a road, junction, vehicle, stop, or route.</div>
+      <h3 style="margin-top:14px">Network</h3>
+      <div class="kv" id="net-kv"></div>
+      <div class="legend" id="val-legend"></div>
+    </div>
+    <div class="pane" id="tab-charts">
+      <h3>Live analytics</h3>
+      <div class="charts">
+        <div class="chartbox"><div class="cap">Throughput (veh/min)</div><canvas id="c-tp"></canvas></div>
+        <div class="chartbox"><div class="cap">Travel time s (avg / p95)</div><canvas id="c-tt"></canvas></div>
+        <div class="chartbox"><div class="cap">Network speed &amp; queue</div><canvas id="c-vq"></canvas></div>
+        <div class="chartbox"><div class="cap">Transit wait &amp; occupancy</div><canvas id="c-tr"></canvas></div>
+        <div class="chartbox"><div class="cap">Emissions proxy</div><canvas id="c-em"></canvas></div>
+      </div>
+      <div class="kv" id="met-kv" style="margin-top:10px"></div>
+    </div>
+    <div class="pane" id="tab-layers">
+      <h3>Overlays</h3>
+      <div id="overlays"></div>
+      <h3 style="margin-top:12px">Compare</h3>
+      <div class="row"><label>Car-only demand</label><button type="button" id="btn-caronly" aria-label="Toggle car-only scenario">Off</button></div>
+      <p class="chip">Transit-supported uses coverage-based mode split. Car-only forces all trips onto the road network.</p>
+    </div>
+    <div class="pane" id="tab-demand">
+      <h3>Clock &amp; weather</h3>
+      <div class="row"><label>Time of day</label><input id="in-tod" type="range" min="0" max="24" step="0.25" value="7.5" aria-label="Time of day hours"></div>
+      <div class="row"><label>Rush bias</label><input id="in-rush" type="range" min="0" max="2" step="0.1" value="1" aria-label="Rush hour bias"></div>
+      <div class="row"><label>Weather slowdown</label><input id="in-wx" type="range" min="0.5" max="1" step="0.05" value="1" aria-label="Weather speed factor"></div>
+      <div class="row"><label>Event pulse</label><button type="button" id="btn-event" aria-label="Trigger stadium event pulse">Trigger</button></div>
+      <h3>Policy</h3>
+      <div class="row"><label>Demand scale</label><input id="in-dem" type="range" min="0" max="3" step="0.1" value="1" aria-label="Demand scale"></div>
+      <div class="row"><label>Aggressiveness</label><input id="in-agg" type="range" min="0.4" max="1.6" step="0.05" value="1" aria-label="Driver aggressiveness"></div>
+      <div class="row"><label>Reroute sensitivity</label><input id="in-re" type="range" min="0" max="1" step="0.05" value="0.45" aria-label="Rerouting sensitivity"></div>
+      <div class="row"><label>Lane-change</label><input id="in-lc" type="range" min="0" max="1" step="0.05" value="0.6" aria-label="Lane change eagerness"></div>
+      <div class="row"><label>Signal policy</label>
+        <select id="in-sig" aria-label="Signal policy">
+          <option value="auto">Automatic</option>
+          <option value="fixed">Fixed-time</option>
+          <option value="user">User-edited</option>
+        </select>
+      </div>
+      <div class="row"><label>Transit frequency</label><input id="in-freq" type="range" min="0" max="3" step="0.1" value="1" aria-label="Transit frequency scale"></div>
+      <div class="row"><label>Vehicle capacity</label><input id="in-cap" type="range" min="0.5" max="2" step="0.1" value="1" aria-label="Transit vehicle capacity scale"></div>
+      <div class="row"><label>Incident rate</label><input id="in-inc" type="range" min="0" max="2" step="0.1" value="0.3" aria-label="Incident rate"></div>
+      <div class="row"><label>Sandbox (free build)</label><button type="button" id="btn-sand" class="active" aria-pressed="true" aria-label="Toggle sandbox mode">On</button></div>
+      <div class="row"><label>Map size</label>
+        <select id="in-map" aria-label="Map size">
+          <option value="small">Small</option>
+          <option value="medium" selected>Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </div>
+      <div class="row"><label>Seed</label><input id="in-seed" type="number" value="20260908" aria-label="Deterministic seed" style="width:110px"></div>
+    </div>
+  </aside>
+  <footer id="bot">
+    <div class="grp">
+      <button type="button" id="btn-pause" aria-label="Pause or resume">Pause</button>
+      <button type="button" id="btn-step" aria-label="Single step">Step</button>
+      <button type="button" id="btn-reset" aria-label="Reset simulation">Reset</button>
+    </div>
+    <div class="grp">
+      <label>Sim speed</label>
+      <input id="in-speed" type="range" min="0.25" max="16" step="0.25" value="4" aria-label="Simulation speed">
+      <span id="spd-lab">4×</span>
+    </div>
+    <div class="grp">
+      <label>Scenario</label>
+      <select id="in-scen" aria-label="Load curated scenario">
+        <option value="crossroads">Simple crossroads</option>
+        <option value="avenue">Synchronized avenue</option>
+        <option value="bottleneck">Suburban bottleneck</option>
+        <option value="downtown" selected>Downtown grid</option>
+        <option value="stadium">Stadium event</option>
+        <option value="bridge">Bridge closure</option>
+        <option value="brt">BRT corridor</option>
+        <option value="strike">Transit strike</option>
+        <option value="induced">Induced demand</option>
+        <option value="stress">Dense stress test</option>
+      </select>
+      <button type="button" id="btn-loadscen" aria-label="Load selected scenario">Load</button>
+    </div>
+    <div class="grp">
+      <button type="button" id="btn-undo" aria-label="Undo">Undo</button>
+      <button type="button" id="btn-redo" aria-label="Redo">Redo</button>
+      <button type="button" id="btn-save" aria-label="Save city JSON">Save</button>
+      <button type="button" id="btn-load" aria-label="Load city JSON">Load</button>
+      <button type="button" id="btn-csv" aria-label="Export metrics CSV">CSV</button>
+      <button type="button" id="btn-png" aria-label="Export map PNG">PNG</button>
+      <button type="button" id="btn-named" aria-label="Save named scenario">Name</button>
+      <button type="button" id="btn-help" aria-label="Open help">Help</button>
+      <input class="filehide" id="file-json" type="file" accept="application/json,.json" aria-label="JSON file">
+    </div>
+  </footer>
+</div>
+<script>
+(() => {
+"use strict";
+
+const TAU = Math.PI * 2;
+const $ = (id) => document.getElementById(id);
+const canvas = $("map");
+const ctx = canvas.getContext("2d");
+const wrap = $("mapwrap");
+
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function hypot(x, y) { return Math.hypot(x, y); }
+function ang(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
+function fmtTime(s) {
+  s = ((s % 86400) + 86400) % 86400;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+}
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => t.classList.remove("show"), 2400);
+}
+function download(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+function RNG(seed) {
+  let t = (seed >>> 0) || 1;
+  const r = {
+    get state() { return t; },
+    set state(s) { t = s >>> 0; },
+    next() {
+      t = (t + 0x6D2B79F5) >>> 0;
+      let x = Math.imul(t ^ (t >>> 15), 1 | t);
+      x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    },
+    int(n) { return Math.floor(r.next() * n); },
+    pick(a) { return a[r.int(a.length)]; },
+    range(a, b) { return a + r.next() * (b - a); }
+  };
+  return r;
+}
+
+function segIntersect(a, b, c, d) {
+  const r = { x: b.x - a.x, y: b.y - a.y };
+  const s = { x: d.x - c.x, y: d.y - c.y };
+  const den = r.x * s.y - r.y * s.x;
+  if (Math.abs(den) < 1e-8) return null;
+  const qp = { x: c.x - a.x, y: c.y - a.y };
+  const t = (qp.x * s.y - qp.y * s.x) / den;
+  const u = (qp.x * r.y - qp.y * r.x) / den;
+  if (t <= 0.02 || t >= 0.98 || u <= 0.02 || u >= 0.98) return null;
+  return { x: a.x + t * r.x, y: a.y + t * r.y, t, u };
+}
+function projectT(a, b, p) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy;
+  if (l2 < 1e-8) return 0;
+  return clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / l2, 0, 1);
+}
+function dist2(a, b) { const dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; }
+
+const OVERLAYS = [
+  ["none", "None"], ["speed", "Speed"], ["density", "Density"], ["queue", "Queue length"],
+  ["tt", "Travel time"], ["route", "Route choice"], ["signal", "Signal phase"],
+  ["turns", "Turn movements"], ["transit", "Transit coverage"], ["wait", "Waiting passengers"],
+  ["emis", "Emissions"], ["od", "O-D demand"], ["valid", "Network validation"]
+];
+
+const TOOLS = {
+  select: "Select", road: "Road", erase: "Erase", oneway: "One-way", lanes: "Lanes",
+  signal: "Signal", roundabout: "Circle", turns: "Turns", zone: "Zone", park: "Park",
+  stop: "Stop", route: "Route", closure: "Close", incident: "Incident"
+};
+
+const ZONE_KIND = {
+  residential: { fill: "rgba(86,140,72,.28)", stroke: "#7cb342", trips: 1.1 },
+  commercial: { fill: "rgba(46,154,134,.28)", stroke: "#2e9a86", trips: 1.2 },
+  industrial: { fill: "rgba(196,140,48,.28)", stroke: "#c48922", trips: 0.8 },
+  event: { fill: "rgba(217,75,61,.28)", stroke: "#d94b3d", trips: 0.2 },
+  school: { fill: "rgba(90,140,196,.28)", stroke: "#6aa0d4", trips: 0.7 },
+  parking: { fill: "rgba(180,180,120,.2)", stroke: "#c8c070", trips: 0.3 }
+};
+
+let dpr = 1;
+let cam = { x: 520, y: 420, k: 1.15 };
+let tool = "select";
+let overlay = "none";
+let paused = false;
+let stepOnce = false;
+let spaceDown = false;
+let pointer = { down: false, sx: 0, sy: 0, lx: 0, ly: 0, pan: false, id: null };
+let drawPts = [];
+let drawHover = null;
+let zoneStart = null;
+let selected = null;
+let routeDraft = [];
+let turnPick = null;
+let fps = 0, fpsC = 0, fpsT = 0;
+let lastTs = 0;
+let simAcc = 0;
+let namedPrompt = null;
+
+const hist = { tp: [], tt: [], p95: [], v: [], q: [], wait: [], occ: [], em: [], ride: [] };
+const undo = [];
+const redo = [];
+
+const S = {
+  speed: 4,
+  demand: 1,
+  agg: 1,
+  reroute: 0.45,
+  laneChange: 0.6,
+  sigPolicy: "auto",
+  freq: 1,
+  cap: 1,
+  incidentRate: 0.3,
+  sandbox: true,
+  mapSize: "medium",
+  rush: 1,
+  weather: 1,
+  carOnly: false,
+  induced: false,
+  strike: false,
+  budget: 25000
+};
+
+const city = {
+  name: "Harbor Grid",
+  seed: 20260908,
+  rng: RNG(20260908),
+  time: 0,
+  tod: 7.5 * 3600,
+  nid: 1, lid: 1, zid: 1, sid: 1, rid: 1, vid: 1, pid: 1, iid: 1,
+  nodes: new Map(),
+  links: new Map(),
+  zones: new Map(),
+  stops: new Map(),
+  routes: new Map(),
+  incidents: new Map(),
+  vehicles: [],
+  passengers: [],
+  edges: new Map(),
+  adj: new Map(),
+  completed: 0,
+  failed: 0,
+  ridership: 0,
+  emissions: 0,
+  lastSample: 0,
+  ttSamples: [],
+  delaySamples: [],
+  spawnCarry: 0,
+  busCarry: new Map(),
+  world: { w: 1400, h: 1100 },
+  buildings: []
+};
+
+function nid() { return city.nid++; }
+function lid() { return city.lid++; }
+
+function addNode(x, y, extra) {
+  const n = Object.assign({ id: nid(), x, y, kind: "x", signal: null, forbid: {}, occ: [] }, extra || {});
+  city.nodes.set(n.id, n);
+  return n;
+}
+function addLink(a, b, spec) {
+  const A = city.nodes.get(a), B = city.nodes.get(b);
+  if (!A || !B || a === b) return null;
+  const len = hypot(B.x - A.x, B.y - A.y);
+  if (len < 18) return null;
+  for (const L of city.links.values()) {
+    if ((L.a === a && L.b === b) || (L.a === b && L.b === a)) {
+      if (spec) Object.assign(L, spec);
+      return L;
+    }
+  }
+  const L = Object.assign({
+    id: lid(), a, b, len,
+    lanesAB: 1, lanesBA: 1, speed: 12.5, name: "", closed: false,
+    permit: "all", kind: "street", cost: len
+  }, spec || {});
+  L.len = len;
+  city.links.set(L.id, L);
+  return L;
+}
+
+function removeLink(id) {
+  const L = city.links.get(id);
+  if (!L) return;
+  city.links.delete(id);
+  for (const inc of [...city.incidents.values()]) if (inc.link === id) city.incidents.delete(inc.id);
+  for (const v of city.vehicles) if (v.edge && city.edges.get(v.edge) && city.edges.get(v.edge).link === id) v.needRoute = true;
+}
+
+function rebuildGraph() {
+  city.edges.clear();
+  city.adj.clear();
+  for (const n of city.nodes.values()) city.adj.set(n.id, []);
+  const addE = (from, to, L, dir, lanes) => {
+    if (lanes <= 0 || L.closed) return;
+    const inc = [...city.incidents.values()].filter(i => i.link === L.id);
+    let laneCut = 0, spd = L.speed * S.weather;
+    for (const i of inc) {
+      if (i.kind === "construction") { spd *= 0.55; laneCut += 1; }
+      else { spd *= 0.4; laneCut += 1; }
+    }
+    const e = {
+      id: L.id + ":" + dir, from, to, link: L.id, dir, lanes: Math.max(0, lanes - laneCut) || (lanes > 0 && laneCut ? 1 : lanes),
+      len: L.len, speed: Math.max(2.5, spd), permit: L.permit, dead: false
+    };
+    if (e.lanes <= 0) return;
+    city.edges.set(e.id, e);
+    city.adj.get(from).push(e);
+  };
+  for (const L of city.links.values()) {
+    const A = city.nodes.get(L.a), B = city.nodes.get(L.b);
+    if (!A || !B) continue;
+    L.len = hypot(B.x - A.x, B.y - A.y);
+    addE(L.a, L.b, L, "ab", L.lanesAB);
+    addE(L.b, L.a, L, "ba", L.lanesBA);
+  }
+  for (const v of city.vehicles) {
+    if (v.done) continue;
+    if (!v.edge || !city.edges.has(v.edge)) v.needRoute = true;
+    else if (v.path && v.path.some(id => !city.edges.has(id))) v.needRoute = true;
+  }
+}
+
+function nearestNode(p, max) {
+  let best = null, bd = max * max;
+  for (const n of city.nodes.values()) {
+    const d = dist2(n, p);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+function nearestLink(p, max) {
+  let best = null, bd = max, bt = 0, bx = 0, by = 0;
+  for (const L of city.links.values()) {
+    const A = city.nodes.get(L.a), B = city.nodes.get(L.b);
+    const t = projectT(A, B, p);
+    const x = lerp(A.x, B.x, t), y = lerp(A.y, B.y, t);
+    const d = hypot(p.x - x, p.y - y);
+    if (d < bd) { bd = d; best = L; bt = t; bx = x; by = y; }
+  }
+  return best ? { L: best, t: bt, x: bx, y: by, d: bd } : null;
+}
+function nearestVeh(p, max) {
+  let best = null, bd = max * max;
+  for (const v of city.vehicles) {
+    if (v.done) continue;
+    const d = (v.x - p.x) ** 2 + (v.y - p.y) ** 2;
+    if (d < bd) { bd = d; best = v; }
+  }
+  return best;
+}
+
+function splitLinkAt(L, x, y) {
+  const A = city.nodes.get(L.a), B = city.nodes.get(L.b);
+  const t = projectT(A, B, { x, y });
+  if (t < 0.08) return A;
+  if (t > 0.92) return B;
+  const n = addNode(lerp(A.x, B.x, t), lerp(A.y, B.y, t));
+  const spec = { lanesAB: L.lanesAB, lanesBA: L.lanesBA, speed: L.speed, name: L.name, permit: L.permit, kind: L.kind, closed: L.closed };
+  const id = L.id;
+  city.links.delete(id);
+  addLink(A.id, n.id, spec);
+  addLink(n.id, B.id, spec);
+  for (const s of city.stops.values()) if (s.link === id) { s.link = null; s.node = n.id; }
+  return n;
+}
+
+function connectPoints(pts) {
+  if (pts.length < 2) return;
+  const snapR = 22 / cam.k;
+  const nodesAlong = [];
+  for (const p of pts) {
+    let n = nearestNode(p, snapR);
+    if (!n) {
+      const hit = nearestLink(p, snapR);
+      if (hit && hit.d < snapR) n = splitLinkAt(hit.L, hit.x, hit.y);
+    }
+    if (!n) n = addNode(Math.round(p.x / 10) * 10, Math.round(p.y / 10) * 10);
+    if (!nodesAlong.length || nodesAlong[nodesAlong.length - 1].id !== n.id) nodesAlong.push(n);
+  }
+  for (let i = 0; i < nodesAlong.length - 1; i++) {
+    const a = nodesAlong[i], b = nodesAlong[i + 1];
+    const crosses = [];
+    for (const L of [...city.links.values()]) {
+      const A = city.nodes.get(L.a), B = city.nodes.get(L.b);
+      if (!A || !B) continue;
+      if (L.a === a.id || L.b === a.id || L.a === b.id || L.b === b.id) continue;
+      const hit = segIntersect(a, b, A, B);
+      if (hit) crosses.push({ hit, L });
+    }
+    crosses.sort((u, v) => u.hit.t - v.hit.t);
+    let prev = a;
+    for (const c of crosses) {
+      const n = splitLinkAt(c.L, c.hit.x, c.hit.y);
+      addLink(prev.id, n.id, { speed: 12.5 });
+      prev = n;
+    }
+    addLink(prev.id, b.id, { speed: 12.5 });
+  }
+  pruneLoose();
+  autoSignals();
+  rebuildGraph();
+}
+
+function pruneLoose() {
+  const used = new Set();
+  for (const L of city.links.values()) { used.add(L.a); used.add(L.b); }
+  for (const s of city.stops.values()) if (s.node) used.add(s.node);
+  for (const id of [...city.nodes.keys()]) if (!used.has(id) && city.nodes.get(id).kind !== "roundabout") city.nodes.delete(id);
+}
+
+function degree(n) {
+  let d = 0;
+  for (const L of city.links.values()) if (L.a === n.id || L.b === n.id) d++;
+  return d;
+}
+
+function autoSignals() {
+  for (const n of city.nodes.values()) {
+    if (n.kind === "roundabout") { n.signal = null; continue; }
+    const deg = degree(n);
+    if (deg >= 3 && !n.signal) n.signal = makeSignal(n);
+    if (deg < 3 && n.signal && n.signal.auto) n.signal = null;
+    if (n.signal) buildPhases(n);
+  }
+}
+
+function approaches(n) {
+  const arr = [];
+  for (const L of city.links.values()) {
+    if (L.b === n.id && L.lanesAB > 0) arr.push({ from: L.a, L, dir: "ab" });
+    if (L.a === n.id && L.lanesBA > 0) arr.push({ from: L.b, L, dir: "ba" });
+  }
+  arr.sort((a, b) => {
+    const A = city.nodes.get(a.from), B = city.nodes.get(b.from);
+    return ang(n.x, n.y, A.x, A.y) - ang(n.x, n.y, B.x, B.y);
+  });
+  return arr;
+}
+
+function makeSignal(n) {
+  return { auto: true, cycle: 72, offset: 0, phases: [], yellow: 3, allRed: 1.5, conflicts: [], unreachable: [] };
+}
+
+function groupsByAxis(n, ap) {
+  if (ap.length <= 1) return [ap.map((_, i) => i)];
+  if (ap.length === 2) return [[0], [1]];
+  const axes = [];
+  const used = new Set();
+  for (let i = 0; i < ap.length; i++) {
+    if (used.has(i)) continue;
+    const A = city.nodes.get(ap[i].from);
+    const ai = ang(n.x, n.y, A.x, A.y);
+    const group = [i];
+    used.add(i);
+    for (let j = i + 1; j < ap.length; j++) {
+      if (used.has(j)) continue;
+      const B = city.nodes.get(ap[j].from);
+      const d = Math.abs(Math.atan2(Math.sin(ang(n.x, n.y, B.x, B.y) - ai), Math.cos(ang(n.x, n.y, B.x, B.y) - ai)));
+      if (Math.abs(d - Math.PI) < 0.45) { group.push(j); used.add(j); }
+    }
+    axes.push(group);
+  }
+  return axes.length ? axes : [ap.map((_, i) => i)];
+}
+
+function buildPhases(n) {
+  const ap = approaches(n);
+  n._ap = ap;
+  if (!n.signal) return;
+  if (S.sigPolicy === "user" && n.signal.phases && n.signal.phases.length) {
+    diagnoseSignal(n);
+    return;
+  }
+  const groups = groupsByAxis(n, ap);
+  const phases = groups.map((g, i) => ({
+    name: "P" + (i + 1),
+    green: Math.max(12, Math.round(n.signal.cycle / groups.length) - n.signal.yellow - n.signal.allRed),
+    moves: g.map(idx => ap[idx].from)
+  }));
+  n.signal.phases = phases;
+  if (S.sigPolicy === "auto") {
+    let off = 0;
+    if (n.x) off = (n.x / 16) % n.signal.cycle;
+    n.signal.offset = off;
+  }
+  diagnoseSignal(n);
+}
+
+function diagnoseSignal(n) {
+  const sig = n.signal;
+  if (!sig) return;
+  const ap = approaches(n);
+  const greenFrom = new Set();
+  sig.conflicts = [];
+  for (const ph of sig.phases) {
+    for (const f of ph.moves) greenFrom.add(f);
+    for (let i = 0; i < ph.moves.length; i++) {
+      for (let j = i + 1; j < ph.moves.length; j++) {
+        const A = city.nodes.get(ph.moves[i]), B = city.nodes.get(ph.moves[j]);
+        if (!A || !B) continue;
+        const d = Math.abs(Math.atan2(Math.sin(ang(n.x, n.y, B.x, B.y) - ang(n.x, n.y, A.x, A.y)), Math.cos(ang(n.x, n.y, B.x, B.y) - ang(n.x, n.y, A.x, A.y))));
+        if (Math.abs(d - Math.PI / 2) < 0.5) sig.conflicts.push(ph.name + " crossing greens");
+      }
+    }
+  }
+  sig.unreachable = ap.filter(a => !greenFrom.has(a.from)).map(a => a.from);
+}
+
+function signalState(n, fromId) {
+  const sig = n.signal;
+  if (!sig || !sig.phases.length) return "green";
+  let cyc = sig.cycle;
+  const t = (city.tod + sig.offset + city.time) % cyc;
+  let acc = 0;
+  for (const ph of sig.phases) {
+    const g = ph.green, y = sig.yellow, r = sig.allRed;
+    if (t < acc + g) return ph.moves.includes(fromId) ? "green" : "red";
+    acc += g;
+    if (t < acc + y) return ph.moves.includes(fromId) ? "yellow" : "red";
+    acc += y + r;
+  }
+  return "red";
+}
+
+function movementAllowed(node, from, to) {
+  const f = node.forbid[from];
+  if (f && f[to]) return false;
+  return true;
+}
+
+function routeCost(e, cong) {
+  const sat = edgeSat(e);
+  const slow = 1 + cong * 1.8 * sat;
+  const q = edgeQueue(e);
+  return (e.len / Math.max(2.2, e.speed)) * slow + q * 1.6;
+}
+
+function edgeVehs(e) {
+  const out = [];
+  for (const v of city.vehicles) if (!v.done && v.edge === e.id) out.push(v);
+  return out;
+}
+function edgeSat(e) {
+  const vs = edgeVehs(e);
+  const jam = Math.max(1, (e.len / 8) * e.lanes);
+  return clamp(vs.length / jam, 0, 1.4);
+}
+function edgeQueue(e) {
+  let q = 0;
+  for (const v of city.vehicles) if (!v.done && v.edge === e.id && v.v < 1.6) q++;
+  return q;
+}
+function edgeAvgV(e) {
+  const vs = edgeVehs(e);
+  if (!vs.length) return e.speed;
+  return vs.reduce((s, v) => s + v.v, 0) / vs.length;
+}
+
+function pathfind(from, to, opts) {
+  opts = opts || {};
+  if (from === to) return [];
+  const bus = opts.bus;
+  const cong = opts.cong !== false;
+  const pq = [[0, from]];
+  const dist = new Map([[from, 0]]);
+  const prev = new Map();
+  const prevE = new Map();
+  const seen = new Set();
+  while (pq.length) {
+    pq.sort((a, b) => a[0] - b[0]);
+    const [d, u] = pq.shift();
+    if (seen.has(u)) continue;
+    seen.add(u);
+    if (u === to) break;
+    const outs = city.adj.get(u) || [];
+    for (const e of outs) {
+      if (bus && e.permit === "car") continue;
+      if (!bus && e.permit === "bus") continue;
+      const v = e.to;
+      const last = prev.get(u);
+      if (last != null && !movementAllowed(city.nodes.get(u), last, v)) continue;
+      const nd = d + routeCost(e, cong ? 1 : 0) + (opts.avoid && opts.avoid.has(e.id) ? 80 : 0);
+      if (!dist.has(v) || nd < dist.get(v)) {
+        dist.set(v, nd);
+        prev.set(v, u);
+        prevE.set(v, e.id);
+        pq.push([nd, v]);
+      }
+    }
+  }
+  if (!prevE.has(to) && from !== to) return null;
+  const edges = [];
+  let cur = to;
+  while (cur !== from) {
+    const e = prevE.get(cur);
+    if (!e) return null;
+    edges.push(e);
+    cur = prev.get(cur);
+  }
+  edges.reverse();
+  return edges;
+}
+
+function components() {
+  const und = new Map();
+  for (const n of city.nodes.values()) und.set(n.id, []);
+  for (const L of city.links.values()) {
+    if (L.closed) continue;
+    und.get(L.a).push(L.b);
+    und.get(L.b).push(L.a);
+  }
+  const seen = new Map();
+  let c = 0;
+  for (const id of und.keys()) {
+    if (seen.has(id)) continue;
+    c++;
+    const st = [id];
+    while (st.length) {
+      const u = st.pop();
+      if (seen.has(u)) continue;
+      seen.set(u, c);
+      for (const v of und.get(u)) st.push(v);
+    }
+  }
+  return { seen, count: c };
+}
+
+function illegalTurns() {
+  const bad = [];
+  for (const n of city.nodes.values()) {
+    const ins = (city.adj && [...city.edges.values()].filter(e => e.to === n.id)) || [];
+    const outs = city.adj.get(n.id) || [];
+    for (const e of ins) {
+      const opts = outs.filter(o => o.to !== e.from && movementAllowed(n, e.from, o.to));
+      if (outs.length && !opts.length) bad.push({ node: n.id, from: e.from });
+    }
+  }
+  return bad;
+}
+
+function rushFactor(tod) {
+  const h = (tod / 3600) % 24;
+  const g = (mu, s) => Math.exp(-0.5 * ((h - mu) / s) ** 2);
+  return (0.32 + 1.35 * g(8, 0.85) + 1.45 * g(17.4, 1.05)) * S.rush;
+}
+
+function zoneRate(z, tod) {
+  const h = (tod / 3600) % 24;
+  let k = ZONE_KIND[z.kind] ? ZONE_KIND[z.kind].trips : 1;
+  if (z.kind === "residential") k *= (h < 12 ? 1.3 : 0.7);
+  if (z.kind === "commercial") k *= (h >= 11 && h <= 19 ? 1.25 : 0.7);
+  if (z.kind === "industrial") k *= (h >= 6 && h <= 16 ? 1.2 : 0.5);
+  if (z.kind === "school") k *= ((h >= 7 && h <= 9) || (h >= 14 && h <= 16) ? 2.2 : 0.15);
+  if (z.kind === "event") k *= z.pulse ? 6 : 0.2;
+  return k * z.intensity * rushFactor(tod);
+}
+
+function nodesInZone(z) {
+  const out = [];
+  for (const n of city.nodes.values()) {
+    if (n.x >= z.x && n.x <= z.x + z.w && n.y >= z.y && n.y <= z.y + z.h) out.push(n);
+  }
+  if (out.length) return out;
+  let best = null, bd = 1e15;
+  const cx = z.x + z.w / 2, cy = z.y + z.h / 2;
+  for (const n of city.nodes.values()) {
+    const d = (n.x - cx) ** 2 + (n.y - cy) ** 2;
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best ? [best] : [];
+}
+
+function pickDest(fromZ) {
+  const zs = [...city.zones.values()].filter(z => z.id !== fromZ.id);
+  if (!zs.length) return null;
+  const h = (city.tod / 3600) % 24;
+  const w = zs.map(z => {
+    let wt = z.intensity + 0.1;
+    if (fromZ.kind === "residential") {
+      if (z.kind === "commercial") wt *= h < 12 ? 3 : 1.2;
+      if (z.kind === "industrial") wt *= h < 12 ? 2 : 0.6;
+      if (z.kind === "school") wt *= h < 9 ? 2.5 : 0.4;
+      if (z.kind === "event" && z.pulse) wt *= 8;
+      if (z.kind === "parking") wt *= 1.4;
+    }
+    if (fromZ.kind === "commercial" && z.kind === "residential") wt *= h > 15 ? 3 : 1;
+    if (fromZ.kind === "industrial" && z.kind === "residential") wt *= h > 15 ? 3 : 0.7;
+    return wt;
+  });
+  let s = w.reduce((a, b) => a + b, 0), r = city.rng.next() * s, acc = 0;
+  for (let i = 0; i < zs.length; i++) { acc += w[i]; if (r <= acc) return zs[i]; }
+  return zs[zs.length - 1];
+}
+
+function nearestStopTo(p) {
+  let best = null, bd = 220 * 220;
+  for (const s of city.stops.values()) {
+    const n = stopPos(s);
+    const d = dist2(n, p);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function stopPos(s) {
+  if (s.node && city.nodes.get(s.node)) return city.nodes.get(s.node);
+  return { x: s.x, y: s.y };
+}
+
+function transitPlan(a, b) {
+  if (!a || !b || a.id === b.id) return null;
+  const cov = new Map();
+  for (const r of city.routes.values()) {
+    if (S.strike) continue;
+    r.stops.forEach((sid, i) => {
+      if (!cov.has(sid)) cov.set(sid, []);
+      cov.get(sid).push({ r, i });
+    });
+  }
+  for (const r of city.routes.values()) {
+    const i = r.stops.indexOf(a.id), j = r.stops.indexOf(b.id);
+    if (i >= 0 && j > i) return [{ route: r.id, from: a.id, to: b.id }];
+  }
+  for (const r1 of city.routes.values()) {
+    const i = r1.stops.indexOf(a.id);
+    if (i < 0) continue;
+    for (let k = i + 1; k < r1.stops.length; k++) {
+      const mid = r1.stops[k];
+      for (const r2 of city.routes.values()) {
+        if (r2.id === r1.id) continue;
+        const m = r2.stops.indexOf(mid), t = r2.stops.indexOf(b.id);
+        if (m >= 0 && t > m) return [
+          { route: r1.id, from: a.id, to: mid },
+          { route: r2.id, from: mid, to: b.id }
+        ];
+      }
+    }
+  }
+  return null;
+}
+
+function vehParams(type) {
+  const ag = S.agg;
+  if (type === "truck") return { len: 11, w: 2.5, aMax: 0.9 * ag, bMax: 2.2, T: 1.7 / ag, color: "#c48922", vMul: 0.82 };
+  if (type === "bus") return { len: 12.5, w: 2.6, aMax: 1.05 * ag, bMax: 2.4, T: 1.5 / ag, color: "#2e9a86", vMul: 0.88 };
+  return { len: 4.6, w: 1.9, aMax: 1.5 * ag, bMax: 2.8, T: 1.15 / ag, color: null, vMul: 1 };
+}
+
+const CAR_COLS = ["#dfe6cf", "#e8d59a", "#b7c4a0", "#8faad0", "#d9b48a", "#c9cfc0"];
+
+function spawnVehicle(fromN, toN, type, extra) {
+  if (!fromN || !toN || fromN.id === toN.id) return null;
+  const path = pathfind(fromN.id, toN.id, { bus: type === "bus", cong: true });
+  if (!path || !path.length) return null;
+  const p = vehParams(type);
+  const v = Object.assign({
+    id: city.vid++, type, from: fromN.id, dest: toN.id, path, pathI: 0,
+    edge: path[0], s: 2, lane: 0, v: 5, a: 0, x: fromN.x, y: fromN.y, hdg: 0,
+    len: p.len, w: p.w, aMax: p.aMax, bMax: p.bMax, T: p.T, vMul: p.vMul,
+    color: p.color || CAR_COLS[city.rng.int(CAR_COLS.length)],
+    born: city.time, wait: 0, done: false, failed: false, needRoute: false,
+    passengers: [], dwell: 0, served: new Set(), ff: 0, emissions: 0
+  }, extra || {});
+  v.ff = path.reduce((s, id) => { const e = city.edges.get(id); return s + (e ? e.len / e.speed : 0); }, 0);
+  city.vehicles.push(v);
+  return v;
+}
+
+function failVeh(v, why) {
+  v.done = true; v.failed = true; v.why = why; city.failed++;
+}
+
+function completeVeh(v) {
+  v.done = true;
+  city.completed++;
+  const tt = city.time - v.born;
+  city.ttSamples.push(tt);
+  city.delaySamples.push(Math.max(0, tt - v.ff));
+  if (city.ttSamples.length > 400) { city.ttSamples.shift(); city.delaySamples.shift(); }
+}
+
+function reroute(v) {
+  const e = city.edges.get(v.edge);
+  const here = e ? e.to : v.from;
+  const dest = v.dest;
+  const avoid = new Set(v.path && v.pathI < (v.path.length) ? [v.edge] : []);
+  const path = pathfind(here, dest, { bus: v.type === "bus", cong: true, avoid });
+  if (!path) {
+    const p2 = pathfind(here, dest, { bus: v.type === "bus", cong: false });
+    if (!p2) { failVeh(v, "no-path"); return; }
+    v.path = p2; v.pathI = 0; v.edge = p2[0]; v.s = Math.min(v.s, 4);
+    return;
+  }
+  v.path = path; v.pathI = 0; v.edge = path[0]; v.s = Math.min(v.s, 4);
+}
+
+function findLeader(v) {
+  let best = null, bd = 1e9;
+  for (const o of city.vehicles) {
+    if (o === v || o.done || o.edge !== v.edge || o.lane !== v.lane) continue;
+    const gap = o.s - v.s - o.len;
+    if (gap >= -1 && gap < bd) { bd = gap; best = o; }
+  }
+  return best ? { v: best, gap: bd } : null;
+}
+
+function desiredLane(v, e) {
+  if (!e || e.lanes <= 1) return 0;
+  const next = v.path[v.pathI + 1];
+  if (!next) return v.lane;
+  const ne = city.edges.get(next);
+  if (!ne) return v.lane;
+  const n = city.nodes.get(e.to);
+  const from = city.nodes.get(e.from);
+  const to = city.nodes.get(ne.to);
+  if (!n || !from || !to) return v.lane;
+  let turn = Math.atan2(Math.sin(ang(n.x, n.y, to.x, to.y) - ang(from.x, from.y, n.x, n.y)), Math.cos(ang(n.x, n.y, to.x, to.y) - ang(from.x, from.y, n.x, n.y)));
+  if (turn > 0.6) return e.lanes - 1;
+  if (turn < -0.6) return 0;
+  return clamp(v.lane, 0, e.lanes - 1);
+}
+
+function junctionOK(v, e) {
+  const n = city.nodes.get(e.to);
+  if (!n) return false;
+  const next = v.path[v.pathI + 1];
+  if (!next) return true;
+  const ne = city.edges.get(next);
+  if (!ne) return false;
+  if (!movementAllowed(n, e.from, ne.to)) return false;
+  if (n.kind === "roundabout") {
+    for (const o of city.vehicles) {
+      if (o.done || o === v) continue;
+      const oe = city.edges.get(o.edge);
+      if (oe && oe.from === n.id && o.s < 18 && Math.abs(((o.hdg - v.hdg + TAU) % TAU) - Math.PI) > 0.4) return false;
+    }
+  }
+  if (n.signal) {
+    const st = signalState(n, e.from);
+    if (st === "red") return false;
+    if (st === "yellow" && (e.len - v.s) > 8 + v.v * 0.6) return false;
+    const nextE = city.edges.get(next);
+    const opp = [...city.edges.values()].filter(x => x.to === n.id && x.from === nextE.to);
+    if (opp.length) {
+      const left = (() => {
+        const from = city.nodes.get(e.from), to = city.nodes.get(nextE.to);
+        let turn = Math.atan2(Math.sin(ang(n.x, n.y, to.x, to.y) - ang(from.x, from.y, n.x, n.y)), Math.cos(ang(n.x, n.y, to.x, to.y) - ang(from.x, from.y, n.x, n.y)));
+        return turn < -0.5;
+      })();
+      if (left) {
+        for (const o of city.vehicles) {
+          if (o.done || o === v) continue;
+          const oe = city.edges.get(o.edge);
+          if (oe && oe.from === nextE.to && oe.to === n.id && o.v > 2 && (oe.len - o.s) < 24) return false;
+        }
+      }
+    }
+  }
+  let occ = 0;
+  for (const o of city.vehicles) {
+    if (o.done || o === v) continue;
+    if (o.inJunc === n.id) occ++;
+  }
+  if (occ >= 3 + (n.kind === "roundabout" ? 2 : 0)) return false;
+  return true;
+}
+
+function idm(v, v0, s, vLead) {
+  const a = v.aMax, b = v.bMax, T = v.T, s0 = 2.2;
+  const dv = v.v - vLead;
+  const ss = s0 + Math.max(0, v.v * T + v.v * dv / (2 * Math.sqrt(a * b)));
+  return a * (1 - Math.pow(v.v / Math.max(v0, 0.4), 4) - Math.pow(ss / Math.max(s, 0.3), 2));
+}
+
+function placeOnEdge(v, e) {
+  const A = city.nodes.get(e.from), B = city.nodes.get(e.to);
+  const t = clamp(v.s / Math.max(e.len, 0.1), 0, 1);
+  const dx = B.x - A.x, dy = B.y - A.y;
+  const len = Math.max(0.1, hypot(dx, dy));
+  const ux = dx / len, uy = dy / len;
+  const px = -uy, py = ux;
+  const laneOff = (e.lanes === 1 ? 1.7 : (v.lane + 0.5) * 3.4 - e.lanes * 1.7);
+  v.x = A.x + ux * v.s + px * laneOff;
+  v.y = A.y + uy * v.s + py * laneOff;
+  v.hdg = Math.atan2(uy, ux);
+}
+
+function handleBus(v, dt) {
+  if (v.type !== "bus" || !v.routeId) return;
+  const r = city.routes.get(v.routeId);
+  if (!r) return;
+  const e = city.edges.get(v.edge);
+  if (!e) return;
+  for (const sid of r.stops) {
+    if (v.served.has(sid)) continue;
+    const st = city.stops.get(sid);
+    if (!st) continue;
+    const p = stopPos(st);
+    const d = hypot(v.x - p.x, v.y - p.y);
+    if (d < 14) {
+      v.dwell = Math.max(v.dwell, r.dwell);
+      const alight = v.passengers.filter(pax => pax.to === sid || (pax.leg && pax.leg.to === sid));
+      for (const pax of alight) {
+        v.passengers = v.passengers.filter(x => x !== pax);
+        if (pax.plan && pax.plan.length > 1) {
+          pax.plan.shift();
+          pax.route = pax.plan[0].route;
+          pax.from = pax.plan[0].from;
+          pax.to = pax.plan[0].to;
+          pax.on = false;
+          city.passengers.push(pax);
+          st.wait = st.wait || [];
+          st.wait.push(pax);
+        } else {
+          pax.done = true;
+          city.ridership++;
+          city.ttSamples.push(city.time - pax.born);
+        }
+      }
+      st.wait = st.wait || [];
+      const cap = Math.round(r.capacity * S.cap);
+      while (st.wait.length && v.passengers.length < cap) {
+        const pax = st.wait[0];
+        if (pax.route && pax.route !== r.id && !(pax.plan && pax.plan[0] && pax.plan[0].route === r.id)) break;
+        if (pax.route && pax.route !== r.id) { st.wait.push(st.wait.shift()); if (st.wait[0] === pax) break; continue; }
+        st.wait.shift();
+        pax.on = true;
+        pax.boarded = city.time;
+        v.passengers.push(pax);
+        city.passengers = city.passengers.filter(x => x !== pax);
+      }
+      v.served.add(sid);
+      return;
+    }
+  }
+}
+
+function tickVehicle(v, dt) {
+  if (v.done) return;
+  if (v.needRoute) { reroute(v); v.needRoute = false; if (v.done) return; }
+  if (v.dwell > 0) { v.dwell -= dt; v.v = 0; v.wait += dt; return; }
+  const e = city.edges.get(v.edge);
+  if (!e) { reroute(v); if (v.done) return; }
+  const edge = city.edges.get(v.edge);
+  if (!edge) { failVeh(v, "missing-edge"); return; }
+  const L = city.links.get(edge.link);
+  if (!L || L.closed) { reroute(v); return; }
+
+  if (v.type === "bus") handleBus(v, dt);
+  if (v.dwell > 0) { v.v = 0; return; }
+
+  const want = desiredLane(v, edge);
+  if (want !== v.lane && city.rng.next() < S.laneChange * dt * 1.8) {
+    const gapOk = !city.vehicles.some(o => o !== v && !o.done && o.edge === v.edge && o.lane === want && Math.abs(o.s - v.s) < 9);
+    if (gapOk) v.lane = want;
+  }
+  v.lane = clamp(v.lane, 0, Math.max(0, edge.lanes - 1));
+
+  const lead = findLeader(v);
+  let v0 = edge.speed * v.vMul * (v.type === "bus" && v.dwell > 0 ? 0.2 : 1);
+  let gap = lead ? Math.max(0.2, lead.gap) : 400;
+  let vLead = lead ? lead.v.v : v0;
+  const remain = edge.len - v.s;
+  const next = v.path[v.pathI + 1];
+  if (!next && remain < 10) { completeVeh(v); return; }
+
+  if (remain < 38) {
+    const ok = junctionOK(v, edge);
+    if (!ok) {
+      gap = Math.min(gap, Math.max(0.4, remain - 5));
+      vLead = 0;
+    } else if (remain < 10) v.inJunc = edge.to;
+  } else v.inJunc = null;
+
+  if (S.reroute > 0.05 && remain < 20 && next) {
+    const sat = edgeSat(edge);
+    if (sat > 0.55 + (1 - S.reroute) * 0.4 && city.rng.next() < S.reroute * dt * 0.4) v.needRoute = true;
+  }
+
+  const acc = clamp(idm(v, v0, gap, vLead), -v.bMax * 1.4, v.aMax);
+  v.a = acc;
+  v.v = clamp(v.v + acc * dt, 0, v0 * 1.15);
+  if (v.v < 0.35 && gap < 12) v.wait += dt;
+  v.s += v.v * dt;
+  const fuel = (0.8 + 0.04 * v.v + 0.6 * Math.max(0, acc) + (v.v < 1.2 ? 0.35 : 0)) * dt * (v.type === "truck" ? 2.2 : v.type === "bus" ? 1.8 : 1);
+  v.emissions += fuel;
+  city.emissions += fuel;
+  placeOnEdge(v, edge);
+
+  if (v.s >= edge.len - 0.4) {
+    if (!next) { completeVeh(v); return; }
+    if (!junctionOK(v, edge) && v.s >= edge.len - 0.4) { v.s = edge.len - 0.5; v.v = 0; return; }
+    const ne = city.edges.get(next);
+    if (!ne) { v.needRoute = true; return; }
+    v.pathI++;
+    v.edge = next;
+    v.s = Math.min(3, v.s - edge.len + 0.5);
+    v.inJunc = null;
+    placeOnEdge(v, ne);
+  }
+}
+
+function spawnDemand(dt) {
+  let rate = 0;
+  for (const z of city.zones.values()) rate += zoneRate(z, city.tod) * 0.11;
+  if (S.induced) {
+    const vs = city.vehicles.filter(v => !v.done);
+    const spd = vs.length ? vs.reduce((s, v) => s + v.v, 0) / vs.length : 10;
+    rate *= 0.65 + 0.7 * clamp(spd / 12, 0, 1.4);
+  }
+  rate *= S.demand;
+  if (city.vehicles.filter(v => !v.done).length > (S.mapSize === "large" ? 1600 : S.mapSize === "small" ? 420 : 900)) rate *= 0.15;
+  city.spawnCarry += rate * dt;
+  while (city.spawnCarry >= 1) {
+    city.spawnCarry -= 1;
+    const zs = [...city.zones.values()];
+    if (!zs.length) break;
+    const weights = zs.map(z => zoneRate(z, city.tod));
+    let s = weights.reduce((a, b) => a + b, 0) || 1, r = city.rng.next() * s, acc = 0, fromZ = zs[0];
+    for (let i = 0; i < zs.length; i++) { acc += weights[i]; if (r <= acc) { fromZ = zs[i]; break; } }
+    const toZ = pickDest(fromZ);
+    const fn = city.rng.pick(nodesInZone(fromZ));
+    const tn = toZ ? city.rng.pick(nodesInZone(toZ)) : null;
+    if (!fn || !tn) continue;
+    const useTransit = !S.carOnly && !S.strike && city.rng.next() < transitShare(fromZ, toZ, fn, tn);
+    if (useTransit) spawnPassenger(fn, tn);
+    else {
+      const t = city.rng.next();
+      const type = t > 0.92 ? "truck" : "car";
+      spawnVehicle(fn, tn, type);
+    }
+  }
+}
+
+function transitShare(fromZ, toZ, fn, tn) {
+  const a = nearestStopTo(fn), b = nearestStopTo(tn);
+  if (!a || !b) return 0.02;
+  if (!transitPlan(a, b)) return 0.04;
+  return 0.38 * S.freq;
+}
+
+function spawnPassenger(fromN, toN) {
+  const a = nearestStopTo(fromN), b = nearestStopTo(toN);
+  if (!a || !b) return;
+  const plan = transitPlan(a, b);
+  const pax = {
+    id: city.pid++, from: a.id, to: b.id, born: city.time, on: false, plan: plan || [],
+    route: plan ? plan[0].route : null, destN: toN.id
+  };
+  a.wait = a.wait || [];
+  if (!plan) { city.failed++; return; }
+  a.wait.push(pax);
+  city.passengers.push(pax);
+}
+
+function spawnBuses(dt) {
+  if (S.strike) return;
+  for (const r of city.routes.values()) {
+    const headway = Math.max(25, r.headway / Math.max(0.15, S.freq));
+    const c = city.busCarry.get(r.id) || 0;
+    const n = c + dt;
+    if (n >= headway) {
+      city.busCarry.set(r.id, n - headway);
+      launchBus(r, false);
+      if (r.stops.length > 1) launchBus(r, true);
+    } else city.busCarry.set(r.id, n);
+  }
+}
+
+function launchBus(r, reverse) {
+  if (!r.stops.length) return;
+  const order = reverse ? r.stops.slice().reverse() : r.stops;
+  const s0 = city.stops.get(order[0]);
+  const s1 = city.stops.get(order[order.length - 1]);
+  if (!s0 || !s1) return;
+  const a = stopNode(s0), b = stopNode(s1);
+  if (!a || !b) return;
+  const v = spawnVehicle(a, b, "bus", { routeId: r.id, color: r.color, served: new Set() });
+  if (v) {
+    const via = [];
+    for (const sid of order) {
+      const n = stopNode(city.stops.get(sid));
+      if (n) via.push(n.id);
+    }
+    const path = pathVia(via, true);
+    if (path && path.length) { v.path = path; v.edge = path[0]; v.dest = via[via.length - 1]; }
+  }
+}
+
+function stopNode(s) {
+  if (!s) return null;
+  if (s.node && city.nodes.get(s.node)) return city.nodes.get(s.node);
+  return nearestNode(s, 80);
+}
+
+function pathVia(nodes, bus) {
+  let path = [];
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const p = pathfind(nodes[i], nodes[i + 1], { bus, cong: true });
+    if (!p) return path.length ? path : null;
+    path = path.concat(p);
+  }
+  return path;
+}
+
+function maybeIncidents(dt) {
+  if (S.incidentRate <= 0) return;
+  if (city.rng.next() < S.incidentRate * 0.0008 * dt) {
+    const links = [...city.links.values()].filter(L => !L.closed);
+    if (!links.length) return;
+    const L = city.rng.pick(links);
+    const inc = { id: city.iid++, link: L.id, kind: city.rng.next() < 0.4 ? "construction" : "crash", until: city.time + city.rng.range(40, 140) };
+    city.incidents.set(inc.id, inc);
+    rebuildGraph();
+    toast("Incident on " + (L.name || "link " + L.id));
+  }
+  for (const inc of [...city.incidents.values()]) {
+    if (inc.until && city.time > inc.until && inc.kind !== "construction") {
+      city.incidents.delete(inc.id);
+      rebuildGraph();
+    }
+  }
+}
+
+function sampleMetrics() {
+  if (city.time - city.lastSample < 2.5) return;
+  city.lastSample = city.time;
+  const live = city.vehicles.filter(v => !v.done);
+  const q = live.filter(v => v.v < 1.5).length;
+  const spd = live.length ? live.reduce((s, v) => s + v.v, 0) / live.length : 0;
+  const waits = [];
+  for (const st of city.stops.values()) for (const p of (st.wait || [])) waits.push(city.time - p.born);
+  const buses = live.filter(v => v.type === "bus");
+  const occ = buses.length ? buses.reduce((s, v) => s + v.passengers.length / Math.max(1, (city.routes.get(v.routeId) || { capacity: 40 }).capacity), 0) / buses.length : 0;
+  const avgTT = city.ttSamples.length ? city.ttSamples.reduce((a, b) => a + b, 0) / city.ttSamples.length : 0;
+  const sorted = city.ttSamples.slice().sort((a, b) => a - b);
+  const p95 = sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : 0;
+  const tp = (city.completed) / Math.max(1, city.time / 60);
+  push(hist.tp, tp); push(hist.tt, avgTT); push(hist.p95, p95);
+  push(hist.v, spd); push(hist.q, q); push(hist.wait, waits.length ? waits.reduce((a, b) => a + b, 0) / waits.length : 0);
+  push(hist.occ, occ * 100); push(hist.em, city.emissions); push(hist.ride, city.ridership);
+}
+
+function push(a, v) { a.push(v); if (a.length > 90) a.shift(); }
+
+function simStep(dt) {
+  city.time += dt;
+  city.tod = (city.tod + dt) % 86400;
+  spawnDemand(dt);
+  spawnBuses(dt);
+  maybeIncidents(dt);
+  if (S.sigPolicy === "auto") adaptSignals(dt);
+  for (const v of city.vehicles) tickVehicle(v, dt);
+  if (city.vehicles.length > 1800) city.vehicles = city.vehicles.filter(v => !v.done || city.time - v.born < 2);
+  else if (city.time % 5 < dt) city.vehicles = city.vehicles.filter(v => !v.done);
+  for (const st of city.stops.values()) {
+    st.wait = (st.wait || []).filter(p => {
+      if (city.time - p.born > 900) { city.failed++; return false; }
+      return !p.done;
+    });
+  }
+  sampleMetrics();
+}
+
+function adaptSignals(dt) {
+  if ((city.time / 8 | 0) === ((city.time - dt) / 8 | 0)) return;
+  for (const n of city.nodes.values()) {
+    if (!n.signal || !n.signal.auto || S.sigPolicy !== "auto") continue;
+    const ap = approaches(n);
+    if (ap.length < 2) continue;
+    const loads = ap.map(a => {
+      const e = [...city.edges.values()].find(e => e.to === n.id && e.from === a.from);
+      return e ? edgeQueue(e) + 1 : 1;
+    });
+    const groups = groupsByAxis(n, ap);
+    const gLoad = groups.map(g => g.reduce((s, i) => s + loads[i], 0));
+    const sum = gLoad.reduce((a, b) => a + b, 0) || 1;
+    const split = n.signal.cycle - groups.length * (n.signal.yellow + n.signal.allRed);
+    n.signal.phases.forEach((ph, i) => { ph.green = Math.max(8, Math.round(split * gLoad[i] / sum)); });
+  }
+}
+
+function snapshot() {
+  return JSON.stringify(serialize(true));
+}
+function pushUndo() {
+  undo.push(snapshot());
+  if (undo.length > 40) undo.shift();
+  redo.length = 0;
+}
+
+function serialize(withAgents) {
+  const data = {
+    v: 1,
+    name: city.name,
+    seed: city.seed,
+    rng: city.rng.state,
+    time: city.time,
+    tod: city.tod,
+    ids: { nid: city.nid, lid: city.lid, zid: city.zid, sid: city.sid, rid: city.rid, vid: city.vid, pid: city.pid, iid: city.iid },
+    settings: Object.assign({}, S),
+    world: city.world,
+    nodes: [...city.nodes.values()].map(n => ({
+      id: n.id, x: n.x, y: n.y, kind: n.kind,
+      signal: n.signal ? { auto: n.signal.auto, cycle: n.signal.cycle, offset: n.signal.offset, phases: n.signal.phases, yellow: n.signal.yellow, allRed: n.signal.allRed } : null,
+      forbid: n.forbid
+    })),
+    links: [...city.links.values()],
+    zones: [...city.zones.values()],
+    stops: [...city.stops.values()].map(s => ({ id: s.id, node: s.node, x: s.x, y: s.y, name: s.name })),
+    routes: [...city.routes.values()],
+    incidents: [...city.incidents.values()],
+    stats: { completed: city.completed, failed: city.failed, ridership: city.ridership, emissions: city.emissions },
+    vehicles: withAgents ? city.vehicles.filter(v => !v.done).map(v => ({
+      id: v.id, type: v.type, from: v.from, dest: v.dest, path: v.path, pathI: v.pathI, edge: v.edge, s: v.s, lane: v.lane, v: v.v,
+      routeId: v.routeId, color: v.color, born: v.born, passengers: v.passengers
+    })) : [],
+    passengers: withAgents ? city.passengers : []
+  };
+  return JSON.parse(JSON.stringify(data));
+}
+
+function validateCity(data) {
+  if (!data || data.v !== 1) return "Unsupported or missing format version";
+  if (!Array.isArray(data.nodes) || !Array.isArray(data.links)) return "City must include nodes and links arrays";
+  for (const n of data.nodes) if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) return "Node with invalid coordinates";
+  for (const L of data.links) {
+    if (L.a == null || L.b == null) return "Link missing endpoints";
+  }
+  return null;
+}
+
+function loadCity(data, keepAgents) {
+  const err = validateCity(data);
+  if (err) throw new Error(err);
+  city.name = data.name || "Imported";
+  city.seed = data.seed || 1;
+  city.rng = RNG(city.seed);
+  if (data.rng != null) city.rng.state = data.rng;
+  city.time = data.time || 0;
+  city.tod = data.tod || 7.5 * 3600;
+  const ids = data.ids || {};
+  city.nid = ids.nid || 1; city.lid = ids.lid || 1; city.zid = ids.zid || 1;
+  city.sid = ids.sid || 1; city.rid = ids.rid || 1; city.vid = ids.vid || 1;
+  city.pid = ids.pid || 1; city.iid = ids.iid || 1;
+  if (data.settings) Object.assign(S, data.settings);
+  city.world = data.world || { w: 1400, h: 1100 };
+  city.nodes = new Map();
+  for (const n of data.nodes) {
+    const node = addNode(n.x, n.y, { kind: n.kind || "x", forbid: n.forbid || {} });
+    city.nodes.delete(node.id);
+    node.id = n.id;
+    node.signal = n.signal || null;
+    city.nodes.set(n.id, node);
+    city.nid = Math.max(city.nid, n.id + 1);
+  }
+  city.links = new Map();
+  for (const L of data.links) {
+    city.links.set(L.id, Object.assign({}, L));
+    city.lid = Math.max(city.lid, L.id + 1);
+  }
+  city.zones = new Map();
+  for (const z of data.zones || []) { city.zones.set(z.id, Object.assign({}, z)); city.zid = Math.max(city.zid, z.id + 1); }
+  city.stops = new Map();
+  for (const s of data.stops || []) { city.stops.set(s.id, Object.assign({ wait: [] }, s)); city.sid = Math.max(city.sid, s.id + 1); }
+  city.routes = new Map();
+  for (const r of data.routes || []) { city.routes.set(r.id, Object.assign({}, r)); city.rid = Math.max(city.rid, r.id + 1); }
+  city.incidents = new Map();
+  for (const i of data.incidents || []) { city.incidents.set(i.id, Object.assign({}, i)); city.iid = Math.max(city.iid, i.id + 1); }
+  city.completed = (data.stats && data.stats.completed) || 0;
+  city.failed = (data.stats && data.stats.failed) || 0;
+  city.ridership = (data.stats && data.stats.ridership) || 0;
+  city.emissions = (data.stats && data.stats.emissions) || 0;
+  city.vehicles = [];
+  city.passengers = [];
+  city.ttSamples = [];
+  city.delaySamples = [];
+  city.spawnCarry = 0;
+  city.busCarry = new Map();
+  for (const k of Object.keys(hist)) hist[k] = [];
+  rebuildGraph();
+  bakeBuildings();
+  if (keepAgents && data.vehicles) {
+    for (const raw of data.vehicles) {
+      const p = vehParams(raw.type);
+      const v = Object.assign({
+        len: p.len, w: p.w, aMax: p.aMax, bMax: p.bMax, T: p.T, vMul: p.vMul,
+        color: raw.color || p.color, wait: 0, done: false, failed: false, needRoute: false,
+        passengers: raw.passengers || [], dwell: 0, served: new Set(), ff: 0, emissions: 0, x: 0, y: 0, hdg: 0
+      }, raw);
+      city.vehicles.push(v);
+    }
+  }
+  autoSignals();
+  rebuildGraph();
+  fitCam();
+}
+
+function fitCam() {
+  let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
+  for (const n of city.nodes.values()) { minx = Math.min(minx, n.x); maxx = Math.max(maxx, n.x); miny = Math.min(miny, n.y); maxy = Math.max(maxy, n.y); }
+  if (!city.nodes.size) return;
+  cam.x = (minx + maxx) / 2; cam.y = (miny + maxy) / 2;
+  const w = wrap.clientWidth || 800, h = wrap.clientHeight || 600;
+  cam.k = clamp(Math.min(w / (maxx - minx + 160), h / (maxy - miny + 160)), 0.35, 2.4);
+}
+
+function clearCity() {
+  city.nodes.clear(); city.links.clear(); city.zones.clear(); city.stops.clear();
+  city.routes.clear(); city.incidents.clear(); city.vehicles = []; city.passengers = [];
+  city.nid = city.lid = city.zid = city.sid = city.rid = city.vid = city.pid = city.iid = 1;
+  city.time = 0; city.completed = 0; city.failed = 0; city.ridership = 0; city.emissions = 0;
+  city.ttSamples = []; city.delaySamples = []; city.spawnCarry = 0; city.busCarry = new Map();
+  for (const k of Object.keys(hist)) hist[k] = [];
+  S.induced = false; S.strike = false; S.carOnly = false;
+}
+
+function addZone(x, y, w, h, kind, intensity) {
+  const z = { id: city.zid++, x, y, w, h, kind, intensity: intensity || 1, pulse: false };
+  city.zones.set(z.id, z);
+  return z;
+}
+function addStop(node, name) {
+  const n = typeof node === "object" ? node : city.nodes.get(node);
+  const s = { id: city.sid++, node: n.id, x: n.x, y: n.y, name: name || ("Stop " + city.sid), wait: [] };
+  city.stops.set(s.id, s);
+  return s;
+}
+function addRoute(name, stops, opt) {
+  const r = Object.assign({ id: city.rid++, name, stops: stops.map(s => s.id || s), headway: 90, capacity: 42, dwell: 8, color: "#2e9a86" }, opt || {});
+  city.routes.set(r.id, r);
+  return r;
+}
+
+function grid(cols, rows, ox, oy, sx, sy) {
+  const g = [];
+  for (let j = 0; j < rows; j++) {
+    g[j] = [];
+    for (let i = 0; i < cols; i++) g[j][i] = addNode(ox + i * sx, oy + j * sy);
+  }
+  return g;
+}
+function stitchGrid(g, hSpec, vSpec) {
+  const rows = g.length, cols = g[0].length;
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols - 1; i++) addLink(g[j][i].id, g[j][i + 1].id, hSpec(j, i));
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows - 1; j++) addLink(g[j][i].id, g[j + 1][i].id, vSpec(j, i));
+}
+
+function bakeBuildings() {
+  city.buildings = [];
+  const rng = RNG(city.seed ^ 0xB17D);
+  for (const z of city.zones.values()) {
+    const n = Math.max(3, Math.round((z.w * z.h) / 4200));
+    for (let i = 0; i < n; i++) {
+      const bw = rng.range(10, z.kind === "industrial" ? 48 : 22);
+      const bh = rng.range(10, z.kind === "industrial" ? 36 : 20);
+      const x = z.x + rng.range(4, Math.max(5, z.w - bw - 4));
+      const y = z.y + rng.range(4, Math.max(5, z.h - bh - 4));
+      city.buildings.push({ x, y, w: bw, h: bh, kind: z.kind, hgt: rng.range(0.4, 1) });
+    }
+  }
+}
+
+function loadScenario(name) {
+  clearCity();
+  city.rng = RNG(city.seed);
+  city.tod = 7.5 * 3600;
+  S.demand = 1; S.freq = 1; S.sigPolicy = "auto"; S.weather = 1;
+  const size = S.mapSize === "large" ? 1.25 : S.mapSize === "small" ? 0.8 : 1;
+  if (name === "crossroads") {
+    city.name = "Simple Crossroads";
+    const n = [addNode(200, 360), addNode(520, 360), addNode(840, 360), addNode(520, 140), addNode(520, 580)];
+    addLink(n[0].id, n[1].id, { lanesAB: 1, lanesBA: 1, speed: 13, name: "West St" });
+    addLink(n[1].id, n[2].id, { lanesAB: 1, lanesBA: 1, speed: 13, name: "East St" });
+    addLink(n[3].id, n[1].id, { lanesAB: 1, lanesBA: 1, speed: 13, name: "North Ave" });
+    addLink(n[1].id, n[4].id, { lanesAB: 1, lanesBA: 1, speed: 13, name: "South Ave" });
+    addZone(40, 80, 240, 200, "residential", 1.4);
+    addZone(700, 80, 240, 200, "commercial", 1.3);
+    addZone(40, 420, 240, 220, "industrial", 0.9);
+    addZone(700, 420, 240, 220, "residential", 1);
+    const s1 = addStop(n[0], "West"), s2 = addStop(n[2], "East");
+    addRoute("Crosstown", [s1, s2], { headway: 70, color: "#2e9a86" });
+  } else if (name === "avenue") {
+    city.name = "Synchronized Avenue";
+    const cols = 8, rows = 3;
+    const g = grid(cols, rows, 120, 220, 130, 160);
+    stitchGrid(g,
+      (j, i) => ({ lanesAB: j === 1 ? 2 : 1, lanesBA: j === 1 ? 2 : 1, speed: j === 1 ? 16 : 11, name: j === 1 ? "Harbor Pkwy" : "Lane " + j }),
+      (j, i) => ({ lanesAB: 1, lanesBA: 1, speed: 11, name: "N " + (i + 1) })
+    );
+    addZone(40, 40, 280, 160, "residential", 1.3);
+    addZone(700, 40, 360, 160, "commercial", 1.4);
+    addZone(40, 540, 400, 160, "residential", 1.1);
+    const stops = [];
+    for (let i = 0; i < cols; i += 2) stops.push(addStop(g[1][i], "Pkwy " + i));
+    addRoute("Pkwy BRT", stops, { headway: 60, color: "#1f8a78" });
+    S.sigPolicy = "auto";
+  } else if (name === "bottleneck") {
+    city.name = "Suburban Bottleneck";
+    const a = grid(4, 3, 80, 200, 110, 140);
+    const b = grid(4, 3, 780, 200, 110, 140);
+    stitchGrid(a, () => ({ lanesAB: 1, lanesBA: 1, speed: 12, name: "Oak" }), () => ({ lanesAB: 1, lanesBA: 1, speed: 12, name: "Pine" }));
+    stitchGrid(b, () => ({ lanesAB: 1, lanesBA: 1, speed: 12, name: "Elm" }), () => ({ lanesAB: 1, lanesBA: 1, speed: 12, name: "Ash" }));
+    addLink(a[1][3].id, b[1][0].id, { lanesAB: 1, lanesBA: 1, speed: 14, name: "The Cut" });
+    addZone(40, 40, 360, 140, "residential", 1.6);
+    addZone(760, 40, 400, 140, "commercial", 1.7);
+    addZone(40, 560, 360, 140, "residential", 1.2);
+    const s1 = addStop(a[1][0], "Suburb"), s2 = addStop(b[1][3], "Town");
+    addRoute("Cut Line", [s1, addStop(a[1][3], "Gate"), s2], { headway: 80, color: "#c48922" });
+  } else if (name === "stadium") {
+    city.name = "Stadium Event";
+    loadScenario("downtown");
+    city.name = "Stadium Event";
+    addZone(980, 80, 220, 180, "event", 2.2).pulse = true;
+    S.demand = 1.35;
+  } else if (name === "bridge") {
+    city.name = "Bridge Closure";
+    const w = grid(4, 4, 80, 160, 120, 120);
+    const e = grid(4, 4, 820, 160, 120, 120);
+    stitchGrid(w, () => ({ speed: 12, name: "Westside" }), () => ({ speed: 12 }));
+    stitchGrid(e, () => ({ speed: 12, name: "Eastside" }), () => ({ speed: 12 }));
+    const br1 = addLink(w[1][3].id, e[1][0].id, { lanesAB: 2, lanesBA: 2, speed: 16, name: "North Bridge" });
+    addLink(w[2][3].id, e[2][0].id, { lanesAB: 1, lanesBA: 1, speed: 14, name: "South Bridge" });
+    if (br1) br1.closed = true;
+    addZone(40, 40, 300, 120, "residential", 1.4);
+    addZone(820, 40, 360, 140, "commercial", 1.5);
+    addZone(40, 620, 300, 120, "industrial", 1);
+    const s1 = addStop(w[1][0], "West"), s2 = addStop(e[1][3], "East");
+    addRoute("Bridge Bus", [s1, addStop(w[1][3], "Span"), s2], { headway: 75, color: "#6aa0d4" });
+    city._bridge = br1.id;
+  } else if (name === "brt") {
+    city.name = "BRT Corridor";
+    const cols = 9, rows = 3;
+    const g = grid(cols, rows, 80, 240, 120, 150);
+    stitchGrid(g,
+      (j) => ({ lanesAB: j === 1 ? 1 : 1, lanesBA: j === 1 ? 1 : 1, speed: 12, name: j === 1 ? "Frontage" : "St" }),
+      () => ({ speed: 11 })
+    );
+    for (let i = 0; i < cols - 1; i++) {
+      addLink(g[1][i].id, g[1][i + 1].id, { lanesAB: 1, lanesBA: 1, speed: 18, name: "BRT Way", permit: "bus", kind: "bus" });
+    }
+    addZone(40, 40, 420, 170, "residential", 1.5);
+    addZone(620, 40, 420, 170, "commercial", 1.6);
+    const stops = [];
+    for (let i = 0; i < cols; i += 2) stops.push(addStop(g[1][i], "BRT " + i));
+    addRoute("Red BRT", stops, { headway: 45, color: "#d94b3d", capacity: 70, dwell: 6 });
+  } else if (name === "strike") {
+    loadScenario("downtown");
+    city.name = "Transit Strike";
+    S.strike = true; S.freq = 0; S.demand = 1.25; S.carOnly = true;
+  } else if (name === "induced") {
+    loadScenario("avenue");
+    city.name = "Induced Demand";
+    S.induced = true; S.demand = 1.1;
+    for (const L of city.links.values()) if (L.name === "Harbor Pkwy") { L.lanesAB = 3; L.lanesBA = 3; }
+  } else if (name === "stress") {
+    city.name = "Dense Stress Test";
+    const cols = 8, rows = 7;
+    const g = grid(cols, rows, 60, 60, 110 * size, 90 * size);
+    stitchGrid(g,
+      (j, i) => ({ lanesAB: j % 3 === 1 ? 2 : 1, lanesBA: j % 3 === 1 ? 2 : 1, speed: j % 3 === 1 ? 15 : 11, name: "H" + j }),
+      (j, i) => ({ lanesAB: i % 3 === 1 ? 2 : 1, lanesBA: i % 3 === 1 ? 2 : 1, speed: i % 3 === 1 ? 15 : 11, name: "V" + i })
+    );
+    addZone(20, 20, 280, 200, "residential", 2);
+    addZone(520, 20, 320, 180, "commercial", 2);
+    addZone(20, 420, 260, 220, "industrial", 1.4);
+    addZone(520, 420, 300, 200, "school", 1.2);
+    const stops = [addStop(g[0][0], "A"), addStop(g[2][3], "B"), addStop(g[5][6], "C"), addStop(g[6][1], "D")];
+    addRoute("Loop", stops, { headway: 50, color: "#e3b14a" });
+    addRoute("Cross", [stops[0], addStop(g[3][7], "E")], { headway: 70, color: "#2e9a86" });
+    S.demand = 1.8;
+  } else {
+    city.name = "Downtown Grid";
+    const cols = 6, rows = 5;
+    const g = grid(cols, rows, 160, 120, 140, 120);
+    stitchGrid(g,
+      (j, i) => ({
+        lanesAB: j === 2 ? 2 : 1, lanesBA: j === 2 ? 2 : 1,
+        speed: j === 2 ? 15.5 : 11.5,
+        name: j === 2 ? "Harbor Pkwy" : ["Quay", "Cedar", "Harbor Pkwy", "Market", "Canal"][j]
+      }),
+      (j, i) => ({
+        lanesAB: i === 2 || i === 3 ? 2 : 1, lanesBA: i === 2 || i === 3 ? 2 : 1,
+        speed: i === 2 || i === 3 ? 15 : 11,
+        name: i === 2 ? "Cedar Ave" : i === 3 ? "Market Ave" : "N " + (i + 1) + "th"
+      })
+    );
+    addZone(20, 40, 200, 260, "residential", 1.35);
+    addZone(20, 360, 200, 280, "residential", 1.15);
+    addZone(880, 40, 240, 240, "commercial", 1.5);
+    addZone(880, 360, 240, 220, "commercial", 1.2);
+    addZone(380, 680, 360, 160, "industrial", 0.95);
+    addZone(700, 680, 280, 140, "school", 0.8);
+    addZone(400, 40, 200, 80, "parking", 0.7);
+    const cedar = [];
+    for (let j = 0; j < rows; j++) cedar.push(addStop(g[j][2], "Cedar " + (j + 1)));
+    addRoute("Cedar Line", cedar, { headway: 70, color: "#2e9a86", capacity: 48 });
+    const mkt = [addStop(g[2][0], "Pkwy W"), addStop(g[2][5], "Pkwy E")];
+    addRoute("Pkwy Shuttle", [mkt[0], addStop(g[2][2], "Harbor Hub"), mkt[1]], { headway: 100, color: "#c48922" });
+  }
+  if (name === "bridge") {
+    /* keep */
+  }
+  pruneLoose();
+  autoSignals();
+  rebuildGraph();
+  bakeBuildings();
+  fitCam();
+  for (const r of city.routes.values()) {
+    launchBus(r, false);
+    if (r.stops.length > 1) launchBus(r, true);
+    city.busCarry.set(r.id, 0);
+  }
+  city.spawnCarry += 36;
+  spawnDemand(0);
+  for (let i = 0; i < 48; i++) simStep(0.4);
+  syncSettingsUI();
+  toast("Loaded " + city.name);
+}
+
+function toScreen(x, y) {
+  return {
+    x: (x - cam.x) * cam.k * dpr + canvas.width / 2,
+    y: (y - cam.y) * cam.k * dpr + canvas.height / 2
+  };
+}
+function toWorld(sx, sy) {
+  return {
+    x: (sx - canvas.width / 2) / (cam.k * dpr) + cam.x,
+    y: (sy - canvas.height / 2) / (cam.k * dpr) + cam.y
+  };
+}
+function eventWorld(e) {
+  const r = canvas.getBoundingClientRect();
+  const sx = (e.clientX - r.left) * dpr;
+  const sy = (e.clientY - r.top) * dpr;
+  return toWorld(sx, sy);
+}
+
+function nightK() {
+  const h = (city.tod / 3600) % 24;
+  if (h > 6.5 && h < 19.5) return clamp(1 - Math.min(h - 6.5, 19.5 - h) / 1.2, 0, 1) * 0; // day
+  if (h >= 19.5) return clamp((h - 19.5) / 1.5, 0, 1);
+  return clamp((6.5 - h) / 1.5, 0, 1);
+}
+
+function heatColor(t, goodHigh) {
+  t = clamp(t, 0, 1);
+  if (!goodHigh) t = 1 - t;
+  const r = Math.round(lerp(46, 227, 1 - t));
+  const g = Math.round(lerp(154, 177, t * 0.4 + 0.3));
+  const b = Math.round(lerp(134, 61, 1 - t));
+  return "rgb(" + r + "," + g + "," + b + ")";
+}
+
+function drawChart(id, series, series2) {
+  const c = $(id); if (!c) return;
+  const w = c.width = c.clientWidth * dpr;
+  const h = c.height = c.clientHeight * dpr;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = "#3a4630";
+  g.beginPath(); g.moveTo(0, h - 8); g.lineTo(w, h - 8); g.stroke();
+  const paint = (arr, col) => {
+    if (!arr.length) return;
+    const mx = Math.max(...arr, 0.001);
+    g.strokeStyle = col; g.lineWidth = 1.5 * dpr; g.beginPath();
+    arr.forEach((v, i) => {
+      const x = (i / Math.max(1, arr.length - 1)) * w;
+      const y = h - 10 - (v / mx) * (h - 16);
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    });
+    g.stroke();
+  };
+  paint(series, "#e3b14a");
+  if (series2) paint(series2, "#2e9a86");
+}
+
+function draw() {
+  const w = canvas.width, h = canvas.height;
+  const nk = nightK();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = nk > 0.4 ? "#0c1a14" : "#1c5a3c";
+  ctx.fillRect(0, 0, w, h);
+  const grass = ctx.createRadialGradient(w * 0.5, h * 0.5, 10, w * 0.5, h * 0.5, Math.max(w, h) * 0.7);
+  grass.addColorStop(0, nk > 0.4 ? "#163328" : "#2a6a44");
+  grass.addColorStop(1, nk > 0.4 ? "#0a1612" : "#164a32");
+  ctx.fillStyle = grass;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255," + (nk ? 0.03 : 0.06) + ")";
+  ctx.lineWidth = 1;
+  const step = 40;
+  const a = toWorld(0, 0), b = toWorld(w, h);
+  for (let x = Math.floor(a.x / step) * step; x < b.x; x += step) {
+    const p = toScreen(x, 0), q = toScreen(x, city.world.h);
+    ctx.beginPath(); ctx.moveTo(p.x, 0); ctx.lineTo(q.x, h); ctx.stroke();
+  }
+
+  for (const z of city.zones.values()) {
+    const p = toScreen(z.x, z.y), q = toScreen(z.x + z.w, z.y + z.h);
+    const zk = ZONE_KIND[z.kind] || ZONE_KIND.residential;
+    ctx.fillStyle = zk.fill;
+    ctx.fillRect(p.x, p.y, q.x - p.x, q.y - p.y);
+    if (overlay === "od") {
+      ctx.fillStyle = "rgba(227,177,74," + clamp(zoneRate(z, city.tod) / 8, 0.1, 0.55) + ")";
+      ctx.fillRect(p.x, p.y, q.x - p.x, q.y - p.y);
+    }
+    ctx.strokeStyle = zk.stroke;
+    ctx.lineWidth = 1.2 * dpr;
+    ctx.strokeRect(p.x, p.y, q.x - p.x, q.y - p.y);
+    if (cam.k > 0.7) {
+      ctx.fillStyle = zk.stroke;
+      ctx.font = 11 * dpr + "px " + getComputedStyle(document.body).fontFamily;
+      ctx.fillText(z.kind, p.x + 6, p.y + 14 * dpr);
+    }
+  }
+
+  for (const bld of city.buildings) {
+    const p = toScreen(bld.x, bld.y), q = toScreen(bld.x + bld.w, bld.y + bld.h);
+    ctx.fillStyle = nk > 0.4 ? "rgba(30,40,28,.9)" : "rgba(210,200,170,.85)";
+    ctx.fillRect(p.x, p.y, q.x - p.x, q.y - p.y);
+    if (nk > 0.45 && bld.hgt > 0.7) {
+      ctx.fillStyle = "rgba(227,177,74,.35)";
+      ctx.fillRect(p.x + 2, p.y + 2, 3 * dpr, 3 * dpr);
+    }
+  }
+
+  for (const L of city.links.values()) {
+    const A = city.nodes.get(L.a), B = city.nodes.get(L.b);
+    if (!A || !B) continue;
+    const p = toScreen(A.x, A.y), q = toScreen(B.x, B.y);
+    const lanes = Math.max(L.lanesAB, L.lanesBA, 1);
+    const wid = (6 + lanes * 5) * cam.k * dpr * 0.9;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1a1e18";
+    ctx.lineWidth = wid + 4 * dpr;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    let col = L.permit === "bus" ? "#245a50" : "#3a4038";
+    if (L.closed) col = "#5a3030";
+    if (overlay === "speed") col = heatColor(edgeAvgV(city.edges.get(L.id + ":ab") || city.edges.get(L.id + ":ba") || { speed: L.speed, id: "" }) / 16, true);
+    if (overlay === "density") {
+      const e = city.edges.get(L.id + ":ab") || city.edges.get(L.id + ":ba");
+      col = e ? heatColor(edgeSat(e), false) : col;
+    }
+    if (overlay === "queue") {
+      const e = city.edges.get(L.id + ":ab") || city.edges.get(L.id + ":ba");
+      col = e ? heatColor(Math.min(1, edgeQueue(e) / 8), false) : col;
+    }
+    if (overlay === "tt") {
+      const e = city.edges.get(L.id + ":ab") || city.edges.get(L.id + ":ba");
+      col = e ? heatColor(clamp((e.len / Math.max(0.5, edgeAvgV(e))) / (e.len / e.speed) / 3, 0, 1), false) : col;
+    }
+    if (overlay === "emis") col = heatColor(Math.min(1, edgeVehs(city.edges.get(L.id + ":ab") || { id: "" }).length / 8), false);
+    if (overlay === "transit") col = L.permit === "bus" || routeCoversLink(L) ? "#2e9a86" : "#3a4038";
+    ctx.strokeStyle = col;
+    ctx.lineWidth = wid;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    ctx.strokeStyle = L.lanesAB && L.lanesBA ? "rgba(226,201,110,.65)" : "rgba(230,230,230,.7)";
+    ctx.setLineDash(L.lanesAB && L.lanesBA ? [10 * dpr, 12 * dpr] : []);
+    ctx.lineWidth = 1.2 * dpr;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    ctx.setLineDash([]);
+    if (L.lanesAB === 0 || L.lanesBA === 0) {
+      ctx.fillStyle = "#eee";
+      const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+      const hdg = Math.atan2(q.y - p.y, q.x - p.x);
+      ctx.save(); ctx.translate(mx, my); ctx.rotate(L.lanesAB ? hdg : hdg + Math.PI);
+      ctx.beginPath(); ctx.moveTo(8 * dpr, 0); ctx.lineTo(-5 * dpr, 5 * dpr); ctx.lineTo(-5 * dpr, -5 * dpr); ctx.fill();
+      ctx.restore();
+    }
+    if (selected && selected.kind === "link" && selected.id === L.id) {
+      ctx.strokeStyle = "#e3b14a"; ctx.lineWidth = 3 * dpr; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  if (overlay === "valid") {
+    const comp = components();
+    const cols = ["#2e9a86", "#e3b14a", "#d94b3d", "#6aa0d4", "#c48922"];
+    for (const n of city.nodes.values()) {
+      const p = toScreen(n.x, n.y);
+      ctx.fillStyle = cols[(comp.seen.get(n.id) || 1) % cols.length];
+      ctx.beginPath(); ctx.arc(p.x, p.y, 8 * dpr, 0, TAU); ctx.fill();
+    }
+    for (const b of illegalTurns()) {
+      const n = city.nodes.get(b.node);
+      const p = toScreen(n.x, n.y);
+      ctx.strokeStyle = "#d94b3d"; ctx.lineWidth = 2 * dpr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 14 * dpr, 0, TAU); ctx.stroke();
+    }
+  }
+
+  for (const n of city.nodes.values()) {
+    const p = toScreen(n.x, n.y);
+    const deg = degree(n);
+    ctx.fillStyle = n.kind === "roundabout" ? "#2a4038" : "#32382f";
+    ctx.beginPath(); ctx.arc(p.x, p.y, (n.kind === "roundabout" ? 16 : 7 + deg) * cam.k * dpr * 0.35 + 6 * dpr, 0, TAU); ctx.fill();
+    if (n.kind === "roundabout") {
+      ctx.strokeStyle = "#8a9378"; ctx.lineWidth = 2 * dpr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 10 * cam.k * dpr * 0.4, 0, TAU); ctx.stroke();
+    }
+    if (n.signal) {
+      const ap = approaches(n);
+      for (const a of ap) {
+        const st = signalState(n, a.from);
+        const A = city.nodes.get(a.from);
+        const hdg = ang(A.x, A.y, n.x, n.y);
+        const sp = toScreen(n.x - Math.cos(hdg) * 10, n.y - Math.sin(hdg) * 10);
+        ctx.fillStyle = st === "green" ? "#7cb342" : st === "yellow" ? "#e3b14a" : "#d94b3d";
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 4.2 * dpr, 0, TAU); ctx.fill();
+      }
+      if (overlay === "signal") {
+        ctx.strokeStyle = "#e3b14a"; ctx.strokeRect(p.x - 12, p.y - 12, 24, 24);
+      }
+    }
+    if (selected && selected.kind === "node" && selected.id === n.id) {
+      ctx.strokeStyle = "#e3b14a"; ctx.lineWidth = 2 * dpr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 16 * dpr, 0, TAU); ctx.stroke();
+    }
+  }
+
+  for (const st of city.stops.values()) {
+    const p = toScreen(st.x, st.y);
+    ctx.fillStyle = "#12201c";
+    ctx.fillRect(p.x - 7 * dpr, p.y - 10 * dpr, 14 * dpr, 12 * dpr);
+    ctx.fillStyle = "#2e9a86";
+    ctx.fillRect(p.x - 7 * dpr, p.y - 16 * dpr, 14 * dpr, 6 * dpr);
+    const w = (st.wait || []).length;
+    if (w || overlay === "wait") {
+      ctx.fillStyle = "#e3b14a";
+      ctx.font = 10 * dpr + "px monospace";
+      ctx.fillText(String(w), p.x + 8 * dpr, p.y);
+    }
+    if (overlay === "wait") {
+      ctx.fillStyle = "rgba(227,177,74," + clamp(w / 12, 0.15, 0.8) + ")";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 18 * dpr, 0, TAU); ctx.fill();
+    }
+    if (selected && selected.kind === "stop" && selected.id === st.id) {
+      ctx.strokeStyle = "#e3b14a"; ctx.strokeRect(p.x - 12, p.y - 20, 24, 28);
+    }
+  }
+
+  if (overlay === "turns") {
+    for (const v of city.vehicles) {
+      if (v.done || !v.path) continue;
+      const e = city.edges.get(v.edge); if (!e) continue;
+      const next = city.edges.get(v.path[v.pathI + 1]);
+      if (!next) continue;
+      const n = city.nodes.get(e.to), t = city.nodes.get(next.to);
+      if (!n || !t) continue;
+      const p = toScreen(n.x, n.y), q = toScreen(t.x, t.y);
+      ctx.strokeStyle = "rgba(227,177,74,.35)";
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    }
+  }
+
+  for (const v of city.vehicles) {
+    if (v.done) continue;
+    const p = toScreen(v.x, v.y);
+    const sc = cam.k * dpr;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(v.hdg);
+    const lw = v.len * sc * 0.85, ww = v.w * sc * 0.85;
+    ctx.fillStyle = v.color;
+    ctx.strokeStyle = selected && selected.kind === "veh" && selected.id === v.id ? "#fff" : "rgba(0,0,0,.4)";
+    ctx.lineWidth = selected && selected.kind === "veh" && selected.id === v.id ? 2 * dpr : 1;
+    roundRect(ctx, -lw / 2, -ww / 2, lw, ww, 2 * dpr);
+    ctx.fill(); ctx.stroke();
+    if (nk > 0.35) {
+      ctx.fillStyle = "rgba(255,230,160,.85)";
+      ctx.fillRect(lw / 2 - 2, -ww / 2 + 1, 3 * dpr, 2 * dpr);
+      ctx.fillRect(lw / 2 - 2, ww / 2 - 3 * dpr, 3 * dpr, 2 * dpr);
+    }
+    if (v.type === "bus") {
+      ctx.fillStyle = "#0e1612";
+      ctx.fillRect(-lw / 4, -ww / 2, lw / 2, 2 * dpr);
+    }
+    ctx.restore();
+  }
+
+  if (selected && selected.kind === "veh") {
+    const v = city.vehicles.find(x => x.id === selected.id);
+    if (v && v.path) {
+      ctx.strokeStyle = "rgba(227,177,74,.8)"; ctx.setLineDash([6, 4]); ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      for (let i = v.pathI; i < v.path.length; i++) {
+        const e = city.edges.get(v.path[i]); if (!e) continue;
+        const B = city.nodes.get(e.to); const p = toScreen(B.x, B.y);
+        if (i === v.pathI) { const A = toScreen(v.x, v.y); ctx.moveTo(A.x, A.y); }
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  if (overlay === "route" && selected && (selected.kind === "veh" || selected.kind === "route")) {
+    /* path already drawn for veh */
+  }
+
+  for (const inc of city.incidents.values()) {
+    const L = city.links.get(inc.link); if (!L) continue;
+    const A = city.nodes.get(L.a), B = city.nodes.get(L.b);
+    const p = toScreen((A.x + B.x) / 2, (A.y + B.y) / 2);
+    ctx.fillStyle = inc.kind === "construction" ? "#c48922" : "#d94b3d";
+    ctx.beginPath(); ctx.moveTo(p.x, p.y - 10 * dpr); ctx.lineTo(p.x + 8 * dpr, p.y + 8 * dpr); ctx.lineTo(p.x - 8 * dpr, p.y + 8 * dpr); ctx.fill();
+  }
+
+  if (drawPts.length) {
+    ctx.strokeStyle = "#e3b14a"; ctx.setLineDash([8, 5]); ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    drawPts.forEach((pt, i) => { const p = toScreen(pt.x, pt.y); i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+    if (drawHover) { const p = toScreen(drawHover.x, drawHover.y); ctx.lineTo(p.x, p.y); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (zoneStart && drawHover && tool === "zone") {
+    const p = toScreen(zoneStart.x, zoneStart.y), q = toScreen(drawHover.x, drawHover.y);
+    ctx.strokeStyle = "#7cb342"; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(p.x, p.y, q.x - p.x, q.y - p.y); ctx.setLineDash([]);
+  }
+  if (routeDraft.length) {
+    ctx.strokeStyle = "#2e9a86"; ctx.lineWidth = 3 * dpr;
+    ctx.beginPath();
+    routeDraft.forEach((s, i) => { const p = toScreen(s.x, s.y); i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+    ctx.stroke();
+  }
+
+  if (nk > 0.15) {
+    ctx.fillStyle = "rgba(4,10,12," + (nk * 0.45) + ")";
+    ctx.fillRect(0, 0, w, h);
+  }
+  ctx.restore();
+}
+
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+function routeCoversLink(L) {
+  for (const r of city.routes.values()) {
+    for (let i = 0; i < r.stops.length - 1; i++) {
+      const a = stopNode(city.stops.get(r.stops[i]));
+      const b = stopNode(city.stops.get(r.stops[i + 1]));
+      if (!a || !b) continue;
+      const p = pathfind(a.id, b.id, { bus: true, cong: false });
+      if (p && p.some(id => (city.edges.get(id) || {}).link === L.id)) return true;
+    }
+  }
+  return false;
+}
+
+function resize() {
+  const r = wrap.getBoundingClientRect();
+  dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  canvas.width = Math.max(1, r.width * dpr);
+  canvas.height = Math.max(1, r.height * dpr);
+}
+
+function liveStats() {
+  const live = city.vehicles.filter(v => !v.done);
+  const q = live.filter(v => v.v < 1.5).length;
+  const spd = live.length ? live.reduce((s, v) => s + v.v, 0) / live.length : 0;
+  const avgTT = city.ttSamples.length ? city.ttSamples.reduce((a, b) => a + b, 0) / city.ttSamples.length : 0;
+  const delay = city.delaySamples.length ? city.delaySamples.reduce((a, b) => a + b, 0) / city.delaySamples.length : 0;
+  const waits = [];
+  for (const st of city.stops.values()) for (const p of (st.wait || [])) waits.push(city.time - p.born);
+  const buses = live.filter(v => v.type === "bus");
+  const occ = buses.length ? buses.reduce((s, v) => s + v.passengers.length, 0) / Math.max(1, buses.length) : 0;
+  return {
+    fps, time: city.tod, speed: S.speed, active: live.length, completed: city.completed, failed: city.failed,
+    avgTT, delay, netSpeed: spd, queue: q, ridership: city.ridership, tool: TOOLS[tool],
+    incidents: city.incidents.size, paused, emissions: city.emissions, wait: waits.length ? waits.reduce((a, b) => a + b, 0) / waits.length : 0,
+    occ, p95: percentile(city.ttSamples, 0.95)
+  };
+}
+
+function percentile(arr, p) {
+  if (!arr.length) return 0;
+  const s = arr.slice().sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+}
+
+function renderHUD() {
+  const m = liveStats();
+  $("h-fps").textContent = String(Math.round(m.fps));
+  $("h-time").textContent = fmtTime(m.time);
+  $("h-spd").textContent = m.speed.toFixed(m.speed % 1 ? 2 : 0) + "×";
+  $("h-act").textContent = String(m.active);
+  $("h-done").textContent = String(m.completed);
+  $("h-tt").textContent = m.avgTT ? m.avgTT.toFixed(0) + "s" : "—";
+  $("h-v").textContent = (m.netSpeed * 3.6).toFixed(0) + " km/h";
+  $("h-q").textContent = String(m.queue);
+  $("h-ride").textContent = String(m.ridership);
+  $("h-tool").textContent = m.tool;
+  $("h-inc").textContent = String(m.incidents);
+  $("h-pause").textContent = m.paused ? "PAUSE" : "RUN";
+  $("h-pause-wrap").classList.toggle("warn", m.paused);
+  $("btn-pause").textContent = m.paused ? "Resume" : "Pause";
+  $("spd-lab").textContent = S.speed + "×";
+}
+
+function inspectorHTML() {
+  const el = $("inspector");
+  if (!selected) { el.textContent = "Click the map to inspect a road, junction, vehicle, stop, or route."; return; }
+  if (selected.kind === "link") {
+    const L = city.links.get(selected.id); if (!L) return;
+    const eab = city.edges.get(L.id + ":ab"), eba = city.edges.get(L.id + ":ba");
+    el.innerHTML = `<b>${L.name || "Link " + L.id}</b><div class="kv">
+      <span>Lanes A→B / B→A</span><b>${L.lanesAB} / ${L.lanesBA}</b>
+      <span>Speed</span><b>${(L.speed * 3.6).toFixed(0)} km/h</b>
+      <span>Length</span><b>${L.len.toFixed(0)} m</b>
+      <span>Closed</span><b>${L.closed ? "yes" : "no"}</b>
+      <span>Queue</span><b>${(eab ? edgeQueue(eab) : 0) + (eba ? edgeQueue(eba) : 0)}</b>
+      <span>Density</span><b>${((eab ? edgeSat(eab) : 0) * 100).toFixed(0)}%</b>
+      <span>Permit</span><b>${L.permit}</b></div>
+      <button type="button" data-act="close-link">${L.closed ? "Reopen" : "Close road"}</button>
+      <button type="button" data-act="oneway-link">Toggle one-way</button>
+      <button type="button" data-act="lanes-link">Cycle lanes</button>`;
+  } else if (selected.kind === "node") {
+    const n = city.nodes.get(selected.id); if (!n) return;
+    const sig = n.signal;
+    let ph = "";
+    if (sig) {
+      ph = sig.phases.map((p, i) => `<div class="phase-row">
+        <span class="sw" style="background:${signalState(n, p.moves[0]) === "green" && true ? "#7cb342" : "#555"}"></span>
+        ${p.name} green <input data-ph="${i}" type="number" min="6" max="90" value="${p.green}" aria-label="Phase ${i} green" style="width:56px"> s
+        from ${p.moves.join(",")}</div>`).join("");
+      ph += `<div class="chip">${sig.conflicts.length ? "Conflicts: " + sig.conflicts.join("; ") : "No crossing-green conflicts"}</div>`;
+      ph += `<div class="chip">${sig.unreachable.length ? "Unreachable approaches: " + sig.unreachable.join(", ") : "All approaches served"}</div>`;
+      ph += `<div class="row"><label>Cycle</label><input id="sig-cyc" type="number" value="${sig.cycle}" aria-label="Signal cycle length" style="width:64px"></div>`;
+      ph += `<div class="row"><label>Offset</label><input id="sig-off" type="number" value="${sig.offset.toFixed(0)}" aria-label="Signal offset" style="width:64px"></div>`;
+    }
+    el.innerHTML = `<b>Junction ${n.id}</b> · ${n.kind}<div class="kv">
+      <span>Degree</span><b>${degree(n)}</b></div>${ph}
+      <button type="button" data-act="toggle-sig">Toggle signal</button>
+      <button type="button" data-act="toggle-rbt">Toggle roundabout</button>
+      <p class="chip">Turn tool: click incoming then outgoing node to ban/allow.</p>`;
+  } else if (selected.kind === "veh") {
+    const v = city.vehicles.find(x => x.id === selected.id);
+    if (!v) { el.textContent = "Vehicle left the network."; return; }
+    el.innerHTML = `<b>${v.type} #${v.id}</b><div class="kv">
+      <span>Speed</span><b>${(v.v * 3.6).toFixed(0)} km/h</b>
+      <span>Wait / dwell</span><b>${v.wait.toFixed(0)}s / ${v.dwell.toFixed(0)}s</b>
+      <span>Passengers</span><b>${v.passengers.length}</b>
+      <span>Origin → dest</span><b>${v.from} → ${v.dest}</b>
+      <span>Age</span><b>${(city.time - v.born).toFixed(0)}s</b></div>`;
+  } else if (selected.kind === "stop") {
+    const s = city.stops.get(selected.id); if (!s) return;
+    el.innerHTML = `<b>${s.name}</b><div class="kv">
+      <span>Waiting</span><b>${(s.wait || []).length}</b></div>`;
+  } else if (selected.kind === "route") {
+    const r = city.routes.get(selected.id); if (!r) return;
+    el.innerHTML = `<b>${r.name}</b><div class="kv">
+      <span>Stops</span><b>${r.stops.length}</b>
+      <span>Headway</span><b>${r.headway}s</b>
+      <span>Capacity</span><b>${r.capacity}</b></div>`;
+  } else if (selected.kind === "zone") {
+    const z = city.zones.get(selected.id); if (!z) return;
+    el.innerHTML = `<b>${z.kind}</b> intensity ${z.intensity}
+      <div class="row"><label>Kind</label><select id="z-kind" aria-label="Zone kind">${Object.keys(ZONE_KIND).map(k => `<option ${k === z.kind ? "selected" : ""}>${k}</option>`).join("")}</select></div>`;
+  }
+}
+
+function renderSide() {
+  const ae = document.activeElement;
+  if (!ae || !$("inspector").contains(ae)) inspectorHTML();
+  const live = liveStats();
+  const comp = components();
+  $("net-kv").innerHTML = `
+    <span>Nodes / links</span><b>${city.nodes.size} / ${city.links.size}</b>
+    <span>Components</span><b>${comp.count}</b>
+    <span>Illegal turns</span><b>${illegalTurns().length}</b>
+    <span>Failed trips</span><b>${city.failed}</b>
+    <span>Delay</span><b>${live.delay.toFixed(0)}s</b>
+    <span>Budget</span><b>${S.sandbox ? "sandbox" : S.budget.toFixed(0)}</b>`;
+  $("met-kv").innerHTML = `
+    <span>Throughput</span><b>${(city.completed / Math.max(1, city.time / 60)).toFixed(1)} /min</b>
+    <span>p95 TT</span><b>${live.p95.toFixed(0)}s</b>
+    <span>Transit wait</span><b>${live.wait.toFixed(0)}s</b>
+    <span>Bus occupancy</span><b>${live.occ.toFixed(1)}</b>
+    <span>Emissions</span><b>${city.emissions.toFixed(0)}</b>`;
+  drawChart("c-tp", hist.tp);
+  drawChart("c-tt", hist.tt, hist.p95);
+  drawChart("c-vq", hist.v, hist.q);
+  drawChart("c-tr", hist.wait, hist.occ);
+  drawChart("c-em", hist.em);
+}
+
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll("#tools [data-tool]").forEach(b => {
+    const on = b.getAttribute("data-tool") === t;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  drawPts = []; zoneStart = null; routeDraft = []; turnPick = null;
+  canvas.style.cursor = t === "select" ? (spaceDown ? "grab" : "default") : "crosshair";
+  $("hint").textContent = hints[t] || hints.select;
+}
+
+const hints = {
+  select: "Click to inspect · drag empty space to pan · wheel zoom · hold Space to pan",
+  road: "Click vertices or drag continuously. Snaps to nodes & crossings. Enter/double-click finish · Esc cancel",
+  erase: "Click a road, stop, zone, or vehicle to delete",
+  oneway: "Click a road to cycle two-way → A→B → B→A",
+  lanes: "Click a road to cycle 1/1 → 2/2 → 3/3 → 2/1 lanes",
+  signal: "Click a junction to add or remove a signal",
+  roundabout: "Click a junction to convert to a yield circle",
+  turns: "Click junction, then incoming approach, then destination to toggle a ban",
+  zone: "Drag a rectangle, then pick land use in the inspector",
+  park: "Click to place a parking / destination zone",
+  stop: "Click near a node to place a bus stop",
+  route: "Click stops in order, Enter to create a route",
+  closure: "Click a road to close or reopen it — vehicles will reroute or fail",
+  incident: "Click a road to drop a crash (temporary lane loss)"
+};
+
+function hitTest(p) {
+  const v = nearestVeh(p, 10 / cam.k);
+  if (v) return { kind: "veh", id: v.id };
+  let bs = null, bd = 16 / cam.k;
+  for (const s of city.stops.values()) {
+    const d = hypot(s.x - p.x, s.y - p.y);
+    if (d < bd) { bd = d; bs = s; }
+  }
+  if (bs) return { kind: "stop", id: bs.id };
+  const n = nearestNode(p, 14 / cam.k);
+  if (n) return { kind: "node", id: n.id };
+  const L = nearestLink(p, 10 / cam.k);
+  if (L) return { kind: "link", id: L.L.id };
+  for (const z of city.zones.values()) {
+    if (p.x >= z.x && p.x <= z.x + z.w && p.y >= z.y && p.y <= z.y + z.h) return { kind: "zone", id: z.id };
+  }
+  return null;
+}
+function onMapDown(e) {
+  if (e.button === 1 || spaceDown || (tool === "select" && e.button === 0 && !hitTest(eventWorld(e)))) {
+    pointer.pan = true; pointer.down = true; pointer.lx = e.clientX; pointer.ly = e.clientY; pointer.id = e.pointerId;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    canvas.style.cursor = "grabbing";
+    return;
+  }
+  pointer.down = true; pointer.sx = e.clientX; pointer.sy = e.clientY; pointer.lx = e.clientX; pointer.ly = e.clientY;
+  pointer.pan = false; pointer.id = e.pointerId;
+  const w = eventWorld(e);
+  drawHover = w;
+  if (tool === "road") {
+    if (!drawPts.length) pushUndo();
+    const snap = snapPoint(w);
+    drawPts.push(snap);
+  } else if (tool === "zone") {
+    zoneStart = w;
+  } else if (tool === "select") {
+    selected = hitTest(w);
+    renderSide();
+  }
+  unlockAudio();
+}
+
+function snapPoint(w) {
+  const n = nearestNode(w, 18 / cam.k);
+  if (n) return { x: n.x, y: n.y };
+  const hit = nearestLink(w, 14 / cam.k);
+  if (hit) return { x: hit.x, y: hit.y };
+  return { x: Math.round(w.x / 10) * 10, y: Math.round(w.y / 10) * 10 };
+}
+
+function onMapMove(e) {
+  const w = eventWorld(e);
+  drawHover = w;
+  if (pointer.pan && pointer.down) {
+    cam.x -= (e.clientX - pointer.lx) / cam.k;
+    cam.y -= (e.clientY - pointer.ly) / cam.k;
+    pointer.lx = e.clientX; pointer.ly = e.clientY;
+    return;
+  }
+  if (pointer.down && tool === "road" && drawPts.length) {
+    const last = drawPts[drawPts.length - 1];
+    if (hypot(w.x - last.x, w.y - last.y) > 28) drawPts.push(snapPoint(w));
+  }
+}
+
+function onMapUp(e) {
+  const w = eventWorld(e);
+  const moved = hypot(e.clientX - pointer.sx, e.clientY - pointer.sy);
+  if (pointer.pan) { pointer.pan = false; pointer.down = false; canvas.style.cursor = tool === "select" ? "default" : "crosshair"; return; }
+  pointer.down = false;
+  if (tool === "road") {
+    if (moved < 4 && drawPts.length) {
+      /* click vertex already added on down */
+    }
+    if (e.detail >= 2) finishRoad();
+    return;
+  }
+  if (tool === "zone" && zoneStart) {
+    pushUndo();
+    const x = Math.min(zoneStart.x, w.x), y = Math.min(zoneStart.y, w.y);
+    const zw = Math.abs(w.x - zoneStart.x), zh = Math.abs(w.y - zoneStart.y);
+    if (zw > 20 && zh > 20) {
+      const z = addZone(x, y, zw, zh, "residential", 1);
+      selected = { kind: "zone", id: z.id };
+      bakeBuildings();
+    }
+    zoneStart = null;
+    return;
+  }
+  if (moved > 8) return;
+  applyClick(w);
+}
+
+function applyClick(w) {
+  if (tool === "select") { selected = hitTest(w); return; }
+  if (tool === "erase") {
+    const h = hitTest(w); if (!h) return; pushUndo();
+    if (h.kind === "link") removeLink(h.id);
+    if (h.kind === "stop") city.stops.delete(h.id);
+    if (h.kind === "zone") city.zones.delete(h.id);
+    if (h.kind === "veh") { const v = city.vehicles.find(x => x.id === h.id); if (v) failVeh(v, "deleted"); }
+    if (h.kind === "node") {
+      [...city.links.values()].filter(L => L.a === h.id || L.b === h.id).forEach(L => removeLink(L.id));
+      city.nodes.delete(h.id);
+    }
+    pruneLoose(); rebuildGraph(); autoSignals(); return;
+  }
+  if (tool === "oneway") {
+    const h = nearestLink(w, 12 / cam.k); if (!h) return; pushUndo();
+    cycleOneway(h.L); rebuildGraph(); return;
+  }
+  if (tool === "lanes") {
+    const h = nearestLink(w, 12 / cam.k); if (!h) return; pushUndo();
+    cycleLanes(h.L); rebuildGraph(); return;
+  }
+  if (tool === "signal") {
+    const n = nearestNode(w, 16 / cam.k); if (!n) return; pushUndo();
+    n.signal = n.signal ? null : makeSignal(n);
+    if (n.signal) { n.signal.auto = S.sigPolicy !== "user"; buildPhases(n); }
+    return;
+  }
+  if (tool === "roundabout") {
+    const n = nearestNode(w, 16 / cam.k); if (!n) return; pushUndo();
+    n.kind = n.kind === "roundabout" ? "x" : "roundabout";
+    n.signal = null; return;
+  }
+  if (tool === "turns") {
+    const n = nearestNode(w, 16 / cam.k);
+    if (!selected || selected.kind !== "node") { if (n) selected = { kind: "node", id: n.id }; turnPick = null; return; }
+    const node = city.nodes.get(selected.id);
+    if (!turnPick) { turnPick = n ? n.id : null; toast("Now click destination node to toggle ban"); return; }
+    if (n) {
+      pushUndo();
+      node.forbid[turnPick] = node.forbid[turnPick] || {};
+      node.forbid[turnPick][n.id] = !node.forbid[turnPick][n.id];
+      toast(node.forbid[turnPick][n.id] ? "Turn banned" : "Turn allowed");
+      turnPick = null; rebuildGraph();
+    }
+    return;
+  }
+  if (tool === "park") {
+    pushUndo();
+    addZone(w.x - 40, w.y - 30, 80, 60, "parking", 0.9);
+    bakeBuildings(); return;
+  }
+  if (tool === "stop") {
+    const n = nearestNode(w, 24 / cam.k); if (!n) { toast("Place stops near junctions"); return; }
+    pushUndo();
+    const s = addStop(n, "Stop " + n.id);
+    selected = { kind: "stop", id: s.id }; return;
+  }
+  if (tool === "route") {
+    const h = hitTest(w);
+    if (h && h.kind === "stop") {
+      const s = city.stops.get(h.id);
+      routeDraft.push(s);
+      toast("Route stops: " + routeDraft.length);
+    }
+    return;
+  }
+  if (tool === "closure") {
+    const h = nearestLink(w, 12 / cam.k); if (!h) return; pushUndo();
+    h.L.closed = !h.L.closed; rebuildGraph();
+    toast(h.L.closed ? "Road closed — agents will reroute or fail" : "Road reopened");
+    return;
+  }
+  if (tool === "incident") {
+    const h = nearestLink(w, 12 / cam.k); if (!h) return; pushUndo();
+    const inc = { id: city.iid++, link: h.L.id, kind: "crash", until: city.time + 90 };
+    city.incidents.set(inc.id, inc); rebuildGraph(); return;
+  }
+}
+
+function cycleOneway(L) {
+  if (L.lanesAB > 0 && L.lanesBA > 0) { L._ba = L.lanesBA; L.lanesBA = 0; }
+  else if (L.lanesAB > 0 && L.lanesBA === 0) { L.lanesBA = L.lanesAB; L.lanesAB = 0; }
+  else { L.lanesAB = L._ba || 1; L.lanesBA = L._ba || 1; }
+}
+function cycleLanes(L) {
+  const key = L.lanesAB + "/" + L.lanesBA;
+  const seq = { "1/1": [2, 2], "2/2": [3, 3], "3/3": [2, 1], "2/1": [1, 1], "1/0": [1, 0], "0/1": [0, 1] };
+  const nx = seq[key] || [1, 1];
+  L.lanesAB = nx[0]; L.lanesBA = nx[1];
+}
+
+function finishRoad() {
+  if (drawPts.length >= 2) {
+    if (!S.sandbox) {
+      let cost = 0;
+      for (let i = 1; i < drawPts.length; i++) cost += hypot(drawPts[i].x - drawPts[i - 1].x, drawPts[i].y - drawPts[i - 1].y) * 4;
+      if (cost > S.budget) { toast("Over budget"); drawPts = []; return; }
+      S.budget -= cost;
+    }
+    connectPoints(drawPts);
+  }
+  drawPts = [];
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  const w = eventWorld(e);
+  const f = Math.exp(-e.deltaY * 0.0012);
+  cam.k = clamp(cam.k * f, 0.25, 4.5);
+  const w2 = eventWorld(e);
+  cam.x += w.x - w2.x; cam.y += w.y - w2.y;
+}
+
+let pointers = new Map();
+function onPointerDown(e) {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) { pointer.down = false; return; }
+  onMapDown(e);
+}
+function onPointerMove(e) {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = hypot(a.x - b.x, a.y - b.y);
+    if (onPointerMove._d) {
+      const f = d / onPointerMove._d;
+      cam.k = clamp(cam.k * f, 0.25, 4.5);
+    }
+    onPointerMove._d = d;
+    return;
+  }
+  onMapMove(e);
+}
+function onPointerUp(e) {
+  pointers.delete(e.pointerId);
+  onPointerMove._d = 0;
+  onMapUp(e);
+}
+
+function doUndo() {
+  if (!undo.length) return;
+  redo.push(snapshot());
+  loadCity(JSON.parse(undo.pop()), true);
+}
+function doRedo() {
+  if (!redo.length) return;
+  undo.push(snapshot());
+  loadCity(JSON.parse(redo.pop()), true);
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(serialize(true), null, 2)], { type: "application/json" });
+  download((city.name || "city").replace(/\s+/g, "_") + ".json", blob);
+}
+function exportCSV() {
+  let csv = "t,throughput,avgTT,p95,netSpeed,queue,wait,occupancy,emissions,ridership\n";
+  const n = hist.tp.length;
+  for (let i = 0; i < n; i++) {
+    csv += [i, hist.tp[i], hist.tt[i], hist.p95[i], hist.v[i], hist.q[i], hist.wait[i], hist.occ[i], hist.em[i], hist.ride[i]].join(",") + "\n";
+  }
+  download("metrics.csv", new Blob([csv], { type: "text/csv" }));
+}
+function exportPNG() {
+  canvas.toBlob(b => download("map.png", b), "image/png");
+}
+
+function importJSONText(text) {
+  const prev = serialize(true);
+  try {
+    const data = JSON.parse(text);
+    loadCity(data, true);
+    toast("City loaded");
+    autosave();
+  } catch (err) {
+    loadCity(prev, true);
+    toast("Import failed: " + err.message);
+  }
+}
+
+function autosave() {
+  try { localStorage.setItem("harbordesk.autosave", JSON.stringify(serialize(true))); } catch (e) {}
+}
+function loadAutosave() {
+  try {
+    const t = localStorage.getItem("harbordesk.autosave");
+    if (t) { loadCity(JSON.parse(t), true); toast("Restored autosave"); return true; }
+  } catch (e) {}
+  return false;
+}
+
+function saveNamed() {
+  const name = window.prompt("Scenario name", city.name);
+  if (!name) return;
+  try {
+    const all = JSON.parse(localStorage.getItem("harbordesk.named") || "{}");
+    all[name] = serialize(true);
+    localStorage.setItem("harbordesk.named", JSON.stringify(all));
+    toast("Saved “" + name + "”");
+  } catch (e) { toast("Could not save named scenario"); }
+}
+
+let audio = { ctx: null, ready: false, master: null };
+function unlockAudio() {
+  if (audio.ready) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audio.ctx = new AC();
+  audio.master = audio.ctx.createGain();
+  audio.master.gain.value = 0.04;
+  audio.master.connect(audio.ctx.destination);
+  const buf = audio.ctx.createBuffer(1, audio.ctx.sampleRate * 2, audio.ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.4;
+  const src = audio.ctx.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  const f = audio.ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 220;
+  const g = audio.ctx.createGain(); g.gain.value = 0.35;
+  src.connect(f); f.connect(g); g.connect(audio.master);
+  src.start();
+  audio.hum = g;
+  audio.ready = true;
+  audio.ctx.resume();
+}
+function tickAudio() {
+  if (!audio.ready) return;
+  const live = city.vehicles.filter(v => !v.done);
+  const spd = live.length ? live.reduce((s, v) => s + v.v, 0) / live.length : 0;
+  audio.hum.gain.value = 0.2 + clamp(live.length / 200, 0, 0.5) + spd * 0.01;
+}
+
+function resetSim() {
+  const data = serialize(false);
+  data.time = 0; data.stats = { completed: 0, failed: 0, ridership: 0, emissions: 0 };
+  data.vehicles = []; data.passengers = [];
+  city.rng = RNG(city.seed);
+  loadCity(data, false);
+  $("in-seed").value = city.seed;
+  toast("Simulation reset (network kept, seed " + city.seed + ")");
+}
+
+function syncSettingsUI() {
+  $("in-speed").value = S.speed;
+  $("in-dem").value = S.demand;
+  $("in-agg").value = S.agg;
+  $("in-re").value = S.reroute;
+  $("in-lc").value = S.laneChange;
+  $("in-sig").value = S.sigPolicy;
+  $("in-freq").value = S.freq;
+  $("in-cap").value = S.cap;
+  $("in-inc").value = S.incidentRate;
+  $("in-tod").value = city.tod / 3600;
+  $("in-rush").value = S.rush;
+  $("in-wx").value = S.weather;
+  $("in-seed").value = city.seed;
+  $("in-map").value = S.mapSize;
+  $("btn-sand").classList.toggle("active", S.sandbox);
+  $("btn-sand").setAttribute("aria-pressed", S.sandbox ? "true" : "false");
+  $("btn-sand").textContent = S.sandbox ? "On" : "Off";
+  $("btn-caronly").textContent = S.carOnly ? "On" : "Off";
+}
+
+function bindUI() {
+  document.querySelectorAll("#tools [data-tool]").forEach(b => b.addEventListener("click", () => setTool(b.getAttribute("data-tool"))));
+  $("btn-pause").onclick = () => { paused = !paused; };
+  $("btn-step").onclick = () => { paused = true; stepOnce = true; };
+  $("btn-reset").onclick = resetSim;
+  $("in-speed").oninput = () => { S.speed = +$("in-speed").value; };
+  $("in-dem").oninput = () => S.demand = +$("in-dem").value;
+  $("in-agg").oninput = () => S.agg = +$("in-agg").value;
+  $("in-re").oninput = () => S.reroute = +$("in-re").value;
+  $("in-lc").oninput = () => S.laneChange = +$("in-lc").value;
+  $("in-sig").onchange = () => { S.sigPolicy = $("in-sig").value; autoSignals(); };
+  $("in-freq").oninput = () => S.freq = +$("in-freq").value;
+  $("in-cap").oninput = () => S.cap = +$("in-cap").value;
+  $("in-inc").oninput = () => S.incidentRate = +$("in-inc").value;
+  $("in-tod").oninput = () => { city.tod = +$("in-tod").value * 3600; };
+  $("in-rush").oninput = () => S.rush = +$("in-rush").value;
+  $("in-wx").oninput = () => { S.weather = +$("in-wx").value; rebuildGraph(); };
+  $("in-seed").onchange = () => { city.seed = +$("in-seed").value || 1; };
+  $("in-map").onchange = () => S.mapSize = $("in-map").value;
+  $("btn-sand").onclick = () => { S.sandbox = !S.sandbox; syncSettingsUI(); };
+  $("btn-caronly").onclick = () => { S.carOnly = !S.carOnly; $("btn-caronly").textContent = S.carOnly ? "On" : "Off"; toast(S.carOnly ? "Car-only demand" : "Transit-supported demand"); };
+  $("btn-event").onclick = () => {
+    for (const z of city.zones.values()) if (z.kind === "event") z.pulse = true;
+    toast("Event pulse on");
+  };
+  $("btn-loadscen").onclick = () => { pushUndo(); city.seed = +$("in-seed").value || city.seed; loadScenario($("in-scen").value); };
+  $("btn-undo").onclick = doUndo;
+  $("btn-redo").onclick = doRedo;
+  $("btn-save").onclick = exportJSON;
+  $("btn-load").onclick = () => $("file-json").click();
+  $("file-json").onchange = () => {
+    const f = $("file-json").files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => importJSONText(String(rd.result));
+    rd.readAsText(f);
+    $("file-json").value = "";
+  };
+  $("btn-csv").onclick = exportCSV;
+  $("btn-png").onclick = exportPNG;
+  $("btn-named").onclick = saveNamed;
+  $("btn-help").onclick = () => { $("help").classList.add("show"); $("modalbg").classList.add("show"); };
+  $("help-close").onclick = $("modalbg").onclick = () => { $("help").classList.remove("show"); $("modalbg").classList.remove("show"); };
+  $("btn-side").hidden = window.innerWidth > 900;
+  $("btn-side").onclick = () => $("side").classList.toggle("open");
+
+  document.querySelectorAll(".tabs [data-tab]").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".tabs [data-tab]").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".pane").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    $("tab-" + b.getAttribute("data-tab")).classList.add("active");
+  });
+
+  const ov = $("overlays");
+  OVERLAYS.forEach(([id, lab]) => {
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.textContent = lab; btn.setAttribute("aria-label", "Overlay " + lab);
+    btn.style.margin = "3px";
+    btn.onclick = () => { overlay = id; ov.querySelectorAll("button").forEach(x => x.classList.remove("active")); btn.classList.add("active"); };
+    if (id === "none") btn.classList.add("active");
+    ov.appendChild(btn);
+  });
+
+  $("inspector").addEventListener("click", (e) => {
+    const act = e.target.getAttribute && e.target.getAttribute("data-act");
+    if (!act || !selected) return;
+    const L = selected.kind === "link" ? city.links.get(selected.id) : null;
+    const n = selected.kind === "node" ? city.nodes.get(selected.id) : null;
+    pushUndo();
+    if (act === "close-link" && L) { L.closed = !L.closed; rebuildGraph(); }
+    if (act === "oneway-link" && L) { cycleOneway(L); rebuildGraph(); }
+    if (act === "lanes-link" && L) { cycleLanes(L); rebuildGraph(); }
+    if (act === "toggle-sig" && n) { n.signal = n.signal ? null : makeSignal(n); if (n.signal) buildPhases(n); }
+    if (act === "toggle-rbt" && n) { n.kind = n.kind === "roundabout" ? "x" : "roundabout"; n.signal = null; }
+    renderSide();
+  });
+  $("inspector").addEventListener("change", (e) => {
+    const t = e.target;
+    if (!selected) return;
+    if (selected.kind === "node") {
+      const n = city.nodes.get(selected.id); if (!n || !n.signal) return;
+      if (t.id === "sig-cyc") n.signal.cycle = +t.value;
+      if (t.id === "sig-off") n.signal.offset = +t.value;
+      if (t.dataset.ph) { n.signal.phases[+t.dataset.ph].green = +t.value; n.signal.auto = false; S.sigPolicy = "user"; $("in-sig").value = "user"; }
+      diagnoseSignal(n);
+    }
+    if (t.id === "z-kind" && selected.kind === "zone") {
+      const z = city.zones.get(selected.id); z.kind = t.value; bakeBuildings();
+    }
+  });
+
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+  canvas.addEventListener("dblclick", () => { if (tool === "road") finishRoad(); });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") { spaceDown = true; if (tool === "select") canvas.style.cursor = "grab"; e.preventDefault(); }
+    if (e.key === "p" || e.key === "P") { if (!/input|select|textarea/i.test(e.target.tagName)) paused = !paused; }
+    if (e.key === "." ) { paused = true; stepOnce = true; }
+    if (e.key === "1") setTool("select");
+    if (e.key === "2") setTool("road");
+    if (e.key === "3") setTool("erase");
+    if (e.key === "4") setTool("zone");
+    if (e.key === "5") setTool("stop");
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); doUndo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); doRedo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); exportJSON(); }
+    if (e.key === "Enter") {
+      if (tool === "road") finishRoad();
+      if (tool === "route" && routeDraft.length >= 2) {
+        pushUndo();
+        const r = addRoute("Line " + city.rid, routeDraft, { color: "#2e9a86" });
+        selected = { kind: "route", id: r.id };
+        routeDraft = [];
+        toast("Transit route created");
+      }
+    }
+    if (e.key === "Escape") { drawPts = []; routeDraft = []; zoneStart = null; }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      if (/input|select|textarea/i.test(e.target.tagName)) return;
+      if (selected && selected.kind === "link") { pushUndo(); removeLink(selected.id); rebuildGraph(); selected = null; }
+    }
+  });
+  window.addEventListener("keyup", (e) => { if (e.code === "Space") spaceDown = false; });
+  window.addEventListener("resize", () => { resize(); $("btn-side").hidden = window.innerWidth > 900; });
+}
+
+let uiAcc = 0;
+function loop(ts) {
+  if (!lastTs) lastTs = ts;
+  const dt = Math.min(0.05, (ts - lastTs) / 1000);
+  lastTs = ts;
+  fpsC++; fpsT += dt;
+  if (fpsT >= 0.4) { fps = fpsC / fpsT; fpsC = 0; fpsT = 0; }
+
+  let sim = 0;
+  if (stepOnce) { sim = 0.25; stepOnce = false; }
+  else if (!paused) sim = dt * S.speed;
+  const cap = 0.05;
+  while (sim > 0) { const h = Math.min(cap, sim); simStep(h); sim -= h; }
+
+  draw();
+  uiAcc += dt;
+  if (uiAcc > 0.25) { uiAcc = 0; renderHUD(); renderSide(); tickAudio(); }
+  requestAnimationFrame(loop);
+}
+
+function selfTest() {
+  const out = [];
+  const hit = segIntersect({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 10, y: 0 });
+  out.push({ name: "segment-cross", pass: !!(hit && Math.abs(hit.x - 5) < 0.2) });
+  const save = serialize(true);
+  const n1 = [...city.nodes.values()][0], n2 = [...city.nodes.values()][city.nodes.size - 1];
+  const p = n1 && n2 ? pathfind(n1.id, n2.id, { cong: false }) : null;
+  out.push({ name: "route-exists", pass: !!(p && p.length) });
+  const one = [...city.links.values()][0];
+  if (one) {
+    const ba = one.lanesBA; one.lanesBA = 0; rebuildGraph();
+    const e = city.edges.get(one.id + ":ba");
+    out.push({ name: "oneway-blocks-ba", pass: !e });
+    one.lanesBA = ba; rebuildGraph();
+  }
+  try { loadCity({ v: 9 }, true); out.push({ name: "bad-import-throws", pass: false }); }
+  catch (e) { out.push({ name: "bad-import-throws", pass: true }); }
+  try { loadCity(save, true); } catch (e) {}
+  return out;
+}
+
+window.MetroSim = {
+  get city() { return city; },
+  get S() { return S; },
+  pause() { paused = true; },
+  resume() { paused = false; },
+  step() { paused = true; stepOnce = true; },
+  reset: resetSim,
+  setSpeed(v) { S.speed = v; $("in-speed").value = v; },
+  setTool, setOverlay(o) { overlay = o; },
+  loadScenario, exportState: () => serialize(true), importState: importJSONText,
+  metrics: liveStats, selfTest, snapshot: serialize,
+  finishRoad, connectPoints, pathfind, rebuildGraph,
+  worldToClient(wx, wy) {
+    const p = toScreen(wx, wy);
+    const r = canvas.getBoundingClientRect();
+    return { x: r.left + p.x / dpr, y: r.top + p.y / dpr };
+  },
+  get overlay() { return overlay; },
+  get tool() { return tool; },
+  audioState() { return audio.ready ? audio.ctx.state : "locked"; }
+};
+
+bindUI();
+resize();
+if (!loadAutosave()) loadScenario("downtown");
+else { rebuildGraph(); bakeBuildings(); fitCam(); syncSettingsUI(); }
+setInterval(autosave, 12000);
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

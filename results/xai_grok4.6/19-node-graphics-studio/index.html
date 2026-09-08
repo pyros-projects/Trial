@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lumen Graph — Generative Texture Studio</title>
+<style>
+:root{
+  --bg:#0b0c0a;--panel:#12140f;--elev:#1a1d16;--elev2:#22261c;
+  --line:#2c3226;--line2:#454d38;--text:#e8e4d4;--muted:#8b907c;--faint:#5c614f;
+  --accent:#ff5c1a;--accent2:#c8f26d;--ok:#7dffb3;--warn:#ffc857;--err:#ff5a6a;
+  --float:#7dffb3;--vec2:#5ec8ff;--vec3:#ffb84d;--vec4:#ff7a59;--field:#d6e27a;
+  --hud:#9aa186;--paper:#e8dcc8;--shadow:0 12px 40px rgba(0,0,0,.55);
+  --ui:"Bahnschrift","Segoe UI Variable Display","Avenir Next Condensed","Century Gothic","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono","Segoe UI Mono","ui-monospace",Menlo,Consolas,monospace;
+  --bar:42px;--palette:232px;--inspect:292px;--timeline:148px;
+}
+html[data-theme="high"]{
+  --bg:#000;--panel:#0a0a0a;--elev:#161616;--elev2:#222;--line:#666;--line2:#999;
+  --text:#fff;--muted:#ddd;--faint:#aaa;--accent:#ff9a4a;--accent2:#fff66a;
+}
+html[data-theme="film"]{
+  --bg:#140e0c;--panel:#1c1410;--elev:#261c16;--text:#f0e0c8;--muted:#a89078;
+  --accent:#ff7a30;--accent2:#e8c070;--line:#3a2a22;
+}
+html[data-theme="day"]{
+  --bg:#d8d2c2;--panel:#eee8d8;--elev:#f7f2e6;--elev2:#fff;--line:#c4bba6;--line2:#9a917c;
+  --text:#1c1a14;--muted:#5a5648;--faint:#7a7464;--accent:#c43c00;--accent2:#3a6a00;
+  --hud:#4a4638;--shadow:0 12px 28px rgba(40,30,10,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font:12.5px/1.35 var(--ui);overflow:hidden;user-select:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--elev2);border:1px solid var(--line2);color:var(--text);border-radius:5px;padding:4px 8px}
+button:hover{border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:transparent;color:#140800;font-weight:700}
+button.ghost{background:transparent}
+input[type=text],input[type=number],input[type=search],select,textarea{
+  background:var(--bg);border:1px solid var(--line2);border-radius:4px;padding:4px 6px;min-width:0
+}
+input[type=range]{width:100%;accent-color:var(--accent)}
+label.lbl{display:flex;flex-direction:column;gap:3px;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.app{display:grid;height:100%;grid-template-rows:var(--bar) 1fr var(--timeline) 22px;grid-template-columns:1fr}
+.toolbar{display:flex;align-items:center;gap:8px;padding:0 10px;background:linear-gradient(180deg,var(--elev),var(--panel));border-bottom:1px solid var(--line);z-index:5}
+.brand{display:flex;align-items:baseline;gap:8px;margin-right:6px}
+.brand b{font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent2)}
+.brand span{font-size:10px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
+.sep{width:1px;height:18px;background:var(--line2)}
+.grow{flex:1}
+.toolbar .group{display:flex;gap:4px;align-items:center}
+.workspace{display:grid;grid-template-columns:var(--palette) minmax(0,1fr) minmax(280px,1.05fr) var(--inspect);min-height:0;min-width:0}
+.panel{background:var(--panel);border-right:1px solid var(--line);min-height:0;display:flex;flex-direction:column}
+.panel h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);padding:8px 10px 6px;border-bottom:1px solid var(--line)}
+.palette-search{margin:8px 8px 4px}
+.palette-list{overflow:auto;padding:4px 6px 12px;flex:1}
+.pal-cat{margin:8px 4px 4px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.pal-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:grab;border:1px solid transparent}
+.pal-item:hover,.pal-item:focus{background:var(--elev);border-color:var(--line2);outline:none}
+.pal-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.graph-col{position:relative;min-width:0;background:
+  radial-gradient(1200px 600px at 20% -10%, rgba(255,92,26,.07), transparent 50%),
+  var(--bg)}
+#graph-viewport{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab}
+#graph-viewport.panning{cursor:grabbing}
+#graph-world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#wires{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+#wires path{fill:none;stroke-width:2.2;pointer-events:stroke;pointer-events:auto}
+.node{position:absolute;min-width:178px;max-width:230px;background:linear-gradient(180deg,#1d2118,#14170f);border:1px solid #3c4432;border-radius:8px;box-shadow:var(--shadow);color:var(--text)}
+html[data-theme="day"] .node{background:linear-gradient(180deg,#fff,#efe8d6);border-color:#c4bba6}
+.node.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow)}
+.node.invalid{border-color:var(--err)}
+.node.dirty .node-head{background:rgba(255,200,87,.12)}
+.node-head{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.04em;cursor:move}
+.node-head .tag{width:7px;height:7px;border-radius:2px;flex:none}
+.node-body{padding:6px 0 8px}
+.port-row{display:flex;align-items:center;justify-content:space-between;padding:2px 0;position:relative;min-height:16px}
+.port{width:11px;height:11px;border-radius:50%;border:2px solid;background:var(--bg);position:absolute;top:50%;cursor:crosshair;z-index:2}
+.port.in{left:-6px;transform:translateY(-50%)}
+.port.out{right:-6px;transform:translateY(-50%)}
+.port-name{font-size:10px;color:var(--muted);padding:0 12px}
+.port-row.out .port-name{margin-left:auto}
+.node-preview{margin:6px 8px 2px;height:54px;border-radius:4px;border:1px solid var(--line);background:#000;overflow:hidden}
+.node-preview canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+.node.collapsed .node-body,.node.collapsed .node-preview{display:none}
+.frame-box{position:absolute;border:1px dashed var(--line2);background:rgba(200,242,109,.05);border-radius:10px;min-width:80px;min-height:48px}
+.frame-box .frame-title{position:absolute;top:-18px;left:8px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent2)}
+.comment-box{position:absolute;background:var(--paper);color:#2a2418;padding:8px 10px;border-radius:4px;min-width:120px;max-width:240px;font-size:12px;box-shadow:var(--shadow)}
+.selbox{position:absolute;border:1px solid var(--accent);background:rgba(255,92,26,.12);pointer-events:none;z-index:20}
+.minimap{position:absolute;right:10px;bottom:10px;width:148px;height:92px;background:rgba(10,12,8,.82);border:1px solid var(--line2);border-radius:6px;z-index:4;overflow:hidden}
+.empty-hint{position:absolute;inset:18% 16%;pointer-events:none;color:var(--muted);text-align:center;letter-spacing:.04em}
+.empty-hint b{display:block;color:var(--text);font-size:18px;margin-bottom:8px;letter-spacing:.12em;text-transform:uppercase}
+.preview-col{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line);background:#070806}
+.preview-tools{display:flex;flex-wrap:wrap;gap:4px;padding:6px;border-bottom:1px solid var(--line);background:var(--panel)}
+.preview-stage{position:relative;flex:1;min-height:0;background:
+  linear-gradient(45deg,#1a1a1a 25%,transparent 25%),
+  linear-gradient(-45deg,#1a1a1a 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,#1a1a1a 75%),
+  linear-gradient(-45deg,transparent 75%,#1a1a1a 75%);
+  background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0}
+#preview{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+.pixel-read{position:absolute;left:8px;bottom:8px;background:rgba(8,10,6,.82);border:1px solid var(--line2);padding:4px 8px;font-family:var(--mono);font-size:10px;color:var(--hud);border-radius:4px}
+.inspect{border-right:none;overflow:auto}
+.inspect .body{padding:8px;display:flex;flex-direction:column;gap:8px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.param{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center}
+.param span{color:var(--muted);font-size:11px}
+.color-row{display:flex;gap:6px;align-items:center}
+.timeline{display:grid;grid-template-columns:220px 1fr;border-top:1px solid var(--line);background:var(--panel);min-height:0}
+.tl-controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;border-right:1px solid var(--line)}
+#dopesheet{width:100%;height:100%;display:block;background:var(--bg)}
+.status{display:flex;align-items:center;gap:14px;padding:0 10px;background:#090a08;border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--hud);letter-spacing:.04em;overflow:hidden;white-space:nowrap}
+.status b{color:var(--accent2);font-weight:600}
+.overlay-toast{position:fixed;top:52px;left:50%;transform:translateX(-50%);background:#1c140c;border:1px solid var(--accent);color:var(--text);padding:8px 14px;border-radius:6px;z-index:50;box-shadow:var(--shadow);display:none;max-width:min(520px,90vw)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:none;align-items:center;justify-content:center}
+.modal.open{display:flex}
+.sheet{background:var(--panel);border:1px solid var(--line2);border-radius:10px;min-width:min(560px,92vw);max-width:720px;max-height:80vh;overflow:auto;padding:16px;box-shadow:var(--shadow)}
+.sheet h3{letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
+.cmdk{position:fixed;left:50%;top:14%;transform:translateX(-50%);width:min(520px,92vw);background:var(--elev);border:1px solid var(--line2);border-radius:10px;z-index:45;display:none;box-shadow:var(--shadow)}
+.cmdk.open{display:block}
+.cmdk input{width:100%;border:0;border-bottom:1px solid var(--line);padding:10px 12px;background:transparent;outline:none}
+.cmdk .list{max-height:320px;overflow:auto}
+.cmdk .list div{padding:8px 12px;cursor:pointer}
+.cmdk .list div:hover,.cmdk .list div.active{background:var(--elev2)}
+.ctx{position:fixed;z-index:46;display:none;background:var(--elev);border:1px solid var(--line2);border-radius:6px;min-width:180px;padding:4px;box-shadow:var(--shadow)}
+.ctx button{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:4px;padding:6px 8px}
+.guide{position:absolute;background:var(--accent2);opacity:.7;pointer-events:none;z-index:12}
+.errbox{background:rgba(255,90,106,.1);border:1px solid var(--err);color:#ffc0c6;padding:8px;border-radius:6px;white-space:pre-wrap;font-family:var(--mono);font-size:10px}
+.resize-h{position:absolute;top:0;bottom:0;width:6px;cursor:col-resize;z-index:8;background:transparent}
+#split-pal{left:var(--palette)}
+#split-prev{right:calc(var(--inspect) + 0px)}
+.workspace{position:relative}
+@media (max-width:900px){
+  :root{--palette:0px;--inspect:0px;--timeline:120px}
+  .workspace{grid-template-columns:1fr;grid-template-rows:minmax(180px,1fr) minmax(220px,1.2fr)}
+  .palette,.inspect{position:absolute;z-index:9;top:0;bottom:0;width:min(280px,86vw);display:none}
+  .palette.open,.inspect.open{display:flex}
+  .palette{left:0}
+  .inspect{right:0;border-left:1px solid var(--line)}
+  .preview-col{border-right:none;border-bottom:1px solid var(--line);min-height:200px}
+  .brand span{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="toolbar" role="banner">
+    <div class="brand"><b>Lumen Graph</b><span>Procedural studio</span></div>
+    <div class="sep"></div>
+    <div class="group">
+      <button type="button" id="btn-palette" aria-label="Toggle node palette">Palette</button>
+      <button type="button" id="btn-inspect" aria-label="Toggle inspector">Inspector</button>
+      <button type="button" id="btn-cmd" aria-label="Open command palette">Commands</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <label class="lbl" style="flex-direction:row;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text)">Preset
+        <select id="preset-select" aria-label="Load preset"></select>
+      </label>
+      <button type="button" id="btn-load-preset" class="primary" aria-label="Load selected preset">Load</button>
+    </div>
+    <div class="grow"></div>
+    <div class="group">
+      <button type="button" id="btn-undo" aria-label="Undo">Undo</button>
+      <button type="button" id="btn-redo" aria-label="Redo">Redo</button>
+      <button type="button" id="btn-fit" aria-label="Fit graph in view">Fit</button>
+      <button type="button" id="btn-save" aria-label="Save project JSON">Save</button>
+      <button type="button" id="btn-open" aria-label="Open project JSON">Open</button>
+      <button type="button" id="btn-export" aria-label="Open export dialog">Export</button>
+      <button type="button" id="btn-help" aria-label="Show keyboard shortcuts">Help</button>
+    </div>
+    <input id="file-open" type="file" accept="application/json,.json" hidden aria-label="Project file">
+  </header>
+
+  <main class="workspace" id="workspace">
+    <aside class="panel palette" id="palette" aria-label="Node palette">
+      <h2>Library</h2>
+      <input class="palette-search" id="pal-search" type="search" placeholder="Search nodes" aria-label="Search nodes">
+      <div class="palette-list" id="pal-list"></div>
+    </aside>
+    <section class="graph-col" aria-label="Node graph">
+      <div id="graph-viewport" aria-label="Graph canvas">
+        <div id="graph-world">
+          <svg id="wires" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="empty-hint" id="empty-hint" hidden>
+          <b>Drop a node to begin</b>
+          Double-click the graph or press Ctrl+K. Connect Output to see the image.
+        </div>
+        <canvas class="minimap" id="minimap" width="148" height="92" aria-label="Graph minimap"></canvas>
+      </div>
+    </section>
+    <section class="preview-col" aria-label="Live preview">
+      <div class="preview-tools">
+        <button type="button" id="pv-fit" aria-label="Fit preview">Fit</button>
+        <button type="button" id="pv-1to1" aria-label="Preview at 100 percent">1:1</button>
+        <button type="button" id="pv-tile" aria-label="Toggle tiling preview" aria-pressed="false">Tile</button>
+        <label class="lbl" style="flex-direction:row;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text)">View
+          <select id="diag-select" aria-label="Diagnostic view"></select>
+        </label>
+        <label class="lbl" style="flex-direction:row;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text)">Channels
+          <select id="chan-select" aria-label="Channel isolation">
+            <option value="rgb">RGB</option><option value="r">R</option><option value="g">G</option>
+            <option value="b">B</option><option value="a">A</option><option value="luma">Luma</option>
+          </select>
+        </label>
+        <button type="button" id="pv-freeze" aria-label="Freeze reference comparison">Freeze A</button>
+        <button type="button" id="pv-compare" aria-label="Toggle A/B comparison" aria-pressed="false">A/B</button>
+      </div>
+      <div class="preview-stage" id="preview-stage">
+        <canvas id="preview" aria-label="Rendered output preview"></canvas>
+        <div class="pixel-read" id="pixel-read">u 0.00  v 0.00  ·  rgb —</div>
+      </div>
+    </section>
+    <aside class="panel inspect" id="inspect" aria-label="Property inspector">
+      <h2>Inspector</h2>
+      <div class="body" id="inspect-body"></div>
+    </aside>
+  </main>
+
+  <footer class="timeline" aria-label="Animation timeline">
+    <div class="tl-controls">
+      <button type="button" id="tl-play" aria-label="Play animation">Play</button>
+      <button type="button" id="tl-pause" aria-label="Pause animation">Pause</button>
+      <button type="button" id="tl-step" aria-label="Step one frame">Step</button>
+      <button type="button" id="tl-reset" aria-label="Reset time to start">Reset</button>
+      <label class="lbl">Time <input id="tl-time" type="number" step="0.01" min="0" aria-label="Current time seconds"></label>
+      <label class="lbl">Duration <input id="tl-dur" type="number" step="0.1" min="0.1" aria-label="Duration seconds"></label>
+      <label class="lbl">FPS <input id="tl-fps" type="number" step="1" min="1" max="60" aria-label="Frames per second"></label>
+      <label class="lbl" style="flex-direction:row;gap:6px;align-items:center"><input id="tl-loop" type="checkbox" aria-label="Loop playback"> Loop</label>
+    </div>
+    <canvas id="dopesheet" aria-label="Dope sheet editor"></canvas>
+  </footer>
+  <div class="status" id="status" aria-live="polite"></div>
+</div>
+
+<div class="overlay-toast" id="toast" role="status"></div>
+<div class="cmdk" id="cmdk"><input id="cmdk-input" type="search" placeholder="Add node or run command…" aria-label="Command palette search"><div class="list" id="cmdk-list"></div></div>
+<div class="ctx" id="ctx" role="menu"></div>
+<div class="modal" id="modal"><div class="sheet" id="modal-sheet"></div></div>
+
+<script>
+(function(){
+"use strict";
+
+const MAX_NODES=220, MAX_EDGES=480, MAX_EXPORT=4096, MAX_PREVIEW=2048, MAX_KF=500;
+const AUTOSAVE="lumen.autosave.v1", PROJECTS="lumen.projects.v1";
+const RANK={float:1,vec2:2,vec3:3,vec4:4,color:4};
+const GLSL_T={float:"float",vec2:"vec2",vec3:"vec3",vec4:"vec4",color:"vec4"};
+const TYPE_COLOR={float:"var(--float)",vec2:"var(--vec2)",vec3:"var(--vec3)",vec4:"var(--vec4)",color:"var(--vec4)",any:"var(--field)"};
+const CAT_COLOR={Coordinates:"#5ec8ff",Time:"#c8f26d",Constants:"#ffb84d",Vector:"#7dffb3",Math:"#d6e27a",Trig:"#9ad0ff",Gradient:"#ff7a59",Transform:"#e0c070",Noise:"#a8d86a",Shape:"#ff9a6a",Filter:"#8ec8c0",Color:"#ffb0a0",Blend:"#d0a0ff",Light:"#ffe08a",Flow:"#aaa",Output:"#ff5c1a",Annotate:"#e8dcc8"};
+
+let uid=1; const nid=()=>"n"+(uid++);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const deep=o=>JSON.parse(JSON.stringify(o));
+const now=()=>performance.now();
+function toast(msg,ms){const t=document.getElementById("toast");t.textContent=msg;t.style.display="block";clearTimeout(toast._h);toast._h=setTimeout(()=>t.style.display="none",ms||2400);}
+function sid(s){return String(s).replace(/[^a-zA-Z0-9_]/g,"_");}
+
+const CATALOG={};
+function def(type,spec){CATALOG[type]=Object.assign({type,ins:[],outs:[{id:"out",t:"float"}],params:[]},spec);}
+
+def("uv",{cat:"Coordinates",title:"UV",outs:[{id:"out",t:"vec2"}],emit:(id)=>`vec2 ${id}_out(vec2 uv){return uv;}`});
+def("uvCenter",{cat:"Coordinates",title:"Centered UV",outs:[{id:"out",t:"vec2"}],emit:(id)=>`vec2 ${id}_out(vec2 uv){return uv*2.0-1.0;}`});
+def("polar",{cat:"Coordinates",title:"Polar",ins:[{id:"uv",t:"vec2"}],outs:[{id:"out",t:"vec2"},{id:"r",t:"float"},{id:"a",t:"float"}],
+  emit:(id,i)=>`vec2 ${id}_out(vec2 uv){vec2 p=${i.uv}-0.5;return vec2(length(p),atan(p.y,p.x));}
+float ${id}_r(vec2 uv){return ${id}_out(uv).x;} float ${id}_a(vec2 uv){return ${id}_out(uv).y;}`});
+def("cartesian",{cat:"Coordinates",title:"Polar to XY",ins:[{id:"ra",t:"vec2"}],outs:[{id:"out",t:"vec2"}],
+  emit:(id,i)=>`vec2 ${id}_out(vec2 uv){vec2 p=${i.ra};return vec2(cos(p.y),sin(p.y))*p.x+0.5;}`});
+def("aspect",{cat:"Coordinates",title:"Aspect UV",outs:[{id:"out",t:"vec2"}],emit:(id)=>`vec2 ${id}_out(vec2 uv){vec2 p=uv*2.0-1.0;p.x*=uRes.x/max(uRes.y,1.0);return p*0.5+0.5;}`});
+
+def("time",{cat:"Time",title:"Time",outs:[{id:"out",t:"float"}],params:[{id:"speed",t:"float",min:-8,max:8,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return uTime*${p.speed};}`});
+def("frameIdx",{cat:"Time",title:"Frame",outs:[{id:"out",t:"float"}],emit:(id)=>`float ${id}_out(vec2 uv){return uFrame;}`});
+def("pingpong",{cat:"Time",title:"PingPong Time",outs:[{id:"out",t:"float"}],params:[{id:"speed",t:"float",min:0,max:8,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){float t=fract(uTime*${p.speed}*0.5)*2.0;return t>1.0?2.0-t:t;}`});
+
+def("float",{cat:"Constants",title:"Float",outs:[{id:"out",t:"float"}],params:[{id:"value",t:"float",min:-10,max:10,step:0.01,def:0.5}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return ${p.value};}`});
+def("intConst",{cat:"Constants",title:"Integer",outs:[{id:"out",t:"float"}],params:[{id:"value",t:"int",min:0,max:32,step:1,def:4}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return ${p.value};}`});
+def("vec2c",{cat:"Constants",title:"Vec2",outs:[{id:"out",t:"vec2"}],params:[{id:"x",t:"float",min:-4,max:4,step:0.01,def:0},{id:"y",t:"float",min:-4,max:4,step:0.01,def:0}],
+  emit:(id,i,p)=>`vec2 ${id}_out(vec2 uv){return vec2(${p.x},${p.y});}`});
+def("vec3c",{cat:"Constants",title:"Vec3",outs:[{id:"out",t:"vec3"}],params:[{id:"x",t:"float",min:-4,max:4,step:0.01,def:1},{id:"y",t:"float",min:-4,max:4,step:0.01,def:1},{id:"z",t:"float",min:-4,max:4,step:0.01,def:1}],
+  emit:(id,i,p)=>`vec3 ${id}_out(vec2 uv){return vec3(${p.x},${p.y},${p.z});}`});
+def("color",{cat:"Constants",title:"Color",outs:[{id:"out",t:"color"}],params:[{id:"c",t:"color",def:"#ff5c1a"}],
+  emit:(id,i,p)=>`vec4 ${id}_out(vec2 uv){return ${p.c};}`});
+def("seed",{cat:"Constants",title:"Seed",outs:[{id:"out",t:"float"}],params:[{id:"value",t:"float",min:0,max:999,step:1,def:17}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return ${p.value}+uSeed;}`});
+
+function polyMath(type,title,op,defB){
+  def(type,{cat:"Math",title,poly:true,ins:[{id:"a",t:"any"},{id:"b",t:"any"}],outs:[{id:"out",t:"any"}],
+    params:[{id:"bConst",t:"float",min:-8,max:8,step:0.01,def:defB==null?1:defB}],
+    emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){${GLSL_T[tn]} a=${cast(i.a,i.at,tn)}; ${GLSL_T[tn]} b=${i.b?cast(i.b,i.bt,tn):cast({expr:p.bConst,t:"float"},"float",tn)}; return a ${op} b;}`});
+}
+polyMath("add","Add","+",0); polyMath("sub","Subtract","-",0); polyMath("mul","Multiply","*",1); polyMath("div","Divide","/",1);
+def("mod",{cat:"Math",title:"Modulo",ins:[{id:"a",t:"float"},{id:"b",t:"float"}],outs:[{id:"out",t:"float"}],params:[{id:"m",t:"float",min:0.001,max:8,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return mod(${i.a},${i.b||p.m});}`});
+def("pow",{cat:"Math",title:"Power",ins:[{id:"a",t:"float"},{id:"b",t:"float"}],params:[{id:"exp",t:"float",min:0,max:8,step:0.01,def:2}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return pow(max(${i.a},0.0),${i.b||p.exp});}`});
+def("absn",{cat:"Math",title:"Abs",ins:[{id:"a",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return abs(${cast(i.a,i.at,tn)});}`});
+def("floorN",{cat:"Math",title:"Floor",ins:[{id:"a",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return floor(${i.a});}`});
+def("fractN",{cat:"Math",title:"Fract",ins:[{id:"a",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return fract(${i.a});}`});
+def("signN",{cat:"Math",title:"Sign",ins:[{id:"a",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return sign(${i.a});}`});
+def("minN",{cat:"Math",title:"Min",ins:[{id:"a",t:"float"},{id:"b",t:"float"}],params:[{id:"bConst",t:"float",min:-8,max:8,step:0.01,def:0}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return min(${i.a},${i.b||p.bConst});}`});
+def("maxN",{cat:"Math",title:"Max",ins:[{id:"a",t:"float"},{id:"b",t:"float"}],params:[{id:"bConst",t:"float",min:-8,max:8,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return max(${i.a},${i.b||p.bConst});}`});
+def("mixN",{cat:"Math",title:"Mix",poly:true,ins:[{id:"a",t:"any"},{id:"b",t:"any"},{id:"t",t:"float"}],params:[{id:"tConst",t:"float",min:0,max:1,step:0.01,def:0.5}],
+  emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return mix(${cast(i.a,i.at,tn)},${cast(i.b,i.bt,tn)},${i.t||p.tConst});}`});
+def("remap",{cat:"Math",title:"Remap",ins:[{id:"x",t:"float"}],params:[{id:"in0",t:"float",min:-4,max:4,step:0.01,def:0},{id:"in1",t:"float",min:-4,max:4,step:0.01,def:1},{id:"out0",t:"float",min:-4,max:4,step:0.01,def:0},{id:"out1",t:"float",min:-4,max:4,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return mix(${p.out0},${p.out1},clamp((${i.x}-(${p.in0}))/max(${p.in1}-(${p.in0}),1e-5),0.0,1.0));}`});
+def("clampN",{cat:"Math",title:"Clamp",ins:[{id:"x",t:"float"}],params:[{id:"lo",t:"float",min:-8,max:8,step:0.01,def:0},{id:"hi",t:"float",min:-8,max:8,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return clamp(${i.x},${p.lo},${p.hi});}`});
+def("smoothstepN",{cat:"Math",title:"Smoothstep",ins:[{id:"x",t:"float"}],params:[{id:"e0",t:"float",min:-4,max:4,step:0.01,def:0},{id:"e1",t:"float",min:-4,max:4,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return smoothstep(${p.e0},${p.e1},${i.x});}`});
+def("stepN",{cat:"Math",title:"Step",ins:[{id:"x",t:"float"}],params:[{id:"edge",t:"float",min:-4,max:4,step:0.01,def:0.5}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return step(${p.edge},${i.x});}`});
+def("oneMinus",{cat:"Math",title:"One Minus",ins:[{id:"x",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return 1.0-(${i.x});}`});
+
+["sin","cos","tan"].forEach(fn=>def(fn,{cat:"Trig",title:fn[0].toUpperCase()+fn.slice(1),ins:[{id:"x",t:"float"}],params:[{id:"amp",t:"float",min:0,max:4,step:0.01,def:1},{id:"freq",t:"float",min:0,max:20,step:0.01,def:1},{id:"phase",t:"float",min:-6.28,max:6.28,step:0.01,def:0}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return ${p.amp}*${fn}((${i.x})*${p.freq}+${p.phase});}`}));
+def("atan2n",{cat:"Trig",title:"Atan2",ins:[{id:"y",t:"float"},{id:"x",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return atan(${i.y},${i.x});}`});
+
+def("combine2",{cat:"Vector",title:"Combine Vec2",ins:[{id:"x",t:"float"},{id:"y",t:"float"}],outs:[{id:"out",t:"vec2"}],
+  emit:(id,i)=>`vec2 ${id}_out(vec2 uv){return vec2(${i.x},${i.y});}`});
+def("combine3",{cat:"Vector",title:"Combine Vec3",ins:[{id:"x",t:"float"},{id:"y",t:"float"},{id:"z",t:"float"}],outs:[{id:"out",t:"vec3"}],
+  emit:(id,i)=>`vec3 ${id}_out(vec2 uv){return vec3(${i.x},${i.y},${i.z});}`});
+def("split2",{cat:"Vector",title:"Split Vec2",ins:[{id:"v",t:"vec2"}],outs:[{id:"x",t:"float"},{id:"y",t:"float"}],
+  emit:(id,i)=>`float ${id}_x(vec2 uv){return (${i.v}).x;} float ${id}_y(vec2 uv){return (${i.v}).y;} float ${id}_out(vec2 uv){return (${i.v}).x;}`});
+def("split3",{cat:"Vector",title:"Split Vec3",ins:[{id:"v",t:"vec3"}],outs:[{id:"x",t:"float"},{id:"y",t:"float"},{id:"z",t:"float"}],
+  emit:(id,i)=>`float ${id}_x(vec2 uv){return (${i.v}).x;} float ${id}_y(vec2 uv){return (${i.v}).y;} float ${id}_z(vec2 uv){return (${i.v}).z;} float ${id}_out(vec2 uv){return (${i.v}).x;}`});
+def("lengthN",{cat:"Vector",title:"Length",ins:[{id:"v",t:"any"}],outs:[{id:"out",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return length(${cast(i.v,i.vt,"vec3")});}`});
+def("normalizeN",{cat:"Vector",title:"Normalize",ins:[{id:"v",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],
+  emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return ${GLSL_T[tn]}(normalize(${cast(i.v,i.vt,tn==="float"?"vec3":tn)}));}`});
+def("dotN",{cat:"Vector",title:"Dot",ins:[{id:"a",t:"vec3"},{id:"b",t:"vec3"}],outs:[{id:"out",t:"float"}],
+  emit:(id,i)=>`float ${id}_out(vec2 uv){return dot(${cast(i.a,i.at,"vec3")},${cast(i.b,i.bt,"vec3")});}`});
+
+def("linGrad",{cat:"Gradient",title:"Linear Gradient",ins:[{id:"uv",t:"vec2"}],params:[{id:"angle",t:"float",min:0,max:6.28,step:0.01,def:0}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){vec2 p=${i.uv}-0.5; vec2 d=vec2(cos(${p.angle}),sin(${p.angle})); return clamp(dot(p,d)+0.5,0.0,1.0);}`});
+def("radGrad",{cat:"Gradient",title:"Radial Gradient",ins:[{id:"uv",t:"vec2"}],
+  emit:(id,i)=>`float ${id}_out(vec2 uv){return clamp(length(${i.uv}-0.5)*2.0,0.0,1.0);}`});
+def("angGrad",{cat:"Gradient",title:"Angular Gradient",ins:[{id:"uv",t:"vec2"}],
+  emit:(id,i)=>`float ${id}_out(vec2 uv){return atan((${i.uv}-0.5).y,(${i.uv}-0.5).x)/6.2831853+0.5;}`});
+def("ramp",{cat:"Gradient",title:"Color Ramp",ins:[{id:"t",t:"float"}],outs:[{id:"out",t:"color"}],
+  params:[{id:"a",t:"color",def:"#1a0a08"},{id:"b",t:"color",def:"#ff5c1a"},{id:"c",t:"color",def:"#ffe08a"},{id:"d",t:"color",def:"#fff"}],
+  emit:(id,i,p)=>`vec4 ${id}_out(vec2 uv){float t=clamp(${i.t},0.0,1.0); vec4 a=${p.a};vec4 b=${p.b};vec4 c=${p.c};vec4 d=${p.d}; return t<0.33?mix(a,b,t/0.33):t<0.66?mix(b,c,(t-0.33)/0.33):mix(c,d,(t-0.66)/0.34);}`});
+def("palette",{cat:"Gradient",title:"IQ Palette",ins:[{id:"t",t:"float"}],outs:[{id:"out",t:"color"}],
+  params:[{id:"freq",t:"float",min:0,max:8,step:0.01,def:1},{id:"phase",t:"float",min:0,max:6.28,step:0.01,def:0}],
+  emit:(id,i,p)=>`vec4 ${id}_out(vec2 uv){float t=${i.t}; vec3 col=0.5+0.5*cos(6.28318*(vec3(0.0,0.33,0.67)+t*${p.freq}+${p.phase})); return vec4(col,1.0);}`});
+
+def("translate",{cat:"Transform",title:"Translate",ins:[{id:"uv",t:"vec2"}],outs:[{id:"out",t:"vec2"}],params:[{id:"x",t:"float",min:-2,max:2,step:0.01,def:0},{id:"y",t:"float",min:-2,max:2,step:0.01,def:0}],
+  emit:(id,i,p)=>`vec2 ${id}_out(vec2 uv){return ${i.uv}-vec2(${p.x},${p.y});}`});
+def("scaleUV",{cat:"Transform",title:"Scale UV",ins:[{id:"uv",t:"vec2"}],outs:[{id:"out",t:"vec2"}],params:[{id:"s",t:"float",min:0.05,max:20,step:0.01,def:4},{id:"y",t:"float",min:0.05,max:20,step:0.01,def:4}],
+  emit:(id,i,p)=>`vec2 ${id}_out(vec2 uv){return (${i.uv}-0.5)*vec2(${p.s},${p.y})+0.5;}`});
+def("rotateUV",{cat:"Transform",title:"Rotate UV",ins:[{id:"uv",t:"vec2"},{id:"ang",t:"float"}],outs:[{id:"out",t:"vec2"}],params:[{id:"angle",t:"float",min:-6.28,max:6.28,step:0.01,def:0}],
+  emit:(id,i,p)=>`vec2 ${id}_out(vec2 uv){float a=${i.ang||p.angle}; vec2 p=${i.uv}-0.5; float c=cos(a),s=sin(a); return vec2(c*p.x-s*p.y,s*p.x+c*p.y)+0.5;}`});
+def("tile",{cat:"Transform",title:"Tile",ins:[{id:"uv",t:"vec2"}],outs:[{id:"out",t:"vec2"},{id:"id",t:"vec2"}],params:[{id:"n",t:"float",min:1,max:32,step:1,def:4}],
+  emit:(id,i,p)=>`vec2 ${id}_out(vec2 uv){return fract(${i.uv}*${p.n});} vec2 ${id}_id(vec2 uv){return floor(${i.uv}*${p.n});}`});
+def("mirror",{cat:"Transform",title:"Mirror Tile",ins:[{id:"uv",t:"vec2"}],outs:[{id:"out",t:"vec2"}],params:[{id:"n",t:"float",min:1,max:16,step:1,def:2}],
+  emit:(id,i,p)=>`vec2 ${id}_out(vec2 uv){vec2 t=abs(fract(${i.uv}*${p.n})*2.0-1.0); return t;}`});
+
+def("hash",{cat:"Noise",title:"Hash",ins:[{id:"uv",t:"vec2"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return hash21(${i.uv}+uSeed);}`});
+def("white",{cat:"Noise",title:"White Noise",ins:[{id:"uv",t:"vec2"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return hash21(${i.uv}*uRes+uSeed+uFrame);}`});
+def("valueNoise",{cat:"Noise",title:"Value Noise",ins:[{id:"uv",t:"vec2"}],params:[{id:"scale",t:"float",min:0.1,max:40,step:0.1,def:6}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return vnoise(${i.uv}*${p.scale}+uSeed);}`});
+def("gradNoise",{cat:"Noise",title:"Gradient Noise",ins:[{id:"uv",t:"vec2"}],params:[{id:"scale",t:"float",min:0.1,max:40,step:0.1,def:5}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return gnoise(${i.uv}*${p.scale}+vec2(uSeed));}`});
+def("fbm",{cat:"Noise",title:"Fractal Noise",ins:[{id:"uv",t:"vec2"}],params:[{id:"scale",t:"float",min:0.1,max:30,step:0.1,def:4},{id:"oct",t:"int",min:1,max:8,step:1,def:5},{id:"gain",t:"float",min:0.1,max:0.9,step:0.01,def:0.5},{id:"lac",t:"float",min:1.2,max:3,step:0.01,def:2}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return fbm2(${i.uv}*${p.scale}, int(${p.oct}), ${p.lac}, ${p.gain}, uSeed);}`});
+def("turb",{cat:"Noise",title:"Turbulence",ins:[{id:"uv",t:"vec2"}],params:[{id:"scale",t:"float",min:0.1,max:30,step:0.1,def:4},{id:"oct",t:"int",min:1,max:8,step:1,def:5}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return turb2(${i.uv}*${p.scale}, int(${p.oct}), uSeed);}`});
+def("voronoi",{cat:"Noise",title:"Voronoi",ins:[{id:"uv",t:"vec2"}],outs:[{id:"out",t:"float"},{id:"edge",t:"float"},{id:"cell",t:"vec3"}],
+  params:[{id:"scale",t:"float",min:0.5,max:40,step:0.1,def:8},{id:"jitter",t:"float",min:0,max:1,step:0.01,def:0.85}],
+  emit:(id,i,p)=>`vec3 ${id}_pack(vec2 uv){return voronoi3(${i.uv}*${p.scale}, ${p.jitter}, uSeed);}
+float ${id}_out(vec2 uv){return ${id}_pack(uv).x;} float ${id}_edge(vec2 uv){return ${id}_pack(uv).y;} vec3 ${id}_cell(vec2 uv){vec3 p=${id}_pack(uv); return vec3(hash21(p.xz+p.y),hash21(p.xy+7.1),hash21(p.yz+13.3));}`});
+def("ridged",{cat:"Noise",title:"Ridged Noise",ins:[{id:"uv",t:"vec2"}],params:[{id:"scale",t:"float",min:0.1,max:30,step:0.1,def:5},{id:"oct",t:"int",min:1,max:8,step:1,def:5}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return ridged2(${i.uv}*${p.scale}, int(${p.oct}), uSeed);}`});
+
+def("circle",{cat:"Shape",title:"Circle SDF",ins:[{id:"uv",t:"vec2"}],params:[{id:"r",t:"float",min:0.01,max:1.5,step:0.01,def:0.35}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return length(${i.uv}-0.5)-${p.r};}`});
+def("box",{cat:"Shape",title:"Box SDF",ins:[{id:"uv",t:"vec2"}],params:[{id:"w",t:"float",min:0.01,max:1,step:0.01,def:0.3},{id:"h",t:"float",min:0.01,max:1,step:0.01,def:0.2},{id:"r",t:"float",min:0,max:0.5,step:0.01,def:0.02}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){vec2 p=abs(${i.uv}-0.5)-vec2(${p.w},${p.h})+${p.r}; return length(max(p,0.0))+min(max(p.x,p.y),0.0)-${p.r};}`});
+def("hex",{cat:"Shape",title:"Hex SDF",ins:[{id:"uv",t:"vec2"}],params:[{id:"r",t:"float",min:0.01,max:1,step:0.01,def:0.28}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){vec2 p=abs(${i.uv}-0.5); return max(p.x*0.866+p.y*0.5,p.y)-${p.r};}`});
+def("ring",{cat:"Shape",title:"Ring SDF",ins:[{id:"uv",t:"vec2"}],params:[{id:"r",t:"float",min:0.01,max:1,step:0.01,def:0.32},{id:"w",t:"float",min:0.005,max:0.4,step:0.01,def:0.04}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return abs(length(${i.uv}-0.5)-${p.r})-${p.w};}`});
+def("lineS",{cat:"Shape",title:"Line SDF",ins:[{id:"uv",t:"vec2"}],params:[{id:"x1",t:"float",min:0,max:1,step:0.01,def:0.2},{id:"y1",t:"float",min:0,max:1,step:0.01,def:0.2},{id:"x2",t:"float",min:0,max:1,step:0.01,def:0.8},{id:"y2",t:"float",min:0,max:1,step:0.01,def:0.8},{id:"w",t:"float",min:0.002,max:0.2,step:0.001,def:0.02}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){vec2 p=${i.uv},a=vec2(${p.x1},${p.y1}),b=vec2(${p.x2},${p.y2}); vec2 pa=p-a,ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0); return length(pa-ba*h)-${p.w};}`});
+def("sdfFill",{cat:"Shape",title:"Fill SDF",ins:[{id:"d",t:"float"}],params:[{id:"soft",t:"float",min:0.001,max:0.2,step:0.001,def:0.01}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){return 1.0-smoothstep(-${p.soft},${p.soft},${i.d});}`});
+def("sdfU",{cat:"Shape",title:"SDF Union",ins:[{id:"a",t:"float"},{id:"b",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return min(${i.a},${i.b});}`});
+def("sdfS",{cat:"Shape",title:"SDF Subtract",ins:[{id:"a",t:"float"},{id:"b",t:"float"}],emit:(id,i)=>`float ${id}_out(vec2 uv){return max(${i.a},-${i.b});}`});
+def("sdfSmU",{cat:"Shape",title:"Smooth Union",ins:[{id:"a",t:"float"},{id:"b",t:"float"}],params:[{id:"k",t:"float",min:0.001,max:0.4,step:0.001,def:0.06}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){float k=${p.k}; float h=clamp(0.5+0.5*(${i.b}-${i.a})/k,0.0,1.0); return mix(${i.b},${i.a},h)-k*h*(1.0-h);}`});
+
+def("blur",{cat:"Filter",title:"Blur",ins:[{id:"img",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],params:[{id:"r",t:"float",min:0.001,max:0.08,step:0.001,def:0.008}],
+  emit:(id,i,p,tn)=>{const T=GLSL_T[tn]; if(!i.fn) return `${T} ${id}_out(vec2 uv){return ${zeroGLSL(tn)};}`; const samp=uv=>cast({expr:`${i.fn}(${uv})`,t:i.at},i.at,tn);
+    return `${T} ${id}_out(vec2 uv){float r=${p.r}; ${T} acc=${samp("uv")}; acc+=${samp("uv+vec2(r,0.0)")}; acc+=${samp("uv+vec2(-r,0.0)")}; acc+=${samp("uv+vec2(0.0,r)")}; acc+=${samp("uv+vec2(0.0,-r)")}; acc+=${samp("uv+vec2(r,r)*0.7")}; acc+=${samp("uv+vec2(-r,r)*0.7")}; acc+=${samp("uv+vec2(r,-r)*0.7")}; acc+=${samp("uv+vec2(-r,-r)*0.7")}; return acc/9.0;}`;}});
+def("warp",{cat:"Filter",title:"Warp",ins:[{id:"img",t:"any"},{id:"off",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],params:[{id:"amt",t:"float",min:0,max:0.5,step:0.001,def:0.08}],
+  emit:(id,i,p,tn)=>!i.fn?`${GLSL_T[tn]} ${id}_out(vec2 uv){return ${zeroGLSL(tn)};}`:`${GLSL_T[tn]} ${id}_out(vec2 uv){vec2 d=${cast(i.off,i.ot,"vec2")}*${p.amt}; return ${cast({expr:`${i.fn}(uv+d)`,t:i.at},i.at,tn)};}`});
+def("twirl",{cat:"Filter",title:"Twirl UV",ins:[{id:"uv",t:"vec2"}],outs:[{id:"out",t:"vec2"}],params:[{id:"amt",t:"float",min:-12,max:12,step:0.01,def:4},{id:"r",t:"float",min:0.05,max:1.5,step:0.01,def:0.6}],
+  emit:(id,i,p)=>`vec2 ${id}_out(vec2 uv){vec2 p=${i.uv}-0.5; float d=length(p); float a=${p.amt}*smoothstep(${p.r},0.0,d); float c=cos(a),s=sin(a); return vec2(c*p.x-s*p.y,s*p.x+c*p.y)+0.5;}`});
+def("normals",{cat:"Filter",title:"Normal From Height",ins:[{id:"h",t:"float"}],outs:[{id:"out",t:"vec3"}],params:[{id:"eps",t:"float",min:0.0005,max:0.02,step:0.0005,def:0.003},{id:"str",t:"float",min:0.1,max:8,step:0.01,def:1.6}],
+  emit:(id,i,p)=>`vec3 ${id}_out(vec2 uv){float e=${p.eps}; float c=${i.fn}(uv); float x=${i.fn}(uv+vec2(e,0.0)); float y=${i.fn}(uv+vec2(0.0,e)); return normalize(vec3((c-x)*${p.str},(c-y)*${p.str},1.0))*0.5+0.5;}`});
+
+def("hsv",{cat:"Color",title:"HSV",ins:[{id:"h",t:"float"},{id:"s",t:"float"},{id:"v",t:"float"}],outs:[{id:"out",t:"color"}],
+  params:[{id:"sConst",t:"float",min:0,max:1,step:0.01,def:0.7},{id:"vConst",t:"float",min:0,max:1,step:0.01,def:1}],
+  emit:(id,i,p)=>`vec4 ${id}_out(vec2 uv){return vec4(hsv2rgb(vec3(${i.h},${i.s||p.sConst},${i.v||p.vConst})),1.0);}`});
+def("bc",{cat:"Color",title:"Bright Contrast",ins:[{id:"c",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],params:[{id:"b",t:"float",min:-1,max:1,step:0.01,def:0},{id:"k",t:"float",min:0,max:3,step:0.01,def:1}],
+  emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return (${cast(i.c,i.ct,tn)}-0.5)*${p.k}+0.5+${p.b};}`});
+def("sat",{cat:"Color",title:"Saturation",ins:[{id:"c",t:"color"}],outs:[{id:"out",t:"color"}],params:[{id:"s",t:"float",min:0,max:3,step:0.01,def:1}],
+  emit:(id,i,p)=>`vec4 ${id}_out(vec2 uv){vec4 c=${cast(i.c,i.ct,"vec4")}; float l=dot(c.rgb,vec3(0.299,0.587,0.114)); return vec4(mix(vec3(l),c.rgb,${p.s}),c.a);}`});
+def("invert",{cat:"Color",title:"Invert",ins:[{id:"c",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],
+  emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return ${GLSL_T[tn]}(1.0)-${cast(i.c,i.ct,tn)};}`});
+def("poster",{cat:"Color",title:"Posterize",ins:[{id:"c",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],params:[{id:"n",t:"float",min:2,max:16,step:1,def:5}],
+  emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return floor(${cast(i.c,i.ct,tn)}*${p.n}+1e-4)/${p.n};}`});
+def("levels",{cat:"Color",title:"Levels",ins:[{id:"x",t:"float"}],params:[{id:"in0",t:"float",min:0,max:1,step:0.01,def:0},{id:"in1",t:"float",min:0,max:1,step:0.01,def:1},{id:"gamma",t:"float",min:0.1,max:4,step:0.01,def:1}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){float x=clamp((${i.x}-${p.in0})/max(${p.in1}-${p.in0},1e-4),0.0,1.0); return pow(x,1.0/max(${p.gamma},0.04));}`});
+
+def("blend",{cat:"Blend",title:"Blend",ins:[{id:"a",t:"any"},{id:"b",t:"any"},{id:"m",t:"float"}],outs:[{id:"out",t:"color"}],
+  params:[{id:"mode",t:"enum",options:["mix","multiply","screen","overlay","add","soft"],def:"mix"},{id:"amt",t:"float",min:0,max:1,step:0.01,def:1}],
+  emit:(id,i,p)=>{const A=`${cast(i.a,i.at,"vec3")}`,B=`${cast(i.b,i.bt,"vec3")}`;
+    return `vec4 ${id}_out(vec2 uv){vec3 a=${A}; vec3 b=${B}; float m=clamp(${i.m && i.m!=="0.0"?i.m:p.amt},0.0,1.0); vec3 o=a; int md=int(${p.mode});
+    if(md==0)o=mix(a,b,m); else if(md==1)o=mix(a,a*b,m); else if(md==2)o=mix(a,1.0-(1.0-a)*(1.0-b),m);
+    else if(md==3)o=mix(a,mix(2.0*a*b,1.0-2.0*(1.0-a)*(1.0-b),step(0.5,a)),m); else if(md==4)o=mix(a,clamp(a+b,0.0,1.0),m);
+    else o=mix(a, (vec3(1.0)-2.0*b)*a*a+2.0*b*a, m); return vec4(o,1.0);}`;}});
+def("mask",{cat:"Blend",title:"Mask",ins:[{id:"a",t:"any"},{id:"b",t:"any"},{id:"m",t:"float"}],outs:[{id:"out",t:"color"}],
+  emit:(id,i)=>`vec4 ${id}_out(vec2 uv){return vec4(mix(${cast(i.a,i.at,"vec3")},${cast(i.b,i.bt,"vec3")},clamp(${i.m},0.0,1.0)),1.0);}`});
+
+def("lambert",{cat:"Light",title:"Lambert Light",ins:[{id:"n",t:"vec3"},{id:"albedo",t:"any"}],outs:[{id:"out",t:"color"}],
+  params:[{id:"lx",t:"float",min:-2,max:2,step:0.01,def:0.4},{id:"ly",t:"float",min:-2,max:2,step:0.01,def:0.6},{id:"lz",t:"float",min:-2,max:2,step:0.01,def:1},{id:"amb",t:"float",min:0,max:1,step:0.01,def:0.18}],
+  emit:(id,i,p)=>`vec4 ${id}_out(vec2 uv){vec3 N=normalize(${cast(i.n,i.nt,"vec3")}*2.0-1.0); vec3 L=normalize(vec3(${p.lx},${p.ly},${p.lz})); float d=max(dot(N,L),0.0); vec3 a=${cast(i.albedo,i.at,"vec3")}; return vec4(a*(${p.amb}+(1.0-${p.amb})*d),1.0);}`});
+def("spec",{cat:"Light",title:"Specular",ins:[{id:"n",t:"vec3"}],outs:[{id:"out",t:"float"}],
+  params:[{id:"powv",t:"float",min:1,max:128,step:1,def:32},{id:"lx",t:"float",min:-2,max:2,step:0.01,def:0.4},{id:"ly",t:"float",min:-2,max:2,step:0.01,def:0.7}],
+  emit:(id,i,p)=>`float ${id}_out(vec2 uv){vec3 N=normalize(${cast(i.n,i.nt,"vec3")}*2.0-1.0); vec3 L=normalize(vec3(${p.lx},${p.ly},1.0)); vec3 H=normalize(L+vec3(0.0,0.0,1.0)); return pow(max(dot(N,H),0.0),${p.powv});}`});
+
+def("delay",{cat:"Flow",title:"Feedback Delay",ins:[{id:"img",t:"color"}],outs:[{id:"out",t:"color"}],params:[{id:"amt",t:"float",min:0,max:0.98,step:0.01,def:0.85}],
+  emit:(id,i,p)=>`vec4 ${id}_out(vec2 uv){return texture(uPrev, uv)*${p.amt};}`});
+def("reroute",{cat:"Flow",title:"Reroute",ins:[{id:"in",t:"any"}],poly:true,outs:[{id:"out",t:"any"}],
+  emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return ${cast(i.in,i.int,tn)};}`});
+def("switchN",{cat:"Flow",title:"Switch",ins:[{id:"a",t:"any"},{id:"b",t:"any"},{id:"s",t:"float"}],poly:true,outs:[{id:"out",t:"any"}],
+  emit:(id,i,p,tn)=>`${GLSL_T[tn]} ${id}_out(vec2 uv){return mix(${cast(i.a,i.at,tn)},${cast(i.b,i.bt,tn)},step(0.5,${i.s}));}`});
+
+def("output",{cat:"Output",title:"Output",ins:[{id:"color",t:"color"},{id:"alpha",t:"float"}],outs:[],
+  emit:(id,i)=>`vec4 ${id}_out(vec2 uv){vec4 c=${cast(i.color,i.ct,"vec4")}; float a=${i.alpha||"1.0"}; return vec4(c.rgb, c.a*a);}`});
+def("comment",{cat:"Annotate",title:"Comment",outs:[],params:[{id:"text",t:"text",def:"Note"}],nop:true});
+def("frame",{cat:"Annotate",title:"Frame",outs:[],params:[{id:"title",t:"text",def:"Group"},{id:"w",t:"float",min:80,max:1400,step:10,def:360},{id:"h",t:"float",min:60,max:1000,step:10,def:220}],nop:true});
+
+function hexToVec4(hex){
+  const h=String(hex||"#ffffff").replace("#","");
+  const n=parseInt(h.length===3?h.split("").map(c=>c+c).join(""):h,16);
+  const r=((n>>16)&255)/255,g=((n>>8)&255)/255,b=(n&255)/255;
+  return `vec4(${r.toFixed(4)},${g.toFixed(4)},${b.toFixed(4)},1.0)`;
+}
+function enumIdx(spec,val){const o=spec.options||[]; const i=Math.max(0,o.indexOf(val)); return i.toFixed(1);}
+function paramExpr(node,spec,animated){
+  const v=node.params[spec.id];
+  if(spec.t==="color") return hexToVec4(v);
+  if(spec.t==="enum") return enumIdx(spec,v);
+  if(spec.t==="text") return JSON.stringify(v||"");
+  const num=animated!=null?animated: (v==null?spec.def:v);
+  return Number(num).toFixed(4);
+}
+function widest(ts){
+  let r=1,t="float";
+  ts.forEach(x=>{if(x&&RANK[x]>=r){r=RANK[x];t=x==="color"?"vec4":x;}});
+  return t==="color"?"vec4":t;
+}
+function canConnect(fromT,toT){
+  if(!fromT||!toT||toT==="any"||fromT==="any") return true;
+  if(fromT===toT) return true;
+  if(fromT==="color") fromT="vec4";
+  if(toT==="color") toT="vec4";
+  return true;
+}
+function compatible(fromT,toT){
+  if(!toT||toT==="any") return true;
+  if(!fromT||fromT==="any") return true;
+  const a=fromT==="color"?"vec4":fromT, b=toT==="color"?"vec4":toT;
+  return RANK[a]!=null && RANK[b]!=null;
+}
+function zeroGLSL(to){
+  if(to==="float") return "0.0";
+  if(to==="vec2") return "vec2(0.0)";
+  if(to==="vec3") return "vec3(0.0)";
+  return "vec4(0.0,0.0,0.0,1.0)";
+}
+function cast(ref,from,to){
+  const e=typeof ref==="string"?ref:(ref&&ref.expr);
+  if(!e) return zeroGLSL(to==="color"?"vec4":to);
+  const f=(from==="color"?"vec4":from)||"float", t=to==="color"?"vec4":to;
+  if(f===t) return e;
+  if(t==="float"){
+    if(f==="vec2") return `(${e}).x`;
+    if(f==="vec3") return `dot((${e}),vec3(0.299,0.587,0.114))`;
+    if(f==="vec4") return `dot((${e}).rgb,vec3(0.299,0.587,0.114))`;
+  }
+  if(t==="vec2"){
+    if(f==="float") return `vec2(${e})`;
+    if(f==="vec3"||f==="vec4") return `(${e}).xy`;
+  }
+  if(t==="vec3"){
+    if(f==="float") return `vec3(${e})`;
+    if(f==="vec2") return `vec3(${e},0.0)`;
+    if(f==="vec4") return `(${e}).rgb`;
+  }
+  if(t==="vec4"){
+    if(f==="float") return `vec4(vec3(${e}),1.0)`;
+    if(f==="vec2") return `vec4(${e},0.0,1.0)`;
+    if(f==="vec3") return `vec4(${e},1.0)`;
+  }
+  return e;
+}
+
+const HELPERS=`
+float hash11(float p){p=fract(p*0.1031);p*=p+33.33;p*=p+p;return fract(p);}
+float hash21(vec2 p){vec3 p3=fract(vec3(p.xyx)*0.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
+vec2 hash22(vec2 p){vec3 p3=fract(vec3(p.xyx)*vec3(0.1031,0.1030,0.0973));p3+=dot(p3,p3.yzx+33.33);return fract((p3.xx+p3.yz)*p3.zy);}
+float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);float a=hash21(i),b=hash21(i+vec2(1.0,0.0)),c=hash21(i+vec2(0.0,1.0)),d=hash21(i+vec2(1.0,1.0));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}
+float gnoise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.0-2.0*f);return mix(mix(dot(hash22(i)*2.0-1.0,f),dot(hash22(i+vec2(1.0,0.0))*2.0-1.0,f-vec2(1.0,0.0)),u.x),mix(dot(hash22(i+vec2(0.0,1.0))*2.0-1.0,f-vec2(0.0,1.0)),dot(hash22(i+vec2(1.0,1.0))*2.0-1.0,f-vec2(1.0,1.0)),u.x),u.y)*0.5+0.5;}
+float fbm2(vec2 p,int oct,float lac,float gain,float seed){float a=0.0,b=0.5; vec2 q=p+seed; for(int i=0;i<8;i++){if(i>=oct)break; a+=b*gnoise(q); q*=lac; b*=gain;} return a;}
+float turb2(vec2 p,int oct,float seed){float a=0.0,b=0.5; vec2 q=p+seed; for(int i=0;i<8;i++){if(i>=oct)break; a+=b*abs(gnoise(q)*2.0-1.0); q*=2.05; b*=0.5;} return a;}
+float ridged2(vec2 p,int oct,float seed){float a=0.0,b=0.5; vec2 q=p+seed; for(int i=0;i<8;i++){if(i>=oct)break; float n=1.0-abs(gnoise(q)*2.0-1.0); n=n*n; a+=n*b; q*=2.1; b*=0.5;} return a;}
+vec3 voronoi3(vec2 p,float jitter,float seed){vec2 n=floor(p),f=fract(p); float md=8.0; vec2 mr=vec2(0.0); float md2=8.0;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){vec2 g=vec2(float(i),float(j)); vec2 o=hash22(n+g+seed); o=0.5+0.5*sin(6.2831*o)*jitter; vec2 r=g+o-f; float d=dot(r,r); if(d<md){md2=md; md=d; mr=r;} else if(d<md2){md2=d;}}
+  return vec3(sqrt(md),sqrt(md2)-sqrt(md),dot(mr,mr));}
+vec3 hsv2rgb(vec3 c){vec3 p=abs(fract(c.xxx+vec3(0.0,2.0/3.0,1.0/3.0))*6.0-3.0); return c.z*mix(vec3(1.0),clamp(p-1.0,0.0,1.0),c.y);}
+`;
+
+const state={
+  nodes:{}, edges:{},
+  view:{x:80,y:60,z:1},
+  sel:new Set(),
+  timeline:{playing:true,t:0,dur:8,fps:30,loop:true,kf:{}},
+  preview:{zoom:1,pan:[0,0],tile:false,diag:"final",chan:"rgb",compare:false,hasRef:false},
+  settings:{previewRes:512,exportRes:1024,aa:true,seed:17,grid:24,snap:true,theme:"dark",backend:"webgl",cache:true,nodePrev:true,cs:"srgb",maxMs:22},
+  status:{fps:0,evalMs:0,compile:"ok",compileLog:"",dirty:0,autosave:"saved",sel:"—"},
+  lastValid:null,
+  previewNode:null,
+  history:[], histI:-1, histLock:false
+};
+
+function defaultParams(type){
+  const p={}; (CATALOG[type].params||[]).forEach(s=>p[s.id]=s.def);
+  return p;
+}
+function addNode(type,x,y,params,id){
+  if(Object.keys(state.nodes).length>=MAX_NODES){toast("Node limit reached ("+MAX_NODES+")"); return null;}
+  if(!CATALOG[type]) return null;
+  const n={id:id||nid(),type,x,y,params:Object.assign(defaultParams(type),params||{}),collapsed:false,w:186,h:type==="frame"?200:undefined};
+  if(type==="frame"){n.w=n.params.w; n.h=n.params.h;}
+  state.nodes[n.id]=n; markDirty(n.id); return n;
+}
+function removeNodes(ids){
+  ids.forEach(id=>{
+    delete state.nodes[id];
+    Object.keys(state.edges).forEach(e=>{const ed=state.edges[e]; if(ed.fn===id||ed.tn===id) delete state.edges[e];});
+    Object.keys(state.timeline.kf).forEach(k=>{if(k.startsWith(id+".")) delete state.timeline.kf[k];});
+  });
+}
+function addEdge(fn,fp,tn,tp){
+  if(Object.keys(state.edges).length>=MAX_EDGES){toast("Edge limit reached"); return null;}
+  if(fn===tn){toast("Cannot connect a node to itself"); return null;}
+  const a=state.nodes[fn], b=state.nodes[tn];
+  if(!a||!b) return null;
+  const A=CATALOG[a.type], B=CATALOG[b.type];
+  if(!A.outs||!A.outs.length){toast("Incompatible: "+A.title+" has no output"); return null;}
+  if(!B.ins||!B.ins.length){toast("Incompatible: "+B.title+" has no inputs"); return null;}
+  const out=(A.outs||[]).find(p=>p.id===fp) || A.outs[0];
+  const inn=(B.ins||[]).find(p=>p.id===tp);
+  if(!out){toast("Unknown output port"); return null;}
+  if(!inn){toast("Incompatible connection: no input '"+tp+"' on "+B.title); return null;}
+  const ft=out.t, tt=inn.t;
+  if(!compatible(ft,tt)){toast("Incompatible ports: "+ft+" → "+tt); return null;}
+  if(wouldCycle(fn,tn) && b.type!=="delay" && a.type!=="delay"){
+    toast("Cycle blocked. Use a Feedback Delay node for temporal loops."); return null;
+  }
+  Object.keys(state.edges).forEach(id=>{const e=state.edges[id]; if(e.tn===tn&&e.tp===tp) delete state.edges[id];});
+  const e={id:"e"+nid(),fn,fp:out?out.id:fp,tn,tp};
+  state.edges[e.id]=e; markDirty(tn); return e;
+}
+function wouldCycle(from,to){
+  const kids={};
+  Object.values(state.edges).forEach(e=>{(kids[e.fn]=kids[e.fn]||[]).push(e.tn);});
+  (kids[from]=kids[from]||[]).push(to);
+  const seen=new Set();
+  function dfs(n){
+    if(n===from && seen.size) return true;
+    if(seen.has(n)) return false;
+    seen.add(n);
+    return (kids[n]||[]).some(dfs);
+  }
+  return dfs(to);
+}
+function incoming(nodeId,port){
+  return Object.values(state.edges).find(e=>e.tn===nodeId&&e.tp===port);
+}
+function outgoing(nodeId){
+  return Object.values(state.edges).filter(e=>e.fn===nodeId);
+}
+const dirtySet=new Set();
+function markDirty(id){
+  const q=[id], seen=new Set();
+  while(q.length){
+    const n=q.pop(); if(seen.has(n)) continue; seen.add(n); dirtySet.add(n);
+    outgoing(n).forEach(e=>q.push(e.tn));
+  }
+  state.status.dirty=dirtySet.size;
+}
+function clearDirty(){dirtySet.clear(); state.status.dirty=0;}
+
+function evalKeyframe(ch,t){
+  const kfs=state.timeline.kf[ch]; if(!kfs||!kfs.length) return null;
+  const arr=kfs.slice().sort((a,b)=>a.t-b.t);
+  if(t<=arr[0].t) return arr[0].v;
+  if(t>=arr[arr.length-1].t) return arr[arr.length-1].v;
+  for(let i=0;i<arr.length-1;i++){
+    const a=arr[i],b=arr[i+1];
+    if(t>=a.t&&t<=b.t){
+      const u=(t-a.t)/Math.max(1e-6,b.t-a.t);
+      const interp=a.i||"linear";
+      if(interp==="step") return a.v;
+      if(typeof a.v==="string") return u<0.5?a.v:b.v;
+      if(interp==="smooth"){const s=u*u*(3-2*u); return lerp(a.v,b.v,s);}
+      if(interp==="ease"){const s=u<0.5?2*u*u:-1+(4-2*u)*u; return lerp(a.v,b.v,s);}
+      return lerp(a.v,b.v,u);
+    }
+  }
+  return arr[arr.length-1].v;
+}
+function paramValue(node,spec){
+  const ch=node.id+"."+spec.id;
+  const kv=evalKeyframe(ch,state.timeline.t);
+  if(kv!=null) return kv;
+  return node.params[spec.id];
+}
+
+function compile(targetNodeId){
+  const nodes=state.nodes, edges=Object.values(state.edges);
+  const target=targetNodeId || Object.values(nodes).find(n=>n.type==="output")?.id;
+  if(!target) return {ok:false, error:"No Output node in graph.", src:""};
+  const byTo={};
+  edges.forEach(e=>{(byTo[e.tn]=byTo[e.tn]||{})[e.tp]=e;});
+  const reachable=new Set();
+  (function walk(id){
+    if(reachable.has(id)||!nodes[id]) return; reachable.add(id);
+    const spec=CATALOG[nodes[id].type];
+    (spec.ins||[]).forEach(p=>{const e=byTo[id]&&byTo[id][p.id]; if(e) walk(e.fn);});
+  })(target);
+  const order=[], temp=new Set(), perm=new Set();
+  let cycle=false;
+  function vis(id){
+    if(perm.has(id)||!reachable.has(id)) return;
+    if(temp.has(id)){cycle=true; return;}
+    temp.add(id);
+    const spec=CATALOG[nodes[id].type];
+    (spec.ins||[]).forEach(p=>{
+      const e=byTo[id]&&byTo[id][p.id];
+      if(e){
+        if(nodes[id].type==="delay") return;
+        vis(e.fn);
+      }
+    });
+    temp.delete(id); perm.add(id); order.push(id);
+  }
+  vis(target);
+  if(cycle) return {ok:false, error:"Cycle detected. Insert a Feedback Delay node.", src:""};
+  const outType={};
+  const srcs=[];
+  const uniformDecls=[];
+  const uniformMeta=[];
+  order.forEach(id=>{
+    const n=nodes[id], spec=CATALOG[n.type];
+    if(spec.nop) return;
+    const ins={};
+    (spec.ins||[]).forEach(p=>{
+      const e=byTo[id]&&byTo[id][p.id];
+      if(e && nodes[e.fn]){
+        const fn=sid(e.fn);
+        const fp=e.fp||"out";
+        const srcSpec=CATALOG[nodes[e.fn].type];
+        let ft=((srcSpec.outs||[]).find(o=>o.id===fp)||{}).t;
+        if(!ft||ft==="any") ft=outType[e.fn]||"float";
+        if(ft==="color") ft="vec4";
+        let expr=`${fn}_${fp}(uv)`;
+        const want=p.t==="color"?"vec4":p.t;
+        if(want && want!=="any"){ expr=cast(expr, ft, want); ft=want; }
+        ins[p.id]=expr;
+        ins[p.id+"T"]=ft;
+        ins[p.id+"Fn"]=`${fn}_${fp}`;
+      }
+    });
+    let tn="float";
+    if(spec.poly){
+      if(spec.type==="warp"||spec.type==="blur") tn=ins.imgT||"float";
+      else {
+        const ts=(spec.ins||[]).map(p=>ins[p.id+"T"]).filter(Boolean);
+        tn=widest(ts.length?ts:["float"]);
+      }
+      if((spec.outs[0]||{}).t==="color") tn="vec4";
+    } else tn=((spec.outs[0]||{}).t)||"float";
+    if(tn==="color") tn="vec4";
+    if(tn==="any") tn="float";
+    if(spec.type==="output") tn="vec4";
+    outType[id]=tn;
+    const iobj={};
+    (spec.ins||[]).forEach(p=>{
+      iobj[p.id]=ins[p.id]||null;
+      iobj[p.id+"T"]=ins[p.id+"T"];
+      iobj[p.id[0]+"t"]=ins[p.id+"T"];
+    });
+    iobj.at=ins.aT||ins.imgT||ins.albedoT||ins.cT||ins.colorT;
+    iobj.bt=ins.bT; iobj.ct=ins.cT||ins.colorT; iobj.vt=ins.vT; iobj.nt=ins.nT;
+    iobj.ot=ins.offT; iobj.it=ins.imgT||ins.inT; iobj.int=ins.inT;
+    iobj.fn=ins.imgFn||ins.hFn||null;
+    iobj.uv=ins.uv||"uv";
+    if(spec.type==="normals"){
+      const e=byTo[id]&&byTo[id].h;
+      iobj.fn=e?(ins.hFn||(sid(e.fn)+"_out")):"dummyH";
+      iobj.h=iobj.fn==="dummyH"?"0.0":`${iobj.fn}(uv)`;
+    }
+    if(spec.type==="blur"||spec.type==="warp"){
+      iobj.fn=ins.imgFn||null;
+      iobj.at=ins.imgT||"float";
+    }
+    if(spec.type==="warp"){
+      iobj.off=ins.off||"vec2(0.0)";
+      iobj.ot=ins.offT||"vec2";
+    }
+    const pobj={};
+    (spec.params||[]).forEach(ps=>{
+      if(ps.t==="text"){ pobj[ps.id]=JSON.stringify(n.params[ps.id]||""); return; }
+      const uname="u_"+sid(id)+"_"+ps.id;
+      pobj[ps.id]=uname;
+      uniformDecls.push(ps.t==="color"?`uniform vec4 ${uname};`:`uniform float ${uname};`);
+      uniformMeta.push({name:uname,nodeId:id,spec:ps});
+    });
+    (spec.ins||[]).forEach(p=>{
+      if(iobj[p.id]==null){
+        if(p.id==="alpha") iobj[p.id]="1.0";
+        else if(p.t==="vec2"||p.id==="uv") iobj[p.id]="uv";
+        else if(p.t==="float"||p.t==="any") iobj[p.id]="0.0";
+        else if(p.t==="vec3") iobj[p.id]="vec3(0.0)";
+        else iobj[p.id]=null;
+      }
+    });
+    try{
+      srcs.push(spec.emit(sid(id), iobj, pobj, tn));
+    }catch(err){
+      srcs.push("/* emit error "+spec.title+": "+err.message+" */");
+    }
+  });
+  const tid=sid(target);
+  const wrap=cast(tid+"_out(uv)", outType[target]||"vec4", "vec4");
+  const main=`
+vec4 sampleGraph(vec2 uv){
+  vec4 c=${wrap};
+  return c;
+}
+void main(){
+  vec2 res=uRes;
+  vec2 frag=gl_FragCoord.xy;
+  vec2 uv=(frag/res);
+  uv=(uv-0.5)/uZoom - uPan + 0.5;
+  if(uTile>0.5) uv=fract(uv*uTile);
+  vec4 col=sampleGraph(uv);
+  int d=uDiag;
+  vec4 o=col;
+  if(d==1) o=vec4(col.rrr,1.0);
+  else if(d==2) o=vec4(col.ggg,1.0);
+  else if(d==3) o=vec4(col.bbb,1.0);
+  else if(d==4) o=vec4(col.aaa,1.0);
+  else if(d==5){float l=dot(col.rgb,vec3(0.299,0.587,0.114)); o=vec4(vec3(l),1.0);}
+  else if(d==6){o=vec4(normalize(col.rgb)*0.5+0.5,1.0);}
+  else if(d==7){float h=hash21(uv*17.0+float(${order.indexOf(target)})); o=vec4(vec3(h,fract(h*3.7),fract(h*5.1)),1.0);}
+  else if(d==8){float l=dot(col.rgb,vec3(0.299,0.587,0.114)); o=vec4(l,0.0,1.0-l,1.0);}
+  else if(d==9){bool bad=any(isnan(col))||any(isinf(col)); o=bad?vec4(1.0,0.0,0.4,1.0):vec4(vec3(0.12),1.0);}
+  else if(d==10){o=vec4(vec3(uEvalNorm),1.0);}
+  else if(d==11){o=vec4(vec3(uDirtyNorm),1.0);}
+  else if(d==12){o=vec4(uRes.xyx/2048.0,1.0);}
+  int ch=uChan;
+  if(ch==1) o=vec4(o.rrr,1.0);
+  if(ch==2) o=vec4(o.ggg,1.0);
+  if(ch==3) o=vec4(o.bbb,1.0);
+  if(ch==4) o=vec4(o.aaa,1.0);
+  if(ch==5){float l=dot(o.rgb,vec3(0.299,0.587,0.114)); o=vec4(vec3(l),1.0);}
+  if(uCompare>0.5){
+    vec4 refc=texture(uRef, gl_FragCoord.xy/uRes);
+    if(gl_FragCoord.x/uRes.x < uSplit) o=refc;
+  }
+  if(uInspect>0.5 && distance(frag, vec2(uPxX,uPxY))<4.0) o=mix(o,vec4(1.0,0.9,0.2,1.0),0.7);
+  if(uGamma>0.5) o.rgb=pow(clamp(o.rgb,0.0,16.0), vec3(0.454545));
+  fragColor=vec4(o.rgb,1.0);
+}`;
+  const src=`#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec2 uRes; uniform float uTime; uniform float uFrame; uniform float uSeed;
+uniform int uDiag; uniform int uChan; uniform float uTile; uniform vec2 uPan; uniform float uZoom;
+uniform float uPxX; uniform float uPxY; uniform float uInspect; uniform float uCompare; uniform float uSplit;
+uniform float uEvalNorm; uniform float uDirtyNorm; uniform float uGamma; uniform sampler2D uPrev; uniform sampler2D uRef;
+${uniformDecls.join("\n")}
+float dummyH(vec2 uv){return 0.0;}
+${HELPERS}
+${srcs.join("\n")}
+${main}`;
+  return {ok:true, src, target, order, error:"", uniforms:uniformMeta};
+}
+
+const glCanvas=document.getElementById("preview");
+const gl=glCanvas.getContext("webgl2",{premultipliedAlpha:false,preserveDrawingBuffer:true,antialias:true});
+if(!gl) toast("WebGL2 required");
+const VS=`#version 300 es
+in vec2 aPos; void main(){ gl_Position=vec4(aPos,0.0,1.0); }`;
+let prog=null, lastGood=null, quad=null, uniforms={}, fboA=null,fboB=null,texA=null,texB=null,refTex=null, ping=0;
+function sh(type,src){const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){const log=gl.getShaderInfoLog(s); gl.deleteShader(s); return {err:log};} return {s};}
+function makeProg(fsSrc){
+  const v=sh(gl.VERTEX_SHADER,VS); if(v.err) return {err:"VS "+v.err};
+  const f=sh(gl.FRAGMENT_SHADER,fsSrc); if(f.err) return {err:f.err};
+  const p=gl.createProgram(); gl.attachShader(p,v.s); gl.attachShader(p,f.s); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) return {err:gl.getProgramInfoLog(p)};
+  return {p};
+}
+function ensureQuad(){
+  if(quad) return;
+  quad=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,quad);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1, -1,1,1,-1,1,1]),gl.STATIC_DRAW);
+}
+function makeTex(w,h){
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  return t;
+}
+let fboW=0,fboH=0;
+function ensureFBO(w,h){
+  if(fboW===w&&fboH===h&&texA) return;
+  fboW=w; fboH=h;
+  [texA,texB,fboA,fboB].forEach(x=>{if(x) gl.deleteTexture?null:null;});
+  texA=makeTex(w,h); texB=makeTex(w,h); refTex=makeTex(w,h);
+  fboA=gl.createFramebuffer(); fboB=gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fboA); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texA,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fboB); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texB,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+}
+let compileNeed=true, lastSrc="", currentUniforms=[];
+function requestCompile(){compileNeed=true;}
+function hexRgb(hex){
+  const h=String(hex||"#ffffff").replace("#","");
+  const n=parseInt((h.length===3?h.split("").map(c=>c+c).join(""):h).slice(0,6),16)||0;
+  return [((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255];
+}
+function applyProgram(src, meta){
+  if(!gl) return;
+  const r=makeProg(src);
+  if(r.err){
+    state.status.compile="error";
+    state.status.compileLog=r.err;
+    toast("Shader compile error — last valid preview kept");
+    return false;
+  }
+  if(prog) gl.deleteProgram(prog);
+  prog=r.p; lastGood=src; lastSrc=src; currentUniforms=meta||[];
+  state.status.compile="ok"; state.status.compileLog="";
+  return true;
+}
+
+const DIAGS=[
+  ["final","Final color"],["r","Red"],["g","Green"],["b","Blue"],["a","Alpha"],
+  ["luma","Luminance"],["normal","Normal"],["node","Node id"],["range","Value range"],
+  ["nan","NaN / invalid"],["time","Eval time"],["cache","Dirty cache"],["res","Preview resolution"]
+];
+const DIAG_IDX={final:0,r:1,g:2,b:3,a:4,luma:5,normal:6,node:7,range:8,nan:9,time:10,cache:11,res:12};
+
+function loc(name){return gl.getUniformLocation(prog,name);}
+let inspectPx={x:0,y:0};
+function drawPreview(){
+  if(!gl||!prog) return;
+  const stage=document.getElementById("preview-stage");
+  const dpr=Math.min(2, window.devicePixelRatio||1);
+  const cssW=stage.clientWidth||640, cssH=stage.clientHeight||480;
+  const target=state.settings.previewRes;
+  const aspect=cssW/Math.max(cssH,1);
+  let w,h;
+  if(aspect>=1){ w=target; h=Math.max(64, Math.round(target/aspect)); }
+  else { h=target; w=Math.max(64, Math.round(target*aspect)); }
+  w=clamp(Math.round(w*dpr),64,MAX_PREVIEW); h=clamp(Math.round(h*dpr),64,MAX_PREVIEW);
+  if(state.status.evalMs>state.settings.maxMs){ w=Math.max(64,w>>1); h=Math.max(64,h>>1); }
+  if(glCanvas.width!==w||glCanvas.height!==h){ glCanvas.width=w; glCanvas.height=h; }
+  glCanvas.style.width=cssW+"px"; glCanvas.style.height=cssH+"px";
+  ensureQuad(); ensureFBO(w,h);
+  gl.viewport(0,0,w,h);
+  gl.useProgram(prog);
+  gl.disable(gl.BLEND);
+  gl.clearColor(0.02,0.03,0.02,1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindBuffer(gl.ARRAY_BUFFER,quad);
+  const a=gl.getAttribLocation(prog,"aPos");
+  gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
+  const set=(n,fn,v)=>{const L=loc(n); if(L!=null) fn(L,v);};
+  gl.uniform2f(loc("uRes"),w,h);
+  gl.uniform1f(loc("uTime"),state.timeline.t);
+  gl.uniform1f(loc("uFrame"),Math.floor(state.timeline.t*state.timeline.fps));
+  gl.uniform1f(loc("uSeed"),state.settings.seed);
+  gl.uniform1i(loc("uDiag"),DIAG_IDX[state.preview.diag]||0);
+  const ch={rgb:0,r:1,g:2,b:3,a:4,luma:5}[state.preview.chan]||0;
+  gl.uniform1i(loc("uChan"),ch);
+  gl.uniform1f(loc("uTile"),state.preview.tile?3.0:0.0);
+  gl.uniform2f(loc("uPan"),state.preview.pan[0],state.preview.pan[1]);
+  gl.uniform1f(loc("uZoom"),state.preview.zoom);
+  gl.uniform1f(loc("uPxX"),inspectPx.x); gl.uniform1f(loc("uPxY"),inspectPx.y);
+  gl.uniform1f(loc("uInspect"),0.0);
+  gl.uniform1f(loc("uCompare"),state.preview.compare&&state.preview.hasRef?1:0);
+  gl.uniform1f(loc("uSplit"),0.5);
+  gl.uniform1f(loc("uEvalNorm"),clamp(state.status.evalMs/40,0,1));
+  gl.uniform1f(loc("uDirtyNorm"),clamp(state.status.dirty/20,0,1));
+  const gL=loc("uGamma"); if(gL) gl.uniform1f(gL, state.settings.cs==="srgb"?1:0);
+  currentUniforms.forEach(u=>{
+    const n=state.nodes[u.nodeId]; if(!n) return;
+    const L=loc(u.name); if(L==null) return;
+    const v=paramValue(n,u.spec);
+    if(u.spec.t==="color"){const c=hexRgb(v); gl.uniform4f(L,c[0],c[1],c[2],1);}
+    else if(u.spec.t==="enum") gl.uniform1f(L, Math.max(0,(u.spec.options||[]).indexOf(v)));
+    else gl.uniform1f(L, Number(v));
+  });
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, ping?texB:texA);
+  gl.uniform1i(loc("uPrev"),0);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, refTex);
+  gl.uniform1i(loc("uRef"),1);
+  const t0=now();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, ping?fboA:fboB);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, ping?texA:texB);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+  ping^=1;
+  gl.finish();
+  state.status.evalMs=now()-t0;
+  clearDirty();
+}
+
+function freezeRef(){
+  if(!gl||!texA) return;
+  const w=glCanvas.width,h=glCanvas.height;
+  const pix=new Uint8Array(w*h*4);
+  gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,pix);
+  gl.bindTexture(gl.TEXTURE_2D,refTex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,pix);
+  state.preview.hasRef=true;
+  toast("Reference frozen");
+}
+
+function readPixel(cx,cy){
+  if(!gl) return;
+  const r=glCanvas.getBoundingClientRect();
+  const x=clamp(Math.floor((cx-r.left)/r.width*glCanvas.width),0,glCanvas.width-1);
+  const y=clamp(Math.floor((1-(cy-r.top)/r.height)*glCanvas.height),0,glCanvas.height-1);
+  inspectPx={x,y};
+  const pix=new Uint8Array(4);
+  gl.readPixels(x,y,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pix);
+  const u=((cx-r.left)/r.width).toFixed(3), v=((cy-r.top)/r.height).toFixed(3);
+  document.getElementById("pixel-read").textContent=`u ${u}  v ${v}  ·  rgb ${pix[0]}, ${pix[1]}, ${pix[2]}  a ${pix[3]}`;
+}
+
+/* ========== Graph view ========== */
+const vp=document.getElementById("graph-viewport");
+const world=document.getElementById("graph-world");
+const wires=document.getElementById("wires");
+const nodeEls={};
+function worldPt(ev){
+  const r=vp.getBoundingClientRect();
+  return {x:(ev.clientX-r.left-state.view.x)/state.view.z, y:(ev.clientY-r.top-state.view.y)/state.view.z};
+}
+function applyView(){
+  world.style.transform=`translate(${state.view.x}px,${state.view.y}px) scale(${state.view.z})`;
+  drawWires(); drawMinimap();
+}
+function portPos(nodeId,portId,io){
+  const el=document.querySelector(`[data-node="${nodeId}"] [data-port="${portId}"].${io}`);
+  const n=state.nodes[nodeId];
+  if(!n) return {x:0,y:0};
+  if(!el){
+    return {x:n.x+(io==="out"?n.w||186:0), y:n.y+22};
+  }
+  const nr=world.getBoundingClientRect();
+  const pr=el.getBoundingClientRect();
+  return {x:(pr.left+pr.width/2-nr.left)/state.view.z, y:(pr.top+pr.height/2-nr.top)/state.view.z};
+}
+function bezier(a,b){
+  const dx=Math.max(40,Math.abs(b.x-a.x)*0.5);
+  return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`;
+}
+function typeOfPort(nodeId,port,io){
+  const n=state.nodes[nodeId]; if(!n) return "float";
+  const spec=CATALOG[n.type];
+  const arr=io==="in"?spec.ins:spec.outs;
+  const p=(arr||[]).find(x=>x.id===port);
+  return p?p.t:"float";
+}
+function drawWires(){
+  let d="";
+  Object.values(state.edges).forEach(e=>{
+    const a=portPos(e.fn,e.fp,"out"), b=portPos(e.tn,e.tp,"in");
+    const t=typeOfPort(e.fn,e.fp,"out");
+    const col=getComputedStyle(document.documentElement).getPropertyValue(TYPE_COLOR[t]?TYPE_COLOR[t].replace("var(","").replace(")",""):"--vec2") || "#5ec8ff";
+    const c=t==="float"?"#7dffb3":t==="vec2"?"#5ec8ff":t==="vec3"?"#ffb84d":"#ff7a59";
+    d+=`<path data-edge="${e.id}" d="${bezier(a,b)}" stroke="${c}" stroke-width="${state.sel.has("edge:"+e.id)?3.4:2.1}" />`;
+  });
+  if(connectDrag){
+    const a=portPos(connectDrag.node,connectDrag.port,connectDrag.io);
+    const b=connectDrag.cur;
+    d+=`<path d="${bezier(connectDrag.io==="out"?a:b, connectDrag.io==="out"?b:a)}" stroke="#e8dcc8" stroke-dasharray="6 4" stroke-width="2"/>`;
+  }
+  wires.innerHTML=d;
+  const bb=world.getBoundingClientRect();
+  wires.setAttribute("width", 4000); wires.setAttribute("height", 3000);
+  wires.style.width="4000px"; wires.style.height="3000px";
+}
+function nodeHTML(n){
+  const spec=CATALOG[n.type];
+  if(n.type==="comment") return `<div class="comment-box" data-node="${n.id}" style="left:${n.x}px;top:${n.y}px">${escapeHtml(n.params.text||"Note")}</div>`;
+  if(n.type==="frame") return `<div class="frame-box" data-node="${n.id}" style="left:${n.x}px;top:${n.y}px;width:${n.params.w||360}px;height:${n.params.h||220}px"><div class="frame-title">${escapeHtml(n.params.title||"Group")}</div></div>`;
+  const ins=(spec.ins||[]).map(p=>`<div class="port-row in"><i class="port in" data-port="${p.id}" data-type="${p.t}" style="border-color:${p.t==="float"?"#7dffb3":p.t==="vec2"?"#5ec8ff":p.t==="vec3"?"#ffb84d":"#ff7a59"}" aria-label="Input ${p.id}"></i><span class="port-name">${p.id}</span></div>`).join("");
+  const outs=(spec.outs||[]).map(p=>`<div class="port-row out"><span class="port-name">${p.id}</span><i class="port out" data-port="${p.id}" data-type="${p.t}" style="border-color:${p.t==="float"?"#7dffb3":p.t==="vec2"?"#5ec8ff":p.t==="vec3"?"#ffb84d":"#ff7a59"}" aria-label="Output ${p.id}"></i></div>`).join("");
+  const prev=spec.nop?"":`<div class="node-preview" style="background:linear-gradient(90deg,${CAT_COLOR[spec.cat]||"#444"},#111)" aria-hidden="true"></div>`;
+  return `<div class="node${state.sel.has(n.id)?" selected":""}${n.collapsed?" collapsed":""}${dirtySet.has(n.id)?" dirty":""}" data-node="${n.id}" role="group" aria-label="${spec.title} node" style="left:${n.x}px;top:${n.y}px">
+    <div class="node-head"><span class="tag" style="background:${CAT_COLOR[spec.cat]||"#aaa"}"></span><span>${spec.title}</span></div>
+    ${prev}<div class="node-body">${ins}${outs}</div></div>`;
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function renderGraph(full){
+  const hint=document.getElementById("empty-hint");
+  hint.hidden=Object.keys(state.nodes).length>0;
+  const keep=new Set(Object.keys(state.nodes));
+  Object.keys(nodeEls).forEach(id=>{if(!keep.has(id)){nodeEls[id].remove(); delete nodeEls[id];}});
+  Object.values(state.nodes).forEach(n=>{
+    const html=nodeHTML(n);
+    if(!nodeEls[n.id]){
+      const wrap=document.createElement("div");
+      wrap.innerHTML=html; const el=wrap.firstElementChild;
+      world.appendChild(el); nodeEls[n.id]=el; bindNode(el,n);
+    } else {
+      const el=nodeEls[n.id];
+      const tmp=document.createElement("div"); tmp.innerHTML=html;
+      const neu=tmp.firstElementChild;
+      if(el.className!==neu.className) el.className=neu.className;
+      el.style.left=n.x+"px"; el.style.top=n.y+"px";
+      if(n.type==="frame"){el.style.width=(n.params.w||360)+"px"; el.style.height=(n.params.h||220)+"px";}
+      if(full){el.innerHTML=neu.innerHTML; bindNode(el,n);}
+    }
+  });
+  applyView();
+  document.getElementById("empty-hint").hidden=Object.keys(state.nodes).length>0;
+}
+
+function bindNode(el,n){
+  el.onpointerdown=ev=>{
+    if(ev.button!==0) return;
+    if(ev.target.classList.contains("port")) return;
+    if(!ev.shiftKey && !state.sel.has(n.id)) {state.sel.clear(); state.sel.add(n.id);}
+    else state.sel.add(n.id);
+    renderInspector(); renderGraph(false);
+    const start=worldPt(ev);
+    const orig={};
+    state.sel.forEach(id=>{const nn=state.nodes[id]; if(nn) orig[id]={x:nn.x,y:nn.y};});
+    const grid=state.settings.grid;
+    function mv(e){
+      const p=worldPt(e);
+      const dx=p.x-start.x, dy=p.y-start.y;
+      Object.keys(orig).forEach(id=>{
+        const nn=state.nodes[id]; if(!nn) return;
+        nn.x=orig[id].x+dx; nn.y=orig[id].y+dy;
+        if(state.settings.snap){nn.x=Math.round(nn.x/grid)*grid; nn.y=Math.round(nn.y/grid)*grid;}
+        if(nodeEls[id]){nodeEls[id].style.left=nn.x+"px"; nodeEls[id].style.top=nn.y+"px";}
+      });
+      drawGuides(); drawWires();
+    }
+    function up(){
+      window.removeEventListener("pointermove",mv); window.removeEventListener("pointerup",up);
+      clearGuides(); pushHist(); drawWires();
+    }
+    window.addEventListener("pointermove",mv); window.addEventListener("pointerup",up);
+  };
+  el.querySelectorAll(".port").forEach(p=>{
+    p.onpointerdown=ev=>{
+      ev.stopPropagation(); ev.preventDefault();
+      const io=p.classList.contains("out")?"out":"in";
+      connectDrag={node:n.id,port:p.dataset.port,io,cur:worldPt(ev)};
+      function mv(e){connectDrag.cur=worldPt(e); drawWires();}
+      function up(e){
+        window.removeEventListener("pointermove",mv); window.removeEventListener("pointerup",up);
+        const hit=document.elementFromPoint(e.clientX,e.clientY);
+        const port=hit&&hit.closest&&hit.closest(".port");
+        if(port){
+          const tn=port.closest("[data-node]").dataset.node;
+          const tp=port.dataset.port;
+          const tio=port.classList.contains("out")?"out":"in";
+          if(io==="out"&&tio==="in") addEdge(n.id,p.dataset.port,tn,tp);
+          else if(io==="in"&&tio==="out") addEdge(tn,tp,n.id,p.dataset.port);
+          else toast("Connect output to input");
+          pushHist(); requestCompile(); renderGraph(true); renderInspector();
+        }
+        connectDrag=null; drawWires();
+      }
+      window.addEventListener("pointermove",mv); window.addEventListener("pointerup",up);
+    };
+  });
+}
+let connectDrag=null;
+const guides=[];
+function drawGuides(){
+  clearGuides();
+  const sel=[...state.sel].map(id=>state.nodes[id]).filter(Boolean);
+  if(sel.length!==1) return;
+  const n=sel[0];
+  Object.values(state.nodes).forEach(o=>{
+    if(o.id===n.id) return;
+    if(Math.abs(o.x-n.x)<4) addGuide(o.x,0,o.x,3000,true);
+    if(Math.abs(o.y-n.y)<4) addGuide(0,o.y,4000,o.y,false);
+  });
+}
+function addGuide(x1,y1,x2,y2,vert){
+  const g=document.createElement("div"); g.className="guide";
+  if(vert){g.style.left=x1+"px"; g.style.top="0"; g.style.width="1px"; g.style.height="3000px";}
+  else {g.style.top=y1+"px"; g.style.left="0"; g.style.height="1px"; g.style.width="4000px";}
+  world.appendChild(g); guides.push(g);
+}
+function clearGuides(){guides.forEach(g=>g.remove()); guides.length=0;}
+
+let boxSel=null;
+vp.addEventListener("pointerdown",ev=>{
+  if(ev.target!==vp && ev.target!==world && ev.target!==wires && ev.target.id!=="graph-viewport") {
+    if(ev.target.closest("[data-node]")) return;
+  }
+  if(ev.button===1 || ev.altKey || ev.button===0 && ev.target===vp){
+    if(ev.shiftKey){
+      const a=worldPt(ev); boxSel={el:document.createElement("div"), a};
+      boxSel.el.className="selbox"; vp.appendChild(boxSel.el);
+      function mv(e){const b=worldPt(e); const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
+        const r=vp.getBoundingClientRect();
+        boxSel.el.style.left=(r.left+state.view.x+x*state.view.z-r.left)+"px";
+        boxSel.el.style.top=(state.view.y+y*state.view.z)+"px";
+        boxSel.el.style.width=w*state.view.z+"px"; boxSel.el.style.height=h*state.view.z+"px";
+      }
+      function up(e){
+        window.removeEventListener("pointermove",mv); window.removeEventListener("pointerup",up);
+        const b=worldPt(e); const x0=Math.min(a.x,b.x),y0=Math.min(a.y,b.y),x1=Math.max(a.x,b.x),y1=Math.max(a.y,b.y);
+        if(!e.shiftKey) state.sel.clear();
+        Object.values(state.nodes).forEach(n=>{if(n.x>=x0&&n.y>=y0&&n.x<=x1&&n.y<=y1) state.sel.add(n.id);});
+        boxSel.el.remove(); boxSel=null; renderGraph(false); renderInspector();
+      }
+      window.addEventListener("pointermove",mv); window.addEventListener("pointerup",up);
+      return;
+    }
+    if(ev.target.closest("[data-node]")) return;
+    vp.classList.add("panning");
+    const sx=ev.clientX, sy=ev.clientY, ox=state.view.x, oy=state.view.y;
+    function mv(e){state.view.x=ox+(e.clientX-sx); state.view.y=oy+(e.clientY-sy); applyView();}
+    function up(){vp.classList.remove("panning"); window.removeEventListener("pointermove",mv); window.removeEventListener("pointerup",up); window.removeEventListener("pointercancel",up);}
+    window.addEventListener("pointermove",mv); window.addEventListener("pointerup",up); window.addEventListener("pointercancel",up);
+    if(ev.target===vp){state.sel.clear(); renderGraph(false); renderInspector();}
+  }
+});
+vp.addEventListener("wheel",ev=>{
+  ev.preventDefault();
+  const r=vp.getBoundingClientRect();
+  const mx=ev.clientX-r.left, my=ev.clientY-r.top;
+  const old=state.view.z;
+  const z=clamp(old*(ev.deltaY>0?0.9:1.11),0.18,3.2);
+  state.view.x=mx-(mx-state.view.x)*(z/old);
+  state.view.y=my-(my-state.view.y)*(z/old);
+  state.view.z=z; applyView();
+},{passive:false});
+vp.addEventListener("dblclick",ev=>{
+  if(ev.target.closest("[data-node]")) return;
+  const p=worldPt(ev); openCmdk(p);
+});
+
+wires.addEventListener("pointerdown",ev=>{
+  const path=ev.target.closest("path[data-edge]");
+  if(!path) return;
+  ev.stopPropagation();
+  state.sel.clear(); state.sel.add("edge:"+path.dataset.edge); drawWires();
+});
+
+function drawMinimap(){
+  const c=document.getElementById("minimap"); const ctx=c.getContext("2d");
+  ctx.clearRect(0,0,c.width,c.height);
+  ctx.fillStyle="rgba(10,12,8,0.9)"; ctx.fillRect(0,0,c.width,c.height);
+  const ns=Object.values(state.nodes); if(!ns.length) return;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  ns.forEach(n=>{minx=Math.min(minx,n.x); miny=Math.min(miny,n.y); maxx=Math.max(maxx,n.x+190); maxy=Math.max(maxy,n.y+90);});
+  const sx=c.width/Math.max(1,maxx-minx+80), sy=c.height/Math.max(1,maxy-miny+80); const s=Math.min(sx,sy);
+  ns.forEach(n=>{
+    ctx.fillStyle=state.sel.has(n.id)?"#ff5c1a":"#8b907c";
+    ctx.fillRect((n.x-minx+40)*s,(n.y-miny+40)*s,16,8);
+  });
+  const r=vp.getBoundingClientRect();
+  ctx.strokeStyle="#c8f26d"; ctx.strokeRect((-state.view.x/state.view.z-minx+40)*s,(-state.view.y/state.view.z-miny+40)*s,(r.width/state.view.z)*s,(r.height/state.view.z)*s);
+}
+
+function fitGraph(){
+  const ns=Object.values(state.nodes); if(!ns.length) return;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  ns.forEach(n=>{minx=Math.min(minx,n.x); miny=Math.min(miny,n.y); maxx=Math.max(maxx,n.x+200); maxy=Math.max(maxy,n.y+110);});
+  const r=vp.getBoundingClientRect();
+  const z=clamp(Math.min(r.width/(maxx-minx+80), r.height/(maxy-miny+80)),0.25,1.4);
+  state.view.z=z; state.view.x=(r.width-(maxx+minx)*z)/2; state.view.y=(r.height-(maxy+miny)*z)/2; applyView();
+}
+
+/* palette */
+function renderPalette(filter){
+  const q=(filter||"").toLowerCase();
+  const cats={};
+  Object.values(CATALOG).forEach(s=>{
+    if(q && !(s.title.toLowerCase().includes(q)||s.type.includes(q)||(s.cat||"").toLowerCase().includes(q))) return;
+    (cats[s.cat]=cats[s.cat]||[]).push(s);
+  });
+  const el=document.getElementById("pal-list");
+  el.innerHTML=Object.keys(cats).map(c=>`<div class="pal-cat">${c}</div>`+cats[c].map(s=>`<div class="pal-item" draggable="true" tabindex="0" data-type="${s.type}" aria-label="Add ${s.title}"><span class="pal-dot" style="background:${CAT_COLOR[s.cat]}"></span>${s.title}</div>`).join("")).join("");
+  el.querySelectorAll(".pal-item").forEach(it=>{
+    it.ondragstart=e=>{e.dataTransfer.setData("text/plain",it.dataset.type);};
+    it.onclick=()=>{const n=addNode(it.dataset.type, 180-state.view.x/state.view.z, 140-state.view.y/state.view.z); if(n){state.sel.clear(); state.sel.add(n.id); pushHist(); requestCompile(); renderGraph(true); renderInspector();}};
+  });
+}
+vp.addEventListener("dragover",e=>e.preventDefault());
+vp.addEventListener("drop",e=>{
+  e.preventDefault(); const t=e.dataTransfer.getData("text/plain"); const p=worldPt(e);
+  const n=addNode(t,p.x,p.y); if(n){pushHist(); requestCompile(); renderGraph(true);}
+});
+document.getElementById("pal-search").addEventListener("input",e=>renderPalette(e.target.value));
+
+/* inspector */
+function selectedNode(){for(const id of state.sel){if(state.nodes[id]) return state.nodes[id];} return null;}
+function renderInspector(){
+  const el=document.getElementById("inspect-body");
+  const n=selectedNode();
+  if(!n){
+    el.innerHTML=`<p style="color:var(--muted)">Select a node to edit parameters. Changes compile into the live preview.</p>
+      <div class="kv">
+        <label class="lbl">Preview res<input id="set-prevres" type="number" min="64" max="${MAX_PREVIEW}" value="${state.settings.previewRes}" aria-label="Preview resolution"></label>
+        <label class="lbl">Export res<input id="set-expres" type="number" min="64" max="${MAX_EXPORT}" value="${state.settings.exportRes}" aria-label="Export resolution"></label>
+        <label class="lbl">Seed<input id="set-seed" type="number" value="${state.settings.seed}" aria-label="Global seed"></label>
+        <label class="lbl">Theme<select id="set-theme" aria-label="Theme">${["dark","high","film","day"].map(t=>`<option ${state.settings.theme===t?"selected":""}>${t}</option>`).join("")}</select></label>
+        <label class="lbl">Grid<input id="set-grid" type="number" value="${state.settings.grid}" aria-label="Grid size"></label>
+        <label class="lbl">Snap<input id="set-snap" type="checkbox" ${state.settings.snap?"checked":""} aria-label="Snap to grid"></label>
+        <label class="lbl">Backend<select id="set-backend" aria-label="Evaluation backend"><option>webgl</option></select></label>
+        <label class="lbl">Color space<select id="set-cs" aria-label="Color space approximation"><option ${state.settings.cs==="srgb"?"selected":""}>srgb</option><option ${state.settings.cs==="linear"?"selected":""}>linear</option></select></label>
+        <label class="lbl">AA<input id="set-aa" type="checkbox" ${state.settings.aa?"checked":""} aria-label="Antialiasing"></label>
+        <label class="lbl">Node previews<input id="set-np" type="checkbox" ${state.settings.nodePrev?"checked":""} aria-label="Node preview quality"></label>
+      </div>`;
+    bindSettings(); return;
+  }
+  const spec=CATALOG[n.type];
+  const params=spec.params.map(p=>{
+    const v=n.params[p.id]; const keyed=!!state.timeline.kf[n.id+"."+p.id];
+    if(p.t==="color") return `<label class="lbl">${p.id}<span class="color-row"><input type="color" data-param="${p.id}" value="${v}" aria-label="${p.id} color"><button type="button" data-kf="${p.id}" aria-label="Keyframe ${p.id}">${keyed?"◆":"◇"}</button></span></label>`;
+    if(p.t==="enum") return `<label class="lbl">${p.id}<select data-param="${p.id}" aria-label="${p.id}">${p.options.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")}</select></label>`;
+    if(p.t==="text") return `<label class="lbl">${p.id}<input type="text" data-param="${p.id}" value="${escapeHtml(v)}" aria-label="${p.id}"></label>`;
+    return `<div class="param"><span>${p.id}</span><button type="button" data-kf="${p.id}" aria-label="Keyframe ${p.id}">${keyed?"◆":"◇"}</button>
+      <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}" data-param="${p.id}" aria-label="${p.id}">
+      <input type="number" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}" data-param="${p.id}" aria-label="${p.id} value"></div>`;
+  }).join("");
+  el.innerHTML=`<div><b>${spec.title}</b> <span style="color:var(--muted)">${n.id}</span></div>
+    <div class="kv"><label class="lbl">X<input id="nx" type="number" value="${n.x|0}" aria-label="Node X"></label><label class="lbl">Y<input id="ny" type="number" value="${n.y|0}" aria-label="Node Y"></label></div>
+    ${params||"<p style='color:var(--muted)'>No parameters. Connect inputs.</p>"}
+    <div class="group" style="display:flex;gap:6px;flex-wrap:wrap">
+      <button type="button" id="btn-prevnode" aria-label="Preview this node">Preview node</button>
+      <button type="button" id="btn-collapse" aria-label="Collapse node">${n.collapsed?"Expand":"Collapse"}</button>
+      <button type="button" id="btn-dup" aria-label="Duplicate node">Duplicate</button>
+      <button type="button" id="btn-del" aria-label="Delete node">Delete</button>
+    </div>
+    <div id="node-diag" class="errbox" style="display:${state.status.compile==="error"?"block":"none"}">${escapeHtml(state.status.compileLog)}</div>`;
+  el.querySelectorAll("[data-param]").forEach(inp=>{
+    inp.addEventListener("input",()=>{
+      const id=inp.dataset.param; const specp=spec.params.find(p=>p.id===id);
+      let val=inp.type==="number"||inp.type==="range"?parseFloat(inp.value):inp.value;
+      if(specp.t==="int") val=parseInt(inp.value,10);
+      n.params[id]=val;
+      el.querySelectorAll(`[data-param="${id}"]`).forEach(x=>{if(x!==inp) x.value=inp.value;});
+      markDirty(n.id);
+    });
+    inp.addEventListener("change",()=>pushHist());
+  });
+  el.querySelectorAll("[data-kf]").forEach(b=>b.onclick=()=>{
+    const ch=n.id+"."+b.dataset.kf; const specp=spec.params.find(p=>p.id===b.dataset.kf);
+    const arr=state.timeline.kf[ch]||(state.timeline.kf[ch]=[]);
+    if(arr.length>=MAX_KF){toast("Keyframe limit"); return;}
+    arr.push({t:state.timeline.t,v:n.params[specp.id],i:"linear"});
+    toast("Keyframe at "+state.timeline.t.toFixed(2)+"s"); renderInspector(); drawDope();
+  });
+  const nx=el.querySelector("#nx"), ny=el.querySelector("#ny");
+  if(nx) nx.onchange=()=>{n.x=parseFloat(nx.value); renderGraph(false); pushHist();};
+  if(ny) ny.onchange=()=>{n.y=parseFloat(ny.value); renderGraph(false); pushHist();};
+  el.querySelector("#btn-prevnode").onclick=()=>{state.previewNode=n.id; requestCompile(); toast("Previewing "+spec.title);};
+  el.querySelector("#btn-collapse").onclick=()=>{n.collapsed=!n.collapsed; renderGraph(true);};
+  el.querySelector("#btn-dup").onclick=()=>duplicateSel();
+  el.querySelector("#btn-del").onclick=()=>deleteSel();
+}
+function bindSettings(){
+  const g=id=>document.getElementById(id);
+  g("set-prevres").onchange=e=>{state.settings.previewRes=clamp(+e.target.value,64,MAX_PREVIEW);};
+  g("set-expres").onchange=e=>{
+    const v=+e.target.value;
+    if(v>MAX_EXPORT){toast("Export capped at "+MAX_EXPORT); e.target.value=MAX_EXPORT;}
+    state.settings.exportRes=clamp(v,64,MAX_EXPORT);
+  };
+  g("set-seed").onchange=e=>{state.settings.seed=+e.target.value; requestCompile();};
+  g("set-theme").onchange=e=>{state.settings.theme=e.target.value; document.documentElement.dataset.theme=e.target.value==="dark"?"":e.target.value;};
+  g("set-grid").onchange=e=>{state.settings.grid=+e.target.value||24;};
+  g("set-snap").onchange=e=>{state.settings.snap=e.target.checked;};
+  g("set-cs").onchange=e=>{state.settings.cs=e.target.value;};
+  g("set-aa").onchange=e=>{state.settings.aa=e.target.checked;};
+  g("set-np").onchange=e=>{state.settings.nodePrev=e.target.checked;};
+}
+
+/* history / clipboard */
+function snap(){return deep({nodes:state.nodes,edges:state.edges,kf:state.timeline.kf,t:state.timeline.t});}
+function pushHist(){
+  if(state.histLock) return;
+  state.history=state.history.slice(0,state.histI+1);
+  state.history.push(snap());
+  if(state.history.length>80) state.history.shift();
+  state.histI=state.history.length-1;
+}
+function restore(s){
+  state.histLock=true; state.nodes=s.nodes; state.edges=s.edges; state.timeline.kf=s.kf||{};
+  uid=Math.max(uid, ...Object.keys(state.nodes).map(k=>parseInt(k.replace(/\D/g,"")||"1",10)),1)+1;
+  state.histLock=false; requestCompile(); renderGraph(true); renderInspector();
+}
+function undo(){if(state.histI<=0) return; state.histI--; restore(deep(state.history[state.histI])); toast("Undo");}
+function redo(){if(state.histI>=state.history.length-1) return; state.histI++; restore(deep(state.history[state.histI])); toast("Redo");}
+let clip=null;
+function copySel(){
+  const ids=[...state.sel].filter(id=>state.nodes[id]);
+  const nodes={}; ids.forEach(id=>nodes[id]=deep(state.nodes[id]));
+  const edges=Object.values(state.edges).filter(e=>nodes[e.fn]&&nodes[e.tn]).map(deep);
+  clip={nodes,edges}; toast("Copied "+ids.length+" nodes");
+}
+function pasteSel(){
+  if(!clip) return;
+  const map={}; state.sel.clear();
+  Object.values(clip.nodes).forEach(n=>{
+    const nn=addNode(n.type,n.x+40,n.y+40,deep(n.params));
+    if(nn){map[n.id]=nn.id; state.sel.add(nn.id);}
+  });
+  clip.edges.forEach(e=>{if(map[e.fn]&&map[e.tn]) addEdge(map[e.fn],e.fp,map[e.tn],e.tp);});
+  pushHist(); requestCompile(); renderGraph(true); renderInspector();
+}
+function duplicateSel(){copySel(); pasteSel();}
+function deleteSel(){
+  const ids=[...state.sel];
+  ids.forEach(s=>{
+    if(String(s).startsWith("edge:")) delete state.edges[s.slice(5)];
+  });
+  removeNodes(ids.filter(id=>state.nodes[id]));
+  state.sel.clear(); pushHist(); requestCompile(); renderGraph(true); renderInspector();
+}
+function groupSel(){
+  const ids=[...state.sel].filter(id=>state.nodes[id]); if(!ids.length) return;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  ids.forEach(id=>{const n=state.nodes[id]; minx=Math.min(minx,n.x); miny=Math.min(miny,n.y); maxx=Math.max(maxx,n.x+190); maxy=Math.max(maxy,n.y+90);});
+  addNode("frame",minx-16,miny-28,{title:"Group",w:maxx-minx+40,h:maxy-miny+50});
+  pushHist(); renderGraph(true);
+}
+
+/* command palette */
+const cmdk=document.getElementById("cmdk");
+const cmdkInput=document.getElementById("cmdk-input");
+let cmdkAt={x:200,y:160};
+function openCmdk(pt){
+  cmdkAt=pt||{x:200-state.view.x/state.view.z,y:140-state.view.y/state.view.z};
+  cmdk.classList.add("open"); cmdkInput.value=""; renderCmdk(""); cmdkInput.focus();
+}
+function renderCmdk(q){
+  const qq=q.toLowerCase();
+  const items=Object.values(CATALOG).filter(s=>s.title.toLowerCase().includes(qq)||s.type.includes(qq)).slice(0,18);
+  const cmds=[{id:"#fit",title:"Fit graph"},{id:"#play",title:"Play"},{id:"#pause",title:"Pause"},{id:"#export",title:"Export…"}].filter(c=>c.title.toLowerCase().includes(qq));
+  document.getElementById("cmdk-list").innerHTML=items.map((s,i)=>`<div data-type="${s.type}" class="${i===0?"active":""}">${s.cat} · ${s.title}</div>`).concat(cmds.map(c=>`<div data-cmd="${c.id}">${c.title}</div>`)).join("");
+  document.getElementById("cmdk-list").onclick=e=>{
+    const d=e.target.closest("[data-type],[data-cmd]"); if(!d) return;
+    if(d.dataset.type){const n=addNode(d.dataset.type,cmdkAt.x,cmdkAt.y); if(n){state.sel.clear();state.sel.add(n.id);pushHist();requestCompile();renderGraph(true);renderInspector();}}
+    cmdk.classList.remove("open");
+  };
+}
+cmdkInput.addEventListener("input",()=>renderCmdk(cmdkInput.value));
+cmdkInput.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){cmdk.classList.remove("open");}
+  if(e.key==="Enter"){
+    const a=document.querySelector("#cmdk-list .active, #cmdk-list div");
+    if(a) a.click();
+  }
+});
+
+/* context menu */
+const ctx=document.getElementById("ctx");
+function openCtx(x,y,items){
+  ctx.style.left=x+"px"; ctx.style.top=y+"px"; ctx.style.display="block";
+  ctx.innerHTML=items.map(it=>`<button type="button" data-k="${it.k}">${it.l}</button>`).join("");
+  ctx.onclick=e=>{const b=e.target.closest("button"); if(!b) return; runCtx(b.dataset.k); ctx.style.display="none";};
+}
+function runCtx(k){
+  ({dup:duplicateSel,del:deleteSel,copy:copySel,paste:pasteSel,group:groupSel,collapse:()=>{selectedNode()&& (selectedNode().collapsed=!selectedNode().collapsed, renderGraph(true));},preview:()=>{const n=selectedNode(); if(n){state.previewNode=n.id;requestCompile();}}})[k]?.();
+}
+window.addEventListener("pointerdown",e=>{if(!ctx.contains(e.target)) ctx.style.display="none";});
+vp.addEventListener("contextmenu",e=>{
+  e.preventDefault();
+  openCtx(e.clientX,e.clientY,[
+    {k:"copy",l:"Copy"},{k:"paste",l:"Paste"},{k:"dup",l:"Duplicate"},{k:"del",l:"Delete"},
+    {k:"group",l:"Frame selection"},{k:"collapse",l:"Collapse"},{k:"preview",l:"Preview node"}
+  ]);
+});
+
+/* timeline */
+function drawDope(){
+  const c=document.getElementById("dopesheet"); const r=c.parentElement.getBoundingClientRect();
+  const dpr=Math.min(2,devicePixelRatio||1);
+  c.width=Math.max(100,r.width-220)*dpr; c.height=Math.max(40,r.height)*dpr;
+  c.style.width=(c.width/dpr)+"px"; c.style.height=(c.height/dpr)+"px";
+  const ctx=c.getContext("2d"); ctx.scale(dpr,dpr);
+  const w=c.width/dpr,h=c.height/dpr;
+  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--bg")||"#0b0c0a";
+  ctx.fillRect(0,0,w,h);
+  const dur=state.timeline.dur;
+  ctx.strokeStyle="#2c3226";
+  for(let i=0;i<=dur;i++){const x=i/dur*w; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();}
+  const channels=Object.keys(state.timeline.kf);
+  channels.forEach((ch,i)=>{
+    const y=18+i*16; ctx.fillStyle="#8b907c"; ctx.font="10px sans-serif"; ctx.fillText(ch,4,y-4);
+    (state.timeline.kf[ch]||[]).forEach(k=>{
+      const x=k.t/dur*w; ctx.fillStyle="#ff5c1a"; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+5,y+6); ctx.lineTo(x-5,y+6); ctx.closePath(); ctx.fill();
+    });
+  });
+  const px=state.timeline.t/dur*w;
+  ctx.strokeStyle="#c8f26d"; ctx.beginPath(); ctx.moveTo(px,0); ctx.lineTo(px,h); ctx.stroke();
+}
+document.getElementById("dopesheet").addEventListener("pointerdown",ev=>{
+  const c=ev.target, r=c.getBoundingClientRect();
+  const t=clamp((ev.clientX-r.left)/r.width*state.timeline.dur,0,state.timeline.dur);
+  state.timeline.t=t; syncTl(); requestCompile();
+});
+function syncTl(){
+  document.getElementById("tl-time").value=state.timeline.t.toFixed(2);
+  document.getElementById("tl-dur").value=state.timeline.dur;
+  document.getElementById("tl-fps").value=state.timeline.fps;
+  document.getElementById("tl-loop").checked=state.timeline.loop;
+  document.getElementById("tl-play").setAttribute("aria-pressed", state.timeline.playing);
+  drawDope();
+}
+["tl-time","tl-dur","tl-fps"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",e=>{
+    if(id==="tl-time") state.timeline.t=clamp(+e.target.value,0,state.timeline.dur);
+    if(id==="tl-dur") state.timeline.dur=Math.max(0.1,+e.target.value);
+    if(id==="tl-fps") state.timeline.fps=clamp(+e.target.value,1,60);
+    requestCompile();
+  });
+});
+document.getElementById("tl-loop").onchange=e=>state.timeline.loop=e.target.checked;
+document.getElementById("tl-play").onclick=()=>state.timeline.playing=true;
+document.getElementById("tl-pause").onclick=()=>state.timeline.playing=false;
+document.getElementById("tl-step").onclick=()=>{state.timeline.playing=false; state.timeline.t=Math.min(state.timeline.dur, state.timeline.t+1/state.timeline.fps); syncTl(); requestCompile();};
+document.getElementById("tl-reset").onclick=()=>{state.timeline.t=0; syncTl(); requestCompile();};
+
+/* preview tools */
+document.getElementById("pv-fit").onclick=()=>{state.preview.zoom=1; state.preview.pan=[0,0];};
+document.getElementById("pv-1to1").onclick=()=>{state.preview.zoom=1; state.preview.pan=[0,0];};
+document.getElementById("pv-tile").onclick=()=>{state.preview.tile=!state.preview.tile; document.getElementById("pv-tile").setAttribute("aria-pressed",state.preview.tile);};
+document.getElementById("pv-freeze").onclick=freezeRef;
+document.getElementById("pv-compare").onclick=()=>{state.preview.compare=!state.preview.compare; document.getElementById("pv-compare").setAttribute("aria-pressed",state.preview.compare);};
+const diagSel=document.getElementById("diag-select");
+diagSel.innerHTML=DIAGS.map(([k,l])=>`<option value="${k}">${l}</option>`).join("");
+diagSel.onchange=e=>state.preview.diag=e.target.value;
+document.getElementById("chan-select").onchange=e=>state.preview.chan=e.target.value;
+const pstage=document.getElementById("preview-stage");
+pstage.addEventListener("pointermove",e=>readPixel(e.clientX,e.clientY));
+pstage.addEventListener("wheel",e=>{e.preventDefault(); state.preview.zoom=clamp(state.preview.zoom*(e.deltaY>0?0.9:1.1),0.25,8);},{passive:false});
+let ppan=null;
+pstage.addEventListener("pointerdown",e=>{
+  if(e.button===1||e.altKey){ppan={x:e.clientX,y:e.clientY,p:state.preview.pan.slice()};}
+});
+window.addEventListener("pointermove",e=>{if(!ppan) return; state.preview.pan=[ppan.p[0]+(e.clientX-ppan.x)/400, ppan.p[1]-(e.clientY-ppan.y)/400];});
+window.addEventListener("pointerup",()=>ppan=null);
+window.addEventListener("pointercancel",()=>{ppan=null; connectDrag=null; vp.classList.remove("panning");});
+window.addEventListener("blur",()=>{ppan=null; connectDrag=null;});
+
+/* IO */
+function projectJSON(){
+  return {v:1, nodes:state.nodes, edges:state.edges, timeline:{dur:state.timeline.dur,fps:state.timeline.fps,loop:state.timeline.loop,t:state.timeline.t,kf:state.timeline.kf}, settings:state.settings, view:state.view};
+}
+function validateProject(data){
+  if(!data||typeof data!=="object") throw new Error("Not an object");
+  if(!data.nodes||typeof data.nodes!=="object") throw new Error("Missing nodes");
+  Object.values(data.nodes).forEach(n=>{
+    if(!n||!CATALOG[n.type]) throw new Error("Unknown node type "+(n&&n.type));
+    if(typeof n.x!=="number"||typeof n.y!=="number") throw new Error("Bad node position");
+  });
+  return true;
+}
+function loadProject(data){
+  validateProject(data);
+  state.nodes=data.nodes; state.edges=data.edges||{};
+  Object.assign(state.timeline, data.timeline||{});
+  if(data.settings) Object.assign(state.settings,data.settings);
+  if(data.view) state.view=data.view;
+  uid=1; Object.keys(state.nodes).forEach(id=>{const m=String(id).match(/\d+/); if(m) uid=Math.max(uid,parseInt(m[0],10)+1);});
+  document.documentElement.dataset.theme=state.settings.theme==="dark"?"":state.settings.theme;
+  pushHist(); requestCompile(); renderGraph(true); renderInspector(); syncTl(); fitGraph();
+}
+function compactGraph(){
+  const n=Object.values(state.nodes).map(x=>[x.id,x.type,Math.round(x.x),Math.round(x.y),x.params]);
+  const e=Object.values(state.edges).map(x=>[x.fn,x.fp,x.tn,x.tp]);
+  return btoa(unescape(encodeURIComponent(JSON.stringify({n,e,t:state.timeline})))).replace(/=+$/,"");
+}
+function download(name,blob){
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+function exportPNG(res){
+  res=clamp(res||state.settings.exportRes,16,MAX_EXPORT);
+  if(res*res>MAX_EXPORT*MAX_EXPORT){toast("Export too large"); return;}
+  const c=document.createElement("canvas"); c.width=res; c.height=res;
+  const g=c.getContext("webgl2",{preserveDrawingBuffer:true,premultipliedAlpha:false});
+  if(!g){toast("WebGL2 export failed"); return;}
+  const compiled=compile(state.previewNode);
+  if(!compiled.ok){toast(compiled.error); return;}
+  const vs=g.createShader(g.VERTEX_SHADER); g.shaderSource(vs,VS); g.compileShader(vs);
+  const fs=g.createShader(g.FRAGMENT_SHADER); g.shaderSource(fs,compiled.src); g.compileShader(fs);
+  const p=g.createProgram(); g.attachShader(p,vs); g.attachShader(p,fs); g.linkProgram(p);
+  if(!g.getProgramParameter(p,g.LINK_STATUS)){toast("Export compile failed"); return;}
+  const buf=g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER,buf); g.bufferData(g.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),g.STATIC_DRAW);
+  g.useProgram(p); g.viewport(0,0,res,res);
+  const a=g.getAttribLocation(p,"aPos"); g.enableVertexAttribArray(a); g.vertexAttribPointer(a,2,g.FLOAT,false,0,0);
+  const L=(n)=>g.getUniformLocation(p,n);
+  g.uniform2f(L("uRes"),res,res); g.uniform1f(L("uTime"),state.timeline.t); g.uniform1f(L("uFrame"),state.timeline.t*state.timeline.fps);
+  g.uniform1f(L("uSeed"),state.settings.seed); g.uniform1i(L("uDiag"),0); g.uniform1i(L("uChan"),0);
+  g.uniform1f(L("uTile"),0); g.uniform2f(L("uPan"),0,0); g.uniform1f(L("uZoom"),1);
+  g.uniform1f(L("uPxX"),0); g.uniform1f(L("uPxY"),0); g.uniform1f(L("uInspect"),0); g.uniform1f(L("uCompare"),0); g.uniform1f(L("uSplit"),0.5);
+  g.uniform1f(L("uEvalNorm"),0); g.uniform1f(L("uDirtyNorm"),0); g.uniform1f(L("uGamma"),0);
+  const dummy=g.createTexture(); g.bindTexture(g.TEXTURE_2D,dummy); g.texImage2D(g.TEXTURE_2D,0,g.RGBA,1,1,0,g.RGBA,g.UNSIGNED_BYTE,new Uint8Array([0,0,0,255]));
+  g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D,dummy); g.uniform1i(L("uPrev"),0);
+  g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D,dummy); g.uniform1i(L("uRef"),1);
+  (compiled.uniforms||[]).forEach(u=>{
+    const n=state.nodes[u.nodeId]; if(!n) return;
+    const locu=L(u.name); if(locu==null) return;
+    const v=paramValue(n,u.spec);
+    if(u.spec.t==="color"){const c=hexRgb(v); g.uniform4f(locu,c[0],c[1],c[2],1);}
+    else if(u.spec.t==="enum") g.uniform1f(locu, Math.max(0,(u.spec.options||[]).indexOf(v)));
+    else g.uniform1f(locu, Number(v));
+  });
+  g.drawArrays(g.TRIANGLES,0,6);
+  c.toBlob(b=>{if(b) download("lumen-"+res+".png",b); else toast("PNG export failed");},"image/png");
+}
+function exportSequence(){
+  const frames=Math.min(120, Math.ceil(state.timeline.dur*state.timeline.fps));
+  if(!confirm("Export "+frames+" PNG frames at 256px? Large exports are capped for safety.")) return;
+  const old=state.timeline.t;
+  let i=0;
+  (function step(){
+    if(i>=frames){state.timeline.t=old; requestCompile(); toast("Frame export finished"); return;}
+    state.timeline.t=i/state.timeline.fps; const compiled=compile(state.previewNode);
+    if(compiled.ok) applyProgram(compiled.src, compiled.uniforms);
+    drawPreview();
+    glCanvas.toBlob(b=>{if(b) download("frame-"+String(i).padStart(4,"0")+".png",b); i++; setTimeout(step,30);});
+  })();
+}
+function exportAnimWebM(){
+  if(!window.MediaRecorder){toast("MediaRecorder unavailable; using frame sequence."); exportSequence(); return;}
+  const stream=glCanvas.captureStream(state.timeline.fps);
+  const rec=new MediaRecorder(stream,{mimeType:"video/webm"});
+  const chunks=[]; rec.ondataavailable=e=>{if(e.data.size) chunks.push(e.data);};
+  rec.onstop=()=>download("lumen.webm", new Blob(chunks,{type:"video/webm"}));
+  const old=state.timeline.playing; state.timeline.playing=true; rec.start();
+  setTimeout(()=>{rec.stop(); state.timeline.playing=old; toast("WebM captured");}, Math.min(8000,state.timeline.dur*1000));
+}
+
+function openExport(){
+  const m=document.getElementById("modal"); const s=document.getElementById("modal-sheet");
+  s.innerHTML=`<h3>Export</h3>
+    <div class="kv">
+      <label class="lbl">PNG size<input id="ex-res" type="number" min="16" max="${MAX_EXPORT}" value="${state.settings.exportRes}" aria-label="PNG export size"></label>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button type="button" class="primary" id="ex-png" aria-label="Export PNG">PNG</button>
+      <button type="button" id="ex-json" aria-label="Export graph JSON">Graph JSON</button>
+      <button type="button" id="ex-txt" aria-label="Export compact graph text">Compact text</button>
+      <button type="button" id="ex-glsl" aria-label="Export GLSL source">GLSL</button>
+      <button type="button" id="ex-webm" aria-label="Export animation">Animation</button>
+      <button type="button" id="ex-named" aria-label="Save named local project">Named project</button>
+      <button type="button" id="ex-close">Close</button>
+    </div>
+    <p style="margin-top:10px;color:var(--muted)">Exports reflect the current evaluated graph and timeline time.</p>`;
+  m.classList.add("open");
+  s.querySelector("#ex-png").onclick=()=>exportPNG(+s.querySelector("#ex-res").value);
+  s.querySelector("#ex-json").onclick=()=>download("lumen-graph.json", new Blob([JSON.stringify(projectJSON(),null,2)],{type:"application/json"}));
+  s.querySelector("#ex-txt").onclick=()=>download("lumen-graph.txt", new Blob([compactGraph()],{type:"text/plain"}));
+  s.querySelector("#ex-glsl").onclick=()=>{const c=compile(state.previewNode); download("lumen.frag.glsl", new Blob([c.src||c.error],{type:"text/plain"}));};
+  s.querySelector("#ex-webm").onclick=exportAnimWebM;
+  s.querySelector("#ex-named").onclick=()=>{
+    const name=prompt("Project name","untitled"); if(!name) return;
+    const all=JSON.parse(localStorage.getItem(PROJECTS)||"{}"); all[name]=projectJSON(); localStorage.setItem(PROJECTS,JSON.stringify(all)); toast("Saved "+name);
+  };
+  s.querySelector("#ex-close").onclick=()=>m.classList.remove("open");
+}
+
+document.getElementById("btn-save").onclick=()=>download("lumen-graph.json", new Blob([JSON.stringify(projectJSON(),null,2)],{type:"application/json"}));
+document.getElementById("btn-open").onclick=()=>document.getElementById("file-open").click();
+document.getElementById("file-open").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=()=>{try{loadProject(JSON.parse(rd.result)); toast("Loaded");}catch(err){toast("Invalid project: "+err.message);}}; rd.readAsText(f);
+};
+document.getElementById("btn-export").onclick=openExport;
+document.getElementById("btn-undo").onclick=undo;
+document.getElementById("btn-redo").onclick=redo;
+document.getElementById("btn-fit").onclick=fitGraph;
+document.getElementById("btn-cmd").onclick=()=>openCmdk();
+document.getElementById("btn-palette").onclick=()=>document.getElementById("palette").classList.toggle("open");
+document.getElementById("btn-inspect").onclick=()=>document.getElementById("inspect").classList.toggle("open");
+document.getElementById("btn-help").onclick=()=>{
+  const m=document.getElementById("modal"); const s=document.getElementById("modal-sheet");
+  s.innerHTML=`<h3>Shortcuts</h3>
+  <p>Ctrl+K command palette · Ctrl+Z / Shift+Z undo redo · Ctrl+C/V copy paste · Delete · Ctrl+D duplicate · F fit · Space play/pause · # comment · G frame<br>
+  Wheel zoom · drag pan · Shift-drag box select · drag ports to connect · right-click menu.</p>
+  <button type="button" id="hclose">Close</button>`;
+  m.classList.add("open"); s.querySelector("#hclose").onclick=()=>m.classList.remove("open");
+};
+
+window.addEventListener("keydown",e=>{
+  const tag=(e.target.tagName||"").toLowerCase();
+  if(tag==="input"||tag==="textarea"||tag==="select") {
+    if(e.key==="Escape") e.target.blur();
+    return;
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault(); openCmdk(); return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault(); e.shiftKey?redo():undo(); return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==="y"){e.preventDefault(); redo(); return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==="c"){e.preventDefault(); copySel(); return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==="v"){e.preventDefault(); pasteSel(); return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==="d"){e.preventDefault(); duplicateSel(); return;}
+  if(e.key==="Delete"||e.key==="Backspace"){e.preventDefault(); deleteSel(); return;}
+  if(e.key===" " ){e.preventDefault(); state.timeline.playing=!state.timeline.playing; return;}
+  if(e.key==="f"||e.key==="F") fitGraph();
+  if(e.key==="g"||e.key==="G") groupSel();
+  if(e.key==="Escape"){cmdk.classList.remove("open"); document.getElementById("modal").classList.remove("open");}
+});
+
+/* presets */
+function clearGraph(){state.nodes={}; state.edges={}; state.sel.clear(); state.previewNode=null; state.timeline.kf={};}
+function recipe(items,links,extra){
+  clearGraph();
+  const map={};
+  items.forEach(([id,type,x,y,params])=>{const n=addNode(type,x,y,params,id); map[id]=n.id;});
+  links.forEach(([a,ap,b,bp])=>addEdge(map[a]||a,ap,map[b]||b,bp));
+  extra&&extra();
+  requestCompile(); renderGraph(true); renderInspector(); fitGraph(); pushHist();
+}
+const PRESETS={
+  plasma:{name:"Animated Plasma",build(){recipe([
+    ["uv","uv",40,80],["t","time",40,220,{speed:0.35}],["sc","scaleUV",240,80,{s:3.2,y:3.2}],
+    ["fb","fbm",460,60,{scale:2.2,oct:5,gain:0.52}],["pol","polar",240,240],
+    ["adp","add",460,240],["sn","sin",680,220,{amp:0.5,freq:3,phase:0}],["ad","add",680,140],
+    ["rm","remap",880,140,{in0:0,in1:1.4,out0:0,out1:1}],
+    ["pal","palette",1080,120,{freq:1.4,phase:0.2}],["out","output",1300,120]
+  ],[["uv","out","sc","uv"],["sc","out","fb","uv"],["uv","out","pol","uv"],["pol","a","adp","a"],["t","out","adp","b"],
+    ["adp","out","sn","x"],["fb","out","ad","a"],["sn","out","ad","b"],["ad","out","rm","x"],["rm","out","pal","t"],["pal","out","out","color"]]);
+    state.timeline.kf["sn.phase"]=[{t:0,v:0,i:"linear"},{t:8,v:6.28,i:"linear"}];
+    state.timeline.playing=true;
+  }},
+  marble:{name:"Marble",build(){recipe([
+    ["uv","uv",40,100],["sc","scaleUV",240,100,{s:2.4,y:3.6}],["fb","fbm",460,80,{scale:3,oct:6,gain:0.55}],
+    ["wr","warp",700,80,{amt:0.18}],["vn","valueNoise",460,260,{scale:8}],["sin1","sin",920,80,{amp:1,freq:8,phase:0.4}],
+    ["rm","remap",1120,80,{in0:-0.2,in1:1,out0:0,out1:1}],["ramp","ramp",1320,80,{a:"#e8e0d4",b:"#c4b8a4",c:"#6a5848",d:"#2a1c14"}],
+    ["out","output",1540,80]
+  ],[["uv","out","sc","uv"],["sc","out","fb","uv"],["sc","out","wr","img"],["fb","out","wr","off"],["wr","out","sin1","x"],["sin1","out","rm","x"],["rm","out","ramp","t"],["ramp","out","out","color"]]);}},
+  wood:{name:"Wood",build(){recipe([
+    ["uv","uv",40,80],["sc","scaleUV",240,80,{s:1.6,y:8}],["rot","rotateUV",460,80,{angle:0.4}],["fb","fbm",680,60,{scale:4,oct:5}],
+    ["ad","add",900,80],["sin1","sin",1120,80,{amp:0.5,freq:14,phase:0.2}],["rm","remap",1320,80,{in0:0,in1:1}],
+    ["ramp","ramp",1520,80,{a:"#2a160c",b:"#6a3a18",c:"#c48a48",d:"#e8c898"}],["out","output",1740,80]
+  ],[["uv","out","sc","uv"],["sc","out","rot","uv"],["rot","out","fb","uv"],["rot","out","ad","a"],["fb","out","ad","b"],["ad","out","sin1","x"],["sin1","out","rm","x"],["rm","out","ramp","t"],["ramp","out","out","color"]]);}},
+  clouds:{name:"Clouds",build(){recipe([
+    ["uv","uv",40,80],["t","time",40,240,{speed:0.12}],["tr","translate",240,80,{x:0,y:0}],["fb","fbm",480,80,{scale:3.2,oct:6,gain:0.52}],
+    ["sm","smoothstepN",700,80,{e0:0.35,e1:0.78}],["ramp","ramp",920,80,{a:"#4a7ab8",b:"#8ab4e0",c:"#e8f0f8",d:"#ffffff"}],["out","output",1140,80]
+  ],[["uv","out","tr","uv"],["tr","out","fb","uv"],["fb","out","sm","x"],["sm","out","ramp","t"],["ramp","out","out","color"]]);
+    state.timeline.kf["tr.x"]=[{t:0,v:0,i:"linear"},{t:8,v:0.8,i:"linear"}];
+  }},
+  lava:{name:"Lava",build(){recipe([
+    ["uv","uv",40,80],["t","time",40,240,{speed:0.25}],["fb","turb",260,60,{scale:3.4,oct:5}],["fb2","fbm",260,220,{scale:6,oct:4}],
+    ["wp","warp",500,80,{amt:0.12}],["rm","remap",740,80,{in0:0.1,in1:0.9}],["ramp","ramp",980,80,{a:"#140400",b:"#a01800",c:"#ff6a18",d:"#ffe08a"}],
+    ["out","output",1220,80]
+  ],[["uv","out","fb","uv"],["uv","out","fb2","uv"],["fb","out","wp","img"],["fb2","out","wp","off"],["wp","out","rm","x"],["rm","out","ramp","t"],["ramp","out","out","color"]]);}},
+  circuit:{name:"Circuit Board",build(){recipe([
+    ["uv","uv",40,80],["sc","scaleUV",230,80,{s:6,y:6}],["vo","voronoi",450,60,{scale:4,jitter:0.2}],
+    ["ed","smoothstepN",680,40,{e0:0.02,e1:0.08}],["om","oneMinus",900,40],["gn","gradNoise",450,220,{scale:10}],
+    ["th","stepN",680,220,{edge:0.62}],["bl","blend",1120,80,{mode:"add",amt:0.7}],["ramp","ramp",900,80,{a:"#041810",b:"#0a3020",c:"#1cff8a",d:"#e8ffd0"}],
+    ["out","output",1340,80]
+  ],[["uv","out","sc","uv"],["sc","out","vo","uv"],["vo","edge","ed","x"],["ed","out","om","x"],["sc","out","gn","uv"],["gn","out","th","x"],
+    ["om","out","ramp","t"],["ramp","out","bl","a"],["th","out","bl","b"],["bl","out","out","color"]]);}},
+  organism:{name:"Cellular Organism",build(){recipe([
+    ["uv","uv",40,100],["t","time",40,260,{speed:0.2}],["vo","voronoi",260,80,{scale:7,jitter:0.9}],["fb","fbm",260,240,{scale:2.5,oct:4}],
+    ["wp","warp",500,80,{amt:0.07}],["ed","smoothstepN",740,60,{e0:0.02,e1:0.16}],["pal","palette",980,80,{freq:0.8,phase:0.4}],
+    ["out","output",1220,80]
+  ],[["uv","out","vo","uv"],["vo","out","wp","img"],["fb","out","wp","off"],["uv","out","fb","uv"],["wp","out","ed","x"],["ed","out","pal","t"],["pal","out","out","color"]]);
+    state.timeline.kf["pal.phase"]=[{t:0,v:0.4,i:"linear"},{t:8,v:6.68,i:"linear"}];
+  }},
+  neon:{name:"Neon Tunnel",build(){recipe([
+    ["uv","uv",40,80],["pol","polar",240,80],["t","time",40,240,{speed:0.4}],["ad","add",460,80],["fr","fractN",680,80],
+    ["sin1","sin",900,80,{amp:0.5,freq:18,phase:0}],["rm","remap",1120,80],["pal","palette",1340,80,{freq:1.8,phase:0.1}],
+    ["rad","radGrad",240,240],["mul","mul",1560,80],["out","output",1760,80]
+  ],[["uv","out","pol","uv"],["pol","r","ad","a"],["t","out","ad","b"],["ad","out","fr","a"],["fr","out","sin1","x"],["sin1","out","rm","x"],
+    ["rm","out","pal","t"],["uv","out","rad","uv"],["pal","out","mul","a"],["rad","out","mul","b"],["mul","out","out","color"]]);}},
+  terrain:{name:"Terrain Height + Normal",build(){recipe([
+    ["uv","uv",40,80],["fb","fbm",250,60,{scale:3.5,oct:6,gain:0.5}],["rd","ridged",250,220,{scale:5,oct:4}],
+    ["ad","add",480,120],["rm","remap",640,220,{in0:0.35,in1:0.88,out0:0,out1:1}],["nm","normals",720,60,{str:3.4,eps:0.004}],
+    ["ramp","ramp",880,220,{a:"#142810",b:"#4a7a28",c:"#c4a060",d:"#f2efe6"}],
+    ["lit","lambert",1100,80,{lx:0.55,ly:0.85,lz:1,amb:0.12}],["out","output",1340,80]
+  ],[["uv","out","fb","uv"],["uv","out","rd","uv"],["fb","out","ad","a"],["rd","out","ad","b"],["ad","out","nm","h"],["ad","out","rm","x"],
+    ["rm","out","ramp","t"],["nm","out","lit","n"],["ramp","out","lit","albedo"],["lit","out","out","color"]]);}},
+  poster:{name:"Poster Composition",build(){recipe([
+    ["uv","uv",40,80],["hex","hex",250,40,{r:0.28}],["cir","circle",250,180,{r:0.22}],["u","sdfSmU",480,80,{k:0.08}],
+    ["fl","sdfFill",700,80,{soft:0.012}],["vo","voronoi",250,320,{scale:9}],["bl","blend",920,80,{mode:"multiply",amt:0.65}],
+    ["pal","palette",700,240,{freq:1.1,phase:0.6}],["post","poster",1140,80,{n:6}],["out","output",1360,80],["cmt","comment",40,400,{text:"Poster stack: SDF + Voronoi + palette"}]
+  ],[["uv","out","hex","uv"],["uv","out","cir","uv"],["hex","out","u","a"],["cir","out","u","b"],["u","out","fl","d"],
+    ["uv","out","vo","uv"],["fl","out","bl","a"],["vo","out","bl","m"],["pal","out","bl","b"],["vo","out","pal","t"],["bl","out","post","c"],["post","out","out","color"]]);} }
+};
+
+function fillPresets(){
+  const s=document.getElementById("preset-select");
+  s.innerHTML=Object.keys(PRESETS).map(k=>`<option value="${k}">${PRESETS[k].name}</option>`).join("");
+}
+document.getElementById("btn-load-preset").onclick=()=>{
+  const k=document.getElementById("preset-select").value; PRESETS[k].build(); toast("Loaded "+PRESETS[k].name);
+};
+
+/* autosave */
+function autosave(){
+  try{localStorage.setItem(AUTOSAVE, JSON.stringify(projectJSON())); state.status.autosave="saved";}
+  catch(e){state.status.autosave="fail";}
+}
+setInterval(()=>{state.status.autosave="saving"; autosave();}, 4000);
+
+/* status / loop */
+let frames=0, fpsT=now();
+function statusBar(){
+  const n=Object.keys(state.nodes).length, e=Object.keys(state.edges).length;
+  const sel=selectedNode();
+  state.status.sel=sel?CATALOG[sel.type].title:"—";
+  document.getElementById("status").innerHTML=
+    `<span>FPS <b>${state.status.fps}</b></span><span>nodes <b>${n}</b></span><span>edges <b>${e}</b></span>
+     <span>dirty <b>${state.status.dirty}</b></span><span>preview <b>${glCanvas.width}×${glCanvas.height}</b></span>
+     <span>eval <b>${state.status.evalMs.toFixed(1)}ms</b></span><span>frame <b>${Math.floor(state.timeline.t*state.timeline.fps)}</b>  t <b>${state.timeline.t.toFixed(2)}s</b></span>
+     <span>sel <b>${state.status.sel}</b></span><span>compile <b>${state.status.compile}</b></span><span>autosave <b>${state.status.autosave}</b></span>`;
+}
+function tick(ts){
+  const dt=Math.min(0.05,(tick.prev?ts-tick.prev:16)/1000); tick.prev=ts;
+  if(state.timeline.playing){
+    state.timeline.t+=dt;
+    if(state.timeline.t>state.timeline.dur){
+      if(state.timeline.loop) state.timeline.t=state.timeline.t%state.timeline.dur;
+      else {state.timeline.t=state.timeline.dur; state.timeline.playing=false;}
+    }
+  }
+  if(compileNeed){
+    const c=compile(state.previewNode);
+    if(c.ok) applyProgram(c.src, c.uniforms); else {state.status.compile="error"; state.status.compileLog=c.error;}
+    compileNeed=false;
+  }
+  if(prog) drawPreview();
+  frames++; if(now()-fpsT>500){state.status.fps=Math.round(frames*1000/(now()-fpsT)); frames=0; fpsT=now(); statusBar(); syncTl();}
+  requestAnimationFrame(tick);
+}
+
+function thumbnails(){
+  if(!state.settings.nodePrev||!gl||!lastSrc) return;
+  // lightweight: skip extra compiles; node boxes already show live graph relationship
+}
+
+window.addEventListener("resize",()=>{applyView(); drawDope();});
+fillPresets(); renderPalette("");
+DIAGS.forEach(()=>{});
+try{
+  const a=localStorage.getItem(AUTOSAVE);
+  if(a){ /* default still loads striking preset; autosave recoverable via Open */ }
+}catch(e){}
+PRESETS.plasma.build();
+syncTl();
+requestAnimationFrame(tick);
+setTimeout(fitGraph,60);
+
+window.__NGS={
+  state, compile, addNode, addEdge, loadProject, projectJSON, PRESETS, requestCompile,
+  applyNow(){const c=compile(state.previewNode); if(c.ok) applyProgram(c.src,c.uniforms); else {state.status.compile="error"; state.status.compileLog=c.error;} drawPreview(); return {ok:c.ok, error:c.error, log:state.status.compileLog};},
+  getPixels(){const w=glCanvas.width,h=glCanvas.height; const p=new Uint8Array(w*h*4); gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,p); return {w,h,p};}
+};
+
+})();
+</script>
+</body>
+</html>

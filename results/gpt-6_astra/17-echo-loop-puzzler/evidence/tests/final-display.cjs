@@ -1,0 +1,13 @@
+const {connect}=require('./browser.cjs');const fs=require('node:fs'),assert=require('node:assert/strict');const {execFileSync}=require('node:child_process');const ab=(...a)=>execFileSync('agent-browser',['--namespace','echo17','--session','echo',...a],{encoding:'utf8'});
+(async()=>{const b=await connect();try{
+ const before=await b.state();assert.equal(before.paused,true);assert.equal(before.echoCount,1);
+ ab('click','#diagnosticButton');ab('click','#scrub');ab('press','End');await b.sleep(1800);
+ ab('screenshot','evidence/screenshots/42-final-desktop.png');
+ ab('set','viewport','390','844');await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2,mobile:false});await b.sleep(300);
+ ab('click','#timelineCanvas');ab('click','#scrub');ab('press','End');await b.sleep(200);
+ const after=await b.state();assert.equal(after.paused,true);assert.equal(after.echoCount,before.echoCount);assert.equal(after.world.frame,before.world.frame);assert.deepEqual(after.world.actors,before.world.actors);
+ const metrics=await b.evaluate(`(()=>({dpr:devicePixelRatio,viewport:[innerWidth,innerHeight],width:document.body.scrollWidth,canvas:['game','timelineCanvas'].map(id=>{const c=document.getElementById(id),r=c.getBoundingClientRect();return{id,width:c.width,height:c.height,cssWidth:r.width,cssHeight:r.height}}),overlay:(()=>{const r=document.getElementById('liveOverlay').getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,text:document.getElementById('liveOverlay').textContent}})(),preview:document.getElementById('previewNotice').textContent,resources:performance.getEntriesByType('resource').map(r=>r.name)}))()`);
+ assert.equal(metrics.dpr,2);assert.ok(metrics.width<=390);for(const c of metrics.canvas){assert.equal(c.width,Math.round(c.cssWidth*2));assert.equal(c.height,Math.round(c.cssHeight*2));}assert.ok(metrics.overlay.y>=0&&metrics.overlay.y+metrics.overlay.h<=844.01);assert.ok(metrics.overlay.text.includes('PAUSED'));assert.ok(metrics.preview.includes('INSPECTION'));assert.ok(!metrics.resources.some(u=>/^https?:/.test(u)));
+ fs.writeFileSync('evidence/logs/final-high-dpi.json',JSON.stringify({metrics,state:after},null,2));const shot=await b.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false,clip:{x:0,y:0,width:390,height:844,scale:1}});fs.writeFileSync('evidence/screenshots/43-final-mobile-2x.png',Buffer.from(shot.data,'base64'));console.log('PASS 390×844 at DPR 2, both canvas backing stores, live overlay, pointer timeline inspection, state preserved across resize, no external resources');
+ await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+ }finally{b.close()}})().catch(e=>{console.error(e);process.exit(1)});
