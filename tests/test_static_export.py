@@ -87,6 +87,197 @@ class StaticExportTests(unittest.TestCase):
         source = (self.resolve_url(data["comparison_urls"][task_id]) / "index.html").read_text(encoding="utf-8")
         return source, ShareDocument(source)
 
+    def model_document(self, data, model_key="Model One"):
+        source = (self.resolve_url(data["model_urls"][model_key]) / "index.html").read_text(encoding="utf-8")
+        return source, ShareDocument(source)
+
+    def add_catalog_task(self, task_id, title):
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog.append({"id": task_id, "title": title, "track": "html"})
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        prompt = self.root / "prompts" / task_id
+        prompt.mkdir()
+        for name in ("prompt.md", "acceptance.md"):
+            (prompt / name).write_text("Public requirements for " + title, encoding="utf-8")
+
+    def test_model_collection_pages_count_builds_prompts_and_escape_component_paths(self):
+        model_key = "Model ' & # % 雪"
+        model_folder = self.run.parent.with_name(model_key)
+        self.run.parent.rename(model_folder)
+        self.run = model_folder / self.run.name
+        label = 'Model "><img src=x onerror=alert(1)> & </script>'
+        settings = {"siteUrl": "https://models.example.test:8443/", "models": [{"key": model_key, "label": label}]}
+        (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+        self.add_catalog_task("02-vector", "Vector")
+        for run_key in ("01-fluid-simulation-repeat", "02-vector", "unknown-build"):
+            folder = model_folder / run_key
+            folder.mkdir()
+            (folder / "index.html").write_bytes(self.html)
+        private_only = self.root / "results/Not Published/source-only/project"
+        private_only.mkdir(parents=True)
+        (private_only / "main.py").write_text("PRIVATE-SOURCE", encoding="utf-8")
+        (self.run / "metadata.json").write_text('{"notes":"PRIVATE-NOTE","model":"PRIVATE-MODEL"}', encoding="utf-8")
+        (self.run / "screenshot.png").write_bytes(b"PRIVATE-DO-NOT-READ-SCREENSHOTS-NONE")
+        originals = {path: path.read_bytes() for path in self.root.rglob("index.html")}
+        report, data = self.export(screenshots="none")
+        model_url = "/models/" + quote(model_key, safe="") + "/"
+        self.assertEqual(data["model_urls"], {model_key: model_url})
+        source, document = self.model_document(data, model_key)
+        canonical = "https://models.example.test:8443" + model_url
+        self.assertEqual(document.metadata["og:url"], canonical)
+        self.assertIn(("link", {"rel": "canonical", "href": canonical}), document.tags)
+        self.assertEqual(document.metadata["og:title"], label + " builds | Trial - a Vibe Benchmark")
+        self.assertIn("4 builds", document.metadata["og:description"])
+        self.assertIn("2 prompts", document.metadata["og:description"])
+        self.assertEqual(document.metadata["twitter:title"], document.metadata["og:title"])
+        self.assertEqual(document.metadata["twitter:description"], document.metadata["og:description"])
+        self.assertEqual(document.metadata["twitter:card"], "summary")
+        self.assertFalse(any(key and "image" in key for key in document.metadata))
+        viewer = "/#model/" + quote(model_key, safe="")
+        self.assertIn(viewer, [attrs.get("href") for tag, attrs in document.tags if tag == "a"])
+        script = re.search(r"<script>(.*?)</script>", source, flags=re.DOTALL).group(1)
+        self.assertEqual(json.loads(re.search(r"location\.replace\((.+?)\);", script).group(1)), viewer)
+        self.assertEqual(sum(tag == "script" for tag, _ in document.tags), 1)
+        self.assertEqual(source.count("</script>"), 1)
+        self.assertFalse(any(tag == "img" or "onerror" in attrs or attrs.get("http-equiv", "").lower() == "refresh" for tag, attrs in document.tags))
+        self.assertNotIn("/models/", (self.output / "_redirects").read_text(encoding="utf-8"))
+        self.assertEqual(report["model_pages"], 1)
+        self.assertEqual(report["model_images"], 0)
+        self.assertEqual(report["model_image_bytes"], 0)
+        self.assertEqual([path.name for path in self.resolve_url(model_url).iterdir()], ["index.html"])
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.html"))), 4)
+        for row in data["results"]:
+            self.assertEqual(self.resolve_url(row["artifact"]["url"]).read_bytes(), self.html)
+            self.assertEqual(row["artifact"]["sha256"], hashlib.sha256(self.html).hexdigest())
+        for path, content in originals.items():
+            self.assertEqual(path.read_bytes(), content)
+        for path in self.output.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(b"PRIVATE", path.read_bytes(), str(path))
+        self.assertLess(len(source.encode("utf-8")), 4096)
+
+    def test_model_collection_jpeg_uses_three_distinct_tasks_in_catalog_order(self):
+        try:
+            from PIL import Image, ImageDraw, PngImagePlugin
+        except ImportError:
+            self.skipTest("Optional Pillow is not installed")
+        tasks = [("03-vector", "Vector", "#00ff00"), ("01-fluid-simulation", "Fluid", "#ff0000"),
+                 ("02-orbits", "Orbits", "#0000ff"), ("04-sand", "Sand", "#ffff00")]
+        for key, title, _ in tasks:
+            if key != "01-fluid-simulation":
+                self.add_catalog_task(key, title)
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = {task["id"]: task for task in json.loads(catalog_path.read_text(encoding="utf-8"))}
+        catalog_path.write_text(json.dumps([catalog[key] for key, _, _ in tasks]), encoding="utf-8")
+        original_images = {}
+        for run_key, color in [(key, color) for key, _, color in tasks] + [
+                ("01-fluid-simulation-repeat", "magenta"), ("unknown-build", "navy")]:
+            folder = self.run.parent / run_key
+            folder.mkdir(exist_ok=True)
+            (folder / "index.html").write_bytes(self.html)
+            metadata = PngImagePlugin.PngInfo()
+            metadata.add_text("private", "PRIVATE-IMAGE-METADATA")
+            path = folder / "screenshot.png"
+            Image.new("RGB", (600, 400), color).save(path, pnginfo=metadata)
+            original_images[path] = path.read_bytes()
+        drawn = []
+        original_text = ImageDraw.ImageDraw.text
+
+        def record_text(draw, position, text, *args, **kwargs):
+            drawn.append(text)
+            return original_text(draw, position, text, *args, **kwargs)
+
+        with mock.patch.object(ImageDraw.ImageDraw, "text", record_text):
+            report, data = self.export()
+        _, document = self.model_document(data)
+        image_url = "/models/Model%20One/preview.jpg"
+        self.assertEqual(document.metadata["og:image"], build_site.DEFAULT_SITE_URL + image_url)
+        self.assertEqual(document.metadata["twitter:image"], document.metadata["og:image"])
+        self.assertEqual(document.metadata["twitter:card"], "summary_large_image")
+        self.assertIn("6 builds", document.metadata["og:description"])
+        self.assertIn("4 prompts", document.metadata["og:description"])
+        alt = document.metadata["og:image:alt"]
+        self.assertLess(alt.index("Vector"), alt.index("Fluid"))
+        self.assertLess(alt.index("Fluid"), alt.index("Orbits"))
+        model_text = drawn[drawn.index("TRIAL / MODEL") + 1:]
+        self.assertIn("Display name builds", model_text)
+        self.assertEqual([text for text in model_text if text in {title for _, title, _ in tasks}], ["Vector", "Fluid", "Orbits"])
+        jpeg = self.resolve_url(image_url)
+        with Image.open(jpeg) as image:
+            self.assertEqual(image.format, "JPEG")
+            self.assertEqual(image.size, (1200, 630))
+            self.assertEqual(image.mode, "RGB")
+            self.assertFalse(image.getexif())
+            self.assertNotIn("comment", image.info)
+            self.assertNotIn("icc_profile", image.info)
+            for point, channel in [((200, 360), 1), ((600, 360), 0), ((1000, 360), 2)]:
+                pixel = image.getpixel(point)
+                self.assertGreater(pixel[channel], 200)
+                self.assertTrue(all(value < 50 for index, value in enumerate(pixel) if index != channel))
+        self.assertNotIn(b"PRIVATE", jpeg.read_bytes())
+        self.assertLess(jpeg.stat().st_size, 200 * 1024)
+        self.assertEqual(report["model_pages"], 1)
+        self.assertEqual(report["model_images"], 1)
+        self.assertEqual(report["model_image_bytes"], jpeg.stat().st_size)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.html"))), 6)
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.webp"))), 6)
+        self.assertEqual(len(list((self.output / "models").rglob("*.jpg"))), 1)
+        for path, content in original_images.items():
+            self.assertEqual(path.read_bytes(), content)
+
+    def test_model_collection_without_pillow_reuses_prompt_order_or_unassigned_image(self):
+        self.add_catalog_task("02-orbits", "Orbits")
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog_path.write_text(json.dumps(list(reversed(catalog))), encoding="utf-8")
+        (self.run / "screenshot.png").write_bytes(b"Original fluid screenshot")
+        first = self.run.parent / "02-orbits"
+        first.mkdir()
+        (first / "index.html").write_bytes(self.html)
+        (first / "screenshot.png").write_bytes(b"Original orbital screenshot")
+        unknown = self.root / "results/Unassigned Model/unknown"
+        unknown.mkdir(parents=True)
+        (unknown / "index.html").write_bytes(self.html)
+        (unknown / "screenshot.png").write_bytes(b"Original unassigned screenshot")
+        with mock.patch.object(build_site, "pillow_modules", return_value=None):
+            report, data = self.export()
+        for model_key, run_key in [("Model One", "02-orbits"), ("Unassigned Model", "unknown")]:
+            with self.subTest(model=model_key):
+                _, document = self.model_document(data, model_key)
+                row = next(row for row in data["results"] if row["model_key"] == model_key and row["run_key"] == run_key)
+                screenshot = row["artifact"]["screenshot_url"]
+                self.assertEqual(document.metadata["og:image"], build_site.DEFAULT_SITE_URL + screenshot)
+                self.assertEqual(document.metadata["twitter:image"], document.metadata["og:image"])
+                self.assertEqual(document.metadata["twitter:card"], "summary_large_image")
+                self.assertEqual(self.resolve_url(screenshot).read_bytes(), (self.root / "results" / model_key / run_key / "screenshot.png").read_bytes())
+        _, document = self.model_document(data, "Unassigned Model")
+        self.assertIn("1 build", document.metadata["og:description"])
+        self.assertIn("0 prompts", document.metadata["og:description"])
+        self.assertEqual(report["model_pages"], 2)
+        self.assertEqual(report["model_images"], 0)
+        self.assertEqual(report["model_image_bytes"], 0)
+        self.assertFalse(list((self.output / "models").rglob("preview.jpg")))
+        self.assertEqual(len(list((self.output / "artifacts").rglob("*.png"))), 3)
+
+    def test_model_collection_without_images_is_text_only_and_rebuild_removes_page(self):
+        report, data = self.export()
+        _, document = self.model_document(data)
+        self.assertIn("1 build", document.metadata["og:description"])
+        self.assertIn("1 prompt", document.metadata["og:description"])
+        self.assertNotIn("1 prompts", document.metadata["og:description"])
+        self.assertEqual(document.metadata["twitter:card"], "summary")
+        self.assertNotIn("og:image", document.metadata)
+        self.assertEqual(report["model_pages"], 1)
+        self.assertEqual(report["model_images"], 0)
+        (self.run / "index.html").unlink()
+        report, data = self.export()
+        self.assertEqual(data["model_urls"], {})
+        self.assertEqual(report["model_pages"], 0)
+        self.assertEqual(report["model_images"], 0)
+        self.assertEqual(report["model_image_bytes"], 0)
+        self.assertFalse((self.output / "models").exists())
+
     def test_comparison_pages_count_builds_models_and_escape_public_metadata(self):
         title = 'Fluid </title><script>alert("title")</script>'
         label = 'Model "><img src=x onerror=alert(1)>'

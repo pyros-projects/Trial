@@ -260,15 +260,15 @@ def thumbnail(source: Path, destination: Path, modules) -> None:
         clean.save(destination, "WEBP", quality=78, method=4)
 
 
-def comparison_image(stage: Path, task: dict[str, str], rows: list[dict[str, Any]],
-                     labels: dict[str, str], counts: str, modules) -> tuple[str | None, str]:
-    """Compose only published thumbnails, falling back to an existing image URL."""
-    candidates = [row for row in rows if row["artifact"]["screenshot_url"]]
+def collection_image(stage: Path, title: str, candidates: list[tuple[str, str, str | None]],
+                     counts: str, modules, *, image_url: str, banner: str,
+                     footer: str) -> tuple[str | None, str]:
+    """Compose up to three distinct published thumbnails, or reuse an image URL."""
+    candidates = [candidate for candidate in candidates if candidate[2]]
     if not candidates:
         return None, ""
-    first = candidates[0]
-    fallback = (first["artifact"]["screenshot_url"],
-                f"{labels.get(first['model_key'], first['model'])}: {task.get('title', task['id'])} screenshot")
+    _, first_label, first_url = candidates[0]
+    fallback = (first_url, f"{first_label}: {title} screenshot")
     if modules is None:
         return fallback
     from PIL import ImageDraw, ImageFont
@@ -276,18 +276,18 @@ def comparison_image(stage: Path, task: dict[str, str], rows: list[dict[str, Any
     image_module, image_ops = modules
     panels = []
     seen = set()
-    for row in candidates:
-        if row["model_key"] in seen:
+    for key, label, screenshot_url in candidates:
+        if key in seen:
             continue
-        source = regular_file(stage, unquote(row["artifact"]["screenshot_url"]).lstrip("/"))
+        source = regular_file(stage, unquote(screenshot_url).lstrip("/"))
         if source is None:
             continue
         try:
             with image_module.open(source) as original:
-                panels.append((labels.get(row["model_key"], row["model"]), original.convert("RGB")))
+                panels.append((label, original.convert("RGB")))
         except (OSError, ValueError):
             continue
-        seen.add(row["model_key"])
+        seen.add(key)
         if len(panels) == 3:
             break
     if not panels:
@@ -318,8 +318,8 @@ def comparison_image(stage: Path, task: dict[str, str], rows: list[dict[str, Any
         return value.rstrip() + "..."
 
     draw.rectangle((48, 42, 79, 47), fill="#e48b69")
-    draw.text((93, 29), "TRIAL / COMPARE", font=small_font, fill="#d6b5a2")
-    draw.text((48, 89), fit(task.get("title", task["id"]), title_font, 1104), font=title_font, fill="#f4eee3")
+    draw.text((93, 29), banner, font=small_font, fill="#d6b5a2")
+    draw.text((48, 89), fit(title, title_font, 1104), font=title_font, fill="#f4eee3")
     draw.text((48, 168), counts, font=label_font, fill="#b9bdaf")
     width = min(560, (1104 - 18 * (len(panels) - 1)) // len(panels))
     start = (1200 - width * len(panels) - 18 * (len(panels) - 1)) // 2
@@ -329,13 +329,23 @@ def comparison_image(stage: Path, task: dict[str, str], rows: list[dict[str, Any
         preview = image_ops.contain(screenshot, (width - 2, 234), image_module.Resampling.LANCZOS)
         canvas.paste(preview, (left + (width - preview.width) // 2, 246 + (234 - preview.height) // 2))
         draw.text((left + 16, 507), fit(label, label_font, width - 32), font=label_font, fill="#f4eee3")
-    draw.text((48, 586), "One prompt. Explore every implementation.", font=small_font, fill="#a7ad9c")
-    destination = stage / "comparisons" / f"{task['id']}.jpg"
+    draw.text((48, 586), footer, font=small_font, fill="#a7ad9c")
+    destination = stage / unquote(image_url).lstrip("/")
     destination.parent.mkdir(parents=True, exist_ok=True)
     # New RGB canvas: source metadata and submitted image bytes stay untouched.
     canvas.save(destination, "JPEG", quality=82, optimize=True, progressive=True)
-    return (f"/comparisons/{quote(task['id'], safe='')}.jpg",
-            f"{task.get('title', task['id'])}: {', '.join(label for label, _ in panels)}. {counts}.")
+    return image_url, f"{title}: {', '.join(label for label, _ in panels)}. {counts}."
+
+
+def comparison_image(stage: Path, task: dict[str, str], rows: list[dict[str, Any]],
+                     labels: dict[str, str], counts: str, modules) -> tuple[str | None, str]:
+    candidates = [(row["model_key"], labels.get(row["model_key"], row["model"]),
+                   row["artifact"]["screenshot_url"]) for row in rows]
+    return collection_image(
+        stage, task.get("title", task["id"]), candidates, counts, modules,
+        image_url=f"/comparisons/{quote(task['id'], safe='')}.jpg",
+        banner="TRIAL / COMPARE", footer="One prompt. Explore every implementation.",
+    )
 
 
 def comparison_pages(stage: Path, catalog: list[dict[str, str]], rows: list[dict[str, Any]],
@@ -359,6 +369,46 @@ def comparison_pages(stage: Path, catalog: list[dict[str, str]], rows: list[dict
             f"{task.get('title', task['id'])} | Trial", description, origin + urls[task["id"]],
             f"/#compare/{encoded}", image=origin + image_url if image_url else None,
             image_alt=image_alt, link_text="Open the interactive comparison",
+        ), encoding="utf-8")
+    return urls
+
+
+def model_pages(stage: Path, catalog: list[dict[str, str]], rows: list[dict[str, Any]],
+                origin: str, labels: dict[str, str], modules) -> dict[str, str]:
+    prompt_order = {task["id"]: index for index, task in enumerate(catalog)}
+    model_order = {key: index for index, key in enumerate(labels)}
+    collections: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        collections.setdefault(row["model_key"], []).append(row)
+    urls = {}
+    for model_key in sorted(collections, key=lambda key: (model_order.get(key, len(model_order)), key.casefold())):
+        builds = sorted(collections[model_key], key=lambda row: (
+            prompt_order.get(row["task_id"], len(prompt_order)), row["run_key"].casefold()))
+        prompts = {row["task_id"] for row in builds if row["task_id"] in prompt_order}
+        label = labels.get(model_key, model_key)
+        counts = f"{len(builds)} {'build' if len(builds) == 1 else 'builds'} across {len(prompts)} {'prompt' if len(prompts) == 1 else 'prompts'}"
+        description = f"Browse {counts} by {label} on Trial."
+        unassigned = sum(row["task_id"] not in prompt_order for row in builds)
+        if unassigned:
+            description += f" {unassigned} {'build has' if unassigned == 1 else 'builds have'} no assigned catalog prompt."
+        encoded = quote(model_key, safe="")
+        urls[model_key] = f"/models/{encoded}/"
+        candidates = [(
+            "task:" + row["task_id"] if row["task_id"] in prompt_order else "run:" + row["run_key"],
+            row["task_title"] if row["task_id"] in prompt_order else f"Unassigned: {row['run_id']}",
+            row["artifact"]["screenshot_url"],
+        ) for row in builds]
+        image_url, image_alt = collection_image(
+            stage, f"{label} builds", candidates, counts, modules,
+            image_url=urls[model_key] + "preview.jpg", banner="TRIAL / MODEL",
+            footer="One model. Explore every implementation.",
+        )
+        page = stage / "models" / model_key / "index.html"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(social_page(
+            f"{label} builds | Trial - a Vibe Benchmark", description, origin + urls[model_key],
+            f"/#model/{encoded}", image=origin + image_url if image_url else None,
+            image_alt=image_alt, link_text="Open the interactive model collection",
         ), encoding="utf-8")
     return urls
 
@@ -484,9 +534,13 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
         comparison_images = list((stage / "comparisons").glob("*.jpg"))
         report.update(comparison_pages=len(comparison_urls), comparison_images=len(comparison_images),
                       comparison_image_bytes=sum(path.stat().st_size for path in comparison_images))
+        model_urls = model_pages(stage, catalog, rows, site_origin, model_labels, modules)
+        model_images = list((stage / "models").glob("*/preview.jpg"))
+        report.update(model_pages=len(model_urls), model_images=len(model_images),
+                      model_image_bytes=sum(path.stat().st_size for path in model_images))
         data = {"mode": "public", "generated_at": server.utc_iso(), "artifact_origin": "/artifacts",
                 "catalog": catalog, "summary": state.summary(rows), "results": rows,
-                "comparison_urls": comparison_urls,
+                "comparison_urls": comparison_urls, "model_urls": model_urls,
                 "model_profiles": server.load_model_profiles(state.results_root, (row["model_key"] for row in rows))}
         write_json(stage / "api/data.json", data)
         (stage / "api/export.csv").write_bytes(export_csv(rows))

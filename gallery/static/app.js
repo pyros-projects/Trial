@@ -5,7 +5,7 @@
   const score = value => value == null ? '—' : Number(value).toFixed(1);
   const bytes = value => value == null ? 'Unknown' : value < 1024 ? `${value} B` : value < 1048576 ? `${(value/1024).toFixed(1)} KiB` : `${(value/1048576).toFixed(1)} MiB`;
   const label = track => track === 'real-apps' ? 'SOURCE PROJECT' : 'HTML EXPERIENCE';
-  const state = {data:null, modelSettings:new Map(), buildNotices:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, tab:'preview', promptText:'', promptToken:0, loading:false};
+  const state = {data:null, modelSettings:new Map(), buildNotices:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, collectionModel:null, modelTrigger:null, tab:'preview', promptText:'', promptToken:0, loading:false};
   const noticeLabels={'runtime-error':'Runtime error','slow-start':'May take minutes to load','run-cancelled':'Agent run cancelled'};
   const headings = {
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
@@ -99,6 +99,7 @@
   }
   const playHash=row=>'#play/'+row.id.split('/').map(encodeURIComponent).join('/');
   const comparisonHash=key=>'#compare/'+encodeURIComponent(key);
+  const modelHash=key=>'#model/'+encodeURIComponent(key);
   function copyLinkButton(row, className='button quiet') {
     return row.artifact.url?`<button class="${className}" data-copy-run="${escape(row.id)}" aria-label="Copy link to ${escape(modelName(row))}: ${escape(row.task_title)}">Copy link</button>`:'';
   }
@@ -121,9 +122,21 @@
     try{await navigator.clipboard.writeText(url.href);toast('Link copied. Opens the full prompt comparison.');}
     catch{window.prompt('Copy this link to the prompt comparison:',url.href);}
   }
+  function copyModelButton(key) {
+    const model=state.data.results.find(row=>row.model_key===key);if(!model)return '';
+    return `<button class="button" data-copy-model="${escape(key)}" aria-label="Copy link to model collection: ${escape(modelName(model))}" title="Share all builds from this model">Copy link</button>`;
+  }
+  async function copyModelLink(key) {
+    if(!state.data.results.some(row=>row.model_key===key))return;
+    const share=state.data.model_urls?.[key];
+    const publicLink=isPublic()&&typeof share==='string'&&share.startsWith('/models/');
+    const url=new URL(publicLink?share:location.pathname,location.origin);if(!publicLink)url.hash=modelHash(key);
+    try{await navigator.clipboard.writeText(url.href);toast('Link copied. Opens all builds from this model.');}
+    catch{window.prompt('Copy this link to the model collection:',url.href);}
+  }
   function clearPlayLink() {
     if(location.hash.startsWith('#play/')){
-      const comparison=$('#category-viewer').open&&state.data.catalog.some(task=>task.id===state.categoryTask)?comparisonHash(state.categoryTask):'';
+      const comparison=$('#model-viewer').open?modelHash(state.collectionModel):$('#category-viewer').open&&state.data.catalog.some(task=>task.id===state.categoryTask)?comparisonHash(state.categoryTask):'';
       try{history.replaceState(null,'',location.pathname+location.search+(comparison||(state.view==='gallery'?'':'#'+state.view)));}catch{ /* Browser history may be unavailable when embedded. */ }
     }
   }
@@ -136,9 +149,20 @@
     if(!state.data)return;
     $('#prompt-dialog').close();$('#link-error').hidden=true;
     const route=location.hash.slice(1);
+    if(route.startsWith('model/')){
+      let key;try{key=decodeURIComponent(route.slice(6));}catch{ /* Invalid links use the unavailable-collection message. */ }
+      closeViewer();closeCategory(false);
+      if(state.data.results.some(row=>row.model_key===key)){
+        if(state.collectionModel===key&&$('#model-viewer').open)return;
+        closeModel(false);setView('gallery',false);openModel(key,null,false);return;
+      }
+      closeModel(false);setView('gallery',false);
+      $('#link-error').textContent='This shared model collection is unavailable. Choose a model with submitted builds from the showcase.';
+      $('#link-error').hidden=false;return;
+    }
     if(route.startsWith('compare/')){
       let key;try{key=decodeURIComponent(route.slice(8));}catch{ /* Invalid links use the unavailable-comparison message. */ }
-      closeViewer();
+      closeViewer();closeModel(false);
       if(state.data.catalog.some(task=>task.id===key)&&state.data.results.some(row=>row.task_id===key)){
         if(state.categoryTask===key&&$('#category-viewer').open)return;
         closeCategory(false);setView('gallery',false);openCategory(key,null,true,false);return;
@@ -151,21 +175,21 @@
       let id;try{id=decodeURIComponent(route.slice(5));}catch{ /* Malformed shared links use the unavailable-build message. */ }
       const row=state.data.results.find(r=>r.id===id&&r.artifact.url);
       if(row){
-        if(state.categoryTask!==groupKey(row)){closeCategory(false);setView('gallery',false);}
+        if(!$('#model-viewer').open&&state.categoryTask!==groupKey(row)){closeCategory(false);setView('gallery',false);}
         if(state.selected?.id===row.id&&$('#viewer').open&&$('#viewer').classList.contains('is-live'))return;
         const viewport=$('#viewer').classList.contains('is-live')?$('#viewport-size').value:'fit';
         openRun(row.id);$('#viewport-size').value=viewport;launchPreview(false);return;
       }
-      closeCategory(false);closeViewer();setView('gallery');
+      closeModel(false);closeCategory(false);closeViewer();setView('gallery');
       $('#link-error').textContent='This shared build is unavailable. It may have been moved or removed. Choose a build from the showcase.';
       $('#link-error').hidden=false;
       return;
     }
-    closeCategory(false);closeViewer();setView(route||fallback);
+    closeModel(false);closeCategory(false);closeViewer();setView(route||fallback);
   }
   function setView(view, updateUrl=true) {
     if (!Object.hasOwn(headings,view)||(isPublic()&&view==='leaderboard')) view='gallery';
-    if(state.view!==view)closeCategory();
+    if(state.view!==view){closeCategory();closeModel();}
     $('#link-error').hidden=true;
     if(state.view!==view)window.scrollTo({top:0,behavior:'instant'});
     state.view=view;
@@ -214,11 +238,54 @@
     if(!count)return 'No check report';
     return `<span class="pass">${c.pass} passed</span>${c.fail?` · <span class="fail">${c.fail} failed</span>`:''}${c.blocked?` · <span class="blocked">${c.blocked} blocked</span>`:''}`;
   }
-  function runCard(row, repeated=false) {
+  function runCard(row, repeated=false, modelView=false) {
     const a=row.artifact;const status=row.score==null?'Not scored':`${score(row.score)} / 100`;
     const image=a.screenshot_url?`<img src="${escape(a.screenshot_url)}" alt="${escape(modelName(row))}: ${escape(row.task_title)}" loading="lazy" decoding="async" width="1280" height="800">`:`<div class="card-placeholder"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><span class="visual-label">${a.kind==='html'?'READY TO EXPLORE':a.exists?'SOURCE AVAILABLE':'NO ARTIFACT'}</span></div>`;
     const footer=repeated?escape(row.run_id):!isPublic()&&row.report_binding!=='none'?checksSummary(row):`${bytes(a.bytes)} · ${a.demo?'Session demo':a.kind==='html'?'HTML build':'Source project'}`;
-    return `<article class="run-card"><div class="card-model">${modelIdentity(row)}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div>${cardBuildNotice(row)}<div class="card-bottom"><span class="check-summary">${footer}</span><div class="card-actions">${copyLinkButton(row,'copy-link')}<button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></div></article>`;
+    const task=modelView?state.data.catalog.find(task=>task.id===row.task_id):null;
+    const identity=modelView?`<div class="model-card-identity"><span class="prompt-number">${task?escape(task.id.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(row.category)}</div><h4>${escape(row.task_title)}</h4></div></div>`:modelIdentity(row);
+    const hint=task?.look_for;
+    const context=modelView&&task?`<div class="model-card-context">${typeof hint==='string'&&hint.trim()?`<details class="model-card-guide"><summary>Look for</summary><p>${escape(hint)}</p></details>`:''}<button class="button quiet" data-open-prompt="${escape(task.id)}">Read prompt ↗</button></div>`:'';
+    return `<article class="run-card${modelView?' model-run-card':''}"><div class="card-model">${identity}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div>${cardBuildNotice(row)}${context}<div class="card-bottom"><span class="check-summary">${footer}</span><div class="card-actions">${copyLinkButton(row,'copy-link')}<button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></div></article>`;
+  }
+  function modelRuns(key) {
+    const order=new Map(state.data.catalog.map((task,index)=>[task.id,index]));
+    return state.data.results.filter(row=>row.model_key===key).sort((a,b)=>(order.get(a.task_id)??Infinity)-(order.get(b.task_id)??Infinity)||String(a.task_id||'').localeCompare(String(b.task_id||''))||a.run_id.localeCompare(b.run_id)||a.id.localeCompare(b.id));
+  }
+  function modelCollection(key,runs,expanded=false) {
+    const all=modelRuns(key);const model=all[0];if(!model)return '';
+    const promptCount=new Set(runs.filter(row=>state.data.catalog.some(task=>task.id===row.task_id)).map(row=>row.task_id)).size;
+    const profile=modelProfile(model);const setup=[profile.harness,profile.setting].map(profileText).filter(Boolean).join(' · ');
+    const counts=`${runs.length}${runs.length===all.length?'':' of '+all.length} ${runs.length===1&&all.length===1?'build':'builds'}${runs.length===all.length?'':' shown'} · ${promptCount} ${promptCount===1?'prompt':'prompts'}`;
+    const title=escape(modelName(model));
+    return `<section class="model-collection" data-model="${escape(key)}" style="--model-color:${modelColor(model)}"><header class="model-collection-header"><div><div class="eyebrow">MODEL COLLECTION</div><h3${expanded?' id="model-title"':''}>${title}</h3>${setup?`<p class="model-collection-setup">${escape(setup)}</p>`:''}<p class="model-collection-count">${counts}</p></div><div class="model-collection-actions">${copyModelButton(key)}${expanded?'':`<button class="button" data-expand-model="${escape(key)}" aria-label="Expand ${title} model collection" title="Show all builds from this model">Expand <span aria-hidden="true">↗</span></button>`}</div></header><div class="model-grid">${runs.map(row=>runCard(row,all.filter(other=>groupKey(other)===groupKey(row)).length>1,true)).join('')}</div></section>`;
+  }
+  function renderModel() {
+    if(!$('#model-viewer').open)return;
+    const runs=modelRuns(state.collectionModel);if(!runs.length){closeModel();return;}
+    const scrollTop=$('#model-content').scrollTop;
+    $('#model-content').innerHTML=modelCollection(state.collectionModel,runs,true);$('#model-content').scrollTop=scrollTop;
+  }
+  function openModel(key,trigger=null,updateUrl=true) {
+    const runs=modelRuns(key);if(!runs.length)return;
+    $('#link-error').hidden=true;
+    closeCategory(false);state.collectionModel=key;state.modelTrigger=trigger;
+    $('#model-content').innerHTML=modelCollection(key,runs,true);$('#model-viewer').showModal();$('#model-content').scrollTop=0;
+    if(updateUrl&&location.hash!==modelHash(key))try{history.pushState(null,'',modelHash(key));}catch{ /* Copy link remains available without browser history. */ }
+    $('#close-model').focus();
+  }
+  function finishModelClose() {
+    if($('#model-viewer').open)return;
+    const key=state.collectionModel;const trigger=state.modelTrigger;
+    state.collectionModel=null;state.modelTrigger=null;$('#model-content').replaceChildren();
+    if(key&&!$('#viewer').open&&!$('#prompt-dialog').open){
+      const fallback=[...document.querySelectorAll('#cards [data-expand-model]')].find(button=>button.dataset.expandModel===key);
+      (trigger?.isConnected?trigger:fallback||$('#model-filter')).focus({preventScroll:true});
+    }
+  }
+  function closeModel(updateUrl=true) {
+    if(updateUrl&&$('#model-viewer').open&&location.hash.startsWith('#model/'))try{history.replaceState(null,'',location.pathname+location.search+(state.view==='gallery'?'':'#'+state.view));}catch{ /* The dialog can still close without browser history access. */ }
+    $('#model-viewer').close();finishModelClose();
   }
   const groupKey=row=>row.task_id||`unassigned:${row.id}`;
   function promptGroup(key,runs,expanded=false,allModels=false) {
@@ -272,6 +339,7 @@
   }
   function openCategory(key,trigger=null,allModels=false,updateUrl=true) {
     const runs=(allModels?state.data.results:matchingRuns()).filter(row=>groupKey(row)===key);if(!runs.length)return;
+    closeModel(false);
     state.categoryTask=key;state.categoryTrigger=trigger;state.categoryAllModels=allModels;
     $('#category-content').innerHTML=promptGroup(key,runs,true,allModels);
     $('#category-viewer').showModal();$('#category-content').scrollTop=0;updateComparison($('#category-content .prompt-group'));
@@ -301,9 +369,11 @@
       if(mode==='score'){const max=r=>Math.max(...r.map(x=>x.score??-1));const diff=max(b)-max(a);if(diff)return diff;}
       return keyA.localeCompare(keyB);
     });
-    $('#cards').innerHTML=ordered.map(([key,runs])=>promptGroup(key,runs)).join('');
+    const selectedModel=$('#model-filter').value;
+    $('#cards').innerHTML=selectedModel==='all'?ordered.map(([key,runs])=>promptGroup(key,runs)).join(''):modelCollection(selectedModel,rows);
     document.querySelectorAll('#cards .prompt-group').forEach(group=>positionComparison(group,positions.get(group.dataset.task)||0));
     $('#result-count').textContent=rows.length;$('#group-count').textContent=ordered.filter(([key])=>state.data.catalog.some(task=>task.id===key)).length;
+    $('#result-context').textContent=selectedModel==='all'?' results, grouped by the prompt that started them.':' results from this model. Choose a build to look closer.';
     $('#empty-results').hidden=rows.length>0;
     if(!rows.length){
       const hasRuns=Boolean(state.data?.results.length);
@@ -343,7 +413,7 @@
     $('#leaderboard-content').innerHTML=content||'<div class="empty"><h2>No matching runs yet.</h2><p>Import results and attach independent evaluator scores to see model summaries.</p></div>';
   }
   function render() {
-    renderGallery();renderCatalog();renderLeaderboard();renderCategory();
+    renderGallery();renderCatalog();renderLeaderboard();renderCategory();renderModel();
   }
   async function loadData() {
     if(state.loading)return;state.loading=true;$('#refresh').disabled=true;$('#connection-status').textContent='Scanning…';
@@ -513,8 +583,10 @@
     if(target.dataset.openRun)openRun(target.dataset.openRun);
     if(target.dataset.copyRun)copyRunLink(target.dataset.copyRun);
     if(target.dataset.copyTask)copyCategoryLink(target.dataset.copyTask);
+    if(target.dataset.copyModel)copyModelLink(target.dataset.copyModel);
     if(target.dataset.openPrompt)openPrompt(target.dataset.openPrompt);
     if(target.dataset.expandTask)openCategory(target.dataset.expandTask,target);
+    if(target.dataset.expandModel)openModel(target.dataset.expandModel,target);
     if(target.dataset.shiftModels)shiftComparison(target.closest('.prompt-group'),Number(target.dataset.shiftModels));
     if(target.dataset.tab){state.tab=target.dataset.tab;renderViewer();}
     if(target.id==='launch-preview')launchPreview();
@@ -537,6 +609,9 @@
   $('#close-category').addEventListener('click',()=>closeCategory());
   $('#category-viewer').addEventListener('cancel',event=>{event.preventDefault();closeCategory();});
   $('#category-viewer').addEventListener('close',finishCategoryClose);
+  $('#close-model').addEventListener('click',()=>closeModel());
+  $('#model-viewer').addEventListener('cancel',event=>{event.preventDefault();closeModel();});
+  $('#model-viewer').addEventListener('close',finishModelClose);
   $('#viewer').addEventListener('close',finishViewerClose);
   $('#viewer').addEventListener('cancel',event=>{event.preventDefault();if(!closeLiveInfo())closeViewer();});
   $('#close-prompt').addEventListener('click',()=>$('#prompt-dialog').close());
@@ -549,7 +624,7 @@
       else shiftComparison(group,event.key==='ArrowRight'?1:-1);
     }
     if(event.key==='Escape'&&$('#viewer').open&&closeLiveInfo()){event.preventDefault();return;}
-    if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#category-viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}
+    if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#category-viewer').open&&!$('#model-viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}
   });
   window.addEventListener('hashchange',()=>followRoute());
   document.addEventListener('scroll',event=>{

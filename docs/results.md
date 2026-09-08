@@ -6,15 +6,15 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-08 checkout contains 76 submitted HTML builds for twenty tasks across six model folders:
+The 2026-09-08 checkout contains 87 submitted HTML builds for twenty tasks across six model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
-| `gpt-6_astra` | 19 | 01-19 |
-| `anthropic_opus5` | 9 | 01-09 |
+| `gpt-6_astra` | 20 | 01-20 |
+| `anthropic_opus5` | 11 | 01-11 |
 | `xai_grok4.6` | 20 | 01-20 |
-| `zai_glm5.3_flash` | 8 | 01-07, 10 |
-| `google_gemini3.8_flash` | 14 | 01-14 |
+| `zai_glm5.3_flash` | 10 | 01-10 |
+| `google_gemini3.8_flash` | 20 | 01-20 |
 | `alibaba_qwen3.8_flash` | 6 | 01-05, 09 |
 
 These are submitted artifacts, not verified passes. This snapshot includes no evaluator reports or scores. The gallery reads the files that are present, so its totals change as results are added.
@@ -158,6 +158,12 @@ For a legacy source-project submission, review the source and declared commands,
 The local gallery, a separate port, and an iframe do not provide security isolation. HTML previews share the artifact server's origin, and cookies are not isolated by port. Run unfamiliar submissions in a disposable environment with dedicated browser profiles or contexts. Keep secrets and mutable application data outside the results tree. The source exclusion list is not a comprehensive secret scanner. Use the static export for public hosting rather than exposing the local gallery server.
 
 ## Compare results
+
+Select one model to browse its matching builds in a compact grid across prompts: three columns on desktop, two from 581–1100 pixels, and one on mobile. Each card identifies the prompt and offers its own **Look for** guidance, prompt text, source details, and implementation link. The model name and reported harness/setting appear once above the collection. Search, task, status, and sort controls continue to apply to this filtered grid.
+
+Choose **Expand** in the model heading to open its complete collection, including builds outside the current search or task filter. **Copy link** shares the same complete collection. Public links use `/models/<model-key>/` and carry a model title, build/prompt counts, and a compact preview from up to three different prompts. The browser opens `/#model/<model-key>`; local links use that hash directly. Shared model collections ignore saved filters. Closing a build returns to the collection, even after switching models within the live viewer; closing the collection restores the underlying gallery filters and focus. The link follows the model folder key, so changing its display label does not break it.
+
+![Expanded Opus collection with prompt titles, three cards per row, and sharing controls](model-collection-preview.png)
 
 **Recorded builds only** is enabled by default. It hides empty model columns, including missing submissions and builds excluded by other filters. Turn it off to show the labeled placeholders. The control is available in the showcase filters and the expanded comparison bar; both share one preference saved in your browser. **Reset** restores the default. Shared comparison links honor this preference while showing all submitted models independently of search, model, and task filters.
 

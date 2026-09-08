@@ -54,8 +54,9 @@ Keep the benchmarks. Get your hands on the work.
 ## What you can do
 
 - **Compare the same brief.** Browse three models side by side on desktop, two on smaller screens, or one on mobile. Use the arrows or swipe through the model lineup. **Expand** shows every entry in a grid with as many rows as needed: three columns on desktop, two on smaller screens, and one on mobile, with Look for hints above. Filter by model, task, status, or text.
+- **Explore one model.** Select a model to see its builds in a compact grid across prompts, with prompt titles and Look for hints on each card. **Expand** opens its complete collection at full size; **Copy link** shares that collection with its own screenshot preview.
 - **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Switch models without leaving the prompt, and open **Look for** when you want a few useful things to try. Download the source to inspect it yourself.
-- **Share a build or a whole comparison.** Choose **Copy link** on a card to share its maximized app, or beside a prompt to share the expanded comparison. Category links open all models for that prompt and carry their own title and screenshot preview; individual build links keep their model-specific previews.
+- **Share a build, comparison, or model collection.** Choose **Copy link** on a card to share its maximized app, beside a prompt to share the expanded comparison, or in a model heading to share all of its builds. Each has its own title and screenshot preview.
 - **Run any of the 24 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
 - **Give the agent the last word.** The Capstone asks it to research, choose a concept the other 23 tasks do not cover, and build a complete experience. Then you get to try its judgment, too.
 - **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, score summaries, and CSV export. Missing scores stay missing.

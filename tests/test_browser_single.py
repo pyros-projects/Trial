@@ -73,6 +73,208 @@ class BrowserEnvironment(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('RUN_BROWSER_TESTS')=='1','Set RUN_BROWSER_TESTS=1 for direct Chromium integration.')
 class BrowserTests(BrowserEnvironment):
+    def model_collection_fixture(self):
+        models = [
+            {'key': 'fixture Astra & + café', 'label': 'Astra collection fixture', 'color': '#88CCAA'},
+            {'key': 'fixture_grok', 'label': 'Grok collection fixture', 'color': '#EEAA77'},
+        ]
+        tasks = self.state.catalog[:5]
+        for model, selected_tasks in [(models[0], tasks), (models[1], tasks[:1])]:
+            for task in selected_tasks:
+                run = self.results / model['key'] / (task['id'] + '-main')
+                run.mkdir(parents=True)
+                (run / 'index.html').write_text('''<!doctype html><meta charset="utf-8"><title>Model collection fixture</title>
+<h1 id="build-model">''' + model['key'] + '''</h1><button id="increment">Count: 0</button>
+<script>let n=0;document.querySelector('button').onclick=e=>e.target.textContent='Count: '+(++n);</script>''', encoding='utf-8')
+        self.model_settings(json.dumps({'models': models}))
+        return models, tasks
+
+    def assert_model_grid(self, grid, columns, count):
+        from playwright.sync_api import expect
+        cards = grid.locator('.model-run-card')
+        expect(cards).to_have_count(count)
+        self.page.wait_for_function('''({grid, columns}) =>
+            getComputedStyle(grid).gridTemplateColumns.split(' ').length === columns
+        ''', arg={'grid': grid.element_handle(), 'columns': columns})
+        boxes = cards.evaluate_all('nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};})')
+        self.assertEqual(len({round(box['x']) for box in boxes}), columns)
+        self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+        if columns > 1:
+            self.assertLess(boxes[0]['width'], self.page.viewport_size['width'] / 2)
+            self.assertAlmostEqual(boxes[0]['y'], boxes[columns-1]['y'], delta=2)
+
+    def test_selected_model_uses_compact_responsive_prompt_cards_and_keeps_filters(self):
+        from playwright.sync_api import expect
+        models, tasks = self.model_collection_fixture()
+        self.navigate_direct()
+        self.page.locator('#model-filter').select_option(models[0]['key'])
+        grid = self.page.locator('#cards .model-grid')
+        expect(grid).to_be_visible()
+        cards = grid.locator('.model-run-card')
+        expect(cards).to_have_count(5)
+        expect(self.page.locator('#cards .prompt-group')).to_have_count(0)
+        for card, task in zip(cards.all(), tasks):
+            expect(card).to_contain_text(task['title'])
+        for width, columns in [(1440, 3), (900, 2), (390, 1)]:
+            self.page.set_viewport_size({'width': width, 'height': 1000})
+            self.assert_model_grid(grid, columns, 5)
+        self.page.locator('#search').fill(tasks[1]['title'])
+        expect(cards).to_have_count(1)
+        expect(cards.first).to_contain_text(tasks[1]['title'])
+        self.page.locator('#search').fill('')
+        self.page.locator('#task-filter').select_option(tasks[2]['id'])
+        expect(cards).to_have_count(1)
+        expect(cards.first).to_contain_text(tasks[2]['title'])
+        self.page.locator('#clear-filters').click()
+        expect(grid).to_have_count(0)
+        expect(self.page.locator('#cards .prompt-group')).to_have_count(5)
+        self.assertEqual(self.errors, [])
+
+    def test_model_collection_expands_all_builds_copies_and_returns_after_model_switch(self):
+        from playwright.sync_api import expect
+        models, tasks = self.model_collection_fixture()
+        self.navigate_direct()
+        self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+        self.page.locator('#model-filter').select_option(models[0]['key'])
+        self.page.locator('#task-filter').select_option(tasks[1]['id'])
+        self.page.locator('#search').fill(tasks[1]['title'])
+        expect(self.page.locator('#cards .model-run-card')).to_have_count(1)
+        filters = self.page.locator('#search,#model-filter,#task-filter').evaluate_all('nodes=>nodes.map(node=>[node.id,node.value])')
+        share = self.base + '/#model/' + quote(models[0]['key'], safe='')
+        self.page.locator('[data-copy-model]').first.click()
+        expect(self.page.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        trigger = self.page.locator('[data-expand-model]').first
+        trigger.click()
+        collection = self.page.locator('#model-viewer')
+        expect(collection).to_be_visible()
+        expect(self.page.locator('#model-title')).to_contain_text(models[0]['label'])
+        expect(self.page).to_have_url(share)
+        self.assertTrue(collection.evaluate('node=>node instanceof HTMLDialogElement&&node.matches(":modal")'))
+        expect(self.page.locator('#category-viewer')).not_to_be_visible()
+        for width, columns in [(1440, 3), (900, 2), (390, 1)]:
+            self.page.set_viewport_size({'width': width, 'height': 1000})
+            self.assert_model_grid(collection.locator('.model-grid'), columns, 5)
+        self.page.set_viewport_size({'width': 1440, 'height': 1000})
+        collection.locator('[data-copy-model]').click()
+        expect(collection.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        collection.locator('.model-run-card .card-open').first.click()
+        self.page.locator('#launch-preview').click()
+        expect(self.page.frame_locator('#artifact-frame').locator('#build-model')).to_have_text(models[0]['key'])
+        self.page.locator('#live-model').select_option(models[1]['key'] + '/' + tasks[0]['id'] + '-main')
+        expect(self.page.frame_locator('#artifact-frame').locator('#build-model')).to_have_text(models[1]['key'])
+        self.page.locator('#close-live').click()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        expect(collection).to_be_visible()
+        expect(self.page.locator('#model-title')).to_contain_text(models[0]['label'])
+        expect(self.page).to_have_url(share)
+        expect(collection.locator('.model-run-card')).to_have_count(5)
+        self.page.locator('#close-model').click()
+        expect(collection).not_to_be_visible()
+        expect(trigger).to_be_focused()
+        expect(self.page.locator('#cards .model-run-card')).to_have_count(1)
+        self.assertEqual(self.page.locator('#search,#model-filter,#task-filter').evaluate_all('nodes=>nodes.map(node=>[node.id,node.value])'), filters)
+        expect(self.page.locator('dialog[open]')).to_have_count(0)
+        self.page.reload()
+        expect(collection).not_to_be_visible()
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        expect(self.page.locator('#cards .model-run-card')).to_have_count(1)
+        self.assertEqual(self.errors, [])
+
+    def test_model_routes_reload_history_invalid_links_and_comparison_exclusion(self):
+        from playwright.sync_api import expect
+        models, tasks = self.model_collection_fixture()
+        model_hash = '#model/' + quote(models[0]['key'], safe='')
+        self.page.goto(self.base + '/' + model_hash)
+        collection = self.page.locator('#model-viewer')
+        category = self.page.locator('#category-viewer')
+        expect(collection).to_be_visible()
+        expect(collection.locator('.model-run-card')).to_have_count(5)
+        self.page.reload()
+        expect(collection).to_be_visible()
+        expect(self.page.locator('dialog[open]')).to_have_count(1)
+        self.page.evaluate('hash=>location.hash=hash', '#compare/' + tasks[0]['id'])
+        expect(category).to_be_visible()
+        expect(collection).not_to_be_visible()
+        expect(category.locator('.run-card')).to_have_count(2)
+        self.page.go_back()
+        expect(collection).to_be_visible()
+        expect(category).not_to_be_visible()
+        self.page.go_forward()
+        expect(category).to_be_visible()
+        expect(collection).not_to_be_visible()
+        invalid = ['missing-model', '%E0%A4%A', '', quote('../' + models[0]['key'], safe=''),
+                   quote('<img src=x onerror="window.__modelInjection=1">', safe='')]
+        for index, key in enumerate(invalid):
+            with self.subTest(invalid_model=key):
+                self.page.evaluate('hash=>location.hash=hash', model_hash)
+                expect(collection).to_be_visible()
+                expect(category).not_to_be_visible()
+                if index == 0:
+                    collection.locator('.model-run-card .card-open').first.click()
+                    self.page.locator('#launch-preview').click()
+                    expect(self.page.locator('#artifact-frame')).to_have_count(1)
+                self.page.evaluate('hash=>location.hash=hash', '#model/' + key)
+                expect(self.page.locator('#link-error')).to_be_visible()
+                expect(self.page.locator('#link-error')).to_contain_text('unavailable')
+                expect(self.page.locator('dialog[open]')).to_have_count(0)
+                expect(self.page.locator('#artifact-frame')).to_have_count(0)
+                expect(self.page.locator('#link-error img')).to_have_count(0)
+                self.assertTrue(self.page.evaluate('window.__modelInjection === undefined'))
+        self.page.locator('#model-filter').select_option(models[0]['key'])
+        self.page.locator('[data-expand-model]').first.click()
+        expect(collection).to_be_visible()
+        self.page.locator('#close-model').click()
+        expect(collection).not_to_be_visible()
+        expect(self.page.locator('#link-error')).not_to_be_visible()
+        self.assertEqual(self.errors, [])
+
+    def test_public_model_share_uses_encoded_page_and_ignores_saved_filters(self):
+        from playwright.sync_api import expect
+        models, tasks = self.model_collection_fixture()
+        origin, data = self.public_export()
+        model = models[0]
+        expected_path = '/models/' + quote(model['key'], safe='') + '/'
+        self.assertEqual(data['model_urls'][model['key']], expected_path)
+        share = origin + expected_path
+        response = self.page.request.get(share)
+        self.assertEqual(response.status, 200)
+        self.assertIn('property="og:title"', response.text())
+        self.assertIn(model['label'], response.text())
+        self.assertIn('location.replace(', response.text())
+        self.page.goto(origin)
+        self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+        self.page.locator('#model-filter').select_option(models[1]['key'])
+        self.page.locator('#task-filter').select_option(tasks[1]['id'])
+        self.page.locator('#search').fill('no matching fixture')
+        self.page.locator('.nav-button[data-view="why"]').click()
+        self.page.goto(share)
+        collection = self.page.locator('#model-viewer')
+        expect(collection).to_be_visible()
+        expect(self.page).to_have_url(origin + '/#model/' + quote(model['key'], safe=''))
+        expect(self.page.locator('#model-title')).to_contain_text(model['label'])
+        expect(collection.locator('.model-run-card')).to_have_count(5)
+        expect(self.page.locator('#model-filter')).to_have_value(models[1]['key'])
+        expect(self.page.locator('#task-filter')).to_have_value(tasks[1]['id'])
+        expect(self.page.locator('#search')).to_have_value('no matching fixture')
+        collection.locator('[data-copy-model]').click()
+        expect(collection.locator('#toast')).to_contain_text('Link copied')
+        self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
+        self.page.reload()
+        expect(collection).to_be_visible()
+        expect(collection.locator('.model-run-card')).to_have_count(5)
+        self.page.go_back()
+        expect(self.page).to_have_url(origin + '/#why')
+        expect(self.page.locator('dialog[open]')).to_have_count(0)
+        self.page.go_forward()
+        expect(collection).to_be_visible()
+        self.page.locator('#close-model').click()
+        expect(collection).not_to_be_visible()
+        expect(self.page.locator('#cards .run-card')).to_have_count(0)
+        expect(self.page.locator('#artifact-frame')).to_have_count(0)
+        self.assertEqual(self.errors, [])
+
     def comparison_fixture(self):
         names = ['Astra', 'Opus', 'Grok', 'GLM', 'Gemini']
         models = [{'key': 'fixture_' + name.lower(), 'label': name + ' fixture', 'color': color}
@@ -467,10 +669,10 @@ window.probe=async origin=>{
         expect(category.locator(f'.model-column[data-model="{keys[2]}"] .run-card')).to_have_count(2)
         self.page.locator('#close-category').click()
         self.page.locator('#model-filter').select_option(keys[2])
-        self.assert_comparison_range(group, 1, 1, 1)
-        expect(group.locator('.run-card')).to_have_count(2)
+        model_grid = self.page.locator('#cards .model-grid')
+        expect(model_grid.locator('.model-run-card')).to_have_count(2)
         self.page.locator('#search').fill('extra')
-        expect(group.locator('.run-card')).to_have_count(1)
+        expect(model_grid.locator('.model-run-card')).to_have_count(1)
         self.page.locator('#clear-filters').click()
         unknown = self.page.locator('#cards .prompt-group').filter(has=self.page.locator(f'[data-open-run="{keys[0]}/unknown-fixture"]'))
         expect(unknown).to_have_count(1)
@@ -1370,7 +1572,8 @@ quantization_url = 'https://models.example/quant'
         self.navigate_direct()
         self.page.locator('#track-filter').select_option('html')
         self.page.locator('#model-filter').select_option(model)
-        expect(self.page.locator('.model-setup')).to_have_text('Test CLI · Max')
+        selected_setup = self.page.locator('#cards .model-collection-setup')
+        expect(selected_setup).to_have_text('Test CLI · Max')
         self.page.locator('#cards .card-open').click()
         self.page.locator('[data-tab="details"]').click()
         expect(self.page.locator('.model-setup-details')).to_contain_text('Shared setup for this model')
@@ -1424,10 +1627,10 @@ quantization_url = 'https://models.example/quant'
         self.page.locator('#close-live').click()
         profile.write_text('harness = "Test CLI"\nsetting = "Low"\n', encoding='utf-8')
         self.page.locator('#refresh').click()
-        expect(self.page.locator('.model-setup')).to_have_text('Test CLI · Low')
+        expect(selected_setup).to_have_text('Test CLI · Low')
         profile.write_text('invalid = [', encoding='utf-8')
         self.page.locator('#refresh').click()
-        expect(self.page.locator('.model-setup')).to_have_count(0)
+        expect(selected_setup).to_have_count(0)
         self.page.locator('#cards .card-open').click()
         self.page.locator('#launch-preview').click()
         expect(self.page.locator('.live-setup')).to_have_count(0)
@@ -1516,9 +1719,9 @@ quantization_url = 'https://models.example/quant'
         expect(self.page.locator('#prompt-title')).to_have_text('Real-Time 2D Fluid Simulation')
         self.page.locator('#close-prompt').click()
         self.page.locator('#model-filter').select_option('Second model')
-        expect(self.page.locator('#cards .prompt-group')).to_have_count(1)
+        expect(self.page.locator('#cards .prompt-group')).to_have_count(0)
         expect(self.page.locator('#cards .run-card')).to_have_count(1)
-        expect(self.page.locator('#cards .model-column')).to_have_count(1)
+        expect(self.page.locator('#cards .model-grid .model-run-card')).to_have_count(1)
         self.assertEqual(self.errors,[])
 
     def test_active_catalog_counts_clear_retired_filters_and_hide_single_track(self):

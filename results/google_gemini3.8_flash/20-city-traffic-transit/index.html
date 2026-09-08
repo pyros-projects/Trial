@@ -1,0 +1,4348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>METROFLOW - City Traffic & Public Transit Simulator</title>
+<style>
+  :root {
+    --bg-base: #090d16;
+    --bg-panel: rgba(15, 23, 42, 0.92);
+    --bg-panel-hover: rgba(30, 41, 59, 0.98);
+    --border-color: rgba(255, 255, 255, 0.12);
+    --border-highlight: rgba(56, 189, 248, 0.6);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --accent-blue: #38bdf8;
+    --accent-primary: #3b82f6;
+    --accent-green: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-red: #ef4444;
+    --accent-purple: #8b5cf6;
+    --accent-indigo: #6366f1;
+    --panel-radius: 12px;
+    --control-radius: 8px;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body, html {
+    width: 100%; height: 100%; overflow: hidden;
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    user-select: none;
+  }
+
+  #app {
+    position: relative;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+  }
+
+  #canvas-container {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1;
+    cursor: default;
+    background: #0b111e;
+  }
+  canvas#simCanvas {
+    width: 100%; height: 100%; display: block;
+  }
+
+  .ui-layer {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .interactive { pointer-events: auto; }
+
+  header#top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+    z-index: 20;
+  }
+
+  .brand {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 15px; letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .brand-badge {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+    color: white; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 1px;
+  }
+
+  .time-clock {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border-color);
+    padding: 4px 10px; border-radius: var(--control-radius);
+    font-size: 12px; font-weight: 700; color: var(--accent-blue);
+    display: flex; align-items: center; gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .hud-metrics {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .hud-metrics::-webkit-scrollbar { display: none; }
+  .hud-item {
+    display: flex; flex-direction: column; align-items: flex-start;
+    flex-shrink: 0;
+  }
+  .hud-label {
+    font-size: 9px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.5px;
+  }
+  .hud-val {
+    font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 4px;
+  }
+  .hud-val.good { color: var(--accent-green); }
+  .hud-val.warning { color: var(--accent-amber); }
+  .hud-val.danger { color: var(--accent-red); }
+
+  .top-controls {
+    display: flex; align-items: center; gap: 6px;
+    flex-shrink: 0;
+  }
+
+  button, select {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 6px 12px;
+    border-radius: var(--control-radius);
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    outline: none;
+    min-height: 32px;
+  }
+  button:hover, select:hover {
+    background: var(--bg-panel-hover);
+    border-color: rgba(255,255,255,0.25);
+  }
+  button:active {
+    transform: scale(0.97);
+  }
+  button.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-blue);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+  }
+  button.btn-danger {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
+  button.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.35);
+  }
+  button.btn-success {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+  }
+  button.btn-success:hover {
+    background: rgba(16, 185, 129, 0.35);
+  }
+
+  #left-toolbar {
+    position: absolute;
+    top: 60px; left: 16px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--panel-radius);
+    padding: 8px;
+    display: flex; flex-direction: column; gap: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.55);
+    max-height: calc(100vh - 124px);
+    overflow-y: auto;
+    z-index: 15;
+  }
+
+  .tool-group {
+    display: flex; flex-direction: column; gap: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding-bottom: 6px; margin-bottom: 2px;
+  }
+  .tool-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .tool-group-label {
+    font-size: 9px; text-transform: uppercase; color: var(--text-dim);
+    font-weight: 700; padding: 2px 4px;
+  }
+
+  .tool-btn {
+    width: 44px; height: 44px;
+    padding: 0;
+    font-size: 19px;
+    border-radius: var(--control-radius);
+    position: relative;
+  }
+  .tool-btn .hotkey {
+    position: absolute; bottom: 2px; right: 4px;
+    font-size: 9px; font-family: var(--font-mono);
+    color: var(--text-dim);
+  }
+  .tool-btn.active .hotkey { color: rgba(255,255,255,0.85); }
+
+  #tool-options-bar {
+    position: absolute;
+    top: 60px; left: 78px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--panel-radius);
+    padding: 8px 12px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.55);
+    font-size: 12px;
+    z-index: 15;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  #tool-options-bar.hidden {
+    opacity: 0; pointer-events: none; transform: translateX(-10px);
+  }
+
+  #bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.45);
+    z-index: 20;
+    gap: 10px;
+    overflow-x: auto;
+  }
+
+  .overlay-selector {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    flex-shrink: 0;
+  }
+  .overlay-btn {
+    font-size: 11px; padding: 4px 8px; border-radius: 6px; min-height: 28px;
+  }
+
+  .camera-quick-tools {
+    display: flex; align-items: center; gap: 6px;
+    flex-shrink: 0;
+  }
+
+  #right-sidebar {
+    position: absolute;
+    top: 60px; right: 16px;
+    width: 380px;
+    max-height: calc(100vh - 124px);
+    background: var(--bg-panel);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--panel-radius);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.65);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    z-index: 18;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+  }
+  #right-sidebar.collapsed {
+    transform: translateX(410px);
+    opacity: 0; pointer-events: none;
+  }
+
+  .sidebar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0,0,0,0.25);
+  }
+  .sidebar-tabs {
+    display: flex; gap: 4px;
+  }
+  .tab-btn {
+    padding: 4px 10px; font-size: 11px; font-weight: 600;
+    border-radius: 6px; border: none; background: transparent;
+    color: var(--text-muted); min-height: 28px;
+  }
+  .tab-btn.active {
+    background: rgba(255,255,255,0.14); color: var(--text-main);
+  }
+
+  .sidebar-content {
+    padding: 14px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex; flex-direction: column; gap: 14px;
+    font-size: 12px;
+  }
+
+  .sidebar-panel { display: none; flex-direction: column; gap: 12px; }
+  .sidebar-panel.active { display: flex; }
+
+  .card {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-color);
+    border-radius: var(--control-radius);
+    padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .card-title {
+    font-weight: 700; font-size: 12px; color: var(--accent-blue);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .stat-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .stat-box {
+    background: rgba(255,255,255,0.035);
+    padding: 6px 8px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .stat-box-label { font-size: 9px; text-transform: uppercase; color: var(--text-dim); }
+  .stat-box-value { font-size: 14px; font-weight: 700; font-family: var(--font-mono); margin-top: 2px; }
+
+  .chart-box {
+    position: relative;
+    width: 100%; height: 110px;
+    background: #090e18;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .chart-box canvas { width: 100%; height: 100%; display: block; }
+  .chart-label {
+    position: absolute; top: 4px; left: 6px;
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    color: var(--text-muted); pointer-events: none;
+    background: rgba(9, 14, 24, 0.75); padding: 2px 4px; border-radius: 4px;
+  }
+
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .setting-label { font-size: 11px; color: var(--text-muted); }
+  .slider-wrapper {
+    display: flex; align-items: center; gap: 8px; flex: 1; max-width: 180px;
+  }
+  input[type="range"] {
+    width: 100%; accent-color: var(--accent-primary); cursor: pointer;
+  }
+  .slider-val {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600; min-width: 38px; text-align: right;
+  }
+
+  .phase-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 8px; background: rgba(255,255,255,0.03);
+    border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);
+  }
+  .phase-light {
+    width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+  }
+  .phase-light.green { background: #10b981; box-shadow: 0 0 8px #10b981; }
+  .phase-light.yellow { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+  .phase-light.red { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+  #toast {
+    position: absolute;
+    bottom: 64px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: rgba(15, 23, 42, 0.96);
+    border: 1px solid var(--accent-primary);
+    color: var(--text-main);
+    padding: 8px 18px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.65);
+    pointer-events: none; opacity: 0;
+    transition: all 0.25s ease;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  #toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  .modal-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
+    z-index: 200; display: none; align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: var(--panel-radius);
+    width: 90%; max-width: 600px; max-height: 85vh;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.85);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .modal-header {
+    padding: 14px 18px; border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center; justify-content: space-between;
+    font-weight: 700; font-size: 14px;
+  }
+  .modal-body {
+    padding: 18px; overflow-y: auto; font-size: 13px; line-height: 1.6;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .shortcut-list {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;
+  }
+  .shortcut-item {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .kbd {
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+    padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px;
+  }
+
+  .compare-split {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px;
+  }
+  .compare-box {
+    background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* Responsive for mobile (390 x 844) */
+  @media (max-width: 820px) {
+    header#top-bar {
+      padding: 6px 8px;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+    header#top-bar::-webkit-scrollbar { display: none; }
+    .brand span:not(.brand-badge) { display: none; }
+    .hud-metrics { display: none; }
+    .top-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .top-controls button { padding: 4px 6px; font-size: 11px; }
+    .time-clock { padding: 3px 6px; font-size: 11px; }
+    
+    #left-toolbar {
+      top: auto; bottom: 58px; left: 8px;
+      flex-direction: row; max-height: none; width: calc(100vw - 16px);
+      overflow-x: auto; padding: 6px;
+    }
+    .tool-group { flex-direction: row; border-bottom: none; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 6px; margin-right: 4px; }
+    .tool-group-label { display: none; }
+    .tool-btn { width: 40px; height: 40px; font-size: 17px; flex-shrink: 0; }
+
+    #tool-options-bar {
+      top: auto; bottom: 112px; left: 8px;
+      width: calc(100vw - 16px); overflow-x: auto;
+    }
+
+    #right-sidebar {
+      top: 50px; right: 0; left: 0;
+      width: 100%; max-height: 56vh;
+      border-radius: var(--panel-radius) var(--panel-radius) 0 0;
+      transform: translateY(110%);
+    }
+    #right-sidebar.collapsed { transform: translateY(110%); }
+    #right-sidebar:not(.collapsed) { transform: translateY(0); }
+
+    #bottom-bar {
+      padding: 6px 10px;
+    }
+    .overlay-selector span { display: none; }
+    .overlay-btn { font-size: 9px; padding: 3px 6px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas-container">
+    <canvas id="simCanvas"></canvas>
+  </div>
+
+  <div class="ui-layer">
+    <header id="top-bar" class="interactive">
+      <div class="brand">
+        <span class="brand-badge">METROFLOW</span>
+        <span>City Sim</span>
+      </div>
+
+      <div class="time-clock" id="clockDisplay" title="Simulated Day and Time">
+        <span id="clockIcon">☀️</span>
+        <span id="clockTime">07:30</span>
+        <span id="clockPeriod" style="font-size:10px; color:var(--text-muted); font-weight:normal;">(Morning Rush)</span>
+      </div>
+
+      <div class="hud-metrics">
+        <div class="hud-item" title="Frames per second">
+          <span class="hud-label">FPS</span>
+          <span class="hud-val" id="hudFps">60</span>
+        </div>
+        <div class="hud-item" title="Vehicles currently in network">
+          <span class="hud-label">Active</span>
+          <span class="hud-val" id="hudActiveVehicles">0</span>
+        </div>
+        <div class="hud-item" title="Vehicles waiting at signals or in queues">
+          <span class="hud-label">Queued</span>
+          <span class="hud-val" id="hudQueuedVehicles">0</span>
+        </div>
+        <div class="hud-item" title="Average Network Speed">
+          <span class="hud-label">Avg Speed</span>
+          <span class="hud-val" id="hudAvgSpeed">0 km/h</span>
+        </div>
+        <div class="hud-item" title="Trips successfully completed">
+          <span class="hud-label">Completed</span>
+          <span class="hud-val good" id="hudCompletedTrips">0</span>
+        </div>
+        <div class="hud-item" title="Public transit passengers moved">
+          <span class="hud-label">Ridership</span>
+          <span class="hud-val good" id="hudRidership">0</span>
+        </div>
+        <div class="hud-item" title="Congestion level across all corridors">
+          <span class="hud-label">Congestion</span>
+          <span class="hud-val" id="hudCongestion">0%</span>
+        </div>
+      </div>
+
+      <div class="top-controls">
+        <button id="btnPause" title="Pause / Resume (Space)">⏸️</button>
+        <button id="btnStep" title="Single Step (S)">⏭</button>
+        <div style="display:flex; gap:2px; background:rgba(0,0,0,0.3); border-radius:6px; padding:2px;">
+          <button class="speed-btn active" data-speed="1" title="1x Speed">1x</button>
+          <button class="speed-btn" data-speed="2" title="2x Speed">2x</button>
+          <button class="speed-btn" data-speed="5" title="5x Speed">5x</button>
+          <button class="speed-btn" data-speed="10" title="10x Speed">10x</button>
+        </div>
+        <button id="btnAudio" title="Toggle Procedural Audio (Muted by default)">🔇</button>
+        <button id="btnScenarios" title="Load Curated Scenario">📂 Scenarios</button>
+        <button id="btnToggleSidebar" title="Toggle Sidebar">📊 Inspector</button>
+        <button id="btnHelp" title="Keyboard Shortcuts & Guide">❓</button>
+      </div>
+    </header>
+
+    <div id="tool-options-bar" class="interactive hidden"></div>
+
+    <div id="left-toolbar" class="interactive">
+      <div class="tool-group">
+        <span class="tool-group-label">General</span>
+        <button class="tool-btn active" id="tool-select" data-tool="select" title="Select & Inspect (V)">
+          🔍<span class="hotkey">V</span>
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <span class="tool-group-label">Roads</span>
+        <button class="tool-btn" id="tool-road" data-tool="road" title="Draw Road (R)">
+          🛣️<span class="hotkey">R</span>
+        </button>
+        <button class="tool-btn" id="tool-signal" data-tool="signal" title="Signal & Junction Editor (J)">
+          🚦<span class="hotkey">J</span>
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <span class="tool-group-label">Transit</span>
+        <button class="tool-btn" id="tool-bus-stop" data-tool="bus-stop" title="Add Bus / Tram Stop (B)">
+          🚏<span class="hotkey">B</span>
+        </button>
+        <button class="tool-btn" id="tool-bus-route" data-tool="bus-route" title="Create / Edit Transit Route (T)">
+          🚌<span class="hotkey">T</span>
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <span class="tool-group-label">Zoning & Ops</span>
+        <button class="tool-btn" id="tool-zone" data-tool="zone" title="Zone Land Use (Z)">
+          🏢<span class="hotkey">Z</span>
+        </button>
+        <button class="tool-btn" id="tool-incident" data-tool="incident" title="Toggle Road Closure / Incident (X)">
+          ⚠️<span class="hotkey">X</span>
+        </button>
+        <button class="tool-btn btn-danger" id="tool-demolish" data-tool="demolish" title="Demolish (D)">
+          💣<span class="hotkey">D</span>
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <button class="tool-btn" id="btnUndo" title="Undo (Ctrl+Z)">↩️</button>
+        <button class="tool-btn" id="btnRedo" title="Redo (Ctrl+Y)">↪️</button>
+      </div>
+    </div>
+
+    <div id="bottom-bar" class="interactive">
+      <div class="overlay-selector">
+        <span style="font-size:11px; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Overlays:</span>
+        <button class="overlay-btn active" data-overlay="none">Normal</button>
+        <button class="overlay-btn" data-overlay="speed">Speed Heatmap</button>
+        <button class="overlay-btn" data-overlay="queues">Queue Tails</button>
+        <button class="overlay-btn" data-overlay="transit">Transit Coverage</button>
+        <button class="overlay-btn" data-overlay="emissions">Emissions</button>
+        <button class="overlay-btn" data-overlay="demand">O-D Desire Lines</button>
+        <button class="overlay-btn" data-overlay="validation">Graph Validation</button>
+      </div>
+
+      <div class="camera-quick-tools">
+        <button id="btnWeather" title="Cycle Weather (Clear -> Rain -> Snow)">☀️ Clear</button>
+        <button id="btnCompareTransit" title="Compare Car-Only vs Transit-Supported Scenario">⚖️ Compare Transit</button>
+        <button id="btnZoomIn" title="Zoom In (+)">➕</button>
+        <button id="btnZoomOut" title="Zoom Out (-)">➖</button>
+        <button id="btnResetCamera" title="Reset View (Home)">🎯 Center</button>
+      </div>
+    </div>
+  </div>
+
+  <aside id="right-sidebar" class="interactive">
+    <div class="sidebar-header">
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" data-tab="inspector">Inspector</button>
+        <button class="tab-btn" data-tab="analytics">Analytics</button>
+        <button class="tab-btn" data-tab="settings">Demand</button>
+        <button class="tab-btn" data-tab="io">Save/Export</button>
+      </div>
+      <button id="btnCloseSidebar" style="padding:2px 6px; font-size:12px; border:none; background:none;">✕</button>
+    </div>
+
+    <div class="sidebar-content">
+      <!-- TAB 1: INSPECTOR -->
+      <div class="sidebar-panel active" id="tab-inspector">
+        <div id="inspector-placeholder" style="color:var(--text-dim); text-align:center; padding:30px 10px;">
+          <div style="font-size:28px; margin-bottom:10px;">🔍</div>
+          <div style="font-weight:600; color:var(--text-muted);">Nothing Selected</div>
+          <div style="font-size:11px; margin-top:4px;">Click any vehicle, road segment, intersection, bus stop, or transit route to inspect live parameters.</div>
+        </div>
+
+        <div class="card" id="inspect-vehicle" style="display:none;">
+          <div class="card-title">
+            <span id="veh-title">🚗 Car #104</span>
+            <button id="btnFollowVehicle" style="font-size:10px; padding:2px 6px;">🎥 Follow</button>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-box-label">Speed</div>
+              <div class="stat-box-value" id="veh-speed">48 km/h</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">State</div>
+              <div class="stat-box-value" id="veh-state" style="color:var(--accent-green)">Cruising</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Trip Time</div>
+              <div class="stat-box-value" id="veh-time">18.4s</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Route Rem.</div>
+              <div class="stat-box-value" id="veh-route-dist">240m</div>
+            </div>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+            <div><strong>Origin / Dest:</strong> <span id="veh-od">Zone A -> Zone B</span></div>
+            <div id="veh-passengers-row" style="display:none;"><strong>Passengers:</strong> <span id="veh-passengers">14 / 40</span></div>
+            <div><strong>Acceleration:</strong> <span id="veh-accel">+1.2 m/s²</span></div>
+          </div>
+        </div>
+
+        <div class="card" id="inspect-road" style="display:none;">
+          <div class="card-title">
+            <span id="road-title">🛣️ Road Segment #12</span>
+            <button id="btnToggleClosure" class="btn-danger" style="font-size:10px; padding:2px 6px;">🚧 Close Road</button>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-box-label">Lanes</div>
+              <div class="stat-box-value" id="road-lanes">2 Lanes</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Speed Limit</div>
+              <div class="stat-box-value" id="road-speed-limit">60 km/h</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Occupancy</div>
+              <div class="stat-box-value" id="road-density">4 veh</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Flow Rate</div>
+              <div class="stat-box-value" id="road-flow">420 veh/h</div>
+            </div>
+          </div>
+          <div class="setting-row" style="margin-top:6px;">
+            <span class="setting-label">Speed Limit:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="roadSpeedSlider" min="20" max="100" step="5" value="60">
+              <span class="slider-val" id="roadSpeedVal">60</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Construction:</span>
+            <button id="btnToggleConstruction" style="font-size:11px; padding:3px 8px;">Toggle Work Zone</button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Direction:</span>
+            <button id="btnToggleOneWay" style="font-size:11px; padding:3px 8px;">Switch One-Way</button>
+          </div>
+        </div>
+
+        <div class="card" id="inspect-node" style="display:none;">
+          <div class="card-title">
+            <span id="node-title">🚦 Intersection #5</span>
+            <span id="node-type-badge" style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.1);">Signalized</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-box-label">Junction Type</div>
+              <select id="nodeTypeSelect" style="width:100%; margin-top:2px; font-size:11px; padding:2px 4px;">
+                <option value="traffic_signal">Traffic Signal</option>
+                <option value="stop_sign">All-Way Stop</option>
+                <option value="roundabout">Roundabout</option>
+                <option value="yield">Yield / Priority</option>
+              </select>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Signal Mode</div>
+              <select id="signalModeSelect" style="width:100%; margin-top:2px; font-size:11px; padding:2px 4px;">
+                <option value="fixed">Fixed Cycle</option>
+                <option value="actuated">Actuated (Sensors)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="signal-phase-container" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+            <div style="font-weight:700; font-size:11px; display:flex; justify-content:space-between; align-items:center;">
+              <span>Signal Phase Sequence</span>
+              <button id="btnNextPhase" style="font-size:10px; padding:2px 6px;">⏭ Force Phase</button>
+            </div>
+            <div id="signalPhasesList" style="display:flex; flex-direction:column; gap:4px;"></div>
+            <div class="setting-row" style="margin-top:4px;">
+              <span class="setting-label">Cycle Offset (s):</span>
+              <div class="slider-wrapper">
+                <input type="range" id="signalOffsetSlider" min="0" max="60" step="1" value="0">
+                <span class="slider-val" id="signalOffsetVal">0s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="inspect-stop" style="display:none;">
+          <div class="card-title">
+            <span id="stop-title">🚏 Transit Stop: Central St</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-box-label">Waiting Pax</div>
+              <div class="stat-box-value good" id="stop-waiting">8 pax</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Avg Wait Time</div>
+              <div class="stat-box-value" id="stop-avg-wait">2.4 min</div>
+            </div>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+            <div><strong>Lines Serving Stop:</strong> <span id="stop-lines">Red Line</span></div>
+            <div style="margin-top:2px;"><strong>Total Boardings:</strong> <span id="stop-boardings">142</span></div>
+          </div>
+        </div>
+
+        <div class="card" id="inspect-route" style="display:none;">
+          <div class="card-title">
+            <span id="route-title">🚌 Line 1 (Red Express)</span>
+            <button id="btnDeleteRoute" class="btn-danger" style="font-size:10px; padding:2px 6px;">Delete Line</button>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-box-label">Active Fleet</div>
+              <div class="stat-box-value" id="route-fleet">4 Buses</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Line Ridership</div>
+              <div class="stat-box-value good" id="route-ridership">285 pax</div>
+            </div>
+          </div>
+          <div class="setting-row" style="margin-top:6px;">
+            <span class="setting-label">Headway / Freq (s):</span>
+            <div class="slider-wrapper">
+              <input type="range" id="routeHeadwaySlider" min="15" max="90" step="5" value="30">
+              <span class="slider-val" id="routeHeadwayVal">30s</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Bus Capacity:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="routeCapSlider" min="20" max="80" step="5" value="40">
+              <span class="slider-val" id="routeCapVal">40</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: LIVE ANALYTICS & CHARTS -->
+      <div class="sidebar-panel" id="tab-analytics">
+        <div class="card">
+          <div class="card-title">Throughput & Average Speed</div>
+          <div class="chart-box">
+            <span class="chart-label">Trips/min (Green) & Speed km/h (Blue)</span>
+            <canvas id="chartThroughput"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Queues & Delay</div>
+          <div class="chart-box">
+            <span class="chart-label">Queued Vehicles (Amber) & Delay s (Red)</span>
+            <canvas id="chartDelays"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Transit Ridership & Mode Share</div>
+          <div class="chart-box">
+            <span class="chart-label">Transit % (Purple) & Car % (Cyan)</span>
+            <canvas id="chartModeShare"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Network Summary Statistics</div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-box-label">Total Distance</div>
+              <div class="stat-box-value" id="statTotalKm">0 km</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Emissions Proxy</div>
+              <div class="stat-box-value" id="statEmissions">0 kg CO₂</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Failed / Diverted</div>
+              <div class="stat-box-value danger" id="statFailedTrips">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Transit Mode Share</div>
+              <div class="stat-box-value good" id="statTransitShare">0%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: DEMAND & SIMULATION SETTINGS -->
+      <div class="sidebar-panel" id="tab-settings">
+        <div class="card">
+          <div class="card-title">Demand & Rush Hour Model</div>
+          <div class="setting-row">
+            <span class="setting-label">Demand Multiplier:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="demandScaleSlider" min="0.2" max="3.0" step="0.1" value="1.0">
+              <span class="slider-val" id="demandScaleVal">1.0x</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Time of Day Speed:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="timeSpeedSlider" min="0" max="60" step="5" value="15">
+              <span class="slider-val" id="timeSpeedVal">15s/m</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <button id="btnSetMorningRush" style="flex:1; font-size:10px;">🌅 Morning Rush</button>
+            <button id="btnSetMidday" style="flex:1; font-size:10px;">☀️ Midday</button>
+            <button id="btnSetEveningRush" style="flex:1; font-size:10px;">🌆 Evening Rush</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Driver Physics & Behavior (IDM)</div>
+          <div class="setting-row">
+            <span class="setting-label">Headway / Aggression:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="headwaySlider" min="0.6" max="2.4" step="0.1" value="1.2">
+              <span class="slider-val" id="headwayVal">1.2s</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Rerouting Sensitivity:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="rerouteSlider" min="0.1" max="2.0" step="0.1" value="1.0">
+              <span class="slider-val" id="rerouteVal">1.0x</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Lane Change Politeness:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="politenessSlider" min="0.0" max="1.0" step="0.1" value="0.5">
+              <span class="slider-val" id="politenessVal">0.5</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Random Incidents Rate:</span>
+            <div class="slider-wrapper">
+              <input type="range" id="incidentRateSlider" min="0" max="5" step="1" value="0">
+              <span class="slider-val" id="incidentRateVal">Off</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Simulator Maintenance</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button id="btnClearTraffic" style="font-size:11px;">🧹 Clear All Vehicles</button>
+            <button id="btnResetCity" class="btn-danger" style="font-size:11px;">🗑️ Clear Entire City Network</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: SAVE, EXPORT & PRESETS -->
+      <div class="sidebar-panel" id="tab-io">
+        <div class="card">
+          <div class="card-title">City File Storage (JSON)</div>
+          <div style="display:flex; gap:6px;">
+            <button id="btnSaveJson" class="btn-success" style="flex:1;">💾 Save File</button>
+            <button id="btnLoadJsonTrigger" style="flex:1;">📂 Load File</button>
+            <input type="file" id="jsonFileInput" accept=".json" style="display:none;">
+          </div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <button id="btnSaveLocal" style="flex:1; font-size:11px;">💾 Browser Save</button>
+            <button id="btnLoadLocal" style="flex:1; font-size:11px;">📂 Browser Load</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Data & Image Export</div>
+          <div style="display:flex; gap:6px;">
+            <button id="btnExportCsv" style="flex:1;">📊 Export CSV</button>
+            <button id="btnExportPng" style="flex:1;">📷 Export PNG</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Deterministic Replay Seed</div>
+          <div class="setting-row">
+            <span class="setting-label">Seed:</span>
+            <input type="number" id="simSeedInput" value="12345" style="width:90px; padding:4px; font-family:var(--font-mono); background:rgba(0,0,0,0.4); border:1px solid var(--border-color); color:white; border-radius:4px;">
+            <button id="btnApplySeed" style="font-size:11px;">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="toast">Notification message</div>
+
+  <div class="modal-overlay" id="scenarioModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>Curated Scenarios & Benchmarks</span>
+        <button id="btnCloseScenarioModal" style="border:none; background:none; font-size:14px; cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12px; color:var(--text-muted);">
+          Select a pre-built city scenario to benchmark traffic flow, transit networks, signal timing, and bottlenecks.
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" id="scenarioListContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="helpModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>MetroFlow Simulator Guide & Shortcuts</span>
+        <button id="btnCloseHelpModal" style="border:none; background:none; font-size:14px; cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <h4 style="color:var(--accent-blue); margin-bottom:4px;">Keyboard Shortcuts</h4>
+          <div class="shortcut-list">
+            <div class="shortcut-item"><span class="kbd">Space</span> <span>Pause / Resume</span></div>
+            <div class="shortcut-item"><span class="kbd">S</span> <span>Single Step</span></div>
+            <div class="shortcut-item"><span class="kbd">V</span> <span>Select / Inspect</span></div>
+            <div class="shortcut-item"><span class="kbd">R</span> <span>Road Builder</span></div>
+            <div class="shortcut-item"><span class="kbd">J</span> <span>Signal / Junction Tool</span></div>
+            <div class="shortcut-item"><span class="kbd">B</span> <span>Bus Stop Tool</span></div>
+            <div class="shortcut-item"><span class="kbd">T</span> <span>Transit Line Builder</span></div>
+            <div class="shortcut-item"><span class="kbd">Z</span> <span>Zone Land Use</span></div>
+            <div class="shortcut-item"><span class="kbd">X</span> <span>Road Block / Incident</span></div>
+            <div class="shortcut-item"><span class="kbd">D</span> <span>Demolish</span></div>
+            <div class="shortcut-item"><span class="kbd">Ctrl+Z</span> <span>Undo</span></div>
+            <div class="shortcut-item"><span class="kbd">Ctrl+Y</span> <span>Redo</span></div>
+          </div>
+        </div>
+
+        <div>
+          <h4 style="color:var(--accent-blue); margin-bottom:4px;">Controls & Navigation</h4>
+          <ul style="padding-left:18px; display:flex; flex-direction:column; gap:4px;">
+            <li><strong>Pan Map:</strong> Click and drag in Select mode, or Right-Click / Middle-Click drag in any tool. Touch drag on mobile.</li>
+            <li><strong>Zoom:</strong> Mouse wheel, pinch gesture, or bottom bar +/- buttons.</li>
+            <li><strong>Continuous Road Drawing:</strong> Click start point, move mouse to preview, click to place. Automatically snaps to nearby nodes and splits intersecting roads cleanly. Hold <span class="kbd">Shift</span> for 45°/90° alignment.</li>
+            <li><strong>Create Transit Route:</strong> Select Transit Route Tool, click bus stops in desired sequence to form a line. MetroFlow computes paths and dispatches scheduled buses!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="compareModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>⚖️ Multimodal Comparison: Car-Only vs Transit</span>
+        <button id="btnCloseCompareModal" style="border:none; background:none; font-size:14px; cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>Test the macro-economic and congestion effect of public transit. By toggling transit on or off, you can compare network delay, travel times, emissions, and gridlock.</p>
+        <div class="compare-split">
+          <div class="compare-box">
+            <h4 style="color:var(--accent-amber); font-size:13px; margin-bottom:6px;">Without Transit (100% Cars)</h4>
+            <div style="font-size:11px; display:flex; flex-direction:column; gap:4px;">
+              <div>• All commuters drive private vehicles</div>
+              <div>• Road bottlenecks saturate rapidly</div>
+              <div>• Higher queue buildup and carbon emissions</div>
+            </div>
+            <button id="btnRunCarOnlyTest" class="btn-danger" style="margin-top:10px; width:100%;">Run Car-Only Test</button>
+          </div>
+          <div class="compare-box">
+            <h4 style="color:var(--accent-green); font-size:13px; margin-bottom:6px;">With High-Capacity Transit</h4>
+            <div style="font-size:11px; display:flex; flex-direction:column; gap:4px;">
+              <div>• Buses carry up to 40-80 commuters each</div>
+              <div>• Road corridors stay free-flowing</div>
+              <div>• Reduced overall network travel time</div>
+            </div>
+            <button id="btnRestoreTransitTest" class="btn-success" style="margin-top:10px; width:100%;">Enable Full Transit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * METROFLOW - City Traffic and Public Transit Simulator
+ * Complete Self-Contained Microscopic Traffic & Transit Engine
+ */
+(function() {
+  'use strict';
+
+  // 1. SEEDED PSEUDO-RANDOM NUMBER GENERATOR
+  class SeededRNG {
+    constructor(seed = 12345) {
+      this.initialSeed = seed;
+      this.s = seed >>> 0;
+    }
+    setSeed(seed) {
+      this.initialSeed = seed;
+      this.s = seed >>> 0;
+    }
+    next() {
+      let t = this.s += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    range(min, max) { return min + this.next() * (max - min); }
+    choice(arr) { return arr[Math.floor(this.next() * arr.length)]; }
+  }
+  const rng = new SeededRNG(12345);
+
+  // 2. PROCEDURAL WEB AUDIO ENGINE
+  class SoundEngine {
+    constructor() {
+      this.ctx = null;
+      this.enabled = false;
+      this.engineGain = null;
+    }
+    init() {
+      if (!this.ctx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          this.ctx = new AudioContext();
+          this.setupAmbientEngine();
+        }
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+    }
+    setupAmbientEngine() {
+      if (!this.ctx) return;
+      try {
+        const osc = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(45, this.ctx.currentTime);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(140, this.ctx.currentTime);
+
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+
+        this.engineGain = gain;
+      } catch (e) {}
+    }
+    toggle() {
+      this.init();
+      this.enabled = !this.enabled;
+      if (this.engineGain && this.ctx) {
+        this.engineGain.gain.setTargetAtTime(this.enabled ? 0.015 : 0, this.ctx.currentTime, 0.2);
+      }
+      return this.enabled;
+    }
+    playClick() {
+      if (!this.enabled || !this.ctx) return;
+      try {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.04);
+        gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.04);
+      } catch (e) {}
+    }
+    playBuild() {
+      if (!this.enabled || !this.ctx) return;
+      try {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(350, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(700, this.ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.08);
+      } catch (e) {}
+    }
+    playDemolish() {
+      if (!this.enabled || !this.ctx) return;
+      try {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.12);
+      } catch (e) {}
+    }
+    playSignalTick() {
+      if (!this.enabled || !this.ctx) return;
+      try {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+        gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.03);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.03);
+      } catch (e) {}
+    }
+    playBusChime() {
+      if (!this.enabled || !this.ctx) return;
+      try {
+        const now = this.ctx.currentTime;
+        [523.25, 659.25].forEach((freq, i) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + i * 0.09);
+          gain.gain.setValueAtTime(0.05, now + i * 0.09);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.15);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + i * 0.09);
+          osc.stop(now + i * 0.09 + 0.15);
+        });
+      } catch (e) {}
+    }
+    playHorn() {
+      if (!this.enabled || !this.ctx) return;
+      try {
+        const now = this.ctx.currentTime;
+        [440, 554.37].forEach(freq => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.04, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        });
+      } catch (e) {}
+    }
+  }
+  const sounds = new SoundEngine();
+
+  // 3. GEOMETRY & MATH HELPERS
+  const MathUtils = {
+    dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); },
+    distSq(x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1; return dx*dx + dy*dy; },
+    angle(x1, y1, x2, y2) { return Math.atan2(y2 - y1, x2 - x1); },
+    clamp(val, min, max) { return Math.max(min, Math.min(max, val)); },
+    lerp(a, b, t) { return a + (b - a) * t; },
+    distToSegment(px, py, x1, y1, x2, y2) {
+      const l2 = MathUtils.distSq(x1, y1, x2, y2);
+      if (l2 === 0) return { dist: MathUtils.dist(px, py, x1, y1), t: 0, x: x1, y: y1 };
+      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+      t = MathUtils.clamp(t, 0, 1);
+      const projX = x1 + t * (x2 - x1);
+      const projY = y1 + t * (y2 - y1);
+      return { dist: MathUtils.dist(px, py, projX, projY), t, x: projX, y: projY };
+    }
+  };
+
+  // 4. NETWORK MODEL: NODES, EDGES, LANES & TRANSIT
+  const LANE_WIDTH = 13;
+  const STOP_LINE_MARGIN = 20;
+
+  class Node {
+    constructor(id, x, y, type = 'traffic_signal') {
+      this.id = id;
+      this.x = x;
+      this.y = y;
+      this.type = type;
+      this.incomingEdges = [];
+      this.outgoingEdges = [];
+      this.signal = {
+        mode: 'fixed',
+        currentPhaseIdx: 0,
+        timer: 0,
+        offset: 0,
+        phases: [
+          { name: 'Phase 1 (N-S)', greenDuration: 18, yellowDuration: 3, allRedDuration: 1, allowedEdgeIds: [] },
+          { name: 'Phase 2 (E-W)', greenDuration: 18, yellowDuration: 3, allRedDuration: 1, allowedEdgeIds: [] }
+        ]
+      };
+    }
+  }
+
+  class Edge {
+    constructor(id, fromNodeId, toNodeId, lanes = 2, speedLimit = 60, oneWay = false) {
+      this.id = id;
+      this.fromNodeId = fromNodeId;
+      this.toNodeId = toNodeId;
+      this.lanes = lanes;
+      this.speedLimit = speedLimit;
+      this.oneWay = oneWay;
+      this.pairedEdgeId = null;
+      this.status = 'normal';
+      this.incidents = [];
+      this.length = 0;
+      this.angle = 0;
+      this.dx = 0;
+      this.dy = 0;
+      this.stops = [];
+    }
+    updateGeometry(nodes) {
+      const f = nodes.get(this.fromNodeId);
+      const t = nodes.get(this.toNodeId);
+      if (!f || !t) return;
+      this.length = MathUtils.dist(f.x, f.y, t.x, t.y);
+      this.angle = MathUtils.angle(f.x, f.y, t.x, t.y);
+      this.dx = Math.cos(this.angle);
+      this.dy = Math.sin(this.angle);
+    }
+  }
+
+  class TransitStop {
+    constructor(id, edgeId, sFraction = 0.5, name = 'Transit Stop') {
+      this.id = id;
+      this.edgeId = edgeId;
+      this.sFraction = MathUtils.clamp(sFraction, 0.1, 0.9);
+      this.name = name;
+      this.waitingPassengers = [];
+      this.totalBoardings = 0;
+    }
+  }
+
+  class TransitRoute {
+    constructor(id, name, color, stopIds = [], headway = 30, capacity = 40) {
+      this.id = id;
+      this.name = name;
+      this.color = color;
+      this.stopIds = stopIds;
+      this.edgePath = [];
+      this.headway = headway;
+      this.capacity = capacity;
+      this.spawnTimer = 0;
+      this.ridership = 0;
+    }
+  }
+
+  class Zone {
+    constructor(id, type, x, y, radius = 60, name = '') {
+      this.id = id;
+      this.type = type;
+      this.x = x;
+      this.y = y;
+      this.radius = radius;
+      this.name = name || `${type} Zone ${id}`;
+    }
+  }
+
+  // 5. VEHICLES & INTELLIGENT DRIVER MODEL (IDM)
+  class Vehicle {
+    constructor(id, type = 'car', route = [], color = '#38bdf8') {
+      this.id = id;
+      this.type = type;
+      this.route = route;
+      this.routeIdx = 0;
+      this.edgeId = route[0] || null;
+      this.lane = 0;
+      this.s = 0;
+      this.v = 0;
+      this.a = 0;
+      this.color = color;
+
+      if (type === 'truck') {
+        this.length = 28; this.width = 10;
+        this.v0_kmh = 50; this.T = 1.8; this.a_max = 24; this.b_comf = 25;
+      } else if (type === 'bus') {
+        this.length = 32; this.width = 10;
+        this.v0_kmh = 50; this.T = 1.6; this.a_max = 26; this.b_comf = 28;
+      } else if (type === 'emergency') {
+        this.length = 18; this.width = 8;
+        this.v0_kmh = 95; this.T = 0.8; this.a_max = 50; this.b_comf = 45;
+      } else {
+        this.length = 16; this.width = 8;
+        this.v0_kmh = rng.range(55, 75); this.T = 1.2; this.a_max = 38; this.b_comf = 35;
+      }
+
+      this.s0 = 7;
+      this.state = 'cruising';
+      this.turnSignal = 0;
+      this.startTime = 0;
+      this.waitTime = 0;
+      this.distanceTraveled = 0;
+      this.originNodeId = null;
+      this.destNodeId = null;
+
+      this.transitRouteId = null;
+      this.passengers = [];
+      this.dwellTimer = 0;
+      this.lastServedStopId = null;
+      this.stuckTimer = 0;
+    }
+
+    getDesiredSpeed(speedLimitKmh) {
+      const limit = Math.min(this.v0_kmh, speedLimitKmh);
+      return (limit * 1000) / 3600 * 3.0;
+    }
+  }
+
+  // 6. MAIN SIMULATOR ENGINE
+  class TrafficSimulator {
+    constructor() {
+      this.nodes = new Map();
+      this.edges = new Map();
+      this.transitStops = new Map();
+      this.transitRoutes = new Map();
+      this.zones = new Map();
+      this.vehicles = [];
+
+      this.nextId = 100;
+      this.paused = false;
+      this.simSpeed = 1;
+      this.simTime = 7.5 * 3600;
+      this.timeSpeed = 15;
+
+      this.demandScale = 1.0;
+      this.headwayScale = 1.2;
+      this.rerouteSensitivity = 1.0;
+      this.politeness = 0.5;
+      this.incidentRate = 0;
+      this.weather = 'clear';
+
+      this.completedTrips = 0;
+      this.failedTrips = 0;
+      this.totalTravelTime = 0;
+      this.totalTravelDist = 0;
+      this.transitRidership = 0;
+      this.carTripsCount = 0;
+      this.transitTripsCount = 0;
+
+      this.history = {
+        throughput: [0],
+        avgSpeed: [35],
+        queueLength: [0],
+        delay: [0],
+        transitShare: [0],
+        timestamps: [this.simTime]
+      };
+
+      this.undoStack = [];
+      this.redoStack = [];
+
+      this.selectedEntity = null;
+      this.followedVehicleId = null;
+      this.spatialEdgeVehicles = new Map();
+    }
+
+    pushUndoState() {
+      const state = this.serializeState();
+      this.undoStack.push(state);
+      if (this.undoStack.length > 30) this.undoStack.shift();
+      this.redoStack = [];
+    }
+
+    undo() {
+      if (this.undoStack.length === 0) return;
+      const current = this.serializeState();
+      this.redoStack.push(current);
+      const prev = this.undoStack.pop();
+      this.loadState(prev, true);
+    }
+
+    redo() {
+      if (this.redoStack.length === 0) return;
+      const current = this.serializeState();
+      this.undoStack.push(current);
+      const next = this.redoStack.pop();
+      this.loadState(next, true);
+    }
+
+    addNode(x, y, type = 'traffic_signal') {
+      const id = ++this.nextId;
+      const node = new Node(id, x, y, type);
+      this.nodes.set(id, node);
+      return node;
+    }
+
+    addEdge(fromId, toId, lanes = 2, speedLimit = 60, oneWay = false) {
+      if (fromId === toId) return null;
+      for (const edge of this.edges.values()) {
+        if (edge.fromNodeId === fromId && edge.toNodeId === toId) return edge;
+      }
+      const id = ++this.nextId;
+      const edge = new Edge(id, fromId, toId, lanes, speedLimit, oneWay);
+      edge.updateGeometry(this.nodes);
+      this.edges.set(id, edge);
+
+      const fromNode = this.nodes.get(fromId);
+      const toNode = this.nodes.get(toId);
+      if (fromNode) fromNode.outgoingEdges.push(id);
+      if (toNode) toNode.incomingEdges.push(id);
+
+      this.updateNodeSignalPhases(toNode);
+      return edge;
+    }
+
+    addTwoWayRoad(nodeAId, nodeBId, lanesPerDir = 2, speedLimit = 60) {
+      const edge1 = this.addEdge(nodeAId, nodeBId, lanesPerDir, speedLimit, false);
+      const edge2 = this.addEdge(nodeBId, nodeAId, lanesPerDir, speedLimit, false);
+      if (edge1 && edge2) {
+        edge1.pairedEdgeId = edge2.id;
+        edge2.pairedEdgeId = edge1.id;
+      }
+      return { forward: edge1, backward: edge2 };
+    }
+
+    deleteNode(nodeId) {
+      const node = this.nodes.get(nodeId);
+      if (!node) return;
+      const edgesToDelete = [...node.incomingEdges, ...node.outgoingEdges];
+      edgesToDelete.forEach(edgeId => this.deleteEdge(edgeId));
+      this.nodes.delete(nodeId);
+    }
+
+    deleteEdge(edgeId) {
+      const edge = this.edges.get(edgeId);
+      if (!edge) return;
+      const f = this.nodes.get(edge.fromNodeId);
+      if (f) f.outgoingEdges = f.outgoingEdges.filter(id => id !== edgeId);
+      const t = this.nodes.get(edge.toNodeId);
+      if (t) {
+        t.incomingEdges = t.incomingEdges.filter(id => id !== edgeId);
+        this.updateNodeSignalPhases(t);
+      }
+      for (const stop of [...this.transitStops.values()]) {
+        if (stop.edgeId === edgeId) {
+          this.transitStops.delete(stop.id);
+        }
+      }
+      if (edge.pairedEdgeId) {
+        const paired = this.edges.get(edge.pairedEdgeId);
+        if (paired) paired.pairedEdgeId = null;
+      }
+      this.edges.delete(edgeId);
+
+      this.vehicles.forEach(veh => {
+        if (veh.edgeId === edgeId || veh.route.includes(edgeId)) {
+          this.handleVehicleRerouteOrDespawn(veh);
+        }
+      });
+    }
+
+    updateNodeSignalPhases(node) {
+      if (!node || node.incomingEdges.length === 0) return;
+      const angles = node.incomingEdges.map(edgeId => {
+        const edge = this.edges.get(edgeId);
+        return { edgeId, angle: edge ? edge.angle : 0 };
+      });
+
+      const nsEdges = [];
+      const ewEdges = [];
+      angles.forEach(item => {
+        const deg = Math.abs((item.angle * 180 / Math.PI) % 180);
+        if (deg >= 45 && deg <= 135) {
+          nsEdges.push(item.edgeId);
+        } else {
+          ewEdges.push(item.edgeId);
+        }
+      });
+
+      node.signal.phases = [
+        { name: 'Phase 1 (N-S)', greenDuration: 18, yellowDuration: 3, allRedDuration: 1, allowedEdgeIds: nsEdges.length ? nsEdges : [node.incomingEdges[0]] },
+        { name: 'Phase 2 (E-W)', greenDuration: 18, yellowDuration: 3, allRedDuration: 1, allowedEdgeIds: ewEdges.length ? ewEdges : (node.incomingEdges.length > 1 ? [node.incomingEdges[1]] : [node.incomingEdges[0]]) }
+      ];
+      node.signal.currentPhaseIdx = 0;
+      node.signal.timer = 0;
+    }
+
+    findRoute(startNodeId, endNodeId, isTransit = false) {
+      if (startNodeId === endNodeId) return [];
+      const startNode = this.nodes.get(startNodeId);
+      const endNode = this.nodes.get(endNodeId);
+      if (!startNode || !endNode) return [];
+
+      const openSet = new Set([startNodeId]);
+      const cameFrom = new Map();
+      const gScore = new Map();
+      const fScore = new Map();
+
+      for (const id of this.nodes.keys()) {
+        gScore.set(id, Infinity);
+        fScore.set(id, Infinity);
+      }
+      gScore.set(startNodeId, 0);
+      fScore.set(startNodeId, MathUtils.dist(startNode.x, startNode.y, endNode.x, endNode.y) / 20);
+
+      while (openSet.size > 0) {
+        let currentId = null;
+        let lowestF = Infinity;
+        for (const id of openSet) {
+          const f = fScore.get(id);
+          if (f < lowestF) {
+            lowestF = f;
+            currentId = id;
+          }
+        }
+
+        if (currentId === endNodeId) {
+          const path = [];
+          let curr = endNodeId;
+          while (cameFrom.has(curr)) {
+            const step = cameFrom.get(curr);
+            path.unshift(step.edgeId);
+            curr = step.prevNodeId;
+          }
+          return path;
+        }
+
+        openSet.delete(currentId);
+        const currNode = this.nodes.get(currentId);
+        if (!currNode) continue;
+
+        for (const edgeId of currNode.outgoingEdges) {
+          const edge = this.edges.get(edgeId);
+          if (!edge || edge.status === 'closed') continue;
+
+          const freeSpeed = (edge.speedLimit * 1000 / 3600) * 3;
+          let cost = edge.length / Math.max(5, freeSpeed);
+
+          if (edge.status === 'construction') cost *= 2.0;
+
+          const vehsOnEdge = this.spatialEdgeVehicles.get(edgeId) || [];
+          const density = vehsOnEdge.length / Math.max(1, (edge.length / 100) * edge.lanes);
+          cost += density * 4.0 * this.rerouteSensitivity;
+
+          const toNode = this.nodes.get(edge.toNodeId);
+          if (toNode && toNode.type === 'traffic_signal') cost += 4.0;
+          if (toNode && toNode.type === 'stop_sign') cost += 3.0;
+
+          const neighborId = edge.toNodeId;
+          const tentativeG = gScore.get(currentId) + cost;
+
+          if (tentativeG < gScore.get(neighborId)) {
+            cameFrom.set(neighborId, { prevNodeId: currentId, edgeId });
+            gScore.set(neighborId, tentativeG);
+            const neighborNode = this.nodes.get(neighborId);
+            const h = neighborNode ? MathUtils.dist(neighborNode.x, neighborNode.y, endNode.x, endNode.y) / 25 : 0;
+            fScore.set(neighborId, tentativeG + h);
+            openSet.add(neighborId);
+          }
+        }
+      }
+
+      return [];
+    }
+
+    handleVehicleRerouteOrDespawn(veh) {
+      if (!veh) return;
+      const currentEdge = this.edges.get(veh.edgeId);
+      if (!currentEdge || currentEdge.status === 'closed') {
+        veh.state = 'blocked';
+        veh.stuckTimer += 1.0;
+        if (veh.stuckTimer > 4.0) {
+          this.failedTrips++;
+          this.removeVehicle(veh);
+        }
+        return;
+      }
+
+      if (veh.destNodeId) {
+        const newRoute = this.findRoute(currentEdge.toNodeId, veh.destNodeId, veh.type === 'bus');
+        if (newRoute.length > 0) {
+          veh.route = [veh.edgeId, ...newRoute];
+          veh.routeIdx = 0;
+          veh.state = 'cruising';
+          veh.stuckTimer = 0;
+        } else {
+          veh.state = 'blocked';
+          veh.stuckTimer += 1.0;
+          if (veh.stuckTimer > 5.0) {
+            this.failedTrips++;
+            this.removeVehicle(veh);
+          }
+        }
+      }
+    }
+
+    removeVehicle(veh) {
+      const idx = this.vehicles.indexOf(veh);
+      if (idx !== -1) {
+        this.vehicles.splice(idx, 1);
+      }
+      if (this.followedVehicleId === veh.id) {
+        this.followedVehicleId = null;
+      }
+    }
+
+    spawnVehicle(type = 'car', originNodeId = null, destNodeId = null) {
+      const nodeIds = Array.from(this.nodes.keys());
+      if (nodeIds.length < 2) return null;
+
+      if (!originNodeId) originNodeId = rng.choice(nodeIds);
+      if (!destNodeId) {
+        do {
+          destNodeId = rng.choice(nodeIds);
+        } while (destNodeId === originNodeId && nodeIds.length > 1);
+      }
+
+      const route = this.findRoute(originNodeId, destNodeId, type === 'bus');
+      if (route.length === 0) return null;
+
+      const firstEdge = this.edges.get(route[0]);
+      if (!firstEdge || firstEdge.status === 'closed') return null;
+
+      const vehsOnFirstEdge = this.spatialEdgeVehicles.get(firstEdge.id) || [];
+      const hasTailQueue = vehsOnFirstEdge.some(v => v.s < 28 && v.lane === 0);
+      if (hasTailQueue) return null;
+
+      let color = '#38bdf8';
+      if (type === 'truck') color = '#fbbf24';
+      else if (type === 'bus') color = '#a855f7';
+      else if (type === 'emergency') color = '#ef4444';
+      else {
+        const carColors = ['#38bdf8', '#60a5fa', '#34d399', '#f472b6', '#cbd5e1', '#f87171', '#fb923c'];
+        color = rng.choice(carColors);
+      }
+
+      const veh = new Vehicle(++this.nextId, type, route, color);
+      veh.originNodeId = originNodeId;
+      veh.destNodeId = destNodeId;
+      veh.startTime = this.simTime;
+      veh.edgeId = route[0];
+      veh.lane = Math.floor(rng.next() * firstEdge.lanes);
+      veh.s = 0;
+      veh.v = (firstEdge.speedLimit * 1000 / 3600) * 1.5;
+
+      this.vehicles.push(veh);
+      return veh;
+    }
+
+    spawnTransitVehicle(route) {
+      if (!route || route.edgePath.length === 0) return null;
+      const firstEdgeId = route.edgePath[0];
+      const edge = this.edges.get(firstEdgeId);
+      if (!edge || edge.status === 'closed') return null;
+
+      const veh = new Vehicle(++this.nextId, 'bus', [...route.edgePath], route.color);
+      veh.transitRouteId = route.id;
+      veh.startTime = this.simTime;
+      veh.edgeId = firstEdgeId;
+      veh.lane = 0;
+      veh.s = 0;
+      veh.v = 25;
+      this.vehicles.push(veh);
+      return veh;
+    }
+
+    update(dt, force = false) {
+      if (this.paused && !force) return;
+
+      this.simTime += dt * this.timeSpeed;
+      if (this.simTime >= 24 * 3600) this.simTime -= 24 * 3600;
+
+      this.updateSignals(dt);
+
+      this.spatialEdgeVehicles.clear();
+      for (let i = 0; i < this.vehicles.length; i++) {
+        const v = this.vehicles[i];
+        if (!this.spatialEdgeVehicles.has(v.edgeId)) {
+          this.spatialEdgeVehicles.set(v.edgeId, []);
+        }
+        this.spatialEdgeVehicles.get(v.edgeId).push(v);
+      }
+      for (const vehList of this.spatialEdgeVehicles.values()) {
+        vehList.sort((a, b) => b.s - a.s);
+      }
+
+      this.updateTransit(dt);
+
+      const substeps = Math.max(1, Math.ceil(this.simSpeed));
+      const subDt = (dt * this.simSpeed) / substeps;
+      for (let step = 0; step < substeps; step++) {
+        this.updateVehiclePhysics(subDt);
+      }
+
+      this.generateTrips(dt);
+      this.recordAnalyticsHistory(dt);
+    }
+
+    updateSignals(dt) {
+      for (const node of this.nodes.values()) {
+        if (node.type !== 'traffic_signal') continue;
+        const sig = node.signal;
+        if (!sig.phases || sig.phases.length === 0) continue;
+
+        const currentPhase = sig.phases[sig.currentPhaseIdx];
+        const greenTime = currentPhase.greenDuration;
+        const yellowTime = currentPhase.yellowDuration || 3;
+        const allRedTime = currentPhase.allRedDuration || 1;
+        const totalPhaseTime = greenTime + yellowTime + allRedTime;
+
+        sig.timer += dt * this.simSpeed;
+
+        if (sig.mode === 'actuated' && sig.timer < greenTime) {
+          const activeEdges = currentPhase.allowedEdgeIds || [];
+          let queueCount = 0;
+          activeEdges.forEach(eid => {
+            const vehs = this.spatialEdgeVehicles.get(eid) || [];
+            queueCount += vehs.filter(v => v.v < 5).length;
+          });
+          if (queueCount === 0 && sig.timer > 8) {
+            sig.timer = greenTime;
+          }
+        }
+
+        if (sig.timer >= totalPhaseTime) {
+          sig.timer = 0;
+          sig.currentPhaseIdx = (sig.currentPhaseIdx + 1) % sig.phases.length;
+          sounds.playSignalTick();
+        }
+      }
+    }
+
+    getSignalStateForEdge(edgeId, nodeId) {
+      const node = this.nodes.get(nodeId);
+      if (!node) return 'green';
+      if (node.type === 'stop_sign') return 'stop_sign';
+      if (node.type === 'roundabout') return 'yield';
+      if (node.type === 'yield') return 'yield';
+      if (node.type !== 'traffic_signal') return 'green';
+
+      const sig = node.signal;
+      if (!sig.phases || sig.phases.length === 0) return 'green';
+
+      const currentPhase = sig.phases[sig.currentPhaseIdx];
+      const isAllowed = (currentPhase.allowedEdgeIds && currentPhase.allowedEdgeIds.includes(edgeId));
+
+      if (isAllowed) {
+        if (sig.timer < currentPhase.greenDuration) return 'green';
+        if (sig.timer < currentPhase.greenDuration + (currentPhase.yellowDuration || 3)) return 'yellow';
+        return 'red';
+      }
+      return 'red';
+    }
+
+    updateVehiclePhysics(dt) {
+      for (let i = this.vehicles.length - 1; i >= 0; i--) {
+        const veh = this.vehicles[i];
+        const edge = this.edges.get(veh.edgeId);
+        if (!edge) {
+          this.removeVehicle(veh);
+          continue;
+        }
+
+        if (veh.type === 'bus' && veh.state === 'dwelling') {
+          veh.dwellTimer -= dt;
+          veh.v = 0;
+          veh.a = 0;
+          if (veh.dwellTimer <= 0) {
+            veh.state = 'cruising';
+            sounds.playBusChime();
+          }
+          continue;
+        }
+
+        let effectiveSpeedLimit = edge.speedLimit;
+        if (edge.status === 'construction') effectiveSpeedLimit *= 0.5;
+        if (this.weather === 'rain') effectiveSpeedLimit *= 0.85;
+        if (this.weather === 'snow') effectiveSpeedLimit *= 0.65;
+        const vDesired = veh.getDesiredSpeed(effectiveSpeedLimit);
+
+        const vehsOnEdge = this.spatialEdgeVehicles.get(edge.id) || [];
+        let leadVeh = null;
+        let sGap = Infinity;
+        let deltaV = 0;
+
+        for (let j = 0; j < vehsOnEdge.length; j++) {
+          const other = vehsOnEdge[j];
+          if (other.id !== veh.id && other.lane === veh.lane && other.s > veh.s) {
+            const gap = other.s - other.length - veh.s;
+            if (gap < sGap) {
+              sGap = gap;
+              leadVeh = other;
+              deltaV = veh.v - other.v;
+            }
+          }
+        }
+
+        const distToEndOfEdge = edge.length - veh.s;
+        const toNode = this.nodes.get(edge.toNodeId);
+        const signalColor = this.getSignalStateForEdge(edge.id, edge.toNodeId);
+
+        let virtualObstacleDist = Infinity;
+        let virtualObstacleSpeed = 0;
+
+        for (const inc of edge.incidents) {
+          if (inc.lane === veh.lane && inc.s > veh.s) {
+            const distToInc = inc.s - veh.s - 10;
+            if (distToInc < virtualObstacleDist) {
+              virtualObstacleDist = distToInc;
+              virtualObstacleSpeed = 0;
+            }
+          }
+        }
+
+        if (distToEndOfEdge < 140 && distToEndOfEdge > 0) {
+          if (signalColor === 'red') {
+            const distToStop = distToEndOfEdge - STOP_LINE_MARGIN;
+            if (distToStop > -5 && distToStop < virtualObstacleDist) {
+              virtualObstacleDist = Math.max(0.5, distToStop);
+              virtualObstacleSpeed = 0;
+            }
+          } else if (signalColor === 'yellow') {
+            const stoppingDist = (veh.v * veh.v) / (2 * veh.b_comf);
+            const distToStop = distToEndOfEdge - STOP_LINE_MARGIN;
+            if (distToStop > stoppingDist + 5 && distToStop < virtualObstacleDist) {
+              virtualObstacleDist = Math.max(0.5, distToStop);
+              virtualObstacleSpeed = 0;
+            }
+          } else if (signalColor === 'stop_sign' && distToEndOfEdge < 35) {
+            if (veh.v > 2) {
+              virtualObstacleDist = Math.max(0.5, distToEndOfEdge - STOP_LINE_MARGIN);
+              virtualObstacleSpeed = 0;
+            }
+          } else if (signalColor === 'yield' && distToEndOfEdge < 35) {
+            const hasConflict = this.checkYieldConflict(veh, toNode);
+            if (hasConflict) {
+              virtualObstacleDist = Math.max(0.5, distToEndOfEdge - STOP_LINE_MARGIN);
+              virtualObstacleSpeed = 0;
+            }
+          }
+        }
+
+        if (veh.type === 'bus' && veh.transitRouteId) {
+          const stopsOnEdge = edge.stops || [];
+          for (const stop of stopsOnEdge) {
+            const stopS = edge.length * stop.sFraction;
+            if (veh.s < stopS && (stopS - veh.s) < 80 && (stopS - veh.s) > 0 && veh.lastServedStopId !== stop.id) {
+              const alightingCount = veh.passengers.filter(p => p.destStopId === stop.id).length;
+              if (stop.waitingPassengers.length > 0 || alightingCount > 0) {
+                const distToStop = stopS - veh.s - 6;
+                if (distToStop < virtualObstacleDist) {
+                  virtualObstacleDist = Math.max(0.5, distToStop);
+                  virtualObstacleSpeed = 0;
+                  if (distToStop <= 12 && veh.v < 8) {
+                    this.boardBusPassengers(veh, stop);
+                    veh.lastServedStopId = stop.id;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        let effectiveGap = sGap;
+        let effectiveDeltaV = deltaV;
+        if (virtualObstacleDist < effectiveGap) {
+          effectiveGap = virtualObstacleDist;
+          effectiveDeltaV = veh.v - virtualObstacleSpeed;
+        }
+
+        const sStar = veh.s0 + (veh.v * veh.T * this.headwayScale) + (veh.v * effectiveDeltaV) / (2 * Math.sqrt(veh.a_max * veh.b_comf));
+        const freeTerm = 1 - Math.pow(veh.v / Math.max(1, vDesired), 4);
+        const intTerm = Math.pow(sStar / Math.max(0.2, effectiveGap), 2);
+        let accel = veh.a_max * (freeTerm - intTerm);
+
+        accel = MathUtils.clamp(accel, -veh.b_comf * 1.8, veh.a_max);
+        veh.a = accel;
+
+        veh.v = Math.max(0, veh.v + veh.a * dt);
+        const stepDist = veh.v * dt;
+        veh.s += stepDist;
+        veh.distanceTraveled += stepDist;
+
+        if (veh.v < 2.0) {
+          veh.waitTime += dt;
+          veh.state = 'queueing';
+        } else {
+          veh.state = 'cruising';
+        }
+
+        if (edge.lanes > 1) {
+          this.evaluateLaneChange(veh, edge, vehsOnEdge, dt);
+        }
+
+        if (veh.s >= edge.length) {
+          this.advanceVehicleToNextEdge(veh, edge, toNode);
+        }
+      }
+    }
+
+    checkYieldConflict(veh, node) {
+      if (!node) return false;
+      for (const edgeId of node.incomingEdges) {
+        if (edgeId === veh.edgeId) continue;
+        const vehs = this.spatialEdgeVehicles.get(edgeId) || [];
+        const oncoming = vehs.find(v => {
+          const ed = this.edges.get(v.edgeId);
+          return ed && (ed.length - v.s) < 30 && v.v > 5;
+        });
+        if (oncoming) return true;
+      }
+      return false;
+    }
+
+    evaluateLaneChange(veh, edge, vehsOnEdge, dt) {
+      const hasIncidentAhead = edge.incidents.some(inc => inc.lane === veh.lane && inc.s > veh.s && (inc.s - veh.s) < 80);
+
+      const possibleLanes = [];
+      if (veh.lane > 0) possibleLanes.push(veh.lane - 1);
+      if (veh.lane < edge.lanes - 1) possibleLanes.push(veh.lane + 1);
+
+      for (const targetLane of possibleLanes) {
+        let targetLead = null, targetFollow = null;
+        let leadGap = Infinity, followGap = Infinity;
+
+        for (const other of vehsOnEdge) {
+          if (other.lane === targetLane) {
+            if (other.s >= veh.s) {
+              const gap = other.s - other.length - veh.s;
+              if (gap < leadGap) { leadGap = gap; targetLead = other; }
+            } else {
+              const gap = veh.s - veh.length - other.s;
+              if (gap < followGap) { followGap = gap; targetFollow = other; }
+            }
+          }
+        }
+
+        const safeFollowGap = veh.s0 + 5;
+        if (followGap > safeFollowGap && leadGap > veh.s0 + 10) {
+          if (hasIncidentAhead || (leadGap > 40 && veh.v < edge.speedLimit * 0.7)) {
+            veh.lane = targetLane;
+            veh.turnSignal = (targetLane > veh.lane) ? 1 : -1;
+            setTimeout(() => { veh.turnSignal = 0; }, 600);
+            break;
+          }
+        }
+      }
+    }
+
+    advanceVehicleToNextEdge(veh, currentEdge, toNode) {
+      veh.routeIdx++;
+      if (veh.routeIdx >= veh.route.length) {
+        this.completedTrips++;
+        const travelDuration = this.simTime - veh.startTime;
+        this.totalTravelTime += travelDuration;
+        this.totalTravelDist += veh.distanceTraveled;
+        if (veh.type === 'bus') {
+          if (veh.transitRouteId) {
+            const tRoute = this.transitRoutes.get(veh.transitRouteId);
+            if (tRoute && tRoute.edgePath.length > 0) {
+              veh.route = [...tRoute.edgePath];
+              veh.routeIdx = 0;
+              veh.edgeId = veh.route[0];
+              veh.s = 0;
+              veh.lastServedStopId = null;
+              return;
+            }
+          }
+        } else {
+          this.carTripsCount++;
+        }
+        this.removeVehicle(veh);
+        return;
+      }
+
+      const nextEdgeId = veh.route[veh.routeIdx];
+      const nextEdge = this.edges.get(nextEdgeId);
+      if (!nextEdge || nextEdge.status === 'closed') {
+        this.handleVehicleRerouteOrDespawn(veh);
+        return;
+      }
+
+      veh.edgeId = nextEdgeId;
+      veh.s = 0;
+      veh.lane = Math.min(veh.lane, nextEdge.lanes - 1);
+    }
+
+    boardBusPassengers(bus, stop) {
+      bus.state = 'dwelling';
+      const alighting = bus.passengers.filter(p => p.destStopId === stop.id);
+      bus.passengers = bus.passengers.filter(p => p.destStopId !== stop.id);
+
+      const freeCap = 40 - bus.passengers.length;
+      const boarding = stop.waitingPassengers.splice(0, freeCap);
+      bus.passengers.push(...boarding);
+
+      stop.totalBoardings += boarding.length;
+      this.transitRidership += boarding.length;
+      this.transitTripsCount += alighting.length;
+
+      bus.dwellTimer = 2.0 + boarding.length * 0.4 + alighting.length * 0.3;
+    }
+
+    updateTransit(dt) {
+      for (const route of this.transitRoutes.values()) {
+        route.spawnTimer += dt * this.simSpeed;
+        if (route.spawnTimer >= route.headway) {
+          route.spawnTimer = 0;
+          this.spawnTransitVehicle(route);
+        }
+      }
+    }
+
+    getRushHourMultiplier() {
+      const hour = this.simTime / 3600;
+      if (hour >= 7.0 && hour <= 9.5) {
+        const t = (hour - 7.0) / 2.5;
+        return 1.0 + Math.sin(t * Math.PI) * 2.5;
+      }
+      if (hour >= 16.5 && hour <= 19.0) {
+        const t = (hour - 16.5) / 2.5;
+        return 1.0 + Math.sin(t * Math.PI) * 2.2;
+      }
+      if (hour >= 22.0 || hour <= 5.5) {
+        return 0.25;
+      }
+      return 0.85;
+    }
+
+    generateTrips(dt) {
+      if (this.nodes.size < 2) return;
+      const mult = this.getRushHourMultiplier() * this.demandScale;
+      const tripsToSpawnProb = 1.5 * mult * dt * this.simSpeed;
+      if (rng.next() < tripsToSpawnProb) {
+        let originNodeId = null, destNodeId = null;
+        const hour = this.simTime / 3600;
+
+        const resZones = Array.from(this.zones.values()).filter(z => z.type === 'R');
+        const comZones = Array.from(this.zones.values()).filter(z => z.type === 'C' || z.type === 'I' || z.type === 'S');
+
+        if (resZones.length > 0 && comZones.length > 0) {
+          if (hour >= 6.5 && hour <= 11.0) {
+            const oz = rng.choice(resZones);
+            const dz = rng.choice(comZones);
+            originNodeId = this.findNearestNode(oz.x, oz.y);
+            destNodeId = this.findNearestNode(dz.x, dz.y);
+          } else if (hour >= 16.0 && hour <= 20.0) {
+            const oz = rng.choice(comZones);
+            const dz = rng.choice(resZones);
+            originNodeId = this.findNearestNode(oz.x, oz.y);
+            destNodeId = this.findNearestNode(dz.x, dz.y);
+          }
+        }
+
+        const hasTransit = this.transitRoutes.size > 0;
+        let chosenMode = 'car';
+        if (hasTransit && rng.next() < 0.38) {
+          chosenMode = 'transit';
+        }
+
+        if (chosenMode === 'transit' && this.transitStops.size > 0) {
+          const stops = Array.from(this.transitStops.values());
+          const stop = rng.choice(stops);
+          const destStop = rng.choice(stops);
+          if (stop && destStop && stop.id !== destStop.id && stop.waitingPassengers.length < 25) {
+            stop.waitingPassengers.push({
+              id: ++this.nextId,
+              destStopId: destStop.id,
+              waitStartTime: this.simTime
+            });
+          }
+        } else {
+          const type = (rng.next() < 0.12) ? 'truck' : 'car';
+          this.spawnVehicle(type, originNodeId, destNodeId);
+        }
+      }
+    }
+
+    findNearestNode(x, y, maxDist = 400) {
+      let nearest = null;
+      let minDist = maxDist;
+      for (const node of this.nodes.values()) {
+        const d = MathUtils.dist(x, y, node.x, node.y);
+        if (d < minDist) {
+          minDist = d;
+          nearest = node.id;
+        }
+      }
+      return nearest;
+    }
+
+    recordAnalyticsHistory(dt) {
+      if (!this.lastHistoryTime) this.lastHistoryTime = 0;
+      this.lastHistoryTime += dt * this.simSpeed;
+
+      if (this.lastHistoryTime >= 1.0) {
+        this.lastHistoryTime = 0;
+
+        const activeCount = this.vehicles.length;
+        const queuedCount = this.vehicles.filter(v => v.v < 2.0).length;
+        const avgSpeed = activeCount > 0 ? (this.vehicles.reduce((sum, v) => sum + v.v, 0) / activeCount) * 1.2 : 0;
+        const totalTrips = Math.max(1, this.carTripsCount + this.transitTripsCount);
+        const transitShare = (this.transitTripsCount / totalTrips) * 100;
+
+        this.history.throughput.push(this.completedTrips);
+        this.history.avgSpeed.push(avgSpeed);
+        this.history.queueLength.push(queuedCount);
+        this.history.delay.push(queuedCount * 1.5);
+        this.history.transitShare.push(transitShare);
+        this.history.timestamps.push(this.simTime);
+
+        const MAX_HIST = 100;
+        if (this.history.throughput.length > MAX_HIST) {
+          this.history.throughput.shift();
+          this.history.avgSpeed.shift();
+          this.history.queueLength.shift();
+          this.history.delay.shift();
+          this.history.transitShare.shift();
+          this.history.timestamps.shift();
+        }
+      }
+    }
+
+    serializeState() {
+      return JSON.stringify({
+        version: '1.0',
+        nextId: this.nextId,
+        simTime: this.simTime,
+        demandScale: this.demandScale,
+        headwayScale: this.headwayScale,
+        nodes: Array.from(this.nodes.values()).map(n => ({
+          id: n.id, x: n.x, y: n.y, type: n.type, signal: n.signal
+        })),
+        edges: Array.from(this.edges.values()).map(e => ({
+          id: e.id, fromNodeId: e.fromNodeId, toNodeId: e.toNodeId,
+          lanes: e.lanes, speedLimit: e.speedLimit, oneWay: e.oneWay,
+          pairedEdgeId: e.pairedEdgeId, status: e.status
+        })),
+        transitStops: Array.from(this.transitStops.values()).map(s => ({
+          id: s.id, edgeId: s.edgeId, sFraction: s.sFraction, name: s.name
+        })),
+        transitRoutes: Array.from(this.transitRoutes.values()).map(r => ({
+          id: r.id, name: r.name, color: r.color, stopIds: r.stopIds,
+          edgePath: r.edgePath, headway: r.headway, capacity: r.capacity
+        })),
+        zones: Array.from(this.zones.values()).map(z => ({
+          id: z.id, type: z.type, x: z.x, y: z.y, radius: z.radius, name: z.name
+        }))
+      });
+    }
+
+    loadState(jsonStr, isUndo = false) {
+      try {
+        const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+        if (!data.nodes || !data.edges) throw new Error('Invalid city schema');
+
+        if (!isUndo) this.pushUndoState();
+
+        this.nodes.clear();
+        this.edges.clear();
+        this.transitStops.clear();
+        this.transitRoutes.clear();
+        this.zones.clear();
+        this.vehicles = [];
+
+        this.nextId = data.nextId || 100;
+        this.simTime = data.simTime || 7.5 * 3600;
+        this.demandScale = data.demandScale || 1.0;
+        this.headwayScale = data.headwayScale || 1.2;
+
+        data.nodes.forEach(nd => {
+          const n = new Node(nd.id, nd.x, nd.y, nd.type);
+          if (nd.signal) n.signal = nd.signal;
+          this.nodes.set(n.id, n);
+        });
+
+        data.edges.forEach(ed => {
+          const e = new Edge(ed.id, ed.fromNodeId, ed.toNodeId, ed.lanes, ed.speedLimit, ed.oneWay);
+          e.pairedEdgeId = ed.pairedEdgeId;
+          e.status = ed.status || 'normal';
+          e.updateGeometry(this.nodes);
+          this.edges.set(e.id, e);
+
+          const f = this.nodes.get(e.fromNodeId);
+          const t = this.nodes.get(e.toNodeId);
+          if (f) f.outgoingEdges.push(e.id);
+          if (t) t.incomingEdges.push(e.id);
+        });
+
+        if (data.transitStops) {
+          data.transitStops.forEach(st => {
+            const s = new TransitStop(st.id, st.edgeId, st.sFraction, st.name);
+            this.transitStops.set(s.id, s);
+            const edge = this.edges.get(st.edgeId);
+            if (edge) edge.stops.push(s);
+          });
+        }
+
+        if (data.transitRoutes) {
+          data.transitRoutes.forEach(rt => {
+            const r = new TransitRoute(rt.id, rt.name, rt.color, rt.stopIds, rt.headway, rt.capacity);
+            r.edgePath = rt.edgePath || [];
+            this.transitRoutes.set(r.id, r);
+          });
+        }
+
+        if (data.zones) {
+          data.zones.forEach(zn => {
+            const z = new Zone(zn.id, zn.type, zn.x, zn.y, zn.radius, zn.name);
+            this.zones.set(z.id, z);
+          });
+        }
+
+        return true;
+      } catch (e) {
+        console.error('Failed to load city:', e);
+        return false;
+      }
+    }
+  }
+
+  // 7. CANVAS RENDERER & VISUAL ENGINE
+  class Renderer {
+    constructor(canvas, sim) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.sim = sim;
+
+      this.camera = { x: 0, y: 0, zoom: 1.0 };
+      this.activeOverlay = 'none';
+
+      this.dpr = window.devicePixelRatio || 1;
+      this.resize();
+      window.addEventListener('resize', () => this.resize());
+    }
+
+    resize() {
+      this.dpr = window.devicePixelRatio || 1;
+      const rect = this.canvas.parentElement.getBoundingClientRect();
+      this.width = rect.width;
+      this.height = rect.height;
+      this.canvas.width = Math.floor(rect.width * this.dpr);
+      this.canvas.height = Math.floor(rect.height * this.dpr);
+    }
+
+    screenToWorld(sx, sy) {
+      return {
+        x: (sx - this.width / 2) / this.camera.zoom + this.camera.x,
+        y: (sy - this.height / 2) / this.camera.zoom + this.camera.y
+      };
+    }
+
+    worldToScreen(wx, wy) {
+      return {
+        x: (wx - this.camera.x) * this.camera.zoom + this.width / 2,
+        y: (wy - this.camera.y) * this.camera.zoom + this.height / 2
+      };
+    }
+
+    render(interactionState) {
+      const ctx = this.ctx;
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.scale(this.dpr, this.dpr);
+      ctx.translate(this.width / 2, this.height / 2);
+      ctx.scale(this.camera.zoom, this.camera.zoom);
+      ctx.translate(-this.camera.x, -this.camera.y);
+
+      this.drawTerrain(ctx);
+      this.drawZones(ctx);
+      this.drawRoads(ctx);
+      this.drawIntersections(ctx);
+      this.drawTransitStops(ctx);
+      this.drawVehicles(ctx);
+      this.drawActiveOverlay(ctx);
+      this.drawEditorPreviews(ctx, interactionState);
+      this.drawAtmosphere(ctx);
+
+      ctx.restore();
+    }
+
+    drawTerrain(ctx) {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(this.camera.x - this.width / this.camera.zoom, this.camera.y - this.height / this.camera.zoom, (this.width * 2) / this.camera.zoom, (this.height * 2) / this.camera.zoom);
+
+      const gridSize = 100;
+      const startX = Math.floor((this.camera.x - this.width / (2 * this.camera.zoom)) / gridSize) * gridSize;
+      const endX = this.camera.x + this.width / (2 * this.camera.zoom);
+      const startY = Math.floor((this.camera.y - this.height / (2 * this.camera.zoom)) / gridSize) * gridSize;
+      const endY = this.camera.y + this.height / (2 * this.camera.zoom);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = startX; x <= endX; x += gridSize) {
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+      }
+      for (let y = startY; y <= endY; y += gridSize) {
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+      }
+      ctx.stroke();
+    }
+
+    drawZones(ctx) {
+      for (const zone of this.sim.zones.values()) {
+        ctx.save();
+        let fillColor = 'rgba(59, 130, 246, 0.12)';
+        let strokeColor = 'rgba(59, 130, 246, 0.4)';
+        let icon = '🏠';
+
+        if (zone.type === 'C') {
+          fillColor = 'rgba(16, 185, 129, 0.12)';
+          strokeColor = 'rgba(16, 185, 129, 0.4)';
+          icon = '🏢';
+        } else if (zone.type === 'I') {
+          fillColor = 'rgba(245, 158, 11, 0.12)';
+          strokeColor = 'rgba(245, 158, 11, 0.4)';
+          icon = '🏭';
+        } else if (zone.type === 'E') {
+          fillColor = 'rgba(239, 68, 68, 0.15)';
+          strokeColor = 'rgba(239, 68, 68, 0.5)';
+          icon = '🏟️';
+        } else if (zone.type === 'S') {
+          fillColor = 'rgba(168, 85, 247, 0.12)';
+          strokeColor = 'rgba(168, 85, 247, 0.4)';
+          icon = '🎓';
+        }
+
+        ctx.fillStyle = fillColor;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+
+        ctx.beginPath();
+        ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = strokeColor;
+        ctx.fillText(`${icon} ${zone.name}`, zone.x, zone.y);
+
+        ctx.restore();
+      }
+    }
+
+    drawRoads(ctx) {
+      for (const edge of this.sim.edges.values()) {
+        const fromNode = this.sim.nodes.get(edge.fromNodeId);
+        const toNode = this.sim.nodes.get(edge.toNodeId);
+        if (!fromNode || !toNode) continue;
+
+        ctx.save();
+        const angle = edge.angle;
+        const roadWidth = edge.lanes * LANE_WIDTH;
+
+        const nx = -Math.sin(angle);
+        const ny = Math.cos(angle);
+
+        let lateralShift = 0;
+        if (edge.pairedEdgeId) {
+          lateralShift = roadWidth / 2;
+        }
+
+        const startX = fromNode.x + nx * lateralShift;
+        const startY = fromNode.y + ny * lateralShift;
+        const endX = toNode.x + nx * lateralShift;
+        const endY = toNode.y + ny * lateralShift;
+
+        ctx.strokeStyle = (edge.status === 'closed') ? '#3f1818' : (edge.status === 'construction' ? '#3b2d18' : '#1e293b');
+        ctx.lineWidth = roadWidth;
+        ctx.lineCap = 'butt';
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(startX + nx * (roadWidth / 2), startY + ny * (roadWidth / 2));
+        ctx.lineTo(endX + nx * (roadWidth / 2), endY + ny * (roadWidth / 2));
+        ctx.moveTo(startX - nx * (roadWidth / 2), startY - ny * (roadWidth / 2));
+        ctx.lineTo(endX - nx * (roadWidth / 2), endY - ny * (roadWidth / 2));
+        ctx.stroke();
+
+        if (edge.pairedEdgeId) {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(startX - nx * (roadWidth / 2), startY - ny * (roadWidth / 2));
+          ctx.lineTo(endX - nx * (roadWidth / 2), endY - ny * (roadWidth / 2));
+          ctx.stroke();
+        }
+
+        if (edge.lanes > 1) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([8, 8]);
+          for (let l = 1; l < edge.lanes; l++) {
+            const laneOffset = - (roadWidth / 2) + l * LANE_WIDTH;
+            ctx.beginPath();
+            ctx.moveTo(startX + nx * laneOffset, startY + ny * laneOffset);
+            ctx.lineTo(endX + nx * laneOffset, endY + ny * laneOffset);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
+
+        if (edge.length > 70) {
+          const midX = (startX + endX) / 2;
+          const midY = (startY + endY) / 2;
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(angle);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.beginPath();
+          ctx.moveTo(8, 0);
+          ctx.lineTo(-4, -4);
+          ctx.lineTo(-2, 0);
+          ctx.lineTo(-6, 0);
+          ctx.lineTo(-6, 0);
+          ctx.lineTo(-2, 0);
+          ctx.lineTo(-4, 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        if (edge.status === 'construction') {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 6]);
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    drawIntersections(ctx) {
+      for (const node of this.sim.nodes.values()) {
+        ctx.save();
+
+        if (node.type === 'roundabout') {
+          ctx.fillStyle = '#0f172a';
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, 22, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#10b981';
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, 14, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, 14, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (node.type === 'stop_sign') {
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 6px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('STOP', node.x, node.y);
+          }
+
+          if (node.type === 'traffic_signal') {
+            for (const edgeId of node.incomingEdges) {
+              const edge = this.sim.edges.get(edgeId);
+              if (!edge) continue;
+
+              const state = this.sim.getSignalStateForEdge(edgeId, node.id);
+              let lightColor = '#10b981';
+              if (state === 'yellow') lightColor = '#f59e0b';
+              else if (state === 'red') lightColor = '#ef4444';
+
+              const nx = -Math.sin(edge.angle);
+              const ny = Math.cos(edge.angle);
+              const lx = node.x - edge.dx * 18 + nx * 10;
+              const ly = node.y - edge.dy * 18 + ny * 10;
+
+              ctx.fillStyle = '#090d16';
+              ctx.fillRect(lx - 4, ly - 4, 8, 8);
+
+              ctx.fillStyle = lightColor;
+              ctx.shadowColor = lightColor;
+              ctx.shadowBlur = 6;
+              ctx.beginPath();
+              ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.shadowBlur = 0;
+            }
+          }
+        }
+
+        ctx.restore();
+      }
+    }
+
+    drawTransitStops(ctx) {
+      for (const stop of this.sim.transitStops.values()) {
+        const edge = this.sim.edges.get(stop.edgeId);
+        if (!edge) continue;
+        const fromNode = this.sim.nodes.get(edge.fromNodeId);
+        if (!fromNode) continue;
+
+        ctx.save();
+        const roadWidth = edge.lanes * LANE_WIDTH;
+        const nx = -Math.sin(edge.angle);
+        const ny = Math.cos(edge.angle);
+        const lateralShift = (edge.pairedEdgeId ? roadWidth / 2 : 0) + (roadWidth / 2) + 6;
+
+        const sx = fromNode.x + edge.dx * (edge.length * stop.sFraction) + nx * lateralShift;
+        const sy = fromNode.y + edge.dy * (edge.length * stop.sFraction) + ny * lateralShift;
+
+        ctx.fillStyle = '#3b82f6';
+        ctx.strokeStyle = '#93c5fd';
+        ctx.lineWidth = 1;
+        ctx.fillRect(sx - 5, sy - 5, 10, 10);
+        ctx.strokeRect(sx - 5, sy - 5, 10, 10);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🚏', sx, sy);
+
+        const paxCount = stop.waitingPassengers.length;
+        if (paxCount > 0) {
+          ctx.fillStyle = '#10b981';
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText(`+${paxCount}`, sx + 10, sy - 6);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    drawVehicles(ctx) {
+      const isNight = this.isNightTime();
+
+      for (let i = 0; i < this.sim.vehicles.length; i++) {
+        const veh = this.sim.vehicles[i];
+        const edge = this.sim.edges.get(veh.edgeId);
+        if (!edge) continue;
+        const fromNode = this.sim.nodes.get(edge.fromNodeId);
+        if (!fromNode) continue;
+
+        ctx.save();
+        const angle = edge.angle;
+        const roadWidth = edge.lanes * LANE_WIDTH;
+        const nx = -Math.sin(angle);
+        const ny = Math.cos(angle);
+
+        const lateralBase = edge.pairedEdgeId ? roadWidth / 2 : 0;
+        const laneOffset = (veh.lane + 0.5) * LANE_WIDTH - (roadWidth / 2);
+        const totalLateral = lateralBase + laneOffset;
+
+        const vx = fromNode.x + edge.dx * veh.s + nx * totalLateral;
+        const vy = fromNode.y + edge.dy * veh.s + ny * totalLateral;
+
+        ctx.translate(vx, vy);
+        ctx.rotate(angle);
+
+        if (isNight) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(255, 255, 210, 0.18)';
+          ctx.beginPath();
+          ctx.moveTo(veh.length / 2, -veh.width / 2);
+          ctx.lineTo(veh.length / 2 + 50, -veh.width * 1.5);
+          ctx.lineTo(veh.length / 2 + 50, veh.width * 1.5);
+          ctx.lineTo(veh.length / 2, veh.width / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        ctx.fillStyle = veh.color;
+        ctx.beginPath();
+        ctx.roundRect(-veh.length / 2, -veh.width / 2, veh.length, veh.width, 2.5);
+        ctx.fill();
+
+        ctx.fillStyle = '#0f172a';
+        if (veh.type === 'bus') {
+          ctx.fillRect(-veh.length / 2 + 4, -veh.width / 2 + 1, veh.length - 8, veh.width - 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '6px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('BUS', 0, 2);
+        } else if (veh.type === 'truck') {
+          ctx.fillRect(veh.length / 2 - 8, -veh.width / 2 + 1, 6, veh.width - 2);
+          ctx.strokeStyle = '#475569';
+          ctx.strokeRect(-veh.length / 2 + 2, -veh.width / 2 + 1, veh.length - 12, veh.width - 2);
+        } else {
+          ctx.fillRect(-veh.length / 2 + 3, -veh.width / 2 + 1.5, veh.length - 6, veh.width - 3);
+          ctx.fillStyle = veh.color;
+          ctx.fillRect(-veh.length / 2 + 5, -veh.width / 2 + 2, veh.length - 10, veh.width - 4);
+        }
+
+        if (veh.a < -2.0 || veh.v < 2.0) {
+          ctx.fillStyle = '#ef4444';
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 6;
+          ctx.fillRect(-veh.length / 2 - 1, -veh.width / 2 + 1, 2, 2.5);
+          ctx.fillRect(-veh.length / 2 - 1, veh.width / 2 - 3.5, 2, 2.5);
+          ctx.shadowBlur = 0;
+        }
+
+        if (veh.type === 'emergency') {
+          const flash = Math.floor(Date.now() / 150) % 2 === 0;
+          ctx.fillStyle = flash ? '#ef4444' : '#3b82f6';
+          ctx.shadowColor = ctx.fillStyle;
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'vehicle' && this.sim.selectedEntity.id === veh.id) {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, veh.length * 0.8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    drawActiveOverlay(ctx) {
+      if (this.activeOverlay === 'none') return;
+
+      if (this.activeOverlay === 'speed') {
+        for (const edge of this.sim.edges.values()) {
+          const vehs = this.sim.spatialEdgeVehicles.get(edge.id) || [];
+          const freeSpeed = (edge.speedLimit * 1000 / 3600) * 3;
+          const avgSpeed = vehs.length > 0 ? (vehs.reduce((s, v) => s + v.v, 0) / vehs.length) : freeSpeed;
+          const speedRatio = MathUtils.clamp(avgSpeed / freeSpeed, 0, 1);
+
+          let hue = speedRatio * 120;
+          ctx.save();
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          const t = this.sim.nodes.get(edge.toNodeId);
+          if (f && t) {
+            ctx.strokeStyle = `hsla(${hue}, 85%, 55%, 0.55)`;
+            ctx.lineWidth = edge.lanes * LANE_WIDTH + 4;
+            ctx.beginPath();
+            ctx.moveTo(f.x, f.y);
+            ctx.lineTo(t.x, t.y);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      } else if (this.activeOverlay === 'queues') {
+        for (const edge of this.sim.edges.values()) {
+          const vehs = this.sim.spatialEdgeVehicles.get(edge.id) || [];
+          const queued = vehs.filter(v => v.v < 3.0);
+          if (queued.length >= 2) {
+            const f = this.sim.nodes.get(edge.fromNodeId);
+            const t = this.sim.nodes.get(edge.toNodeId);
+            if (f && t) {
+              ctx.save();
+              ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
+              ctx.lineWidth = edge.lanes * LANE_WIDTH + 6;
+              ctx.shadowColor = '#ef4444';
+              ctx.shadowBlur = 10;
+              ctx.beginPath();
+              ctx.moveTo(f.x, f.y);
+              ctx.lineTo(t.x, t.y);
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+      } else if (this.activeOverlay === 'transit') {
+        for (const stop of this.sim.transitStops.values()) {
+          const edge = this.sim.edges.get(stop.edgeId);
+          if (!edge) continue;
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          if (!f) continue;
+          const sx = f.x + edge.dx * (edge.length * stop.sFraction);
+          const sy = f.y + edge.dy * (edge.length * stop.sFraction);
+
+          ctx.save();
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+          ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 120, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else if (this.activeOverlay === 'demand') {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        for (const veh of this.sim.vehicles) {
+          if (veh.originNodeId && veh.destNodeId) {
+            const on = this.sim.nodes.get(veh.originNodeId);
+            const dn = this.sim.nodes.get(veh.destNodeId);
+            if (on && dn) {
+              ctx.beginPath();
+              ctx.moveTo(on.x, on.y);
+              ctx.lineTo(dn.x, dn.y);
+              ctx.stroke();
+            }
+          }
+        }
+        ctx.restore();
+      } else if (this.activeOverlay === 'emissions') {
+        for (const veh of this.sim.vehicles) {
+          const edge = this.sim.edges.get(veh.edgeId);
+          if (!edge) continue;
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          if (!f) continue;
+          const vx = f.x + edge.dx * veh.s;
+          const vy = f.y + edge.dy * veh.s;
+
+          const emissionRate = (veh.v < 2.0) ? 0.6 : (veh.a > 5 ? 0.9 : 0.2);
+          ctx.save();
+          ctx.fillStyle = `rgba(239, 68, 68, ${emissionRate * 0.35})`;
+          ctx.beginPath();
+          ctx.arc(vx, vy, 16 * emissionRate + 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      } else if (this.activeOverlay === 'validation') {
+        for (const node of this.sim.nodes.values()) {
+          const isDeadEnd = (node.incomingEdges.length === 0 || node.outgoingEdges.length === 0);
+          if (isDeadEnd) {
+            ctx.save();
+            ctx.strokeStyle = '#ec4899';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#ec4899';
+            ctx.font = 'bold 9px monospace';
+            ctx.fillText('NO EXIT', node.x - 18, node.y - 24);
+            ctx.restore();
+          }
+        }
+      }
+    }
+
+    drawEditorPreviews(ctx, state) {
+      if (!state) return;
+
+      if (state.tool === 'road' && state.roadStartNode) {
+        ctx.save();
+        const sn = state.roadStartNode;
+        const targetX = state.snappedPos ? state.snappedPos.x : state.mouseWorld.x;
+        const targetY = state.snappedPos ? state.snappedPos.y : state.mouseWorld.y;
+
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+        ctx.lineWidth = state.roadLanes * LANE_WIDTH;
+        ctx.lineCap = 'round';
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(sn.x, sn.y);
+        ctx.lineTo(targetX, targetY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const len = Math.round(MathUtils.dist(sn.x, sn.y, targetX, targetY));
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(`${len}m (${state.roadLanes}L)`, (sn.x + targetX) / 2, (sn.y + targetY) / 2 - 12);
+        ctx.restore();
+      }
+
+      if (state.snappedNode) {
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(state.snappedNode.x, state.snappedNode.y, 16, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (this.sim.selectedEntity) {
+        const sel = this.sim.selectedEntity;
+        ctx.save();
+        if (sel.type === 'node') {
+          const node = this.sim.nodes.get(sel.id);
+          if (node) {
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        } else if (sel.type === 'edge') {
+          const edge = this.sim.edges.get(sel.id);
+          if (edge) {
+            const f = this.sim.nodes.get(edge.fromNodeId);
+            const t = this.sim.nodes.get(edge.toNodeId);
+            if (f && t) {
+              ctx.strokeStyle = '#f59e0b';
+              ctx.lineWidth = edge.lanes * LANE_WIDTH + 6;
+              ctx.beginPath();
+              ctx.moveTo(f.x, f.y);
+              ctx.lineTo(t.x, t.y);
+              ctx.stroke();
+            }
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    isNightTime() {
+      const hour = this.sim.simTime / 3600;
+      return (hour >= 20.0 || hour <= 6.0);
+    }
+
+    drawAtmosphere(ctx) {
+      const hour = this.sim.simTime / 3600;
+      let darkness = 0;
+      if (hour >= 19.0 && hour <= 21.0) {
+        darkness = (hour - 19.0) / 2.0 * 0.7;
+      } else if (hour > 21.0 || hour < 5.0) {
+        darkness = 0.7;
+      } else if (hour >= 5.0 && hour <= 7.0) {
+        darkness = (1.0 - (hour - 5.0) / 2.0) * 0.7;
+      }
+
+      if (darkness > 0.05) {
+        ctx.fillStyle = `rgba(3, 7, 18, ${darkness})`;
+        ctx.fillRect(this.camera.x - this.width / this.camera.zoom, this.camera.y - this.height / this.camera.zoom, (this.width * 2) / this.camera.zoom, (this.height * 2) / this.camera.zoom);
+      }
+
+      if (this.sim.weather === 'rain') {
+        ctx.strokeStyle = 'rgba(147, 197, 253, 0.4)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        const t = Date.now() * 0.003;
+        for (let i = 0; i < 40; i++) {
+          const rx = this.camera.x - 300 + ((i * 37 + t * 400) % 700);
+          const ry = this.camera.y - 300 + ((i * 53 + t * 900) % 700);
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 8, ry + 16);
+        }
+        ctx.stroke();
+      } else if (this.sim.weather === 'snow') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        const t = Date.now() * 0.001;
+        for (let i = 0; i < 40; i++) {
+          const sx = this.camera.x - 300 + ((i * 43 + Math.sin(t + i) * 30 + t * 40) % 700);
+          const sy = this.camera.y - 300 + ((i * 61 + t * 120) % 700);
+          ctx.beginPath();
+          ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  // 8. CANVAS CHARTS ENGINE
+  class CanvasChart {
+    constructor(canvasId) {
+      this.canvas = document.getElementById(canvasId);
+      this.ctx = this.canvas.getContext('2d');
+    }
+
+    renderLineSeries(seriesList) {
+      const ctx = this.ctx;
+      const dpr = window.devicePixelRatio || 1;
+      const w = this.canvas.width = Math.floor(this.canvas.clientWidth * dpr);
+      const h = this.canvas.height = Math.floor(this.canvas.clientHeight * dpr);
+
+      ctx.clearRect(0, 0, w, h);
+      if (!seriesList || seriesList.length === 0 || !seriesList[0].data || seriesList[0].data.length === 0) return;
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      const cssW = this.canvas.clientWidth;
+      const cssH = this.canvas.clientHeight;
+
+      const padL = 28, padR = 12, padT = 18, padB = 16;
+      const plotW = cssW - padL - padR;
+      const plotH = cssH - padT - padB;
+
+      // Draw subtle grid lines & Y labels
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.font = '9px monospace';
+      ctx.fillStyle = '#64748b';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+
+      for (let i = 0; i <= 2; i++) {
+        const y = padT + (plotH / 2) * i;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(cssW - padR, y);
+        ctx.stroke();
+      }
+
+      seriesList.forEach(s => {
+        const data = s.data;
+        const rawMax = Math.max(1, ...data);
+        const maxVal = s.max || Math.max(10, Math.ceil(rawMax * 1.25));
+
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+
+        const divisor = Math.max(1, data.length - 1);
+        if (data.length === 1) {
+          const y = padT + plotH - (MathUtils.clamp(data[0], 0, maxVal) / maxVal) * plotH;
+          ctx.moveTo(padL, y);
+          ctx.lineTo(padL + plotW, y);
+        } else {
+          data.forEach((val, idx) => {
+            const x = padL + (idx / divisor) * plotW;
+            const y = padT + plotH - (MathUtils.clamp(val, 0, maxVal) / maxVal) * plotH;
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+        }
+        ctx.stroke();
+
+        // Glowing dot at the current latest value
+        if (data.length > 0) {
+          const lastIdx = data.length - 1;
+          const lastVal = data[lastIdx];
+          const lx = padL + plotW;
+          const ly = padT + plotH - (MathUtils.clamp(lastVal, 0, maxVal) / maxVal) * plotH;
+
+          ctx.fillStyle = s.color;
+          ctx.shadowColor = s.color;
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      });
+
+      ctx.restore();
+    }
+  }
+
+  // 9. CURATED SCENARIOS DEFINITIONS
+  const SCENARIOS = [
+    {
+      id: 'downtown-grid',
+      title: 'Downtown Grid & Transit',
+      desc: 'Dense 4x3 urban grid with synchronized signals, heavy turning volumes, and two high-frequency transit lines.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const grid = [];
+        for (let r = 0; r < 3; r++) {
+          grid[r] = [];
+          for (let c = 0; c < 4; c++) {
+            const n = sim.addNode(-300 + c * 200, -150 + r * 150, 'traffic_signal');
+            grid[r][c] = n;
+          }
+        }
+
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            sim.addTwoWayRoad(grid[r][c].id, grid[r][c+1].id, 2, 50);
+          }
+        }
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 4; c++) {
+            sim.addTwoWayRoad(grid[r][c].id, grid[r+1][c].id, 2, 50);
+          }
+        }
+
+        sim.zones.set(1, new Zone(1, 'R', -320, 0, 90, 'West Suburb'));
+        sim.zones.set(2, new Zone(2, 'C', 100, -50, 110, 'Downtown Commercial'));
+        sim.zones.set(3, new Zone(3, 'I', 320, 100, 90, 'East Industrial'));
+
+        const centralEdge1 = Array.from(sim.edges.values()).find(e => e.fromNodeId === grid[1][0].id && e.toNodeId === grid[1][1].id);
+        const centralEdge2 = Array.from(sim.edges.values()).find(e => e.fromNodeId === grid[1][1].id && e.toNodeId === grid[1][2].id);
+        const centralEdge3 = Array.from(sim.edges.values()).find(e => e.fromNodeId === grid[1][2].id && e.toNodeId === grid[1][3].id);
+
+        if (centralEdge1 && centralEdge2 && centralEdge3) {
+          const s1 = new TransitStop(201, centralEdge1.id, 0.5, 'West Gateway');
+          const s2 = new TransitStop(202, centralEdge2.id, 0.5, 'Downtown Central');
+          const s3 = new TransitStop(203, centralEdge3.id, 0.5, 'East Terminal');
+          sim.transitStops.set(s1.id, s1); centralEdge1.stops.push(s1);
+          sim.transitStops.set(s2.id, s2); centralEdge2.stops.push(s2);
+          sim.transitStops.set(s3.id, s3); centralEdge3.stops.push(s3);
+
+          const r1 = new TransitRoute(301, 'Red Line Express', '#ef4444', [s1.id, s2.id, s3.id], 20, 45);
+          r1.edgePath = [centralEdge1.id, centralEdge2.id, centralEdge3.id];
+          sim.transitRoutes.set(r1.id, r1);
+        }
+
+        for (let i = 0; i < 28; i++) sim.spawnVehicle('car');
+        for (let i = 0; i < 4; i++) sim.spawnVehicle('truck');
+      }
+    },
+    {
+      id: 'simple-crossroads',
+      title: 'Simple Crossroads',
+      desc: 'Classic 4-way intersection benchmark to observe signal phase splits, clearance intervals, and queue dissipation.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const center = sim.addNode(0, 0, 'traffic_signal');
+        const north = sim.addNode(0, -250, 'yield');
+        const south = sim.addNode(0, 250, 'yield');
+        const west = sim.addNode(-300, 0, 'yield');
+        const east = sim.addNode(300, 0, 'yield');
+
+        sim.addTwoWayRoad(west.id, center.id, 2, 60);
+        sim.addTwoWayRoad(center.id, east.id, 2, 60);
+        sim.addTwoWayRoad(north.id, center.id, 2, 60);
+        sim.addTwoWayRoad(center.id, south.id, 2, 60);
+
+        sim.zones.set(1, new Zone(1, 'R', -280, 0, 70, 'Westside'));
+        sim.zones.set(2, new Zone(2, 'C', 280, 0, 70, 'East Business'));
+
+        for (let i = 0; i < 20; i++) sim.spawnVehicle('car');
+      }
+    },
+    {
+      id: 'green-wave',
+      title: 'Synchronized Avenue ("Green Wave")',
+      desc: 'Corridor of 4 consecutive traffic signals with cycle offsets configured to allow uninterrupted progression.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const n0 = sim.addNode(-400, 0, 'traffic_signal');
+        const n1 = sim.addNode(-150, 0, 'traffic_signal');
+        const n2 = sim.addNode(100, 0, 'traffic_signal');
+        const n3 = sim.addNode(350, 0, 'traffic_signal');
+
+        n0.signal.offset = 0;
+        n1.signal.offset = 8;
+        n2.signal.offset = 16;
+        n3.signal.offset = 24;
+
+        sim.addTwoWayRoad(n0.id, n1.id, 3, 60);
+        sim.addTwoWayRoad(n1.id, n2.id, 3, 60);
+        sim.addTwoWayRoad(n2.id, n3.id, 3, 60);
+
+        const c1Top = sim.addNode(-150, -180, 'yield');
+        const c1Bot = sim.addNode(-150, 180, 'yield');
+        sim.addTwoWayRoad(c1Top.id, n1.id, 1, 40);
+        sim.addTwoWayRoad(n1.id, c1Bot.id, 1, 40);
+
+        const c2Top = sim.addNode(100, -180, 'yield');
+        const c2Bot = sim.addNode(100, 180, 'yield');
+        sim.addTwoWayRoad(c2Top.id, n2.id, 1, 40);
+        sim.addTwoWayRoad(n2.id, c2Bot.id, 1, 40);
+
+        for (let i = 0; i < 30; i++) sim.spawnVehicle('car');
+      }
+    },
+    {
+      id: 'suburban-bottleneck',
+      title: 'Suburban Bottleneck',
+      desc: 'A wide 3-lane arterial narrowing down into a single lane choke point, causing traffic shockwaves.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const n0 = sim.addNode(-450, 0, 'yield');
+        const n1 = sim.addNode(-150, 0, 'yield');
+        const n2 = sim.addNode(150, 0, 'yield');
+        const n3 = sim.addNode(450, 0, 'yield');
+
+        sim.addTwoWayRoad(n0.id, n1.id, 3, 70);
+        sim.addTwoWayRoad(n1.id, n2.id, 1, 40);
+        sim.addTwoWayRoad(n2.id, n3.id, 2, 60);
+
+        sim.zones.set(1, new Zone(1, 'R', -400, 0, 80, 'Suburbs'));
+        sim.zones.set(2, new Zone(2, 'C', 400, 0, 80, 'City Center'));
+
+        for (let i = 0; i < 32; i++) sim.spawnVehicle('car');
+      }
+    },
+    {
+      id: 'stadium-event',
+      title: 'Stadium Event Surge',
+      desc: 'Massive event departure from an arena. Compare traffic gridlock when spectators drive cars vs board high-capacity transit shuttles.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const stadiumNode = sim.addNode(-300, 0, 'traffic_signal');
+        const junction = sim.addNode(0, 0, 'traffic_signal');
+        const northExit = sim.addNode(300, -180, 'yield');
+        const southExit = sim.addNode(300, 180, 'yield');
+
+        sim.addTwoWayRoad(stadiumNode.id, junction.id, 3, 50);
+        sim.addTwoWayRoad(junction.id, northExit.id, 2, 60);
+        sim.addTwoWayRoad(junction.id, southExit.id, 2, 60);
+
+        sim.zones.set(1, new Zone(1, 'E', -300, 0, 100, 'Metro Arena'));
+        sim.zones.set(2, new Zone(2, 'R', 300, -180, 80, 'North Metro'));
+        sim.zones.set(3, new Zone(3, 'R', 300, 180, 80, 'South Metro'));
+
+        const e1 = Array.from(sim.edges.values()).find(e => e.fromNodeId === stadiumNode.id && e.toNodeId === junction.id);
+        const e2 = Array.from(sim.edges.values()).find(e => e.fromNodeId === junction.id && e.toNodeId === southExit.id);
+        if (e1 && e2) {
+          const s1 = new TransitStop(401, e1.id, 0.2, 'Arena Platform');
+          const s2 = new TransitStop(402, e2.id, 0.8, 'South Station');
+          sim.transitStops.set(s1.id, s1); e1.stops.push(s1);
+          sim.transitStops.set(s2.id, s2); e2.stops.push(s2);
+
+          const r = new TransitRoute(501, 'Arena Express', '#8b5cf6', [s1.id, s2.id], 15, 60);
+          r.edgePath = [e1.id, e2.id];
+          sim.transitRoutes.set(r.id, r);
+        }
+
+        for (let i = 0; i < 40; i++) sim.spawnVehicle('car', stadiumNode.id, null);
+      }
+    },
+    {
+      id: 'bridge-closure',
+      title: 'River Bridge Closure',
+      desc: 'Twin parallel bridges across a river. Closing one bridge demonstrates dynamic rerouting and sudden gridlock on the alternative route.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const westNorth = sim.addNode(-300, -120, 'traffic_signal');
+        const westSouth = sim.addNode(-300, 120, 'traffic_signal');
+        const eastNorth = sim.addNode(300, -120, 'traffic_signal');
+        const eastSouth = sim.addNode(300, 120, 'traffic_signal');
+
+        sim.addTwoWayRoad(westNorth.id, westSouth.id, 2, 50);
+        sim.addTwoWayRoad(eastNorth.id, eastSouth.id, 2, 50);
+
+        sim.addTwoWayRoad(westNorth.id, eastNorth.id, 2, 70);
+        sim.addTwoWayRoad(westSouth.id, eastSouth.id, 2, 70);
+
+        sim.zones.set(1, new Zone(1, 'R', -350, 0, 100, 'West Island'));
+        sim.zones.set(2, new Zone(2, 'C', 350, 0, 100, 'East Island'));
+
+        for (let i = 0; i < 35; i++) sim.spawnVehicle('car');
+      }
+    },
+    {
+      id: 'brt-corridor',
+      title: 'BRT (Bus Rapid Transit) Corridor',
+      desc: 'Dedicated rapid transit corridor running parallel to congested general traffic lanes.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const a1 = sim.addNode(-400, -60, 'traffic_signal');
+        const a2 = sim.addNode(0, -60, 'traffic_signal');
+        const a3 = sim.addNode(400, -60, 'traffic_signal');
+
+        const b1 = sim.addNode(-400, 60, 'traffic_signal');
+        const b2 = sim.addNode(0, 60, 'traffic_signal');
+        const b3 = sim.addNode(400, 60, 'traffic_signal');
+
+        sim.addTwoWayRoad(a1.id, a2.id, 2, 50);
+        sim.addTwoWayRoad(a2.id, a3.id, 1, 35);
+
+        const brtEdge1 = sim.addTwoWayRoad(b1.id, b2.id, 1, 60);
+        const brtEdge2 = sim.addTwoWayRoad(b2.id, b3.id, 1, 60);
+
+        const s1 = new TransitStop(601, brtEdge1.forward.id, 0.5, 'BRT Terminal West');
+        const s2 = new TransitStop(602, brtEdge2.forward.id, 0.5, 'BRT Terminal East');
+        sim.transitStops.set(s1.id, s1); brtEdge1.forward.stops.push(s1);
+        sim.transitStops.set(s2.id, s2); brtEdge2.forward.stops.push(s2);
+
+        const r = new TransitRoute(701, 'BRT Silver Line', '#3b82f6', [s1.id, s2.id], 15, 60);
+        r.edgePath = [brtEdge1.forward.id, brtEdge2.forward.id];
+        sim.transitRoutes.set(r.id, r);
+
+        for (let i = 0; i < 30; i++) sim.spawnVehicle('car');
+      }
+    },
+    {
+      id: 'induced-demand',
+      title: 'Induced Demand Experiment',
+      desc: 'Widening a corridor from 1 to 3 lanes induces extra vehicle trips, illustrating Braess’s Paradox.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const start = sim.addNode(-350, 0, 'traffic_signal');
+        const topMid = sim.addNode(0, -140, 'traffic_signal');
+        const botMid = sim.addNode(0, 140, 'traffic_signal');
+        const end = sim.addNode(350, 0, 'traffic_signal');
+
+        sim.addTwoWayRoad(start.id, topMid.id, 3, 70);
+        sim.addTwoWayRoad(topMid.id, end.id, 3, 70);
+
+        sim.addTwoWayRoad(start.id, botMid.id, 1, 50);
+        sim.addTwoWayRoad(botMid.id, end.id, 1, 50);
+
+        sim.zones.set(1, new Zone(1, 'R', -350, 0, 90, 'Residential Origin'));
+        sim.zones.set(2, new Zone(2, 'C', 350, 0, 90, 'Employment Center'));
+
+        for (let i = 0; i < 35; i++) sim.spawnVehicle('car');
+      }
+    },
+    {
+      id: 'stress-test',
+      title: 'Dense Stress Test (500+ Agents)',
+      desc: 'High-density multi-corridor metropolitan network pushing microscopic car-following and graph routing to the limit.',
+      setup(sim) {
+        sim.nodes.clear(); sim.edges.clear(); sim.transitStops.clear(); sim.transitRoutes.clear(); sim.zones.clear(); sim.vehicles = [];
+
+        const cols = 5, rows = 4;
+        const grid = [];
+        for (let r = 0; r < rows; r++) {
+          grid[r] = [];
+          for (let c = 0; c < cols; c++) {
+            grid[r][c] = sim.addNode(-400 + c * 200, -220 + r * 150, 'traffic_signal');
+          }
+        }
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols - 1; c++) {
+            sim.addTwoWayRoad(grid[r][c].id, grid[r][c+1].id, 2, 60);
+          }
+        }
+        for (let r = 0; r < rows - 1; r++) {
+          for (let c = 0; c < cols; c++) {
+            sim.addTwoWayRoad(grid[r][c].id, grid[r+1][c].id, 2, 60);
+          }
+        }
+
+        sim.zones.set(1, new Zone(1, 'R', -350, -180, 110, 'Northwest Heights'));
+        sim.zones.set(2, new Zone(2, 'C', 100, 0, 130, 'Financial District'));
+        sim.zones.set(3, new Zone(3, 'I', 350, 180, 110, 'Southeast Freight Yard'));
+
+        for (let i = 0; i < 110; i++) sim.spawnVehicle('car');
+        for (let i = 0; i < 18; i++) sim.spawnVehicle('truck');
+      }
+    }
+  ];
+
+  // 10. INTERACTION CONTROLLER & UI WIRING
+  class Controller {
+    constructor(sim, renderer) {
+      this.sim = sim;
+      this.renderer = renderer;
+
+      this.currentTool = 'select';
+      this.roadLanes = 2;
+      this.roadOneWay = false;
+      this.activeZoneType = 'R';
+
+      this.mouseScreen = { x: 0, y: 0 };
+      this.mouseWorld = { x: 0, y: 0 };
+      this.isDragging = false;
+      this.dragStart = { x: 0, y: 0 };
+      this.cameraStart = { x: 0, y: 0 };
+
+      this.roadStartNode = null;
+      this.snappedNode = null;
+      this.snappedPos = null;
+      this.routeStopSequence = [];
+
+      this.charts = {
+        throughput: new CanvasChart('chartThroughput'),
+        delays: new CanvasChart('chartDelays'),
+        modeShare: new CanvasChart('chartModeShare')
+      };
+
+      this.initEvents();
+      this.initUI();
+      this.loadScenario('downtown-grid');
+      this.startLoop();
+    }
+
+    initEvents() {
+      const canvas = this.renderer.canvas;
+
+      canvas.addEventListener('mousedown', e => this.onPointerDown(e));
+      window.addEventListener('mousemove', e => this.onPointerMove(e));
+      window.addEventListener('mouseup', e => this.onPointerUp(e));
+
+      canvas.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) {
+          const t = e.touches[0];
+          this.onPointerDown({ clientX: t.clientX, clientY: t.clientY, button: 0 });
+        }
+      }, { passive: false });
+      window.addEventListener('touchmove', e => {
+        if (e.touches.length === 1) {
+          const t = e.touches[0];
+          this.onPointerMove({ clientX: t.clientX, clientY: t.clientY });
+        }
+      }, { passive: false });
+      window.addEventListener('touchend', e => this.onPointerUp(e));
+
+      canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.15 : 0.85;
+        this.zoomAt(e.clientX, e.clientY, factor);
+      }, { passive: false });
+
+      window.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+        if (e.code === 'Space') {
+          e.preventDefault();
+          this.togglePause();
+        } else if (e.code === 'KeyS' && !e.ctrlKey) {
+          this.sim.paused = true;
+          document.getElementById('btnPause').textContent = '▶️';
+          this.sim.update(0.05, true);
+        } else if (e.code === 'KeyV') {
+          this.setTool('select');
+        } else if (e.code === 'KeyR') {
+          this.setTool('road');
+        } else if (e.code === 'KeyJ') {
+          this.setTool('signal');
+        } else if (e.code === 'KeyB') {
+          this.setTool('bus-stop');
+        } else if (e.code === 'KeyT') {
+          this.setTool('bus-route');
+        } else if (e.code === 'KeyZ') {
+          this.setTool('zone');
+        } else if (e.code === 'KeyX') {
+          this.setTool('incident');
+        } else if (e.code === 'KeyD') {
+          this.setTool('demolish');
+        } else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          if (e.shiftKey) this.sim.redo(); else this.sim.undo();
+        } else if (e.code === 'KeyY' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          this.sim.redo();
+        }
+      });
+    }
+
+    zoomAt(clientX, clientY, factor) {
+      const rect = this.renderer.canvas.getBoundingClientRect();
+      const sx = clientX - rect.left;
+      const sy = clientY - rect.top;
+      const worldBefore = this.renderer.screenToWorld(sx, sy);
+
+      this.renderer.camera.zoom = MathUtils.clamp(this.renderer.camera.zoom * factor, 0.25, 3.5);
+
+      const worldAfter = this.renderer.screenToWorld(sx, sy);
+      this.renderer.camera.x += worldBefore.x - worldAfter.x;
+      this.renderer.camera.y += worldBefore.y - worldAfter.y;
+    }
+
+    onPointerDown(e) {
+      const rect = this.renderer.canvas.getBoundingClientRect();
+      this.mouseScreen.x = e.clientX - rect.left;
+      this.mouseScreen.y = e.clientY - rect.top;
+      this.mouseWorld = this.renderer.screenToWorld(this.mouseScreen.x, this.mouseScreen.y);
+
+      if (e.button === 2 || e.button === 1 || this.currentTool === 'select') {
+        this.isDragging = true;
+        this.dragStart.x = this.mouseScreen.x;
+        this.dragStart.y = this.mouseScreen.y;
+        this.cameraStart.x = this.renderer.camera.x;
+        this.cameraStart.y = this.renderer.camera.y;
+      }
+
+      if (e.button === 0) {
+        this.handleToolClick();
+      }
+    }
+
+    onPointerMove(e) {
+      const rect = this.renderer.canvas.getBoundingClientRect();
+      this.mouseScreen.x = e.clientX - rect.left;
+      this.mouseScreen.y = e.clientY - rect.top;
+      this.mouseWorld = this.renderer.screenToWorld(this.mouseScreen.x, this.mouseScreen.y);
+
+      if (this.isDragging) {
+        const dx = (this.mouseScreen.x - this.dragStart.x) / this.renderer.camera.zoom;
+        const dy = (this.mouseScreen.y - this.dragStart.y) / this.renderer.camera.zoom;
+        this.renderer.camera.x = this.cameraStart.x - dx;
+        this.renderer.camera.y = this.cameraStart.y - dy;
+      }
+
+      this.updateSnapping();
+    }
+
+    onPointerUp(e) {
+      this.isDragging = false;
+    }
+
+    updateSnapping() {
+      this.snappedNode = null;
+      this.snappedPos = null;
+
+      for (const node of this.sim.nodes.values()) {
+        const d = MathUtils.dist(this.mouseWorld.x, this.mouseWorld.y, node.x, node.y);
+        if (d < 22) {
+          this.snappedNode = node;
+          this.snappedPos = { x: node.x, y: node.y };
+          return;
+        }
+      }
+
+      for (const edge of this.sim.edges.values()) {
+        const f = this.sim.nodes.get(edge.fromNodeId);
+        const t = this.sim.nodes.get(edge.toNodeId);
+        if (f && t) {
+          const proj = MathUtils.distToSegment(this.mouseWorld.x, this.mouseWorld.y, f.x, f.y, t.x, t.y);
+          if (proj.dist < 12 && proj.t > 0.1 && proj.t < 0.9) {
+            this.snappedPos = { x: proj.x, y: proj.y, edgeToSplit: edge };
+            return;
+          }
+        }
+      }
+    }
+
+    handleToolClick() {
+      const mx = this.mouseWorld.x;
+      const my = this.mouseWorld.y;
+
+      if (this.currentTool === 'select') {
+        let clickedVeh = null;
+        for (const v of this.sim.vehicles) {
+          const edge = this.sim.edges.get(v.edgeId);
+          if (edge) {
+            const f = this.sim.nodes.get(edge.fromNodeId);
+            if (f) {
+              const vx = f.x + edge.dx * v.s;
+              const vy = f.y + edge.dy * v.s;
+              if (MathUtils.dist(mx, my, vx, vy) < 14) {
+                clickedVeh = v;
+                break;
+              }
+            }
+          }
+        }
+
+        if (clickedVeh) {
+          this.inspectEntity('vehicle', clickedVeh.id);
+          return;
+        }
+
+        for (const node of this.sim.nodes.values()) {
+          if (MathUtils.dist(mx, my, node.x, node.y) < 18) {
+            this.inspectEntity('node', node.id);
+            return;
+          }
+        }
+
+        for (const edge of this.sim.edges.values()) {
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          const t = this.sim.nodes.get(edge.toNodeId);
+          if (f && t) {
+            const proj = MathUtils.distToSegment(mx, my, f.x, f.y, t.x, t.y);
+            if (proj.dist < (edge.lanes * LANE_WIDTH) / 2 + 5) {
+              this.inspectEntity('edge', edge.id);
+              return;
+            }
+          }
+        }
+
+        for (const stop of this.sim.transitStops.values()) {
+          const edge = this.sim.edges.get(stop.edgeId);
+          if (!edge) continue;
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          if (!f) continue;
+          const sx = f.x + edge.dx * (edge.length * stop.sFraction);
+          const sy = f.y + edge.dy * (edge.length * stop.sFraction);
+          if (MathUtils.dist(mx, my, sx, sy) < 16) {
+            this.inspectEntity('stop', stop.id);
+            return;
+          }
+        }
+
+        this.inspectEntity(null);
+      } else if (this.currentTool === 'road') {
+        this.handleRoadBuildClick();
+      } else if (this.currentTool === 'signal') {
+        for (const node of this.sim.nodes.values()) {
+          if (MathUtils.dist(mx, my, node.x, node.y) < 20) {
+            this.sim.pushUndoState();
+            const types = ['traffic_signal', 'stop_sign', 'roundabout', 'yield'];
+            const nextIdx = (types.indexOf(node.type) + 1) % types.length;
+            node.type = types[nextIdx];
+            this.showToast(`Intersection #${node.id} set to: ${node.type.replace('_', ' ')}`);
+            this.inspectEntity('node', node.id);
+            sounds.playClick();
+            break;
+          }
+        }
+      } else if (this.currentTool === 'bus-stop') {
+        for (const edge of this.sim.edges.values()) {
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          const t = this.sim.nodes.get(edge.toNodeId);
+          if (f && t) {
+            const proj = MathUtils.distToSegment(mx, my, f.x, f.y, t.x, t.y);
+            if (proj.dist < 20 && proj.t > 0.1 && proj.t < 0.9) {
+              this.sim.pushUndoState();
+              const stop = new TransitStop(++this.sim.nextId, edge.id, proj.t, `Transit Stop #${this.sim.nextId}`);
+              this.sim.transitStops.set(stop.id, stop);
+              edge.stops.push(stop);
+              this.showToast(`Created transit stop on road #${edge.id}`);
+              sounds.playBuild();
+              this.inspectEntity('stop', stop.id);
+              break;
+            }
+          }
+        }
+      } else if (this.currentTool === 'bus-route') {
+        for (const stop of this.sim.transitStops.values()) {
+          const edge = this.sim.edges.get(stop.edgeId);
+          if (!edge) continue;
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          if (!f) continue;
+          const sx = f.x + edge.dx * (edge.length * stop.sFraction);
+          const sy = f.y + edge.dy * (edge.length * stop.sFraction);
+          if (MathUtils.dist(mx, my, sx, sy) < 20) {
+            this.routeStopSequence.push(stop.id);
+            sounds.playClick();
+            this.showToast(`Added ${stop.name} to route (${this.routeStopSequence.length} stops)`);
+
+            if (this.routeStopSequence.length >= 2) {
+              this.createTransitRouteFromSequence();
+            }
+            break;
+          }
+        }
+      } else if (this.currentTool === 'zone') {
+        this.sim.pushUndoState();
+        const z = new Zone(++this.sim.nextId, this.activeZoneType, mx, my, 70);
+        this.sim.zones.set(z.id, z);
+        sounds.playBuild();
+        this.showToast(`Created ${z.name}`);
+      } else if (this.currentTool === 'incident') {
+        for (const edge of this.sim.edges.values()) {
+          const f = this.sim.nodes.get(edge.fromNodeId);
+          const t = this.sim.nodes.get(edge.toNodeId);
+          if (f && t) {
+            const proj = MathUtils.distToSegment(mx, my, f.x, f.y, t.x, t.y);
+            if (proj.dist < 20) {
+              this.sim.pushUndoState();
+              if (edge.status === 'normal') {
+                edge.status = 'closed';
+                this.showToast(`Road #${edge.id} closed! Traffic rerouting.`);
+                sounds.playHorn();
+              } else {
+                edge.status = 'normal';
+                this.showToast(`Road #${edge.id} reopened.`);
+                sounds.playClick();
+              }
+              break;
+            }
+          }
+        }
+      } else if (this.currentTool === 'demolish') {
+        let deleted = false;
+        for (const node of this.sim.nodes.values()) {
+          if (MathUtils.dist(mx, my, node.x, node.y) < 20) {
+            this.sim.pushUndoState();
+            this.sim.deleteNode(node.id);
+            sounds.playDemolish();
+            this.showToast(`Demolished intersection #${node.id}`);
+            deleted = true;
+            break;
+          }
+        }
+        if (!deleted) {
+          for (const edge of this.sim.edges.values()) {
+            const f = this.sim.nodes.get(edge.fromNodeId);
+            const t = this.sim.nodes.get(edge.toNodeId);
+            if (f && t) {
+              const proj = MathUtils.distToSegment(mx, my, f.x, f.y, t.x, t.y);
+              if (proj.dist < 15) {
+                this.sim.pushUndoState();
+                this.sim.deleteEdge(edge.id);
+                sounds.playDemolish();
+                this.showToast(`Demolished road #${edge.id}`);
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    handleRoadBuildClick() {
+      const targetPos = this.snappedPos || this.mouseWorld;
+
+      if (!this.roadStartNode) {
+        if (this.snappedNode) {
+          this.roadStartNode = this.snappedNode;
+        } else if (this.snappedPos && this.snappedPos.edgeToSplit) {
+          this.sim.pushUndoState();
+          const splitNode = this.splitEdgeAt(this.snappedPos.edgeToSplit, this.snappedPos.x, this.snappedPos.y);
+          this.roadStartNode = splitNode;
+        } else {
+          this.sim.pushUndoState();
+          this.roadStartNode = this.sim.addNode(targetPos.x, targetPos.y, 'traffic_signal');
+        }
+        sounds.playClick();
+      } else {
+        let endNode = this.snappedNode;
+        if (!endNode) {
+          if (this.snappedPos && this.snappedPos.edgeToSplit) {
+            this.sim.pushUndoState();
+            endNode = this.splitEdgeAt(this.snappedPos.edgeToSplit, this.snappedPos.x, this.snappedPos.y);
+          } else {
+            this.sim.pushUndoState();
+            endNode = this.sim.addNode(targetPos.x, targetPos.y, 'traffic_signal');
+          }
+        }
+
+        if (endNode && endNode.id !== this.roadStartNode.id) {
+          this.sim.pushUndoState();
+          if (this.roadOneWay) {
+            this.sim.addEdge(this.roadStartNode.id, endNode.id, this.roadLanes, 60, true);
+          } else {
+            this.sim.addTwoWayRoad(this.roadStartNode.id, endNode.id, this.roadLanes, 60);
+          }
+          sounds.playBuild();
+          this.showToast(`Constructed ${this.roadLanes}-lane road!`);
+        }
+
+        this.roadStartNode = endNode;
+      }
+    }
+
+    splitEdgeAt(edge, splitX, splitY) {
+      const newNode = this.sim.addNode(splitX, splitY, 'traffic_signal');
+      const origFrom = edge.fromNodeId;
+      const origTo = edge.toNodeId;
+      const lanes = edge.lanes;
+      const speed = edge.speedLimit;
+      const oneWay = edge.oneWay;
+
+      this.sim.deleteEdge(edge.id);
+
+      if (oneWay) {
+        this.sim.addEdge(origFrom, newNode.id, lanes, speed, true);
+        this.sim.addEdge(newNode.id, origTo, lanes, speed, true);
+      } else {
+        this.sim.addTwoWayRoad(origFrom, newNode.id, lanes, speed);
+        this.sim.addTwoWayRoad(newNode.id, origTo, lanes, speed);
+      }
+      return newNode;
+    }
+
+    createTransitRouteFromSequence() {
+      if (this.routeStopSequence.length < 2) return;
+      const stopA = this.sim.transitStops.get(this.routeStopSequence[0]);
+      const stopB = this.sim.transitStops.get(this.routeStopSequence[1]);
+      if (!stopA || !stopB) return;
+
+      const edgeA = this.sim.edges.get(stopA.edgeId);
+      const edgeB = this.sim.edges.get(stopB.edgeId);
+      if (!edgeA || !edgeB) return;
+
+      const path = this.sim.findRoute(edgeA.fromNodeId, edgeB.toNodeId, true);
+      if (path.length > 0) {
+        this.sim.pushUndoState();
+        const route = new TransitRoute(++this.sim.nextId, `Line ${this.sim.transitRoutes.size + 1}`, '#8b5cf6', [...this.routeStopSequence], 25, 40);
+        route.edgePath = path;
+        this.sim.transitRoutes.set(route.id, route);
+        sounds.playBuild();
+        this.showToast(`Transit line '${route.name}' activated! Buses departing.`);
+        this.routeStopSequence = [];
+      }
+    }
+
+    inspectEntity(type, id = null) {
+      if (!type) {
+        this.sim.selectedEntity = null;
+        this.sim.followedVehicleId = null;
+        document.getElementById('inspector-placeholder').style.display = 'block';
+        document.getElementById('inspect-vehicle').style.display = 'none';
+        document.getElementById('inspect-road').style.display = 'none';
+        document.getElementById('inspect-node').style.display = 'none';
+        document.getElementById('inspect-stop').style.display = 'none';
+        document.getElementById('inspect-route').style.display = 'none';
+        return;
+      }
+
+      this.sim.selectedEntity = { type, id };
+      document.getElementById('inspector-placeholder').style.display = 'none';
+      document.getElementById('inspect-vehicle').style.display = (type === 'vehicle') ? 'flex' : 'none';
+      document.getElementById('inspect-road').style.display = (type === 'edge') ? 'flex' : 'none';
+      document.getElementById('inspect-node').style.display = (type === 'node') ? 'flex' : 'none';
+      document.getElementById('inspect-stop').style.display = (type === 'stop') ? 'flex' : 'none';
+      document.getElementById('inspect-route').style.display = (type === 'route') ? 'flex' : 'none';
+
+      document.getElementById('right-sidebar').classList.remove('collapsed');
+      this.switchSidebarTab('inspector');
+    }
+
+    setTool(toolName) {
+      this.currentTool = toolName;
+      this.roadStartNode = null;
+      this.routeStopSequence = [];
+
+      document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === toolName);
+      });
+
+      const optBar = document.getElementById('tool-options-bar');
+      if (toolName === 'road') {
+        optBar.classList.remove('hidden');
+        optBar.innerHTML = `
+          <span>Lanes:</span>
+          <button class="lane-opt ${this.roadLanes === 1 ? 'active' : ''}" data-lanes="1">1</button>
+          <button class="lane-opt ${this.roadLanes === 2 ? 'active' : ''}" data-lanes="2">2</button>
+          <button class="lane-opt ${this.roadLanes === 3 ? 'active' : ''}" data-lanes="3">3</button>
+          <button class="lane-opt ${this.roadLanes === 4 ? 'active' : ''}" data-lanes="4">4</button>
+          <span style="margin-left:8px;">Type:</span>
+          <button id="btnToggleOneWayOpt" class="${this.roadOneWay ? 'active' : ''}">${this.roadOneWay ? 'One-Way' : 'Two-Way'}</button>
+        `;
+        optBar.querySelectorAll('.lane-opt').forEach(b => {
+          b.addEventListener('click', () => {
+            this.roadLanes = parseInt(b.dataset.lanes);
+            this.setTool('road');
+          });
+        });
+        document.getElementById('btnToggleOneWayOpt').addEventListener('click', () => {
+          this.roadOneWay = !this.roadOneWay;
+          this.setTool('road');
+        });
+      } else if (toolName === 'zone') {
+        optBar.classList.remove('hidden');
+        optBar.innerHTML = `
+          <span>Zone Type:</span>
+          <button class="zone-opt ${this.activeZoneType === 'R' ? 'active' : ''}" data-zone="R">🏠 Res</button>
+          <button class="zone-opt ${this.activeZoneType === 'C' ? 'active' : ''}" data-zone="C">🏢 Com</button>
+          <button class="zone-opt ${this.activeZoneType === 'I' ? 'active' : ''}" data-zone="I">🏭 Ind</button>
+          <button class="zone-opt ${this.activeZoneType === 'E' ? 'active' : ''}" data-zone="E">🏟️ Stadium</button>
+        `;
+        optBar.querySelectorAll('.zone-opt').forEach(b => {
+          b.addEventListener('click', () => {
+            this.activeZoneType = b.dataset.zone;
+            this.setTool('zone');
+          });
+        });
+      } else {
+        optBar.classList.add('hidden');
+      }
+    }
+
+    togglePause() {
+      this.sim.paused = !this.sim.paused;
+      document.getElementById('btnPause').textContent = this.sim.paused ? '▶️' : '⏸️';
+      this.showToast(this.sim.paused ? 'Simulation Paused' : 'Simulation Resumed');
+    }
+
+    showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    loadScenario(scenarioId) {
+      const sc = SCENARIOS.find(s => s.id === scenarioId);
+      if (sc) {
+        sc.setup(this.sim);
+        this.renderer.camera.x = 0;
+        this.renderer.camera.y = 0;
+        this.renderer.camera.zoom = 1.0;
+        this.showToast(`Loaded scenario: ${sc.title}`);
+      }
+    }
+
+    initUI() {
+      document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => this.setTool(btn.dataset.tool));
+      });
+
+      document.getElementById('btnPause').addEventListener('click', () => this.togglePause());
+      document.getElementById('btnStep').addEventListener('click', () => {
+        this.sim.paused = true;
+        document.getElementById('btnPause').textContent = '▶️';
+        this.sim.update(0.05, true);
+      });
+
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          this.sim.simSpeed = parseFloat(btn.dataset.speed);
+        });
+      });
+
+      const btnAudio = document.getElementById('btnAudio');
+      btnAudio.addEventListener('click', () => {
+        const enabled = sounds.toggle();
+        btnAudio.textContent = enabled ? '🔊' : '🔇';
+        btnAudio.classList.toggle('active', enabled);
+        this.showToast(enabled ? 'Procedural Audio Enabled' : 'Audio Muted');
+      });
+
+      document.getElementById('btnUndo').addEventListener('click', () => this.sim.undo());
+      document.getElementById('btnRedo').addEventListener('click', () => this.sim.redo());
+
+      document.querySelectorAll('.overlay-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.overlay-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          this.renderer.activeOverlay = btn.dataset.overlay;
+        });
+      });
+
+      document.getElementById('btnZoomIn').addEventListener('click', () => this.zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1.25));
+      document.getElementById('btnZoomOut').addEventListener('click', () => this.zoomAt(window.innerWidth / 2, window.innerHeight / 2, 0.8));
+      document.getElementById('btnResetCamera').addEventListener('click', () => {
+        this.renderer.camera.x = 0;
+        this.renderer.camera.y = 0;
+        this.renderer.camera.zoom = 1.0;
+      });
+
+      const btnWeather = document.getElementById('btnWeather');
+      btnWeather.addEventListener('click', () => {
+        if (this.sim.weather === 'clear') {
+          this.sim.weather = 'rain';
+          btnWeather.textContent = '🌧️ Rain';
+        } else if (this.sim.weather === 'rain') {
+          this.sim.weather = 'snow';
+          btnWeather.textContent = '❄️ Snow';
+        } else {
+          this.sim.weather = 'clear';
+          btnWeather.textContent = '☀️ Clear';
+        }
+      });
+
+      document.querySelectorAll('.tab-btn').forEach(tab => {
+        tab.addEventListener('click', () => this.switchSidebarTab(tab.dataset.tab));
+      });
+
+      document.getElementById('btnToggleSidebar').addEventListener('click', () => {
+        document.getElementById('right-sidebar').classList.toggle('collapsed');
+      });
+      document.getElementById('btnCloseSidebar').addEventListener('click', () => {
+        document.getElementById('right-sidebar').classList.add('collapsed');
+      });
+
+      const helpModal = document.getElementById('helpModal');
+      document.getElementById('btnHelp').addEventListener('click', () => helpModal.classList.add('open'));
+      document.getElementById('btnCloseHelpModal').addEventListener('click', () => helpModal.classList.remove('open'));
+
+      const scenarioModal = document.getElementById('scenarioModal');
+      document.getElementById('btnScenarios').addEventListener('click', () => scenarioModal.classList.add('open'));
+      document.getElementById('btnCloseScenarioModal').addEventListener('click', () => scenarioModal.classList.remove('open'));
+
+      const compareModal = document.getElementById('compareModal');
+      document.getElementById('btnCompareTransit').addEventListener('click', () => compareModal.classList.add('open'));
+      document.getElementById('btnCloseCompareModal').addEventListener('click', () => compareModal.classList.remove('open'));
+
+      document.getElementById('btnRunCarOnlyTest').addEventListener('click', () => {
+        this.sim.transitRoutes.clear();
+        this.sim.vehicles = this.sim.vehicles.filter(v => v.type !== 'bus');
+        compareModal.classList.remove('open');
+        this.showToast('Transit paused! All demand shifted to 100% car travel.');
+      });
+      document.getElementById('btnRestoreTransitTest').addEventListener('click', () => {
+        this.loadScenario('downtown-grid');
+        compareModal.classList.remove('open');
+        this.showToast('Full transit network restored.');
+      });
+
+      const scenarioListContainer = document.getElementById('scenarioListContainer');
+      SCENARIOS.forEach(sc => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.cursor = 'pointer';
+        card.innerHTML = `
+          <div class="card-title">${sc.title}</div>
+          <div style="font-size:11px; color:var(--text-muted);">${sc.desc}</div>
+          <button style="margin-top:6px; font-size:11px;">Load Scenario</button>
+        `;
+        card.addEventListener('click', () => {
+          this.loadScenario(sc.id);
+          scenarioModal.classList.remove('open');
+        });
+        scenarioListContainer.appendChild(card);
+      });
+
+      this.bindSlider('demandScaleSlider', 'demandScaleVal', val => { this.sim.demandScale = parseFloat(val); }, 'x');
+      this.bindSlider('timeSpeedSlider', 'timeSpeedVal', val => { this.sim.timeSpeed = parseFloat(val); }, 's/m');
+      this.bindSlider('headwaySlider', 'headwayVal', val => { this.sim.headwayScale = parseFloat(val); }, 's');
+      this.bindSlider('rerouteSlider', 'rerouteVal', val => { this.sim.rerouteSensitivity = parseFloat(val); }, 'x');
+      this.bindSlider('politenessSlider', 'politenessVal', val => { this.sim.politeness = parseFloat(val); }, '');
+
+      document.getElementById('btnSetMorningRush').addEventListener('click', () => { this.sim.simTime = 7.75 * 3600; });
+      document.getElementById('btnSetMidday').addEventListener('click', () => { this.sim.simTime = 12.0 * 3600; });
+      document.getElementById('btnSetEveningRush').addEventListener('click', () => { this.sim.simTime = 17.5 * 3600; });
+
+      document.getElementById('btnClearTraffic').addEventListener('click', () => {
+        this.sim.vehicles = [];
+        this.showToast('Cleared all vehicles.');
+      });
+      document.getElementById('btnResetCity').addEventListener('click', () => {
+        this.sim.pushUndoState();
+        this.sim.nodes.clear();
+        this.sim.edges.clear();
+        this.sim.transitStops.clear();
+        this.sim.transitRoutes.clear();
+        this.sim.zones.clear();
+        this.sim.vehicles = [];
+        this.showToast('City network reset.');
+      });
+
+      document.getElementById('btnFollowVehicle').addEventListener('click', () => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'vehicle') {
+          this.sim.followedVehicleId = this.sim.selectedEntity.id;
+          this.showToast(`Camera following vehicle #${this.sim.followedVehicleId}`);
+        }
+      });
+
+      // Road Inspector Actions
+      document.getElementById('btnToggleClosure').addEventListener('click', () => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'edge') {
+          const edge = this.sim.edges.get(this.sim.selectedEntity.id);
+          if (edge) {
+            this.sim.pushUndoState();
+            edge.status = (edge.status === 'closed') ? 'normal' : 'closed';
+            this.showToast(`Road #${edge.id} status: ${edge.status}`);
+          }
+        }
+      });
+      document.getElementById('btnToggleConstruction').addEventListener('click', () => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'edge') {
+          const edge = this.sim.edges.get(this.sim.selectedEntity.id);
+          if (edge) {
+            this.sim.pushUndoState();
+            edge.status = (edge.status === 'construction') ? 'normal' : 'construction';
+            this.showToast(`Road #${edge.id} construction: ${edge.status === 'construction' ? 'ON' : 'OFF'}`);
+          }
+        }
+      });
+      document.getElementById('btnToggleOneWay').addEventListener('click', () => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'edge') {
+          const edge = this.sim.edges.get(this.sim.selectedEntity.id);
+          if (edge) {
+            this.sim.pushUndoState();
+            edge.oneWay = !edge.oneWay;
+            this.showToast(`Road #${edge.id} one-way: ${edge.oneWay}`);
+          }
+        }
+      });
+      document.getElementById('roadSpeedSlider').addEventListener('input', e => {
+        const val = parseInt(e.target.value);
+        document.getElementById('roadSpeedVal').textContent = val;
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'edge') {
+          const edge = this.sim.edges.get(this.sim.selectedEntity.id);
+          if (edge) edge.speedLimit = val;
+        }
+      });
+
+      // Signal Inspector Actions
+      document.getElementById('nodeTypeSelect').addEventListener('change', e => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'node') {
+          const node = this.sim.nodes.get(this.sim.selectedEntity.id);
+          if (node) {
+            this.sim.pushUndoState();
+            node.type = e.target.value;
+            this.showToast(`Junction #${node.id} set to: ${node.type}`);
+          }
+        }
+      });
+      document.getElementById('signalModeSelect').addEventListener('change', e => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'node') {
+          const node = this.sim.nodes.get(this.sim.selectedEntity.id);
+          if (node) {
+            this.sim.pushUndoState();
+            node.signal.mode = e.target.value;
+            this.showToast(`Signal mode: ${node.signal.mode}`);
+          }
+        }
+      });
+      document.getElementById('btnNextPhase').addEventListener('click', () => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'node') {
+          const node = this.sim.nodes.get(this.sim.selectedEntity.id);
+          if (node && node.signal.phases.length > 0) {
+            node.signal.currentPhaseIdx = (node.signal.currentPhaseIdx + 1) % node.signal.phases.length;
+            node.signal.timer = 0;
+            this.showToast(`Forced Phase ${node.signal.currentPhaseIdx + 1}`);
+          }
+        }
+      });
+      document.getElementById('signalOffsetSlider').addEventListener('input', e => {
+        const val = parseInt(e.target.value);
+        document.getElementById('signalOffsetVal').textContent = `${val}s`;
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'node') {
+          const node = this.sim.nodes.get(this.sim.selectedEntity.id);
+          if (node) node.signal.offset = val;
+        }
+      });
+
+      // Route Inspector Actions
+      document.getElementById('btnDeleteRoute').addEventListener('click', () => {
+        if (this.sim.selectedEntity && this.sim.selectedEntity.type === 'route') {
+          this.sim.pushUndoState();
+          this.sim.transitRoutes.delete(this.sim.selectedEntity.id);
+          this.inspectEntity(null);
+          this.showToast('Transit line removed.');
+        }
+      });
+
+      // JSON & LocalStorage
+      document.getElementById('btnSaveJson').addEventListener('click', () => this.exportJson());
+      document.getElementById('btnLoadJsonTrigger').addEventListener('click', () => document.getElementById('jsonFileInput').click());
+      document.getElementById('jsonFileInput').addEventListener('change', e => this.importJson(e));
+      document.getElementById('btnSaveLocal').addEventListener('click', () => {
+        localStorage.setItem('metroflow_save', this.sim.serializeState());
+        this.showToast('Saved city to browser storage.');
+      });
+      document.getElementById('btnLoadLocal').addEventListener('click', () => {
+        const saved = localStorage.getItem('metroflow_save');
+        if (saved && this.sim.loadState(saved)) {
+          this.showToast('Loaded city from browser storage.');
+        } else {
+          this.showToast('No saved city found in browser storage.');
+        }
+      });
+      document.getElementById('btnExportCsv').addEventListener('click', () => this.exportCsv());
+      document.getElementById('btnExportPng').addEventListener('click', () => this.exportPng());
+
+      document.getElementById('btnApplySeed').addEventListener('click', () => {
+        const seedVal = parseInt(document.getElementById('simSeedInput').value) || 12345;
+        rng.setSeed(seedVal);
+        this.showToast(`Seeded PRNG to: ${seedVal}`);
+      });
+    }
+
+    bindSlider(sliderId, labelId, onInput, unit) {
+      const slider = document.getElementById(sliderId);
+      const label = document.getElementById(labelId);
+      slider.addEventListener('input', e => {
+        label.textContent = `${e.target.value}${unit}`;
+        onInput(e.target.value);
+      });
+    }
+
+    switchSidebarTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+      });
+      document.querySelectorAll('.sidebar-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `tab-${tabName}`);
+      });
+      this.updateHUDAndSidebar();
+    }
+
+    exportJson() {
+      const json = this.sim.serializeState();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `metroflow_city_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    importJson(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        if (this.sim.loadState(ev.target.result)) {
+          this.showToast('City loaded successfully!');
+        } else {
+          this.showToast('Error: Invalid city file.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    exportCsv() {
+      const hist = this.sim.history;
+      let csv = 'Timestamp_s,Throughput_Trips,AvgSpeed_kmh,QueuedVehicles,TransitShare_pct\n';
+      for (let i = 0; i < hist.timestamps.length; i++) {
+        csv += `${hist.timestamps[i].toFixed(1)},${hist.throughput[i]},${hist.avgSpeed[i].toFixed(1)},${hist.queueLength[i]},${hist.transitShare[i].toFixed(1)}\n`;
+      }
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `metroflow_metrics_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    exportPng() {
+      const url = this.renderer.canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `metroflow_map_${Date.now()}.png`;
+      a.click();
+    }
+
+    startLoop() {
+      let lastTime = performance.now();
+      let frameCount = 0;
+      let lastFpsTime = lastTime;
+
+      const loop = now => {
+        const dt = Math.min((now - lastTime) / 1000, 0.1);
+        lastTime = now;
+
+        if (this.sim.followedVehicleId) {
+          const veh = this.sim.vehicles.find(v => v.id === this.sim.followedVehicleId);
+          if (veh) {
+            const edge = this.sim.edges.get(veh.edgeId);
+            if (edge) {
+              const f = this.sim.nodes.get(edge.fromNodeId);
+              if (f) {
+                this.renderer.camera.x = MathUtils.lerp(this.renderer.camera.x, f.x + edge.dx * veh.s, 0.1);
+                this.renderer.camera.y = MathUtils.lerp(this.renderer.camera.y, f.y + edge.dy * veh.s, 0.1);
+              }
+            }
+          }
+        }
+
+        this.sim.update(dt);
+
+        this.renderer.render({
+          tool: this.currentTool,
+          roadStartNode: this.roadStartNode,
+          roadLanes: this.roadLanes,
+          snappedNode: this.snappedNode,
+          snappedPos: this.snappedPos,
+          mouseWorld: this.mouseWorld
+        });
+
+        frameCount++;
+        if (now - lastFpsTime >= 500) {
+          const fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
+          document.getElementById('hudFps').textContent = fps;
+          frameCount = 0;
+          lastFpsTime = now;
+          this.updateHUDAndSidebar();
+        }
+
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    }
+
+    updateHUDAndSidebar() {
+      const activeCount = this.sim.vehicles.length;
+      const queuedCount = this.sim.vehicles.filter(v => v.v < 2.0).length;
+      const avgSpeed = activeCount > 0 ? (this.sim.vehicles.reduce((s, v) => s + v.v, 0) / activeCount) * 1.2 : 0;
+      const congestionPct = activeCount > 0 ? Math.round((queuedCount / activeCount) * 100) : 0;
+
+      document.getElementById('hudActiveVehicles').textContent = activeCount;
+      document.getElementById('hudQueuedVehicles').textContent = queuedCount;
+      document.getElementById('hudAvgSpeed').textContent = `${Math.round(avgSpeed)} km/h`;
+      document.getElementById('hudCompletedTrips').textContent = this.sim.completedTrips;
+      document.getElementById('hudRidership').textContent = this.sim.transitRidership;
+      const hudCong = document.getElementById('hudCongestion');
+      hudCong.textContent = `${congestionPct}%`;
+      hudCong.className = `hud-val ${congestionPct > 50 ? 'danger' : (congestionPct > 25 ? 'warning' : 'good')}`;
+
+      const totalSec = Math.floor(this.sim.simTime);
+      const hours = Math.floor(totalSec / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const timeStr = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+      document.getElementById('clockTime').textContent = timeStr;
+
+      let periodStr = '(Midday)';
+      if (hours >= 7 && hours <= 9) periodStr = '(Morning Rush)';
+      else if (hours >= 16 && hours <= 19) periodStr = '(Evening Rush)';
+      else if (hours >= 21 || hours <= 5) periodStr = '(Night)';
+      document.getElementById('clockPeriod').textContent = periodStr;
+
+      if (this.sim.selectedEntity) {
+        const sel = this.sim.selectedEntity;
+        if (sel.type === 'vehicle') {
+          const veh = this.sim.vehicles.find(v => v.id === sel.id);
+          if (veh) {
+            document.getElementById('veh-title').textContent = `${veh.type === 'bus' ? '🚌 Bus' : (veh.type === 'truck' ? '🚚 Truck' : '🚗 Car')} #${veh.id}`;
+            document.getElementById('veh-speed').textContent = `${Math.round(veh.v * 1.2)} km/h`;
+            document.getElementById('veh-state').textContent = veh.state.toUpperCase();
+            document.getElementById('veh-time').textContent = `${(this.sim.simTime - veh.startTime).toFixed(1)}s`;
+            document.getElementById('veh-route-dist').textContent = `${Math.round(veh.distanceTraveled)}m`;
+            document.getElementById('veh-accel').textContent = `${veh.a > 0 ? '+' : ''}${veh.a.toFixed(1)} m/s²`;
+          }
+        } else if (sel.type === 'edge') {
+          const edge = this.sim.edges.get(sel.id);
+          if (edge) {
+            document.getElementById('road-title').textContent = `🛣️ Road Segment #${edge.id}`;
+            document.getElementById('road-lanes').textContent = `${edge.lanes} Lanes`;
+            document.getElementById('road-speed-limit').textContent = `${edge.speedLimit} km/h`;
+            const vehs = this.sim.spatialEdgeVehicles.get(edge.id) || [];
+            document.getElementById('road-density').textContent = `${vehs.length} veh`;
+            document.getElementById('road-flow').textContent = `${vehs.length * 15} veh/h`;
+          }
+        } else if (sel.type === 'node') {
+          const node = this.sim.nodes.get(sel.id);
+          if (node) {
+            document.getElementById('node-title').textContent = `🚦 Intersection #${node.id}`;
+            document.getElementById('node-type-badge').textContent = node.type.replace('_', ' ').toUpperCase();
+            document.getElementById('nodeTypeSelect').value = node.type;
+            document.getElementById('signalModeSelect').value = node.signal.mode;
+            document.getElementById('signalOffsetSlider').value = node.signal.offset;
+            document.getElementById('signalOffsetVal').textContent = `${node.signal.offset}s`;
+
+            const phaseList = document.getElementById('signalPhasesList');
+            phaseList.innerHTML = '';
+            node.signal.phases.forEach((p, idx) => {
+              const isActive = (idx === node.signal.currentPhaseIdx);
+              const row = document.createElement('div');
+              row.className = 'phase-row';
+              row.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="phase-light ${isActive ? 'green' : 'red'}"></span>
+                  <span style="font-weight:${isActive ? '700' : 'normal'}">${p.name}</span>
+                </div>
+                <span style="font-family:var(--font-mono); color:var(--text-dim);">${p.greenDuration}s</span>
+              `;
+              phaseList.appendChild(row);
+            });
+          }
+        } else if (sel.type === 'stop') {
+          const stop = this.sim.transitStops.get(sel.id);
+          if (stop) {
+            document.getElementById('stop-title').textContent = `🚏 ${stop.name}`;
+            document.getElementById('stop-waiting').textContent = `${stop.waitingPassengers.length} pax`;
+            document.getElementById('stop-boardings').textContent = stop.totalBoardings;
+          }
+        } else if (sel.type === 'route') {
+          const route = this.sim.transitRoutes.get(sel.id);
+          if (route) {
+            document.getElementById('route-title').textContent = `🚌 ${route.name}`;
+            const fleetCount = this.sim.vehicles.filter(v => v.transitRouteId === route.id).length;
+            document.getElementById('route-fleet').textContent = `${fleetCount} Buses`;
+            document.getElementById('route-ridership').textContent = `${route.ridership} pax`;
+          }
+        }
+      }
+
+      const hist = this.sim.history;
+      this.charts.throughput.renderLineSeries([
+        { data: hist.throughput, color: '#10b981' },
+        { data: hist.avgSpeed, color: '#38bdf8' }
+      ]);
+      this.charts.delays.renderLineSeries([
+        { data: hist.queueLength, color: '#f59e0b' },
+        { data: hist.delay, color: '#ef4444' }
+      ]);
+      this.charts.modeShare.renderLineSeries([
+        { data: hist.transitShare, color: '#8b5cf6', max: 100 }
+      ]);
+
+      document.getElementById('statTotalKm').textContent = `${(this.sim.totalTravelDist / 1000).toFixed(1)} km`;
+      document.getElementById('statEmissions').textContent = `${(this.sim.totalTravelDist * 0.00015).toFixed(1)} kg CO₂`;
+      document.getElementById('statFailedTrips').textContent = this.sim.failedTrips;
+      const totalPaxTrips = Math.max(1, this.sim.carTripsCount + this.sim.transitTripsCount);
+      document.getElementById('statTransitShare').textContent = `${Math.round((this.sim.transitTripsCount / totalPaxTrips) * 100)}%`;
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const sim = new TrafficSimulator();
+    const canvas = document.getElementById('simCanvas');
+    const renderer = new Renderer(canvas, sim);
+    const controller = new Controller(sim, renderer);
+
+    window.MetroFlow = {
+      sim,
+      renderer,
+      controller,
+      sounds,
+      classes: { Node, Edge, TransitStop, TransitRoute, Zone, Vehicle }
+    };
+  });
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SDF / CSG Studio</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#0c0f13; --panel:#141a21; --panel2:#10151b; --line:#232c37; --line2:#2d3845;
+  --txt:#cfd8e3; --dim:#7d8a99; --faint:#55606d;
+  --acc:#5fe0a9; --acc2:#e8b64c; --danger:#f0705a; --sel:#2a4a3e;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px}
+#app{display:flex;flex-direction:column;height:100%}
+
+/* ---------- top bar ---------- */
+#topbar{display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;z-index:30}
+.brand{font-weight:700;letter-spacing:.4px;color:#e8eef5;white-space:nowrap}
+.brand em{color:var(--acc);font-style:normal}
+.brand small{color:var(--faint);font-weight:400;margin-left:6px}
+.tb-group{display:flex;align-items:center;gap:5px}
+.tb-label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.tb-spacer{flex:1}
+button,select,input,textarea{font-family:inherit;font-size:12.5px;color:var(--txt);background:var(--panel2);border:1px solid var(--line2);border-radius:5px;padding:4px 8px}
+button{cursor:pointer}
+button:hover{border-color:var(--acc);color:#fff}
+button:disabled{opacity:.45;cursor:default;border-color:var(--line2);color:var(--txt)}
+button.primary{background:#1d3b31;border-color:#2f6a55;color:#c9f5e2}
+button.primary:hover{background:#255043}
+button.toggle.on{background:#1d3b31;border-color:var(--acc);color:#c9f5e2}
+select{padding:3px 6px;max-width:190px}
+input[type=number]{width:100%;font-family:var(--mono);font-size:12px;padding:3px 5px}
+input[type=text]{width:100%;padding:3px 6px}
+input[type=color]{width:100%;height:24px;padding:1px;cursor:pointer;background:var(--panel2)}
+input[type=range]{width:100%;accent-color:var(--acc);height:18px;background:transparent;border:none;padding:0}
+input[type=checkbox]{accent-color:var(--acc);width:14px;height:14px}
+label{user-select:none}
+
+/* ---------- layout ---------- */
+#main{flex:1;display:flex;min-height:0;position:relative}
+aside{background:var(--panel);display:flex;flex-direction:column;min-height:0}
+#scenePanel{width:230px;border-right:1px solid var(--line)}
+#inspector{width:262px;border-left:1px solid var(--line);overflow-y:auto}
+.panel-head{padding:7px 10px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;position:sticky;top:0;background:var(--panel);z-index:2}
+.panel-head .cnt{color:var(--faint);font-weight:400}
+.panel-head .spacer{flex:1}
+.panel-note{padding:8px 10px;color:var(--faint);font-size:11px;line-height:1.45;border-top:1px solid var(--line)}
+.add-row{display:flex;gap:5px;padding:8px 8px 4px}
+.add-row select{flex:1;min-width:0}
+#btnAdd{white-space:nowrap}
+#objectList{list-style:none;overflow-y:auto;flex:1;padding:4px}
+#objectList li{border-radius:5px;margin-bottom:2px;position:relative}
+#objectList li .rowmain{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:5px;border:1px solid transparent;cursor:pointer}
+#objectList li:hover{background:#1a222c}
+#objectList li.sel .rowmain{background:var(--sel);border-color:#3c6a58}
+#objectList li.drop .rowmain{border-top:2px solid var(--acc)}
+.objname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+.objname input{font-size:12px}
+.badge{font-family:var(--mono);font-size:10px;padding:1px 4px;border-radius:4px;background:#202933;color:var(--dim);white-space:nowrap}
+.badge.op{color:var(--acc2)}
+.badge.base{color:var(--acc)}
+.eye{background:none;border:none;padding:0 2px;font-size:12px;color:var(--dim);line-height:1}
+.eye.off{color:var(--faint);opacity:.6}
+li.hiddenobj .objname{color:var(--faint);text-decoration:line-through}
+.rowacts{display:none;position:absolute;right:4px;top:50%;transform:translateY(-50%);gap:2px;background:#1a222c;border:1px solid var(--line2);border-radius:5px;padding:1px}
+#objectList li:hover .rowacts,#objectList li.sel .rowacts{display:flex}
+.rowacts button{background:none;border:none;padding:2px 4px;font-size:11px;color:var(--dim);line-height:1}
+.rowacts button:hover{color:var(--acc)}
+.rowacts button.del:hover{color:var(--danger)}
+
+/* ---------- viewport ---------- */
+#viewport{flex:1;position:relative;min-width:0;background:#000}
+#glc{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:default}
+#perfOverlay{position:absolute;top:10px;left:10px;font-family:var(--mono);font-size:11px;line-height:1.55;color:#bfe8d4;background:rgba(8,12,10,.72);border:1px solid #24473a;border-radius:6px;padding:6px 9px;pointer-events:none;white-space:pre;z-index:5}
+#perfOverlay b{color:#fff;font-weight:600}
+#hintBar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--dim);background:rgba(10,13,17,.7);border:1px solid var(--line);border-radius:6px;padding:3px 10px;pointer-events:none;white-space:nowrap;z-index:5}
+#modeBanner{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:11px;color:var(--acc2);background:rgba(20,16,6,.7);border:1px solid #4a3d1c;border-radius:6px;padding:4px 9px;pointer-events:none;z-index:5}
+
+/* ---------- inspector / settings ---------- */
+#settingsPanel{position:absolute;top:0;right:262px;width:270px;bottom:0;border-left:1px solid var(--line);z-index:20;transform:translateX(calc(100% + 266px));transition:transform .18s ease;overflow-y:auto;box-shadow:-8px 0 24px rgba(0,0,0,.4)}
+#settingsPanel.open{transform:none}
+.isec{padding:9px 10px;border-bottom:1px solid var(--line)}
+.isec h3{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--acc);margin-bottom:7px;font-weight:700}
+.frow{display:grid;grid-template-columns:86px 1fr;align-items:center;gap:6px;margin-bottom:5px}
+.frow>label{color:var(--dim);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow>label.r{font-family:var(--mono);text-align:right;color:#9fb2c4}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:5px}
+.grid3 .cell label{display:block;color:var(--faint);font-size:10px;margin-bottom:1px}
+.srow{display:grid;grid-template-columns:86px 1fr 44px;align-items:center;gap:6px;margin-bottom:4px}
+.srow .val{font-family:var(--mono);font-size:11px;color:#9fb2c4;text-align:right}
+.btnrow{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px}
+.btnrow button{flex:1}
+.hinttxt{color:var(--faint);font-size:11px;line-height:1.4;margin-top:4px}
+.kbd{font-family:var(--mono);background:#1c242e;border:1px solid var(--line2);border-radius:3px;padding:0 4px;font-size:11px}
+
+/* ---------- toasts / dialogs / fatal ---------- */
+#toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:100;align-items:center}
+.toast{background:#16211c;border:1px solid #2f6a55;color:#d6f5e7;padding:7px 14px;border-radius:7px;font-size:12.5px;box-shadow:0 6px 24px rgba(0,0,0,.5);animation:tin .18s ease}
+.toast.err{background:#241416;border-color:#7a3a30;color:#f5d6d0}
+.toast.out{opacity:0;transition:opacity .3s}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line2);border-radius:10px;padding:0;max-width:640px;width:92vw}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog .dhead{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font-weight:700}
+dialog .dhead button{margin-left:auto;background:none;border:none;font-size:16px;color:var(--dim)}
+dialog .dbody{padding:12px 16px;max-height:62vh;overflow-y:auto;line-height:1.55;font-size:12.5px}
+dialog .dbody h4{color:var(--acc);margin:10px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+dialog .dbody table{border-collapse:collapse;width:100%}
+dialog .dbody td{padding:2px 8px 2px 0;vertical-align:top}
+dialog .dbody td:first-child{color:var(--acc2);font-family:var(--mono);white-space:nowrap}
+#fatal{position:fixed;inset:0;background:#12090a;z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+#fatal[hidden]{display:none}
+#fatal .box{max-width:720px;width:100%;background:#1c1012;border:1px solid #6e3028;border-radius:10px;padding:18px 22px}
+#fatal h2{color:var(--danger);margin-bottom:10px;font-size:16px}
+#fatal pre{background:#0d0708;border:1px solid #3a201c;border-radius:6px;padding:10px;font-size:11.5px;max-height:46vh;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#e8c0b8;margin:8px 0}
+#fatal p{color:#caa79f;line-height:1.5;font-size:12.5px}
+
+/* ---------- narrow screens ---------- */
+.paneItoggle{display:none}
+@media (max-width: 900px){
+  .brand small,.tb-label{display:none}
+  select{max-width:120px}
+  .paneltoggle{display:inline-block}
+  #scenePanel,#inspector{position:absolute;top:0;bottom:0;z-index:25;transition:transform .18s ease;box-shadow:0 0 30px rgba(0,0,0,.5)}
+  #scenePanel{left:0;transform:translateX(-102%)}
+  #inspector{right:0;transform:translateX(102%);width:min(300px,86vw)}
+  #scenePanel.open,#inspector.open{transform:none}
+  #settingsPanel{right:0;width:min(300px,86vw)}
+  #perfOverlay{font-size:10px;max-width:70vw}
+  #hintBar{display:none}
+  #modeBanner{top:auto;bottom:8px;right:8px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand"><em>SDF</em>/<em>CSG</em> Studio<small>ray-marched solid modeling</small></div>
+    <div class="tb-group">
+      <label class="tb-label" for="presetSelect">Preset</label>
+      <select id="presetSelect" title="Load a preset scene"></select>
+    </div>
+    <div class="tb-group">
+      <label class="tb-label" for="modeSelect">View</label>
+      <select id="modeSelect" title="Visualization mode"></select>
+    </div>
+    <div class="tb-group">
+      <button id="btnFocus" title="Frame the selected object (F)">Focus</button>
+      <button id="btnCamReset" title="Reset camera (R)">Reset&nbsp;Cam</button>
+    </div>
+    <div class="tb-group">
+      <button id="btnExport" title="Download scene as JSON">Export</button>
+      <button id="btnImport" title="Import scene JSON">Import</button>
+      <button id="btnCopy" title="Copy deterministic scene JSON to clipboard">Copy&nbsp;JSON</button>
+      <button id="btnShot" title="Save screenshot as PNG">PNG</button>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-group">
+      <button id="btnSettings" class="toggle" title="Render settings">⚙ Settings</button>
+      <button id="btnHelp" title="Help (H)">?</button>
+    </div>
+    <button class="paneltoggle" id="btnSceneToggle">Scene</button>
+    <button class="paneltoggle" id="btnInspectorToggle">Edit</button>
+  </header>
+  <main id="main">
+    <aside id="scenePanel">
+      <div class="panel-head">Scene <span class="cnt" id="objCountLbl"></span></div>
+      <div class="add-row">
+        <select id="addType" title="Primitive type to add"></select>
+        <button id="btnAdd" class="primary" title="Add object">+ Add</button>
+      </div>
+      <ul id="objectList"></ul>
+      <div class="panel-note">Objects compose top-to-bottom as an ordered CSG stack. The first visible object is the base solid; its operation is forced to Union. Reordering changes the result.</div>
+    </aside>
+    <div id="viewport">
+      <canvas id="glc"></canvas>
+      <div id="perfOverlay"></div>
+      <div id="modeBanner" hidden></div>
+      <div id="hintBar">drag&nbsp;bg&nbsp;orbit&nbsp;·&nbsp;wheel&nbsp;zoom&nbsp;·&nbsp;right-drag&nbsp;pan&nbsp;·&nbsp;drag&nbsp;object&nbsp;move&nbsp;·&nbsp;<b>F</b>&nbsp;focus&nbsp;·&nbsp;<b>R</b>&nbsp;reset&nbsp;·&nbsp;<b>H</b>&nbsp;help</div>
+    </div>
+    <aside id="inspector">
+      <div class="panel-head">Inspector</div>
+      <div id="inspectorBody"></div>
+    </aside>
+    <aside id="settingsPanel">
+      <div class="panel-head">Render Settings <span class="spacer"></span><button id="btnCloseSettings" title="Close">✕</button></div>
+      <div id="settingsBody"></div>
+    </aside>
+  </main>
+</div>
+<div id="toasts"></div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+<dialog id="helpDialog">
+  <div class="dhead">SDF / CSG Studio — Help<button id="btnCloseHelp" title="Close">✕</button></div>
+  <div class="dbody">
+    <h4>What am I looking at?</h4>
+    <p>Every pixel is <b>sphere-traced</b> against a signed distance field built from your object list. Objects are folded in list order: each object's operation (union, subtract, intersect, and their smooth variants) combines it with the field so far. The first visible object is the base solid.</p>
+    <h4>Viewport</h4>
+    <table>
+      <tr><td>drag background</td><td>orbit camera</td></tr>
+      <tr><td>wheel / pinch</td><td>zoom</td></tr>
+      <tr><td>right-drag / middle-drag</td><td>pan</td></tr>
+      <tr><td>drag an object</td><td>move it in the view plane (picking is done by ray-marching the real SDF)</td></tr>
+      <tr><td>Shift + drag object</td><td>move on the horizontal plane at the grab height</td></tr>
+      <tr><td>double-click object</td><td>focus</td></tr>
+    </table>
+    <h4>Keys</h4>
+    <table>
+      <tr><td>F</td><td>focus selected</td></tr>
+      <tr><td>R</td><td>reset camera</td></tr>
+      <tr><td>G</td><td>toggle grid</td></tr>
+      <tr><td>Space</td><td>pause / resume animation time</td></tr>
+      <tr><td>1 … 8</td><td>visualization modes (final, normals, depth, ID, steps, shadow, AO, slice)</td></tr>
+      <tr><td>Ctrl/⌘+D</td><td>duplicate selected</td></tr>
+      <tr><td>Del</td><td>delete selected</td></tr>
+      <tr><td>Esc</td><td>deselect / close panels</td></tr>
+    </table>
+    <h4>Tips</h4>
+    <p>Smooth ops use the <b>Blend k</b> value of the object carrying the operation. The <b>SDF slice</b> view shows the raw signed field on a plane — warm colors are inside, cool are outside, the yellow line is the zero set. The <b>Artifact Lab</b> preset deliberately stresses the marcher (noisy distance fields, thin shells) so you can study banding and step artifacts.</p>
+    <p>Scenes persist in <span class="kbd">localStorage</span>; use Export/Import JSON to move them between machines. Nothing leaves your browser — there are no network requests.</p>
+  </div>
+</dialog>
+<div id="fatal" hidden>
+  <div class="box">
+    <h2 id="fatalTitle">Renderer error</h2>
+    <p id="fatalMsg"></p>
+    <pre id="fatalLog" hidden></pre>
+    <p style="margin-top:10px"><button id="btnFatalReload">Reload</button></p>
+  </div>
+</div>
+<script>
+'use strict';
+/* ============================================================================
+   SDF / CSG Studio — single-file ray-marched solid modeling
+   Part B: utilities, scene model, shader generation, GL renderer, camera
+   ========================================================================== */
+
+/* ---------------- tiny dom/util helpers ---------------- */
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const D2R = Math.PI / 180;
+const q = v => Math.round(v * 100000) / 100000; // deterministic quantization (5 dp keeps eps intact)
+
+function toast(msg, kind, ms) {
+  const box = $('#toasts');
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind === 'err' ? ' err' : '');
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 350); }, ms || 3000);
+}
+
+function showFatal(title, msg, log) {
+  $('#fatalTitle').textContent = title;
+  $('#fatalMsg').textContent = msg || '';
+  const pre = $('#fatalLog');
+  if (log) { pre.hidden = false; pre.textContent = log; } else { pre.hidden = true; }
+  $('#fatal').hidden = false;
+}
+
+/* ---------------- quaternion helpers (XYZ euler order) ---------------- */
+function qMul(a, b) {
+  return [
+    a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+    a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+    a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+    a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2],
+  ];
+}
+function qFromAxisAngle(ax, ay, az, ang) {
+  const s = Math.sin(ang / 2);
+  return [ax * s, ay * s, az * s, Math.cos(ang / 2)];
+}
+function qFromEuler(rx, ry, rz) { // apply Z, then Y, then X (extrinsic XYZ)
+  const qx = qFromAxisAngle(1, 0, 0, rx);
+  const qy = qFromAxisAngle(0, 1, 0, ry);
+  const qz = qFromAxisAngle(0, 0, 1, rz);
+  return qMul(qx, qMul(qy, qz));
+}
+const qConj = q => [-q[0], -q[1], -q[2], q[3]];
+function qRot(q, v) {
+  const [x, y, z, w] = q, [vx, vy, vz] = v;
+  const tx = 2 * (y*vz - z*vy), ty = 2 * (z*vx - x*vz), tz = 2 * (x*vy - y*vx);
+  return [vx + w*tx + (y*tz - z*ty), vy + w*ty + (z*tx - x*tz), vz + w*tz + (x*ty - y*tx)];
+}
+function hexToLinear(hex) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const f = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  return [f((n >> 16) & 255), f((n >> 8) & 255), f(n & 255)];
+}
+function linearToHex(l) {
+  const f = c => { c = clamp(c, 0, 1); const s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055; return Math.round(s * 255); };
+  return '#' + ((1 << 24) | (f(l[0]) << 16) | (f(l[1]) << 8) | f(l[2])).toString(16).slice(1);
+}
+
+/* ---------------- object / op / material catalogue ---------------- */
+const OPS = [
+  { v: 0, label: 'Union', short: '∪' },
+  { v: 1, label: 'Smooth Union', short: '∪~' },
+  { v: 2, label: 'Subtract', short: '−' },
+  { v: 3, label: 'Smooth Subtract', short: '−~' },
+  { v: 4, label: 'Intersect', short: '∩' },
+  { v: 5, label: 'Smooth Intersect', short: '∩~' },
+];
+const TYPES = [
+  { key: 'sphere',    label: 'Sphere',           scale: [1, 1, 1],           round: 0 },
+  { key: 'box',       label: 'Box',              scale: [0.9, 0.9, 0.9],     round: 0 },
+  { key: 'roundedBox',label: 'Rounded Box',      scale: [0.8, 0.8, 0.8],     round: 0.3 },
+  { key: 'cylinder',  label: 'Cylinder',         scale: [0.6, 0.9, 0.6],     round: 0 },
+  { key: 'capsule',   label: 'Capsule',          scale: [0.35, 0.8, 0.35],   round: 0 },
+  { key: 'torus',     label: 'Torus',            scale: [1, 0.3, 1],         round: 0 },
+  { key: 'plane',     label: 'Plane (half-space)', scale: [1, 1, 1],         round: 0, infinite: true },
+  { key: 'twistBox',  label: 'Twisted Box',      scale: [0.7, 1, 0.7],       round: 0.2,
+    params: [{ k: 'twist', label: 'Twist (°)', min: -360, max: 360, step: 1, def: 120 }] },
+  { key: 'gyroid',    label: 'Gyroid Shell',     scale: [1.1, 1.1, 1.1],     round: 0, noRound: true,
+    params: [{ k: 'freq', label: 'Frequency', min: 0.5, max: 20, step: 0.1, def: 6 },
+             { k: 'shell', label: 'Shell thickness', min: 0.02, max: 0.6, step: 0.01, def: 0.14 }] },
+  { key: 'noiseBall', label: 'Displaced Sphere', scale: [1, 1, 1],           round: 0, noRound: true,
+    params: [{ k: 'amp', label: 'Displacement', min: 0, max: 0.6, step: 0.005, def: 0.16 },
+             { k: 'freq', label: 'Noise frequency', min: 0.5, max: 20, step: 0.1, def: 3 }] },
+];
+const typeByKey = k => TYPES.find(t => t.key === k) || TYPES[0];
+
+const MAT_PRESETS = {
+  diffuse:  { label: 'Diffuse',  metal: 0, rough: 0.85, emissive: 0,   transmission: 0, ior: 1.5 },
+  metal:    { label: 'Metallic', metal: 1, rough: 0.28, emissive: 0,   transmission: 0, ior: 1.5 },
+  glossy:   { label: 'Glossy',   metal: 0, rough: 0.12, emissive: 0,   transmission: 0, ior: 1.5 },
+  emissive: { label: 'Emissive', metal: 0, rough: 0.5,  emissive: 2.6, transmission: 0, ior: 1.5 },
+  glass:    { label: 'Glass',    metal: 0, rough: 0.05, emissive: 0,   transmission: 1, ior: 1.5 },
+};
+
+const DEFAULT_SETTINGS = {
+  renderScale: 100, maxSteps: 160, eps: 0.0015, maxDist: 40,
+  shadowQuality: 6, aoQuality: 6, aoStrength: 1.0, bounces: 1,
+  exposure: 1.0, fov: 50, fog: 0.02, bg: 0, grid: true,
+  playing: true, timeSpeed: 1, time: 0, sliceY: 0,
+};
+const MODES = [
+  { v: 0, label: 'Final render' }, { v: 1, label: 'Surface normals' },
+  { v: 2, label: 'Depth' }, { v: 3, label: 'Object ID' },
+  { v: 4, label: 'Ray steps' }, { v: 5, label: 'Shadow' },
+  { v: 6, label: 'Ambient occlusion' }, { v: 7, label: 'SDF slice' },
+];
+const DEFAULT_CAMERA = { yaw: 0.62, pitch: 0.34, dist: 7.4, target: [0, 0.35, 0] };
+
+/* ---------------- scene state ---------------- */
+let uidSeq = 1;
+const S = {
+  objects: [],
+  settings: { ...DEFAULT_SETTINGS },
+  camera: { ...DEFAULT_CAMERA, target: [...DEFAULT_CAMERA.target] },
+};
+let selectedId = null;
+let viewMode = 0;
+let dirty = true;          // needs a render
+let structureDirty = true; // needs uniform-capacity check
+
+function makeObject(typeKey, over) {
+  const t = typeByKey(typeKey);
+  const o = {
+    id: uidSeq++, name: t.label + ' ' + uidSeq, type: t.key, op: 0,
+    pos: [0, 1, 0], rot: [0, 0, 0], scale: [...t.scale],
+    rounding: t.round, smoothK: 0.5,
+    params: {}, 
+    mat: { color: '#c8ccd4', metal: 0, rough: 0.6, emissive: 0, transmission: 0, ior: 1.5 },
+    anim: { spin: 0, bobAmp: 0, bobFreq: 1 },
+    hidden: false,
+  };
+  (t.params || []).forEach(p => o.params[p.k] = p.def);
+  if (over) deepMerge(o, over);
+  return o;
+}
+function deepMerge(dst, src) {
+  for (const k of Object.keys(src)) {
+    const v = src[k];
+    if (v && typeof v === 'object' && !Array.isArray(v) && dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) deepMerge(dst[k], v);
+    else if (v !== undefined && v !== null) dst[k] = Array.isArray(v) ? [...v] : v;
+  }
+  return dst;
+}
+const selectedObject = () => S.objects.find(o => o.id === selectedId) || null;
+const firstVisibleIndex = () => S.objects.findIndex(o => !o.hidden);
+function boundRadius(o) {
+  const s = o.scale;
+  switch (o.type) {
+    case 'sphere': case 'gyroid': case 'noiseBall': return Math.max(...s) * 1.35 + o.rounding;
+    case 'box': case 'roundedBox': case 'twistBox': return Math.hypot(s[0], s[1], s[2]) + o.rounding;
+    case 'cylinder': return Math.hypot(s[0], s[1]) + o.rounding;
+    case 'capsule': return s[1] + s[0] * 2 + o.rounding;
+    case 'torus': return s[0] + s[1] * 2 + o.rounding + 0.1;
+    default: return 2.5; // plane: arbitrary
+  }
+}
+function effTransform(o, time) {
+  const pos = [o.pos[0], o.pos[1], o.pos[2]];
+  if (o.anim.bobAmp) pos[1] += Math.sin(time * o.anim.bobFreq) * o.anim.bobAmp;
+  let quat = qFromEuler(o.rot[0] * D2R, o.rot[1] * D2R, o.rot[2] * D2R);
+  if (o.anim.spin) quat = qMul(quat, qFromAxisAngle(0, 1, 0, o.anim.spin * D2R * time));
+  return { pos, quat };
+}
+
+/* ---------------- serialization ---------------- */
+function serializeScene() {
+  return {
+    app: 'sdf-studio', version: 1,
+    camera: { yaw: q(S.camera.yaw), pitch: q(S.camera.pitch), dist: q(S.camera.dist), target: S.camera.target.map(q) },
+    settings: (() => { const s = {}; for (const k of Object.keys(DEFAULT_SETTINGS)) s[k] = typeof S.settings[k] === 'number' ? q(S.settings[k]) : S.settings[k]; return s; })(),
+    time: q(S.settings.time),
+    objects: S.objects.map(o => ({
+      name: o.name, type: o.type, op: o.op,
+      pos: o.pos.map(q), rot: o.rot.map(q), scale: o.scale.map(q),
+      rounding: q(o.rounding), smoothK: q(o.smoothK),
+      params: (() => { const p = {}; for (const k of Object.keys(o.params)) p[k] = q(o.params[k]); return p; })(),
+      mat: { color: o.mat.color, metal: q(o.mat.metal), rough: q(o.mat.rough), emissive: q(o.mat.emissive), transmission: q(o.mat.transmission), ior: q(o.mat.ior) },
+      anim: { spin: q(o.anim.spin), bobAmp: q(o.anim.bobAmp), bobFreq: q(o.anim.bobFreq) },
+      hidden: !!o.hidden,
+    })),
+  };
+}
+function deserializeScene(json) {
+  if (!json || typeof json !== 'object') throw new Error('not an object');
+  if (json.app !== 'sdf-studio' || !Array.isArray(json.objects)) throw new Error('missing app/version/objects fields');
+  const objects = json.objects.map(raw => {
+    const t = typeByKey(String(raw.type));
+    const o = makeObject(t.key);
+    deepMerge(o, {
+      name: String(raw.name || o.name).slice(0, 60), op: clamp(raw.op | 0, 0, 5),
+      pos: raw.pos, rot: raw.rot, scale: raw.scale,
+      rounding: raw.rounding, smoothK: raw.smoothK, params: raw.params,
+      mat: raw.mat, anim: raw.anim, hidden: !!raw.hidden,
+    });
+    o.pos = o.pos.map(v => +v || 0); o.rot = o.rot.map(v => +v || 0);
+    o.scale = o.scale.map(v => Math.max(Math.abs(+v) || 0.001, 0.001));
+    o.rounding = Math.max(+o.rounding || 0, 0); o.smoothK = Math.max(+o.smoothK || 0.0001, 0.0001);
+    return o;
+  });
+  const settings = { ...DEFAULT_SETTINGS };
+  if (json.settings) for (const k of Object.keys(DEFAULT_SETTINGS)) if (json.settings[k] !== undefined) settings[k] = json.settings[k];
+  const camera = { ...DEFAULT_CAMERA, target: [...DEFAULT_CAMERA.target] };
+  if (json.camera) deepMerge(camera, json.camera);
+  return { objects, settings, camera, time: +json.time || 0 };
+}
+
+/* ============================================================================
+   Fragment shader — generated with a compile-time object capacity N.
+   Per-object data lives in uniform arrays so transform edits never recompile.
+   uA: pos.xyz, +type / -type-... (w<0 ⇒ hidden)   uB: quat   uC: scale, rounding
+   uD: op, smoothK, extra0, extra1                  uE: color.rgb, emissive
+   uF: metal, rough, transmission, ior
+   ========================================================================== */
+function buildFragSource(N) {
+  return `#version 300 es
+precision highp float;
+#define N ${N}
+uniform vec2 uRes; uniform float uTime;
+uniform vec3 uCamPos, uCamRight, uCamUp, uCamFwd;
+uniform float uFovTan;
+uniform int uMode, uMaxSteps, uShadowSteps, uAoSamples, uBounces, uBgMode, uAnyVisible;
+uniform float uEps, uMaxDist, uExposure, uShadowK, uAoStrength, uFogDensity, uGridOn, uSliceY;
+uniform vec3 uSunDir, uSunColor, uSkyColor, uGroundColor;
+uniform vec4 uA[N]; uniform vec4 uB[N]; uniform vec4 uC[N];
+uniform vec4 uD[N]; uniform vec4 uE[N]; uniform vec4 uF[N];
+out vec4 fragColor;
+
+float hash1(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float noise3(vec3 x){
+  vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash1(i), hash1(i + vec3(1,0,0)), f.x),
+                 mix(hash1(i + vec3(0,1,0)), hash1(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(hash1(i + vec3(0,0,1)), hash1(i + vec3(1,0,1)), f.x),
+                 mix(hash1(i + vec3(0,1,1)), hash1(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+vec3 qrot(vec4 q, vec3 v){ return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
+
+float evalObj(vec3 p, int i){
+  vec3 pos = uA[i].xyz;
+  float type = abs(uA[i].w) - 1.0;
+  vec4 qt = uB[i];
+  vec3 sc = max(uC[i].xyz, vec3(0.001));
+  float rnd = max(uC[i].w, 0.0);
+  float e0 = uD[i].z, e1 = uD[i].w;
+  vec3 l = qrot(vec4(-qt.x, -qt.y, -qt.z, qt.w), p - pos);
+  if (type < 0.5) {                                   // sphere / ellipsoid
+    float ms = min(sc.x, min(sc.y, sc.z));
+    return (length(l / sc) - 1.0) * ms - rnd;
+  } else if (type < 2.5) {                            // box & rounded box
+    vec3 b = max(sc - rnd, vec3(0.0));
+    vec3 aq = abs(l) - b;
+    return length(max(aq, 0.0)) + min(max(aq.x, max(aq.y, aq.z)), 0.0) + rnd;
+  } else if (type < 3.5) {                            // capped cylinder (Y axis)
+    float r = max(sc.x - rnd, 0.0), h = max(sc.y - rnd, 0.0);
+    vec2 dd = vec2(length(l.xz) - r, abs(l.y) - h);
+    return min(max(dd.x, dd.y), 0.0) + length(max(dd, 0.0)) + rnd;
+  } else if (type < 4.5) {                            // capsule
+    float h = max(sc.y, 0.0);
+    l.y -= clamp(l.y, -h, h);
+    return length(l) - max(sc.x + rnd, 0.001);
+  } else if (type < 5.5) {                            // torus
+    vec2 tq = vec2(length(l.xz) - max(sc.x, 0.001), l.y);
+    return length(tq) - max(sc.y + rnd, 0.001);
+  } else if (type < 6.5) {                            // plane: solid below local y = 0
+    return l.y - rnd;
+  } else if (type < 7.5) {                            // twisted rounded box
+    float h = max(sc.y, 0.001);
+    float a = radians(e0) * (l.y / h);
+    float c = cos(a), s = sin(a);
+    l.xz = mat2(c, -s, s, c) * l.xz;
+    vec3 b = max(sc - rnd, vec3(0.0));
+    vec3 aq = abs(l) - b;
+    return length(max(aq, 0.0)) + min(max(aq.x, max(aq.y, aq.z)), 0.0) + rnd;
+  } else if (type < 8.5) {                            // gyroid shell inside a sphere
+    float ms = min(sc.x, min(sc.y, sc.z));
+    float sph = (length(l / sc) - 1.0) * ms;
+    float f = max(e0, 0.2);
+    vec3 g = l * f;
+    float gy = (abs(dot(sin(g), cos(g.zxy))) - max(e1, 0.01)) / f * 0.62;
+    return max(sph, gy);
+  } else {                                            // noise-displaced sphere
+    float ms = min(sc.x, min(sc.y, sc.z));
+    float base = (length(l / sc) - 1.0) * ms;
+    return base + (noise3(l * max(e1, 0.05)) - 0.5) * 2.0 * max(e0, 0.0);
+  }
+}
+
+vec2 map(vec3 p){
+  float d = 1e9; float id = -1.0;
+  for (int i = 0; i < N; i++){
+    if (uA[i].w < 0.0) continue;
+    float dd = evalObj(p, i);
+    float op = uD[i].x;
+    float k = max(uD[i].y, 0.0001);
+    if (id < -0.5) op = 0.0;                          // first visible object is the base solid
+    if (op < 0.5) {                                   // union
+      if (dd < d) { d = dd; id = float(i); }
+    } else if (op < 1.5) {                            // smooth union
+      if (dd < d) id = float(i);
+      float t = clamp(0.5 + 0.5 * (dd - d) / k, 0.0, 1.0);
+      d = mix(dd, d, t) - k * t * (1.0 - t);
+    } else if (op < 2.5) {                            // subtract
+      if (-dd > d) id = float(i);
+      d = max(d, -dd);
+    } else if (op < 3.5) {                            // smooth subtract
+      if (-dd > d) id = float(i);
+      float t = clamp(0.5 - 0.5 * (-dd - d) / k, 0.0, 1.0);
+      d = mix(-dd, d, t) + k * t * (1.0 - t);
+    } else if (op < 4.5) {                            // intersect
+      if (dd > d) id = float(i);
+      d = max(d, dd);
+    } else {                                          // smooth intersect
+      if (dd > d) id = float(i);
+      float t = clamp(0.5 - 0.5 * (dd - d) / k, 0.0, 1.0);
+      d = mix(dd, d, t) + k * t * (1.0 - t);
+    }
+  }
+  return vec2(d, id);
+}
+
+vec4 march(vec3 ro, vec3 rd, int maxSteps, float eps, float tmax){
+  float t = 0.0, id = -1.0, steps = 0.0;
+  if (uAnyVisible == 0) return vec4(0.0, -1.0, 0.0, 0.0);
+  for (int i = 0; i < 600; i++){
+    if (i >= maxSteps) break;
+    vec2 h = map(ro + rd * t);
+    steps += 1.0;
+    if (h.x < eps) { id = h.y; break; }
+    t += h.x;
+    if (t > tmax) break;
+  }
+  return vec4(t, id, steps, id > -0.5 ? 1.0 : 0.0);
+}
+
+vec3 calcNormal(vec3 p){
+  vec2 e = vec2(1.0, -1.0) * 0.5773;
+  float eps = clamp(uEps * 0.7, 0.0002, 0.02);
+  return normalize(e.xyy * map(p + e.xyy * eps).x + e.yyx * map(p + e.yyx * eps).x +
+                   e.yxy * map(p + e.yxy * eps).x + e.xxx * map(p + e.xxx * eps).x);
+}
+
+float softShadow(vec3 ro, vec3 rd){
+  float res = 1.0, t = 0.02;
+  for (int i = 0; i < 128; i++){
+    if (i >= uShadowSteps) break;
+    float h = map(ro + rd * t).x;
+    res = min(res, uShadowK * h / t);
+    t += clamp(h, 0.005, 0.3);
+    if (res < 0.005 || t > 18.0) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
+float calcAO(vec3 p, vec3 n){
+  float occ = 0.0, sca = 1.0;
+  for (int i = 0; i < 12; i++){
+    if (i >= uAoSamples) break;
+    float hr = 0.01 + 0.13 * float(i) / max(float(uAoSamples - 1), 1.0);
+    float dd = map(p + n * hr).x;
+    occ += (hr - dd) * sca;
+    sca *= 0.78;
+  }
+  return clamp(1.0 - 1.1 * uAoStrength * occ, 0.0, 1.0);
+}
+
+vec3 skyColor(vec3 rd){
+  if (uBgMode == 1) return mix(vec3(0.045, 0.05, 0.062), vec3(0.10, 0.11, 0.13), clamp(rd.y * 0.5 + 0.5, 0.0, 1.0));
+  if (uBgMode == 2) return mix(vec3(0.60, 0.62, 0.66), vec3(0.86, 0.88, 0.92), clamp(rd.y * 0.5 + 0.5, 0.0, 1.0));
+  if (uBgMode == 3) return vec3(0.008);
+  vec3 zen = vec3(0.052, 0.075, 0.135);
+  vec3 hor = vec3(0.40, 0.425, 0.48);
+  vec3 c = mix(hor, zen, pow(clamp(rd.y * 1.6 + 0.12, 0.0, 1.0), 0.65));
+  c += uSunColor * 0.10 * pow(max(dot(rd, uSunDir), 0.0), 28.0);
+  return c;
+}
+
+vec3 renderBackground(vec3 ro, vec3 rd){
+  return skyColor(rd);
+}
+
+/* cosmetic editor grid on the y = 0 plane, depth-tested against the primary hit */
+vec3 applyGroundGrid(vec3 ro, vec3 rd, float tHit, bool hit, vec3 col){
+  if (uGridOn < 0.5 || rd.y > -0.002) return col;
+  float tp = -ro.y / rd.y;
+  if (tp < 0.001 || tp > uMaxDist) return col;
+  if (hit && tp > tHit) return col;
+  vec2 g = (ro + rd * tp).xz;
+  vec2 rl = abs(g - floor(g + 0.5));
+  float aa = tp * 0.0035 + 0.002;
+  float line = 1.0 - smoothstep(aa, aa * 2.2, min(rl.x, rl.y));
+  float fade = exp(-tp * 0.045);
+  col = mix(col, vec3(0.52, 0.58, 0.66), line * 0.28 * fade);
+  float ax = 1.0 - smoothstep(aa, aa * 3.0, abs(g.y));  /* z = 0 → X axis */
+  float az = 1.0 - smoothstep(aa, aa * 3.0, abs(g.x));  /* x = 0 → Z axis */
+  col = mix(col, vec3(0.85, 0.30, 0.28), ax * fade * 0.55);
+  col = mix(col, vec3(0.30, 0.50, 0.92), az * fade * 0.55);
+  return col;
+}
+
+vec3 shadeSimple(vec3 ro, vec3 rd){                    // cheap shading for secondary rays
+  vec4 h = march(ro, rd, 80, uEps * 2.0, uMaxDist);
+  if (h.w < 0.5) return skyColor(rd);
+  vec3 p = ro + rd * h.x;
+  vec3 n = calcNormal(p);
+  int i = int(h.y + 0.5);
+  vec3 alb = uE[i].rgb; float emis = uE[i].w;
+  float metal = uF[i].x, trans = uF[i].z;
+  float dif = max(dot(n, uSunDir), 0.0);
+  vec3 amb = mix(uGroundColor, uSkyColor, n.y * 0.5 + 0.5);
+  vec3 col = alb * (1.0 - metal) * (dif * uSunColor * 0.5 + amb * 0.55) + alb * emis * 3.0;
+  vec3 hv = normalize(uSunDir - rd);
+  col += uSunColor * 0.22 * pow(max(dot(n, hv), 0.0), 44.0) * (1.0 - trans);
+  float fog = 1.0 - exp(-uFogDensity * h.x);
+  return mix(col, skyColor(vec3(rd.x, max(rd.y, 0.0), rd.z)), fog);
+}
+
+vec3 shadeSurface(vec3 ro, vec3 rd, float t, float idf){
+  vec3 p = ro + rd * t;
+  vec3 n = calcNormal(p);
+  int i = int(idf + 0.5);
+  vec3 alb = uE[i].rgb; float emis = uE[i].w;
+  float metal = uF[i].x, rough = max(uF[i].y, 0.04), trans = uF[i].z, ior = max(uF[i].w, 1.01);
+  vec3 col;
+
+  if (trans > 0.5) {
+    /* ---- glass / translucent ---- */
+    float cosi = clamp(dot(-rd, n), 0.0, 1.0);
+    float f0 = (ior - 1.0) / (ior + 1.0); f0 *= f0;
+    float fres = f0 + (1.0 - f0) * pow(1.0 - cosi, 5.0);
+    col = shadeSimple(p + n * 0.03, reflect(rd, n)) * fres;
+    vec3 rdi = refract(rd, n, 1.0 / ior);
+    if (dot(rdi, rdi) < 0.25) rdi = rd;
+    vec3 ip = p + rdi * 0.02;
+    float tt = 0.02; bool exited = false;
+    for (int j = 0; j < 96; j++){
+      float d = map(ip + rdi * tt).x;
+      if (d > -uEps * 1.5) { exited = true; break; }
+      tt += max(-d, 0.005);
+      if (tt > uMaxDist) break;
+    }
+    vec3 ep = ip + rdi * tt;
+    vec3 n2 = calcNormal(ep);
+    vec3 rdo = refract(rdi, -n2, ior);
+    bool tir = dot(rdo, rdo) < 0.25;
+    if (tir) rdo = rdi;
+    vec3 tint = exp(-(vec3(1.0) - alb) * 1.4 * tt) * (tir ? 0.55 : 1.0);
+    vec3 behind = shadeSimple(ep + rdo * 0.03, rdo);
+    col += (1.0 - fres) * tint * behind * (exited ? 1.0 : 0.7);
+    col += alb * emis * 3.0;
+    col += alb * 0.04 * calcAO(p, n);
+  } else {
+    /* ---- opaque: sun + soft shadow + GGX spec + ambient + AO + reflections ---- */
+    float ndl = max(dot(n, uSunDir), 0.0);
+    float sh = softShadow(p + n * 0.02, uSunDir);
+    float ao = calcAO(p, n);
+    vec3 hv = normalize(uSunDir - rd);
+    float a = rough * rough, a2 = a * a;
+    float ndh = max(dot(n, hv), 0.0);
+    float ndv = max(dot(n, -rd), 0.0001);
+    float dtrm = a2 / (3.14159 * pow(ndh * ndh * (a2 - 1.0) + 1.0, 2.0));
+    vec3 F0 = mix(vec3(0.04), alb, metal);
+    vec3 F = F0 + (1.0 - F0) * pow(clamp(1.0 - dot(hv, -rd), 0.0, 1.0), 5.0);
+    vec3 direct = uSunColor * ndl * sh * (alb * (1.0 - metal) * (1.0 / 3.14159) + dtrm * F * mix(0.25, 1.2, metal));
+    vec3 amb = mix(uGroundColor, uSkyColor, n.y * 0.5 + 0.5) * ao;
+    vec3 ambient = amb * alb * (1.0 - metal) * 0.55 + amb * F * 0.5;
+    col = direct + ambient + alb * emis * 3.0;
+
+    if (uBounces > 0 && rough < 0.98 && trans < 0.5){
+      vec3 thr = F * (1.0 - rough * 0.6);
+      vec3 spec = vec3(0.0);
+      vec3 rro = p + n * 0.02, rrd = reflect(rd, n);
+      for (int b = 0; b < 3; b++){
+        if (b >= uBounces) break;
+        vec4 rh = march(rro, rrd, 80, uEps * 2.0, uMaxDist);
+        if (rh.w < 0.5) { spec += thr * skyColor(rrd); break; }
+        vec3 rp = rro + rrd * rh.x;
+        vec3 rn = calcNormal(rp);
+        int ri = int(rh.y + 0.5);
+        vec3 ralb = uE[ri].rgb; float remis = uE[ri].w;
+        float rmetal = uF[ri].x, rrough = max(uF[ri].y, 0.04), rtrans = uF[ri].z;
+        float rdif = max(dot(rn, uSunDir), 0.0);
+        vec3 ramb = mix(uGroundColor, uSkyColor, rn.y * 0.5 + 0.5);
+        vec3 rcol = ralb * (1.0 - rmetal) * (rdif * uSunColor * 0.6 + ramb * 0.55) + ralb * remis * 3.0;
+        if (rtrans > 0.5) rcol = mix(rcol, skyColor(rrd), 0.55);
+        spec += thr * rcol;
+        thr *= mix(vec3(0.04), ralb, rmetal) * (1.0 - rrough * 0.85);
+        if (max(thr.x, max(thr.y, thr.z)) < 0.02) break;
+        rrd = reflect(rrd, rn); rro = rp + rn * 0.02;
+      }
+      col += spec;
+    }
+  }
+  float fog = 1.0 - exp(-uFogDensity * t);
+  return mix(col, skyColor(vec3(rd.x, max(rd.y, 0.0), rd.z)), fog);
+}
+
+vec3 palette(float id){
+  float h = id * 0.61803398875 + 0.08;
+  return 0.40 + 0.55 * cos(6.28318 * (h + vec3(0.0, 0.33, 0.67)));
+}
+vec3 heat(float x){
+  x = clamp(x, 0.0, 1.0);
+  return clamp(vec3(1.7 * x - 0.08, 1.7 * x - 0.62, 1.5 * x - 1.05), 0.0, 1.0);
+}
+vec3 aces(vec3 x){
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+
+void main(){
+  vec2 fc = gl_FragCoord.xy;
+  vec2 ndc = (2.0 * fc - uRes) / uRes.y;
+  vec3 ro = uCamPos;
+  vec3 rd = normalize(uCamFwd + uCamRight * ndc.x * uFovTan + uCamUp * ndc.y * uFovTan);
+
+  if (uMode == 7) { /* ---- SDF slice on plane y = uSliceY ---- */
+    vec3 col = vec3(0.015, 0.017, 0.022);
+    if (abs(rd.y) > 1e-5){
+      float t = (uSliceY - ro.y) / rd.y;
+      if (t > 0.0){
+        vec3 p = ro + rd * t;
+        vec2 g = p.xz;
+        vec2 rl = abs(g - floor(g + 0.5));
+        float aa = t * 0.0035 + 0.002;
+        float gl = 1.0 - smoothstep(aa, aa * 2.2, min(rl.x, rl.y));
+        col = mix(col, vec3(0.10, 0.12, 0.16), gl * 0.85);
+        float v = map(p).x;
+        float u = v * 6.0;
+        float w = fwidth(u) * 1.4 + 1e-5;
+        float line = 1.0 - smoothstep(0.0, w, abs(fract(u + 0.5) - 0.5));
+        vec3 fieldCol = v < 0.0 ? vec3(0.82, 0.26, 0.22) : vec3(0.24, 0.52, 0.88);
+        col = mix(col, fieldCol, 0.38);
+        col += vec3(0.85) * line * 0.30;
+        float wz = fwidth(v) * 2.0 + 1e-6;
+        float zero = 1.0 - smoothstep(0.0, wz, abs(v));
+        col = mix(col, vec3(1.0, 0.85, 0.25), zero * 0.95);
+      }
+    }
+    fragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(0.4545)), 1.0);
+    return;
+  }
+
+  vec4 h = march(ro, rd, uMaxSteps, uEps, uMaxDist);
+
+  if (uMode == 99) { /* ---- picking: R = id+1, G = steps, B = depth ---- */
+    fragColor = vec4((h.y + 1.0) / 255.0, min(h.z, 255.0) / 255.0, clamp(h.x / uMaxDist, 0.0, 1.0), 1.0);
+    return;
+  }
+  if (uMode == 1) { /* normals */
+    fragColor = h.w < 0.5 ? vec4(vec3(0.02), 1.0) : vec4(calcNormal(ro + rd * h.x) * 0.5 + 0.5, 1.0);
+    return;
+  }
+  if (uMode == 2) { /* depth */
+    float d = h.w < 0.5 ? 1.0 : clamp(h.x / uMaxDist, 0.0, 1.0);
+    fragColor = vec4(mix(vec3(0.85, 0.93, 1.0), vec3(0.02, 0.05, 0.12), pow(d, 0.6)), 1.0);
+    return;
+  }
+  if (uMode == 3) { /* object id */
+    fragColor = vec4(h.w < 0.5 ? vec3(0.03) : palette(h.y), 1.0);
+    return;
+  }
+  if (uMode == 4) { /* ray steps */
+    fragColor = vec4(heat(h.z / float(uMaxSteps)), 1.0);
+    return;
+  }
+  if (uMode == 5) { /* shadow */
+    if (h.w < 0.5) { fragColor = vec4(vec3(0.0), 1.0); return; }
+    vec3 p = ro + rd * h.x;
+    vec3 n = calcNormal(p);
+    float sh = softShadow(p + n * 0.02, uSunDir);
+    fragColor = vec4(vec3(sh), 1.0);
+    return;
+  }
+  if (uMode == 6) { /* AO */
+    if (h.w < 0.5) { fragColor = vec4(vec3(0.0), 1.0); return; }
+    vec3 p = ro + rd * h.x;
+    vec3 n = calcNormal(p);
+    fragColor = vec4(vec3(calcAO(p, n)), 1.0);
+    return;
+  }
+
+  vec3 col = (h.w < 0.5) ? renderBackground(ro, rd) : shadeSurface(ro, rd, h.x, h.y);
+  col = applyGroundGrid(ro, rd, h.x, h.w > 0.5, col);
+  col *= uExposure;
+  col = aces(col);
+  fragColor = vec4(pow(col, vec3(0.4545)), 1.0);
+}`;
+}
+const VERT_SRC = `#version 300 es
+layout(location = 0) in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+/* ============================================================================
+   WebGL renderer
+   ========================================================================== */
+const canvas = $('#glc');
+let gl = null, prog = null, U = {}, curN = 0, MAXN = 32;
+let arrA, arrB, arrC, arrD, arrE, arrF;   // Float32Array per-object uniforms
+let pickFBO = null, pickTex = null, pickW = 2, pickH = 2;
+let internalW = 2, internalH = 2;
+const pickPixel = new Uint8Array(4);
+
+function compileShader(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(sh) || '(no log)';
+    gl.deleteShader(sh);
+    throw new Error(log);
+  }
+  return sh;
+}
+function buildProgram(N) {
+  const p = gl.createProgram();
+  const vs = compileShader(gl.VERTEX_SHADER, VERT_SRC);
+  const fs = compileShader(gl.FRAGMENT_SHADER, buildFragSource(N));
+  gl.attachShader(p, vs); gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  gl.deleteShader(vs); gl.deleteShader(fs);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(p) || '(no log)';
+    gl.deleteProgram(p);
+    throw new Error(log);
+  }
+  return p;
+}
+function cacheUniforms() {
+  U = {};
+  for (const name of ['uRes','uTime','uCamPos','uCamRight','uCamUp','uCamFwd','uFovTan','uMode',
+      'uMaxSteps','uEps','uMaxDist','uExposure','uShadowSteps','uShadowK','uAoSamples','uAoStrength',
+      'uBounces','uFogDensity','uBgMode','uGridOn','uSliceY','uSunDir','uSunColor','uSkyColor',
+      'uGroundColor','uAnyVisible','uA','uB','uC','uD','uE','uF'])
+    U[name] = gl.getUniformLocation(prog, name);
+}
+function ensureCapacity(count) {
+  if (count <= curN) return;
+  const newN = Math.min(MAXN, Math.max(8, Math.ceil(count / 8) * 8));
+  if (newN < count) throw new Error(`Object limit reached (${MAXN} objects on this GPU).`);
+  buildRenderer(newN);
+}
+function buildRenderer(N) {
+  if (prog) { const old = prog; prog = null; gl.deleteProgram(old); }
+  prog = buildProgram(N);
+  curN = N;
+  cacheUniforms();
+  arrA = new Float32Array(N * 4); arrB = new Float32Array(N * 4); arrC = new Float32Array(N * 4);
+  arrD = new Float32Array(N * 4); arrE = new Float32Array(N * 4); arrF = new Float32Array(N * 4);
+  dirty = true;
+}
+function ensurePickTarget(w, h) {
+  if (pickFBO && pickW === w && pickH === h) return;
+  pickW = w; pickH = h;
+  if (pickTex) gl.deleteTexture(pickTex);
+  if (pickFBO) gl.deleteFramebuffer(pickFBO);
+  pickTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, pickTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  pickFBO = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pickFBO);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickTex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+}
+function initGL() {
+  gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false,
+    preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+  if (!gl) throw new Error('WebGL2 is not available in this browser. The SDF/CSG studio needs WebGL2 (try a recent Chrome, Firefox, Edge or Safari).');
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const maxUni = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS);
+  MAXN = clamp(Math.floor((maxUni - 40) / 6), 8, 32);
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); showFatal('WebGL context lost', 'The GPU context was lost (driver reset or resource pressure). Reload the page to continue.'); });
+}
+
+/* ---------------- camera ---------------- */
+function camBasis() {
+  const c = S.camera;
+  const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+  const eye = [
+    c.target[0] + c.dist * cp * Math.sin(c.yaw),
+    c.target[1] + c.dist * sp,
+    c.target[2] + c.dist * cp * Math.cos(c.yaw),
+  ];
+  let fwd = [c.target[0] - eye[0], c.target[1] - eye[1], c.target[2] - eye[2]];
+  const fl = Math.hypot(...fwd) || 1; fwd = fwd.map(v => v / fl);
+  let right = [-fwd[2], 0, fwd[0]];
+  const rl = Math.hypot(...right) || 1; right = right.map(v => v / rl);
+  const up = [right[1]*fwd[2] - right[2]*fwd[1], right[2]*fwd[0] - right[0]*fwd[2], right[0]*fwd[1] - right[1]*fwd[0]];
+  return { eye, fwd, right, up };
+}
+function rayFromScreen(cssX, cssY) {
+  const r = canvas.getBoundingClientRect();
+  const { eye, fwd, right, up } = camBasis();
+  const tanF = Math.tan(S.settings.fov * D2R / 2);
+  const nx = (2 * cssX - r.width) / r.height;
+  const ny = (r.height - 2 * cssY) / r.height;
+  const d = [fwd[0] + (right[0]*nx + up[0]*ny) * tanF, fwd[1] + (right[1]*nx + up[1]*ny) * tanF, fwd[2] + (right[2]*nx + up[2]*ny) * tanF];
+  const l = Math.hypot(...d) || 1;
+  return { ro: eye, rd: d.map(v => v / l) };
+}
+function projectToScreen(p) {
+  const r = canvas.getBoundingClientRect();
+  const { eye, fwd, right, up } = camBasis();
+  const rel = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
+  const z = rel[0]*fwd[0] + rel[1]*fwd[1] + rel[2]*fwd[2];
+  if (z <= 0.01) return null;
+  const tanF = Math.tan(S.settings.fov * D2R / 2);
+  const x = (rel[0]*right[0] + rel[1]*right[1] + rel[2]*right[2]) / (z * tanF);
+  const y = (rel[0]*up[0] + rel[1]*up[1] + rel[2]*up[2]) / (z * tanF);
+  return { x: (x * r.height + r.width) / 2, y: (r.height - y * r.height) / 2, depth: z };
+}
+function resetCamera() {
+  S.camera = { yaw: DEFAULT_CAMERA.yaw, pitch: DEFAULT_CAMERA.pitch, dist: DEFAULT_CAMERA.dist, target: [...DEFAULT_CAMERA.target] };
+  dirty = true;
+}
+function focusSelected() {
+  const o = selectedObject();
+  if (!o) { toast('Nothing selected to focus'); return; }
+  const et = effTransform(o, S.settings.time);
+  S.camera.target = [...et.pos];
+  S.camera.dist = clamp(boundRadius(o) * 3.0, 1.6, 60);
+  dirty = true;
+}
+
+/* ---------------- uniform upload + draw ---------------- */
+const SUN_DIR = (() => { const v = [-0.45, 0.78, 0.42]; const l = Math.hypot(...v); return v.map(x => x / l); })();
+const SUN_COLOR = [2.5, 2.28, 2.0], SKY_COLOR = [0.34, 0.40, 0.52], GROUND_COLOR = [0.20, 0.17, 0.145];
+
+function fillUniformArrays(time) {
+  const n = S.objects.length;
+  arrA.fill(0); arrB.fill(0); arrC.fill(0); arrD.fill(0); arrE.fill(0); arrF.fill(0);
+  for (let i = 0; i < curN; i++) {
+    const o = i < n ? S.objects[i] : null;
+    const t = o ? typeByKey(o.type) : null;
+    const idx = i * 4;
+    if (!o || o.hidden) { arrA[idx + 3] = -1; continue; }
+    const et = effTransform(o, time);
+    arrA[idx] = et.pos[0]; arrA[idx + 1] = et.pos[1]; arrA[idx + 2] = et.pos[2];
+    arrA[idx + 3] = TYPES.indexOf(t) + 1;
+    arrB[idx] = et.quat[0]; arrB[idx + 1] = et.quat[1]; arrB[idx + 2] = et.quat[2]; arrB[idx + 3] = et.quat[3];
+    arrC[idx] = o.scale[0]; arrC[idx + 1] = o.scale[1]; arrC[idx + 2] = o.scale[2]; arrC[idx + 3] = o.rounding;
+    arrD[idx] = o.op; arrD[idx + 1] = o.smoothK;
+    if (o.type === 'twistBox') { arrD[idx + 2] = o.params.twist; }
+    else if (o.type === 'gyroid') { arrD[idx + 2] = o.params.freq; arrD[idx + 3] = o.params.shell; }
+    else if (o.type === 'noiseBall') { arrD[idx + 2] = o.params.amp; arrD[idx + 3] = o.params.freq; }
+    const rgb = hexToLinear(o.mat.color);
+    arrE[idx] = rgb[0]; arrE[idx + 1] = rgb[1]; arrE[idx + 2] = rgb[2]; arrE[idx + 3] = o.mat.emissive;
+    arrF[idx] = o.mat.metal; arrF[idx + 1] = o.mat.rough; arrF[idx + 2] = o.mat.transmission; arrF[idx + 3] = o.mat.ior;
+  }
+}
+
+let fpsEMA = 0, lastFrameTs = 0, framesRendered = 0, idleFrames = 0;
+function renderFrame(nowMs) {
+  if (!prog) return;
+  const st = S.settings;
+  if (structureDirty) { try { ensureCapacity(S.objects.length); } catch (e) { toast(e.message, 'err'); } structureDirty = false; }
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const vw = Math.max(2, Math.round(canvas.clientWidth * dpr * st.renderScale / 100));
+  const vh = Math.max(2, Math.round(canvas.clientHeight * dpr * st.renderScale / 100));
+  if (canvas.width !== vw || canvas.height !== vh) { canvas.width = vw; canvas.height = vh; }
+  internalW = vw; internalH = vh;
+
+  gl.useProgram(prog);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, vw, vh);
+  ensurePickTarget(Math.max(2, Math.ceil(vw / 2)), Math.max(2, Math.ceil(vh / 2)));
+  const { eye, fwd, right, up } = camBasis();
+  const anyVisible = S.objects.some(o => !o.hidden) ? 1 : 0;
+  fillUniformArrays(st.time);
+  gl.uniform2f(U.uRes, vw, vh);
+  gl.uniform1f(U.uTime, st.time);
+  gl.uniform3f(U.uCamPos, eye[0], eye[1], eye[2]);
+  gl.uniform3f(U.uCamRight, right[0], right[1], right[2]);
+  gl.uniform3f(U.uCamUp, up[0], up[1], up[2]);
+  gl.uniform3f(U.uCamFwd, fwd[0], fwd[1], fwd[2]);
+  gl.uniform1f(U.uFovTan, Math.tan(st.fov * D2R / 2));
+  gl.uniform1i(U.uMode, viewMode);
+  gl.uniform1i(U.uMaxSteps, Math.round(st.maxSteps));
+  gl.uniform1f(U.uEps, st.eps);
+  gl.uniform1f(U.uMaxDist, st.maxDist);
+  gl.uniform1f(U.uExposure, st.exposure);
+  gl.uniform1i(U.uShadowSteps, Math.round(8 + st.shadowQuality * 7));
+  gl.uniform1f(U.uShadowK, 22 - st.shadowQuality * 1.8);
+  gl.uniform1i(U.uAoSamples, clamp(Math.round(2 + st.aoQuality * 0.8), 1, 12));
+  gl.uniform1f(U.uAoStrength, st.aoStrength);
+  gl.uniform1i(U.uBounces, Math.round(st.bounces));
+  gl.uniform1f(U.uFogDensity, st.fog);
+  gl.uniform1i(U.uBgMode, Math.round(st.bg));
+  gl.uniform1f(U.uGridOn, st.grid ? 1 : 0);
+  gl.uniform1f(U.uSliceY, st.sliceY);
+  gl.uniform3f(U.uSunDir, SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]);
+  gl.uniform3f(U.uSunColor, SUN_COLOR[0], SUN_COLOR[1], SUN_COLOR[2]);
+  gl.uniform3f(U.uSkyColor, SKY_COLOR[0], SKY_COLOR[1], SKY_COLOR[2]);
+  gl.uniform3f(U.uGroundColor, GROUND_COLOR[0], GROUND_COLOR[1], GROUND_COLOR[2]);
+  gl.uniform1i(U.uAnyVisible, anyVisible);
+  gl.uniform4fv(U.uA, arrA); gl.uniform4fv(U.uB, arrB); gl.uniform4fv(U.uC, arrC);
+  gl.uniform4fv(U.uD, arrD); gl.uniform4fv(U.uE, arrE); gl.uniform4fv(U.uF, arrF);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  framesRendered++;
+  if (lastFrameTs) {
+    const dt = (nowMs - lastFrameTs) / 1000;
+    if (dt > 0) fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1 / dt) * 0.1 : 1 / dt;
+  }
+  lastFrameTs = nowMs;
+}
+
+/* ---------------- picking (one-texel pick pass) ---------------- */
+function pickAt(cssX, cssY) {
+  if (!prog || !pickFBO) return { id: -1, steps: 0, depth: 0 };
+  const r = canvas.getBoundingClientRect();
+  const x = clamp(Math.round((cssX / r.width) * internalW), 0, internalW - 1);
+  const y = clamp(Math.round(((r.height - cssY) / r.height) * internalH), 0, internalH - 1);
+  const pw = pickW, ph = pickH;
+  gl.useProgram(prog);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pickFBO);
+  gl.viewport(x >> 1, y >> 1, 1, 1);
+  // re-issue uniforms needed for pick (mode differs)
+  gl.uniform1i(U.uMode, 99);
+  gl.uniform2f(U.uRes, pw, ph);
+  gl.uniform1i(U.uMaxSteps, Math.min(Math.round(S.settings.maxSteps), 255));
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.readPixels(x >> 1, y >> 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pickPixel);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { id: pickPixel[0] - 1, steps: pickPixel[1], depth: pickPixel[2] / 255 * S.settings.maxDist };
+}
+/* ============================================================================
+   Part C: presets, UI, interactions, persistence, boot
+   ========================================================================== */
+
+/* ---------------- presets ---------------- */
+function presetObjects(specs) {
+  return specs.map(s => makeObject(s.type, s));
+}
+const PRESETS = {
+  sculpture: { label: 'Sculpture — Smooth Metaballs', make: () => ({
+    camera: { yaw: 0.62, pitch: 0.34, dist: 7.4, target: [0, 0.35, 0] },
+    objects: presetObjects([
+      { type: 'plane', name: 'Floor', pos: [0, -1.4, 0], mat: { color: '#24272d', rough: 0.95 } },
+      { type: 'sphere', name: 'Core', pos: [0, 0.15, 0], mat: { color: '#aeb6c2', metal: 1, rough: 0.3 } },
+      { type: 'sphere', name: 'Blob L', pos: [-1.05, 0.7, 0.2], scale: [0.72, 0.72, 0.72], op: 1, smoothK: 0.7, mat: { color: '#38c5b0', rough: 0.18 }, anim: { bobAmp: 0.12, bobFreq: 0.9 } },
+      { type: 'sphere', name: 'Blob R', pos: [1.0, 0.85, -0.15], scale: [0.6, 0.6, 0.6], op: 1, smoothK: 0.7, mat: { color: '#f2a13b', rough: 0.18 }, anim: { bobAmp: 0.1, bobFreq: 1.3 } },
+      { type: 'torus', name: 'Ring', pos: [0, 0.85, 0], scale: [1.75, 0.13, 1], op: 1, smoothK: 0.25, mat: { color: '#7b64f5', metal: 1, rough: 0.35 }, anim: { spin: 20 } },
+      { type: 'box', name: 'Base Cut', pos: [0, -1.55, 0], scale: [2.7, 0.65, 2.7], op: 3, smoothK: 0.3, mat: { color: '#2e3238', rough: 0.7 } },
+      { type: 'sphere', name: 'Spark', pos: [0, 1.95, 0], scale: [0.17, 0.17, 0.17], mat: { color: '#ffd27a', emissive: 3 }, anim: { bobAmp: 0.15, bobFreq: 1.7 } },
+    ]),
+  }) },
+  mechanical: { label: 'Mechanical Cutaway', make: () => ({
+    camera: { yaw: -0.7, pitch: 0.3, dist: 7.6, target: [0, 0.1, 0] },
+    objects: presetObjects([
+      { type: 'plane', name: 'Floor', pos: [0, -1.6, 0], mat: { color: '#1f2226', rough: 0.95 } },
+      { type: 'roundedBox', name: 'Housing', pos: [0, 0, 0], scale: [1.7, 1.05, 1.15], rounding: 0.3, mat: { color: '#b8c2cc', metal: 1, rough: 0.4 } },
+      { type: 'cylinder', name: 'Bore', pos: [0, 0.15, 0], rot: [90, 0, 0], scale: [0.55, 2.2, 0.55], op: 2, mat: { color: '#17191d', rough: 0.6 } },
+      { type: 'cylinder', name: 'Shaft', pos: [0, 0.15, 0], rot: [90, 0, 0], scale: [0.3, 2.6, 0.3], mat: { color: '#d8b04a', metal: 1, rough: 0.2 } },
+      { type: 'box', name: 'Corner Cut', pos: [2, 1.05, 2], scale: [2, 1.25, 2], op: 2, mat: { color: '#c9b48e', rough: 0.75 } },
+      { type: 'cylinder', name: 'Bolt A', pos: [-1.25, 0.5, 0], rot: [90, 0, 0], scale: [0.14, 2, 0.14], op: 2, mat: { color: '#17191d', rough: 0.6 } },
+      { type: 'cylinder', name: 'Bolt B', pos: [1.25, 0.5, 0], rot: [90, 0, 0], scale: [0.14, 2, 0.14], op: 2, mat: { color: '#17191d', rough: 0.6 } },
+      { type: 'cylinder', name: 'Bolt C', pos: [-1.25, -0.55, 0], rot: [90, 0, 0], scale: [0.14, 2, 0.14], op: 2, mat: { color: '#17191d', rough: 0.6 } },
+      { type: 'cylinder', name: 'Bolt D', pos: [1.25, -0.55, 0], rot: [90, 0, 0], scale: [0.14, 2, 0.14], op: 2, mat: { color: '#17191d', rough: 0.6 } },
+      { type: 'torus', name: 'Glow Ring', pos: [0, 0.15, 1.7], rot: [90, 0, 0], scale: [0.45, 0.05, 1], mat: { color: '#ff8a3d', emissive: 1.3 } },
+    ]),
+  }) },
+  arch: { label: 'Impossible Arch', make: () => ({
+    camera: { yaw: 0.42, pitch: 0.18, dist: 9.5, target: [0, 0.9, 0] },
+    objects: presetObjects([
+      { type: 'plane', name: 'Floor', pos: [0, -1.5, 0], mat: { color: '#23262b', rough: 0.95 } },
+      { type: 'torus', name: 'Arch Ring', pos: [0, 1.15, 0], rot: [90, 0, 0], scale: [1.6, 0.45, 1], mat: { color: '#d9c49a', rough: 0.85 } },
+      { type: 'box', name: 'Depth Slab', pos: [0, 1.15, 0], scale: [3.4, 3.4, 0.45], op: 4, mat: { color: '#c9b591', rough: 0.8 } },
+      { type: 'torus', name: 'Inner Cut', pos: [0, 1.15, 0], rot: [90, 0, 0], scale: [1.0, 0.55, 1], op: 2, mat: { color: '#17191d', rough: 0.6 } },
+      { type: 'box', name: 'Leg L', pos: [-1.6, -0.15, 0], scale: [0.55, 1.35, 0.6], op: 1, smoothK: 0.35, mat: { color: '#d9c49a', rough: 0.85 } },
+      { type: 'box', name: 'Leg R', pos: [1.6, -0.15, 0], scale: [0.55, 1.35, 0.6], op: 1, smoothK: 0.35, mat: { color: '#d9c49a', rough: 0.85 } },
+      { type: 'sphere', name: 'Keystone', pos: [0, 3.2, 0], scale: [0.45, 0.45, 0.45], op: 1, smoothK: 0.3, mat: { color: '#e8b64c', rough: 0.25 }, anim: { bobAmp: 0.08, bobFreq: 0.8 } },
+    ]),
+  }) },
+  glass: { label: 'Glass Study', make: () => ({
+    camera: { yaw: 0.7, pitch: 0.22, dist: 7.8, target: [0, 0.25, 0] },
+    objects: presetObjects([
+      { type: 'plane', name: 'Floor', pos: [0, -1.3, 0], mat: { color: '#2a2d33', rough: 0.9 } },
+      { type: 'sphere', name: 'Glass Ball', pos: [0, 0.1, 0], scale: [1, 1, 1], mat: { color: '#cfe8ff', transmission: 1, ior: 1.5, rough: 0.03 } },
+      { type: 'sphere', name: 'Inner Glow', pos: [0, 0.1, 0], scale: [0.25, 0.25, 0.25], mat: { color: '#7ad8ff', emissive: 3.5 } },
+      { type: 'torus', name: 'Glass Ring', pos: [0, 0.25, 0], rot: [72, 0, 15], scale: [1.5, 0.2, 1], mat: { color: '#ffe9c9', transmission: 1, ior: 1.46, rough: 0.05 } },
+      { type: 'roundedBox', name: 'Glass Slab', pos: [2.15, -0.15, 0.5], scale: [0.6, 1.3, 0.6], rounding: 0.18, mat: { color: '#d8ffe6', transmission: 1, ior: 1.52, rough: 0.02 } },
+      { type: 'sphere', name: 'Chrome Ball', pos: [-1.9, 0.35, 1.0], scale: [0.45, 0.45, 0.45], mat: { color: '#d8dde6', metal: 1, rough: 0.06 } },
+      { type: 'sphere', name: 'Amber Ball', pos: [-1.6, 0.45, -1.2], scale: [0.55, 0.55, 0.55], mat: { color: '#f2a13b', rough: 0.15 } },
+    ]),
+  }) },
+  repeating: { label: 'Repeating Structure', make: () => {
+    const pillars = [];
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3;
+      pillars.push({ type: 'roundedBox', name: 'Pillar ' + (i + 1), pos: [Math.cos(a) * 2.3, 0, Math.sin(a) * 2.3], rot: [0, -a * 180 / Math.PI, 0], scale: [0.28, 1.0, 0.28], rounding: 0.1, mat: { color: '#5b6572', rough: 0.55 } });
+    }
+    return {
+      camera: { yaw: 0.85, pitch: 0.3, dist: 9.5, target: [0, 0.9, 0] },
+      objects: presetObjects([
+        { type: 'plane', name: 'Floor', pos: [0, -1.0, 0], mat: { color: '#202329', rough: 0.95 } },
+        { type: 'gyroid', name: 'Gyroid Core', pos: [0, 1.0, 0], scale: [1.5, 1.5, 1.5], params: { freq: 6, shell: 0.12 }, mat: { color: '#8fd0c9', metal: 1, rough: 0.25 }, anim: { spin: 10 } },
+        { type: 'torus', name: 'Halo Ring', pos: [0, 1.0, 0], rot: [90, 0, 0], scale: [2.3, 0.1, 1], op: 1, smoothK: 0.2, mat: { color: '#d8b04a', metal: 1, rough: 0.3 }, anim: { spin: -7 } },
+        ...pillars,
+        { type: 'gyroid', name: 'Crown', pos: [0, 2.25, 0], scale: [0.9, 0.55, 0.9], params: { freq: 8, shell: 0.1 }, op: 1, smoothK: 0.25, mat: { color: '#8fd0c9', metal: 1, rough: 0.25 }, anim: { spin: 14 } },
+      ]),
+    };
+  } },
+  artifacts: { label: 'Artifact Lab', make: () => ({
+    settings: { maxSteps: 64, eps: 0.004 },
+    camera: { yaw: 0.75, pitch: 0.26, dist: 8.2, target: [0, 0.3, 0] },
+    objects: presetObjects([
+      { type: 'plane', name: 'Floor', pos: [0, -1.2, 0], mat: { color: '#202329', rough: 0.95 } },
+      { type: 'noiseBall', name: 'Noise Rock', pos: [-1.15, 0.3, 0], scale: [1.1, 1.1, 1.1], params: { amp: 0.22, freq: 7 }, mat: { color: '#b0655a', rough: 0.8 } },
+      { type: 'gyroid', name: 'Thin Shell', pos: [1.3, 0.4, 0], scale: [1.2, 1.2, 1.2], params: { freq: 16, shell: 0.04 }, mat: { color: '#6fd0ff', rough: 0.3 } },
+      { type: 'sphere', name: 'Slit Ball', pos: [0, 0.2, 0.6], scale: [0.9, 0.9, 0.9], mat: { color: '#7de0a8', rough: 0.3 } },
+      { type: 'box', name: 'Razor Slit', pos: [0, 0.2, 0.6], scale: [0.05, 1.2, 1.2], op: 2, mat: { color: '#17191d', rough: 0.6 } },
+      { type: 'torus', name: 'Hairline Torus', pos: [0, 2.0, -0.4], rot: [25, 0, 10], scale: [1.7, 0.025, 1], mat: { color: '#cfd6df', metal: 1, rough: 0.2 } },
+    ]),
+  }) },
+  minimal: { label: 'Minimal Start', make: () => ({
+    camera: { yaw: DEFAULT_CAMERA.yaw, pitch: DEFAULT_CAMERA.pitch, dist: DEFAULT_CAMERA.dist, target: [...DEFAULT_CAMERA.target] },
+    objects: presetObjects([
+      { type: 'plane', name: 'Floor', pos: [0, -1.2, 0], mat: { color: '#24272d', rough: 0.95 } },
+      { type: 'roundedBox', name: 'Blok', pos: [0, 0.2, 0], scale: [0.7, 0.7, 0.7], rounding: 0.25, mat: { color: '#aeb6c2', metal: 1, rough: 0.3 }, anim: { spin: 15 } },
+    ]),
+  }) },
+};
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  if (!p) return;
+  const data = p.make();
+  applySceneData({ objects: data.objects, settings: data.settings || {}, camera: data.camera, time: 0 });
+  scheduleSave();
+  if (key === 'artifacts') toast('Artifact Lab: noisy + hairline-thin fields at a low step budget — try the normals/steps modes to study banding and misses.', null, 5200);
+}
+
+function applySceneData(data) {
+  S.objects = data.objects;
+  const settings = { ...DEFAULT_SETTINGS };
+  if (data.settings) for (const k of Object.keys(DEFAULT_SETTINGS)) if (data.settings[k] !== undefined) settings[k] = data.settings[k];
+  S.settings = settings;
+  S.settings.time = data.time || 0;
+  if (data.camera) S.camera = { yaw: data.camera.yaw, pitch: data.camera.pitch, dist: data.camera.dist, target: [...data.camera.target] };
+  selectedId = null;
+  structureDirty = true; dirty = true;
+  try { ensureCapacity(S.objects.length); } catch (e) { /* surfaced on next render */ }
+  rebuildSceneList();
+  renderInspector();
+  refreshSettingsUI();
+  syncModeSelect();
+  updateObjCountLabel();
+}
+
+/* ---------------- small DOM helpers ---------------- */
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+const fmt = v => (typeof v === 'number' && isFinite(v)) ? Math.round(v * 1000) / 1000 : v;
+
+/* ---------------- scene list ---------------- */
+function updateObjCountLabel() {
+  const vis = S.objects.filter(o => !o.hidden).length;
+  $('#objCountLbl').textContent = `${S.objects.length} object${S.objects.length === 1 ? '' : 's'} · ${vis} visible`;
+}
+function rebuildSceneList() {
+  const ul = $('#objectList');
+  ul.innerHTML = '';
+  const firstVis = firstVisibleIndex();
+  S.objects.forEach((o, idx) => {
+    const li = el('li');
+    li.dataset.id = o.id;
+    if (o.id === selectedId) li.classList.add('sel');
+    if (o.hidden) li.classList.add('hiddenobj');
+    const main = el('div', 'rowmain');
+    const eye = el('button', 'eye' + (o.hidden ? ' off' : ''), o.hidden ? '○' : '●');
+    eye.title = o.hidden ? 'Show object' : 'Hide object';
+    eye.setAttribute('aria-label', (o.hidden ? 'Show ' : 'Hide ') + o.name);
+    eye.addEventListener('click', e => { e.stopPropagation(); o.hidden = !o.hidden; commit(false); rebuildSceneList(); renderInspector(); });
+    const nm = el('span', 'objname', o.name);
+    nm.title = 'Double-click to rename';
+    nm.addEventListener('dblclick', e => { e.stopPropagation(); startInlineRename(nm, o); });
+    const opBadge = el('span', 'badge op' + (idx === firstVis ? ' base' : ''), idx === firstVis ? 'base' : OPS[o.op].short);
+    opBadge.title = idx === firstVis ? 'Base solid (operation forced to Union)' : OPS[o.op].label;
+    const tyBadge = el('span', 'badge', typeByKey(o.type).label.split(' ')[0]);
+    main.append(eye, nm, opBadge, tyBadge);
+    main.addEventListener('click', () => selectObject(o.id));
+    const acts = el('div', 'rowacts');
+    const mk = (label, title, fn, cls) => {
+      const b = el('button', cls, label);
+      b.title = title;
+      b.setAttribute('aria-label', title + ' — ' + o.name);
+      b.addEventListener('click', e => { e.stopPropagation(); fn(); });
+      return b;
+    };
+    acts.append(
+      mk('↑', 'Move up', () => reorderObject(o.id, -1)),
+      mk('↓', 'Move down', () => reorderObject(o.id, +1)),
+      mk('⧉', 'Duplicate', () => duplicateObject(o)),
+      mk('✕', 'Delete', () => deleteObject(o), 'del'),
+    );
+    li.append(main, acts);
+    ul.appendChild(li);
+  });
+  updateObjCountLabel();
+}
+function startInlineRename(span, o) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = o.name;
+  input.maxLength = 60;
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+  let doneCalled = false;
+  const done = save => {
+    if (doneCalled) return;
+    doneCalled = true;
+    if (save && input.value.trim()) { o.name = input.value.trim(); commit(false); }
+    rebuildSceneList();
+    renderInspector();
+  };
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') done(true);
+    else if (e.key === 'Escape') done(false);
+  });
+  input.addEventListener('blur', () => done(true));
+}
+function selectObject(id) {
+  if (selectedId === id) return;
+  selectedId = id;
+  rebuildSceneList();
+  renderInspector();
+}
+function addObject(typeKey) {
+  if (S.objects.length + 1 > MAXN) { toast(`Object limit reached (${MAXN} on this GPU).`, 'err'); return; }
+  const o = makeObject(typeKey);
+  o.pos = [0.45 * (S.objects.length % 5), 1.0, 0];
+  S.objects.push(o);
+  selectedId = o.id;
+  commit(true);
+  rebuildSceneList();
+  renderInspector();
+}
+function duplicateObject(o) {
+  if (S.objects.length + 1 > MAXN) { toast(`Object limit reached (${MAXN} on this GPU).`, 'err'); return; }
+  const c = JSON.parse(JSON.stringify(o));
+  c.id = uidSeq++;
+  c.name = o.name + ' copy';
+  c.pos = [o.pos[0] + 0.45, o.pos[1], o.pos[2]];
+  S.objects.splice(S.objects.indexOf(o) + 1, 0, c);
+  selectedId = c.id;
+  commit(true);
+  rebuildSceneList();
+  renderInspector();
+}
+function deleteObject(o) {
+  const i = S.objects.indexOf(o);
+  if (i < 0) return;
+  S.objects.splice(i, 1);
+  if (selectedId === o.id) selectedId = null;
+  commit(false);
+  rebuildSceneList();
+  renderInspector();
+}
+function reorderObject(id, dir) {
+  const i = S.objects.findIndex(o => o.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= S.objects.length) return;
+  const [o] = S.objects.splice(i, 1);
+  S.objects.splice(j, 0, o);
+  commit(false);
+  rebuildSceneList();
+  renderInspector();
+}
+function commit(structure) {
+  dirty = true;
+  if (structure) structureDirty = true;
+  scheduleSave();
+}
+
+/* ---------------- inspector ---------------- */
+let inspRefreshers = [];
+function refreshInspectorValues() { inspRefreshers.forEach(f => f()); }
+
+function fieldWrap(label, input) {
+  const w = el('div', 'frow');
+  w.append(el('label', null, label), input);
+  return w;
+}
+function mkSelect(options, get, set) {
+  const s = document.createElement('select');
+  options.forEach(op => {
+    const o = document.createElement('option');
+    o.value = op.v; o.textContent = op.label;
+    s.appendChild(o);
+  });
+  s.value = get();
+  s.addEventListener('change', () => set(+s.value));
+  inspRefreshers.push(() => { s.value = get(); });
+  return s;
+}
+function mkText(get, set) {
+  const i = document.createElement('input');
+  i.type = 'text'; i.value = get(); i.maxLength = 60;
+  i.addEventListener('change', () => set(i.value));
+  return i;
+}
+function mkNum(get, set, step) {
+  const i = document.createElement('input');
+  i.type = 'number'; i.value = fmt(get()); i.step = step === undefined ? 0.1 : step;
+  i.addEventListener('change', () => { const v = parseFloat(i.value); if (isFinite(v)) set(v); });
+  inspRefreshers.push(() => { i.value = fmt(get()); });
+  return i;
+}
+function mkColor(get, set) {
+  const i = document.createElement('input');
+  i.type = 'color'; i.value = get();
+  i.addEventListener('input', () => set(i.value));
+  inspRefreshers.push(() => { i.value = get(); });
+  return i;
+}
+function mkCheck(get, set) {
+  const i = document.createElement('input');
+  i.type = 'checkbox'; i.checked = get();
+  i.addEventListener('change', () => set(i.checked));
+  inspRefreshers.push(() => { i.checked = get(); });
+  return i;
+}
+function sliderRow(label, get, set, min, max, step, fmtFn) {
+  const row = el('div', 'srow');
+  const r = document.createElement('input');
+  r.type = 'range'; r.min = min; r.max = max; r.step = step; r.value = get();
+  r.setAttribute('aria-label', label);
+  const val = el('span', 'val', (fmtFn || fmt)(get()));
+  r.addEventListener('input', () => { set(parseFloat(r.value)); val.textContent = (fmtFn || fmt)(get()); });
+  inspRefreshers.push(() => { r.value = get(); val.textContent = (fmtFn || fmt)(get()); });
+  row.append(el('label', null, label), r, val);
+  return row;
+}
+function grid3(title, labels, getters, setters, step) {
+  const box = el('div');
+  if (title) box.appendChild(el('label', null, title));
+  const g = el('div', 'grid3');
+  for (let i = 0; i < 3; i++) {
+    const cell = el('div', 'cell');
+    cell.appendChild(el('label', null, labels[i]));
+    cell.appendChild(mkNum(getters[i], setters[i], step));
+    g.appendChild(cell);
+  }
+  box.appendChild(g);
+  return box;
+}
+function section(parent, title) {
+  const s = el('div', 'isec');
+  s.appendChild(el('h3', null, title));
+  parent.appendChild(s);
+  return s;
+}
+
+function renderInspector() {
+  inspRefreshers = [];
+  const body = $('#inspectorBody');
+  body.innerHTML = '';
+  const o = selectedObject();
+  if (!o) {
+    const d = el('div', 'hinttxt', 'Nothing selected.\n\nClick an object in the viewport (picking ray-marches the real SDF surface) or pick a row in the Scene panel.');
+    d.style.whiteSpace = 'pre-line';
+    d.style.padding = '12px';
+    body.appendChild(d);
+    return;
+  }
+  const t = typeByKey(o.type);
+  const firstVis = firstVisibleIndex();
+  const objIdx = S.objects.indexOf(o);
+  const isBase = objIdx === firstVis;
+
+  /* --- object --- */
+  const sObj = section(body, 'Object');
+  sObj.appendChild(fieldWrap('Name', mkText(() => o.name, v => { o.name = v.trim() || o.name; rebuildSceneList(); commit(false); })));
+  const tyRow = el('div', 'frow');
+  tyRow.append(el('label', null, 'Type'), el('span', 'badge', t.label));
+  sObj.appendChild(tyRow);
+  const opSel = mkSelect(OPS.map(x => ({ v: x.v, label: x.label })), () => o.op, v => { o.op = v; commit(false); rebuildSceneList(); });
+  opSel.disabled = isBase;
+  if (isBase) opSel.title = 'First visible object is the CSG base — operation forced to Union';
+  sObj.appendChild(fieldWrap('Operation', opSel));
+  sObj.appendChild(fieldWrap('Visible', mkCheck(() => !o.hidden, v => { o.hidden = !v; commit(false); rebuildSceneList(); })));
+  if (isBase) sObj.appendChild(el('div', 'hinttxt', 'Base solid: this object starts the field; its operation is ignored.'));
+  if (t.infinite) sObj.appendChild(el('div', 'hinttxt', 'Plane is an infinite solid below its local XZ plane — ideal for floors and CSG cutting.'));
+
+  /* --- transform --- */
+  const sT = section(body, 'Transform');
+  sT.appendChild(grid3('Position', ['x', 'y', 'z'],
+    [0, 1, 2].map(i => () => o.pos[i]), [0, 1, 2].map(i => v => { o.pos[i] = v; commit(false); }), 0.05));
+  sT.appendChild(grid3('Rotation (°)', ['x', 'y', 'z'],
+    [0, 1, 2].map(i => () => o.rot[i]), [0, 1, 2].map(i => v => { o.rot[i] = v; commit(false); }), 1));
+  sT.appendChild(grid3(t.infinite ? 'Scale (ignored)' : 'Scale (extents)', ['x', 'y', 'z'],
+    [0, 1, 2].map(i => () => o.scale[i]), [0, 1, 2].map(i => v => { o.scale[i] = Math.max(Math.abs(v), 0.001); commit(false); }), 0.05));
+  if (!t.noRound && !t.infinite)
+    sT.appendChild(sliderRow('Rounding', () => o.rounding, v => { o.rounding = Math.max(v, 0); commit(false); }, 0, 1.2, 0.005));
+  sT.appendChild(sliderRow('Blend k (smooth ops)', () => o.smoothK, v => { o.smoothK = Math.max(v, 0.0001); commit(false); }, 0.01, 2, 0.01));
+
+  /* --- deform params --- */
+  if (t.params && t.params.length) {
+    const sD = section(body, 'Procedural deform');
+    t.params.forEach(p => {
+      sD.appendChild(sliderRow(p.label, () => o.params[p.k], v => { o.params[p.k] = v; commit(false); }, p.min, p.max, p.step));
+    });
+  }
+
+  /* --- animation --- */
+  const sA = section(body, 'Animation (uses global time)');
+  sA.appendChild(sliderRow('Spin (°/s, local Y)', () => o.anim.spin, v => { o.anim.spin = v; commit(false); }, -180, 180, 1));
+  sA.appendChild(sliderRow('Bob amplitude', () => o.anim.bobAmp, v => { o.anim.bobAmp = v; commit(false); }, 0, 2, 0.01));
+  sA.appendChild(sliderRow('Bob frequency', () => o.anim.bobFreq, v => { o.anim.bobFreq = v; commit(false); }, 0.1, 4, 0.05));
+
+  /* --- material --- */
+  const sM = section(body, 'Material');
+  const presetKeys = Object.keys(MAT_PRESETS);
+  const curPreset = () => {
+    const m = o.mat;
+    for (const k of presetKeys) {
+      const p = MAT_PRESETS[k];
+      if (p.metal === m.metal && p.rough === m.rough && p.emissive === m.emissive && p.transmission === m.transmission && p.ior === m.ior) return k;
+    }
+    return '';
+  };
+  const presetSel = mkSelect(
+    [{ v: '', label: 'Preset…' }, ...presetKeys.map(k => ({ v: k, label: MAT_PRESETS[k].label }))],
+    curPreset,
+    k => {
+      if (!k) return;
+      const p = MAT_PRESETS[k];
+      o.mat.metal = p.metal; o.mat.rough = p.rough; o.mat.emissive = p.emissive;
+      o.mat.transmission = p.transmission; o.mat.ior = p.ior;
+      commit(false); refreshInspectorValues();
+    });
+  presetSel.style.width = '100%';
+  sM.appendChild(fieldWrap('Preset', presetSel));
+  sM.appendChild(fieldWrap('Color', mkColor(() => o.mat.color, v => { o.mat.color = v; commit(false); })));
+  sM.appendChild(sliderRow('Metallic', () => o.mat.metal, v => { o.mat.metal = v; commit(false); refreshInspectorValues(); }, 0, 1, 0.01));
+  sM.appendChild(sliderRow('Roughness', () => o.mat.rough, v => { o.mat.rough = v; commit(false); }, 0.02, 1, 0.01));
+  sM.appendChild(sliderRow('Emissive', () => o.mat.emissive, v => { o.mat.emissive = v; commit(false); refreshInspectorValues(); }, 0, 5, 0.05));
+  sM.appendChild(sliderRow('Transmission', () => o.mat.transmission, v => { o.mat.transmission = v; commit(false); refreshInspectorValues(); }, 0, 1, 0.01));
+  sM.appendChild(sliderRow('Index of refraction', () => o.mat.ior, v => { o.mat.ior = v; commit(false); }, 1.01, 2.5, 0.01));
+  sM.appendChild(el('div', 'hinttxt', 'Transmission > 0.5 switches the surface to refraction + fresnel glass shading.'));
+
+  /* --- actions --- */
+  const sX = section(body, 'Actions');
+  const row = el('div', 'btnrow');
+  const bF = el('button', null, 'Focus');
+  bF.addEventListener('click', () => focusSelected());
+  const bD = el('button', null, 'Duplicate');
+  bD.addEventListener('click', () => duplicateObject(o));
+  const bDel = el('button', null, 'Delete');
+  bDel.className = 'primary';
+  bDel.style.background = '#3b201d';
+  bDel.style.borderColor = '#6e3028';
+  bDel.addEventListener('click', () => deleteObject(o));
+  row.append(bF, bD, bDel);
+  sX.appendChild(row);
+}
+
+/* ---------------- settings panel ---------------- */
+let setRefreshers = [];
+function refreshSettingsUI() { setRefreshers.forEach(f => f()); }
+function buildSettingsPanel() {
+  const st = () => S.settings;
+  const body = $('#settingsBody');
+  body.innerHTML = '';
+  setRefreshers = [];
+  const commitS = () => { dirty = true; scheduleSave(); };
+
+  const mkS = (parent, label, key, min, max, step, fmtFn) => {
+    const row = el('div', 'srow');
+    const r = document.createElement('input');
+    r.type = 'range'; r.min = min; r.max = max; r.step = step; r.value = st()[key];
+    r.id = 'set-' + key;
+    r.setAttribute('aria-label', label);
+    const val = el('span', 'val', (fmtFn || fmt)(st()[key]));
+    r.addEventListener('input', () => { st()[key] = parseFloat(r.value); val.textContent = (fmtFn || fmt)(st()[key]); commitS(); if (key === 'renderScale') renderFrame(performance.now()); });
+    setRefreshers.push(() => { r.value = st()[key]; val.textContent = (fmtFn || fmt)(st()[key]); });
+    row.append(el('label', null, label), r, val);
+    parent.appendChild(row);
+  };
+  const mkC = (parent, label, key) => {
+    const row = el('div', 'frow');
+    const c = document.createElement('input');
+    c.type = 'checkbox'; c.checked = !!st()[key]; c.id = 'set-' + key;
+    c.addEventListener('change', () => { st()[key] = c.checked; commitS(); });
+    setRefreshers.push(() => { c.checked = !!st()[key]; });
+    row.append(el('label', null, label), c);
+    parent.appendChild(row);
+  };
+  const mkSel = (parent, label, key, options) => {
+    const s = document.createElement('select');
+    s.id = 'set-' + key;
+    options.forEach(op => {
+      const o = document.createElement('option');
+      o.value = op.v; o.textContent = op.label;
+      s.appendChild(o);
+    });
+    s.value = st()[key];
+    s.addEventListener('change', () => { st()[key] = +s.value; commitS(); });
+    setRefreshers.push(() => { s.value = st()[key]; });
+    parent.appendChild(fieldWrap(label, s));
+  };
+
+  const sQ = section(body, 'Ray marching');
+  mkS(sQ, 'Max ray steps', 'maxSteps', 32, 512, 8);
+  mkS(sQ, 'Hit epsilon', 'eps', 0.0002, 0.008, 0.0001, v => (+v).toFixed(4));
+  mkS(sQ, 'Max distance', 'maxDist', 10, 80, 1);
+  mkS(sQ, 'Render scale (%)', 'renderScale', 25, 200, 5, v => v + '%');
+
+  const sL = section(body, 'Lighting & shading');
+  mkS(sL, 'Shadow quality', 'shadowQuality', 1, 10, 1);
+  mkS(sL, 'AO quality', 'aoQuality', 1, 10, 1);
+  mkS(sL, 'AO strength', 'aoStrength', 0, 2, 0.05);
+  mkS(sL, 'Reflection bounces', 'bounces', 0, 2, 1);
+  mkS(sL, 'Exposure', 'exposure', 0.2, 3, 0.05);
+  mkS(sL, 'Fog density', 'fog', 0, 0.12, 0.002, v => (+v).toFixed(3));
+
+  const sC = section(body, 'Camera & background');
+  mkS(sC, 'Field of view (°)', 'fov', 20, 100, 1);
+  mkSel(sC, 'Background', 'bg', [
+    { v: 0, label: 'Gradient sky' }, { v: 1, label: 'Dark studio' },
+    { v: 2, label: 'Light studio' }, { v: 3, label: 'Void' },
+  ]);
+  mkC(sC, 'Show ground grid', 'grid');
+  mkS(sC, 'Slice plane Y', 'sliceY', -3, 3, 0.05);
+
+  const sT = section(body, 'Animation time');
+  const playRow = el('div', 'frow');
+  const play = document.createElement('input');
+  play.type = 'checkbox'; play.checked = st().playing; play.id = 'set-playing';
+  play.addEventListener('change', () => { st().playing = play.checked; commitS(); });
+  setRefreshers.push(() => { play.checked = st().playing; });
+  playRow.append(el('label', null, 'Play (Space)'), play);
+  sT.appendChild(playRow);
+  mkS(sT, 'Time speed', 'timeSpeed', 0, 3, 0.05);
+  const scrubRow = el('div', 'srow');
+  const scrub = document.createElement('input');
+  scrub.type = 'range'; scrub.min = 0; scrub.max = 30; scrub.step = 0.05;
+  scrub.setAttribute('aria-label', 'Time scrub');
+  scrub.value = st().time % 30;
+  scrub.addEventListener('input', () => { st().time = parseFloat(scrub.value); commitS(); });
+  setRefreshers.push(() => { if (st().playing) scrub.value = st().time % 30; });
+  scrubRow.append(el('label', null, 'Scrub t'), scrub, el('span', 'val', ''));
+  sT.appendChild(scrubRow);
+}
+
+/* ---------------- top bar ---------------- */
+function buildTopBar() {
+  const presetSel = $('#presetSelect');
+  for (const k of Object.keys(PRESETS)) {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = PRESETS[k].label;
+    presetSel.appendChild(o);
+  }
+  presetSel.addEventListener('change', () => { loadPreset(presetSel.value); presetSel.blur(); });
+
+  const modeSel = $('#modeSelect');
+  MODES.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.v; o.textContent = m.label;
+    modeSel.appendChild(o);
+  });
+  modeSel.addEventListener('change', () => setViewMode(+modeSel.value));
+
+  $('#btnAdd').addEventListener('click', () => addObject($('#addType').value));
+  const addType = $('#addType');
+  TYPES.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.key; o.textContent = t.label;
+    addType.appendChild(o);
+  });
+
+  $('#btnFocus').addEventListener('click', focusSelected);
+  $('#btnCamReset').addEventListener('click', resetCamera);
+  $('#btnSettings').addEventListener('click', () => {
+    $('#settingsPanel').classList.toggle('open');
+    $('#btnSettings').classList.toggle('on');
+  });
+  $('#btnCloseSettings').addEventListener('click', () => {
+    $('#settingsPanel').classList.remove('open');
+    $('#btnSettings').classList.remove('on');
+  });
+  $('#btnHelp').addEventListener('click', () => $('#helpDialog').showModal());
+  $('#btnCloseHelp').addEventListener('click', () => $('#helpDialog').close());
+  $('#btnSceneToggle').addEventListener('click', () => $('#scenePanel').classList.toggle('open'));
+  $('#btnInspectorToggle').addEventListener('click', () => { renderInspector(); $('#inspector').classList.toggle('open'); });
+
+  $('#btnExport').addEventListener('click', exportJSONFile);
+  $('#btnImport').addEventListener('click', () => $('#importFile').click());
+  $('#btnCopy').addEventListener('click', copySceneJSON);
+  $('#btnShot').addEventListener('click', saveScreenshot);
+  $('#btnFatalReload').addEventListener('click', () => location.reload());
+  $('#importFile').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => importJSONText(String(rd.result));
+    rd.onerror = () => toast('Could not read file', 'err');
+    rd.readAsText(f);
+    e.target.value = '';
+  });
+}
+function syncModeSelect() {
+  $('#modeSelect').value = viewMode;
+  const banner = $('#modeBanner');
+  if (viewMode === 0) banner.hidden = true;
+  else { banner.hidden = false; banner.textContent = MODES[viewMode].label; }
+}
+function setViewMode(v) {
+  viewMode = clamp(Math.round(v), 0, 7);
+  syncModeSelect();
+  dirty = true;
+}
+
+/* ---------------- export / import / clipboard / screenshot ---------------- */
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+}
+function exportJSONFile() {
+  const json = JSON.stringify(serializeScene(), null, 1);
+  downloadBlob(new Blob([json], { type: 'application/json' }), 'sdf-scene-' + Date.now() + '.json');
+  toast('Scene exported as JSON');
+}
+function importJSONText(text) {
+  try {
+    const data = deserializeScene(JSON.parse(text));
+    if (data.objects.length > MAXN) {
+      data.objects = data.objects.slice(0, MAXN);
+      toast(`Scene truncated to ${MAXN} objects (GPU uniform budget).`, 'err');
+    }
+    applySceneData(data);
+    scheduleSave();
+    toast(`Scene imported — ${data.objects.length} objects`);
+  } catch (err) {
+    toast('Import failed: ' + err.message, 'err', 5000);
+  }
+}
+async function copySceneJSON() {
+  const json = JSON.stringify(serializeScene(), null, 1);
+  try {
+    await navigator.clipboard.writeText(json);
+    toast('Deterministic scene JSON copied to clipboard');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = json;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('Scene JSON copied'); }
+    catch (e2) { toast('Clipboard unavailable — use Export instead', 'err'); }
+    ta.remove();
+  }
+}
+function saveScreenshot() {
+  renderFrame(performance.now());   // ensure fresh buffer
+  const c2 = document.createElement('canvas');
+  c2.width = internalW; c2.height = internalH;
+  const ctx = c2.getContext('2d');
+  ctx.drawImage(canvas, 0, 0);
+  if (c2.toBlob) c2.toBlob(b => {
+    if (!b) { toast('Screenshot failed', 'err'); return; }
+    downloadBlob(b, 'sdf-studio-' + Date.now() + '.png');
+    toast(`Screenshot saved (${internalW}×${internalH})`);
+  }, 'image/png');
+}
+
+/* ---------------- persistence ---------------- */
+const LS_KEY = 'sdf-csg-studio-v1';
+let saveTimer = 0;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(serializeScene())); }
+    catch (e) { /* storage full/unavailable — non-fatal */ }
+  }, 350);
+}
+function loadSavedScene() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const data = deserializeScene(JSON.parse(raw));
+    if (data.objects.length > MAXN) data.objects = data.objects.slice(0, MAXN);
+    applySceneData(data);
+    return true;
+  } catch (e) {
+    console.warn('Saved scene unusable, loading default:', e);
+    return false;
+  }
+}
+
+/* ---------------- viewport interaction ---------------- */
+const activePtrs = new Map();
+let drag = null;
+let pinch = null;
+let lastProbeTs = 0, lastProbe = { id: -1, steps: 0 };
+let probeX = 0, probeY = 0, haveProbe = false;
+
+function probe(clientX, clientY, force) {
+  const now = performance.now();
+  if (!force && now - lastProbeTs < 160) return;
+  lastProbeTs = now;
+  const r = canvas.getBoundingClientRect();
+  probeX = clamp(clientX - r.left, 0, r.width - 1);
+  probeY = clamp(clientY - r.top, 0, r.height - 1);
+  haveProbe = true;
+  lastProbe = pickAt(probeX, probeY);
+  canvas.style.cursor = lastProbe.id >= 0 ? 'grab' : 'default';
+}
+function planeHit(ro, rd, planePt, n) {
+  const denom = rd[0] * n[0] + rd[1] * n[1] + rd[2] * n[2];
+  if (Math.abs(denom) < 1e-6) return null;
+  const w = [planePt[0] - ro[0], planePt[1] - ro[1], planePt[2] - ro[2]];
+  const t = (w[0] * n[0] + w[1] * n[1] + w[2] * n[2]) / denom;
+  if (t <= 0) return null;
+  return [ro[0] + rd[0] * t, ro[1] + rd[1] * t, ro[2] + rd[2] * t];
+}
+function setupViewportInput() {
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic/inactive pointer */ }
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    activePtrs.set(e.pointerId, { x: px, y: py });
+    if (activePtrs.size === 2) {
+      const pts = [...activePtrs.values()];
+      pinch = { d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), dist: S.camera.dist };
+      drag = null;
+      return;
+    }
+    if (e.button === 1 || e.button === 2) {
+      drag = { kind: 'pan', lastX: px, lastY: py, moved: false };
+      return;
+    }
+    if (e.button !== 0) return;
+    const hit = pickAt(px, py);
+    if (hit.id >= 0 && hit.id < S.objects.length) {
+      const o = S.objects[hit.id];
+      selectObject(o.id);
+      const ray = rayFromScreen(px, py);
+      const gp = [ray.ro[0] + ray.rd[0] * hit.depth, ray.ro[1] + ray.rd[1] * hit.depth, ray.ro[2] + ray.rd[2] * hit.depth];
+      const et = effTransform(o, S.settings.time);
+      drag = {
+        kind: 'obj', o, moved: false, sx: px, sy: py, lastX: px, lastY: py,
+        grabOffset: [gp[0] - et.pos[0], gp[1] - et.pos[1], gp[2] - et.pos[2]],
+        planeN: e.shiftKey ? [0, 1, 0] : camBasis().fwd,
+        ground: !!e.shiftKey,
+        startY: et.pos[1],
+      };
+      canvas.style.cursor = 'grabbing';
+    } else {
+      drag = { kind: 'orbit', lastX: px, lastY: py, moved: false };
+    }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    if (activePtrs.has(e.pointerId)) activePtrs.set(e.pointerId, { x: px, y: py });
+    if (activePtrs.size === 2 && pinch) {
+      const pts = [...activePtrs.values()];
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (pinch.d > 0) S.camera.dist = clamp(pinch.dist * pinch.d / Math.max(d, 1), 0.6, 80);
+      dirty = true;
+      return;
+    }
+    if (!drag) { if (e.pointerType === 'mouse') probe(e.clientX, e.clientY, false); return; }
+    const dx = px - drag.lastX, dy = py - drag.lastY;
+    drag.lastX = px; drag.lastY = py;
+    if (Math.abs(px - (drag.sx ?? px)) + Math.abs(py - (drag.sy ?? py)) > 3) drag.moved = true;
+    if (drag.kind === 'orbit') {
+      S.camera.yaw -= dx * 0.0055;
+      S.camera.pitch = clamp(S.camera.pitch + dy * 0.0055, -1.53, 1.53);
+      dirty = true;
+    } else if (drag.kind === 'pan') {
+      const k = 2 * S.camera.dist * Math.tan(S.settings.fov * D2R / 2) / Math.max(r.height, 1);
+      const { right, up } = camBasis();
+      S.camera.target = [
+        S.camera.target[0] - (right[0] * dx - up[0] * dy) * k,
+        S.camera.target[1] - (right[1] * dx - up[1] * dy) * k,
+        S.camera.target[2] - (right[2] * dx - up[2] * dy) * k,
+      ];
+      dirty = true;
+    } else if (drag.kind === 'obj') {
+      const ray = rayFromScreen(px, py);
+      const et = effTransform(drag.o, S.settings.time);
+      const pt = planeHit(ray.ro, ray.rd, et.pos, drag.planeN);
+      if (pt) {
+        const ny = drag.ground ? drag.startY : pt[1] - drag.grabOffset[1];
+        drag.o.pos = [pt[0] - drag.grabOffset[0], ny, pt[2] - drag.grabOffset[2]];
+        refreshInspectorValues();
+        dirty = true;
+      }
+    }
+  });
+  const endPtr = e => {
+    activePtrs.delete(e.pointerId);
+    if (activePtrs.size < 2) pinch = null;
+    if (drag && drag.kind === 'orbit' && !drag.moved && e.button === 0) selectObject(null);
+    drag = null;
+    canvas.style.cursor = 'default';
+  };
+  canvas.addEventListener('pointerup', endPtr);
+  canvas.addEventListener('pointercancel', endPtr);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    S.camera.dist = clamp(S.camera.dist * Math.exp(e.deltaY * 0.0012), 0.6, 80);
+    dirty = true;
+  }, { passive: false });
+  canvas.addEventListener('dblclick', e => {
+    const r = canvas.getBoundingClientRect();
+    const hit = pickAt(e.clientX - r.left, e.clientY - r.top);
+    if (hit.id >= 0 && hit.id < S.objects.length) {
+      selectObject(S.objects[hit.id].id);
+      focusSelected();
+    }
+  });
+  canvas.addEventListener('pointerleave', () => { haveProbe = false; });
+}
+
+/* ---------------- keyboard ---------------- */
+function setupKeyboard() {
+  window.addEventListener('keydown', e => {
+    const tag = (e.target && e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+    const k = e.key;
+    if (k === 'f' || k === 'F') focusSelected();
+    else if (k === 'r' || k === 'R') resetCamera();
+    else if (k === 'g' || k === 'G') { S.settings.grid = !S.settings.grid; refreshSettingsUI(); dirty = true; scheduleSave(); toast('Grid ' + (S.settings.grid ? 'on' : 'off')); }
+    else if (k === ' ') { e.preventDefault(); S.settings.playing = !S.settings.playing; refreshSettingsUI(); scheduleSave(); toast(S.settings.playing ? 'Animation playing' : 'Animation paused'); }
+    else if (k === 'h' || k === 'H' || k === '?') $('#helpDialog').showModal();
+    else if (k === 'Delete' || k === 'Backspace') { const o = selectedObject(); if (o) deleteObject(o); }
+    else if ((e.ctrlKey || e.metaKey) && (k === 'd' || k === 'D')) { e.preventDefault(); const o = selectedObject(); if (o) duplicateObject(o); }
+    else if (k === 'Escape') { selectObject(null); $('#settingsPanel').classList.remove('open'); $('#btnSettings').classList.remove('on'); $('#scenePanel').classList.remove('open'); $('#inspector').classList.remove('open'); }
+    else if (k >= '1' && k <= '8') setViewMode(+k - 1);
+  });
+}
+
+/* ---------------- performance overlay ---------------- */
+let lastPerfTs = 0, lastRenderWall = 0;
+function updatePerfOverlay(now) {
+  const st = S.settings;
+  const vis = S.objects.filter(o => !o.hidden).length;
+  const sel = selectedObject();
+  const idle = now - lastRenderWall > 1200;
+  if (haveProbe && now - lastProbeTs > 500) lastProbe = pickAt(probeX, probeY);
+  const stepsTxt = haveProbe ? `${lastProbe.steps} (px ${probeX | 0},${probeY | 0})` : '—';
+  $('#perfOverlay').textContent =
+`FPS ${idle ? 'idle' : (fpsEMA ? fpsEMA.toFixed(0) : '—')}
+Res ${internalW}×${internalH} · scale ${st.renderScale}%
+Objects ${S.objects.length} (${vis} visible) · cap ${MAXN}
+Ray steps ${stepsTxt}
+Mode ${MODES[viewMode].label}
+Selected ${sel ? sel.name : '—'}
+ε ${st.eps.toFixed(4)} · sh q${st.shadowQuality | 0} · ao q${st.aoQuality | 0} · refl ${st.bounces | 0} · fov ${st.fov | 0}°`;
+}
+
+/* ---------------- main loop ---------------- */
+let lastLoopTs = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  if (!lastLoopTs) lastLoopTs = ts;
+  const dt = Math.min((ts - lastLoopTs) / 1000, 0.1);
+  lastLoopTs = ts;
+  if (S.settings.playing) {
+    S.settings.time += dt * S.settings.timeSpeed;
+    dirty = true;
+  }
+  if (dirty && prog) {
+    renderFrame(ts);
+    dirty = false;
+    lastRenderWall = performance.now();
+  }
+  if (ts - lastPerfTs > 250) {
+    lastPerfTs = ts;
+    updatePerfOverlay(performance.now());
+  }
+}
+
+/* ---------------- debug / validation API ---------------- */
+window.SDF = {
+  state() {
+    const sel = selectedObject();
+    return {
+      objectCount: S.objects.length,
+      visibleCount: S.objects.filter(o => !o.hidden).length,
+      selected: sel ? sel.name : null,
+      selectedId,
+      mode: viewMode,
+      settings: { ...S.settings },
+      camera: { ...S.camera, target: [...S.camera.target] },
+      fps: Math.round(fpsEMA || 0),
+      internal: [internalW, internalH],
+      maxObjects: MAXN,
+      time: S.settings.time,
+      shaderCapacity: curN,
+    };
+  },
+  objects() {
+    return S.objects.map(o => ({ id: o.id, name: o.name, type: o.type, op: o.op, hidden: o.hidden, pos: [...o.pos] }));
+  },
+  select(nameOrId) {
+    const o = typeof nameOrId === 'number' ? S.objects.find(x => x.id === nameOrId) : S.objects.find(x => x.name === nameOrId);
+    if (!o) return false;
+    selectObject(o.id);
+    return true;
+  },
+  add(type) { addObject(type); return selectedObject() ? selectedObject().name : null; },
+  remove(nameOrId) {
+    const o = typeof nameOrId === 'number' ? S.objects.find(x => x.id === nameOrId) : S.objects.find(x => x.name === nameOrId);
+    if (o) deleteObject(o);
+    return !!o;
+  },
+  setProp(nameOrId, path, value) {
+    const o = typeof nameOrId === 'number' ? S.objects.find(x => x.id === nameOrId) : S.objects.find(x => x.name === nameOrId);
+    if (!o) return false;
+    const parts = path.split('.');
+    let tgt = o;
+    for (let i = 0; i < parts.length - 1; i++) tgt = tgt[parts[i]];
+    const leaf = parts[parts.length - 1];
+    if (Array.isArray(value) && Array.isArray(tgt[leaf])) tgt[leaf] = [...value];
+    else tgt[leaf] = value;
+    commit(true);
+    refreshInspectorValues();
+    rebuildSceneList();
+    return true;
+  },
+  setMode(v) { setViewMode(v); },
+  setSetting(k, v) { S.settings[k] = v; dirty = true; refreshSettingsUI(); scheduleSave(); },
+  reorder(name, newIndex) {
+    const i = S.objects.findIndex(x => x.name === name);
+    if (i < 0) return false;
+    const [o] = S.objects.splice(i, 1);
+    S.objects.splice(clamp(newIndex, 0, S.objects.length), 0, o);
+    commit(true); rebuildSceneList();
+    return true;
+  },
+  exportJSON() { return JSON.stringify(serializeScene()); },
+  importJSON(str) { importJSONText(str); return true; },
+  loadPreset(key) { loadPreset(key); },
+  presets: Object.keys(PRESETS),
+  pickAt(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    return pickAt(clientX - r.left, clientY - r.top);
+  },
+  project(p) { return projectToScreen(p); },
+  focus() { focusSelected(); },
+  resetCamera() { resetCamera(); },
+  renderNow() { renderFrame(performance.now()); dirty = false; lastRenderWall = performance.now(); },
+  pixelStats() { return { ...lastProbe, x: probeX, y: probeY }; },
+  saveNow() { try { localStorage.setItem(LS_KEY, JSON.stringify(serializeScene())); return true; } catch (e) { return false; } },
+  clearSaved() { localStorage.removeItem(LS_KEY); },
+};
+
+/* ---------------- boot ---------------- */
+function boot() {
+  try {
+    initGL();
+  } catch (err) {
+    showFatal('WebGL unavailable', err.message);
+    return;
+  }
+  buildTopBar();
+  buildSettingsPanel();
+  setupViewportInput();
+  setupKeyboard();
+  try {
+    if (!loadSavedScene()) loadPreset('sculpture');
+  } catch (err) {
+    console.error(err);
+    loadPreset('sculpture');
+  }
+  try {
+    ensureCapacity(Math.max(S.objects.length, 1));
+  } catch (err) {
+    showFatal('Shader build failed', 'Could not compile the ray-marching shader.', String(err.message || err));
+    return;
+  }
+  window.addEventListener('resize', () => { dirty = true; });
+  if (window.ResizeObserver) new ResizeObserver(() => { dirty = true; }).observe($('#viewport'));
+  requestAnimationFrame(loop);
+}
+boot();
+</script>
+</body>
+</html>

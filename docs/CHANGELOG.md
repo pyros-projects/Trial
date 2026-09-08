@@ -1,5 +1,18 @@
 # Changelog
 
+## Gemini completes the first twenty prompts: 2026-09-08
+
+- Added Gemini's logic lab, roguelike, echo-loop puzzler, weather lab, node graphics studio, and traffic simulator. Astra, Grok, and Gemini now each cover prompts 01–20.
+- Added GLM's SDF/CSG studio and sand simulation, completing its first ten prompts. The gallery now contains 87 builds across six models.
+- Added a slow-start notice to GLM's SDF/CSG studio after observing roughly 28 seconds of shader initialization before it rendered and accepted input.
+
+## Shareable model collections and three new builds: 2026-09-08
+
+- Selecting one model now displays its builds across prompts in a compact grid: three columns on desktop, two on smaller screens, and one on mobile. Cards identify the prompt and retain its Look for guidance, source access, notices, and implementation links.
+- Added full-screen model collections with Copy link, model setup details, and all submitted builds. Shared links open the complete collection independently of saved filters; returning from an implementation restores its collection.
+- Added model-specific share pages and small preview collages from up to three distinct prompts, with Open Graph and Twitter metadata. Existing implementation and prompt-comparison links remain intact.
+- Included Opus's stealth and factory builds and Astra's traffic simulator, bringing the collection to 79 builds. Astra and Grok now each cover prompts 01–20. Supplied final screenshots illustrate the new entries; original submissions remain unchanged.
+
 ## A single-file collection and the Capstone: 2026-09-08
 
 - Preserved the previous Real Apps prompts 21–30, fixtures, runtime contracts, and domain evaluation material on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps). The original 01–20 prompts and submitted results remain unchanged.
