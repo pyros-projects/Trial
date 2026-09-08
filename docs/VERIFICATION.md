@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Opus lensing and Astra rhythm game: 2026-09-08
+
+The collection contains **43 HTML builds across twelve prompts and six models**: Astra 12, Opus 5, Grok 10, GLM 5, Gemini 8, and Qwen 3. New submissions are Opus's `05-black-hole-lensing` and Astra's `12-rhythm-bullet-hell`. All **132 original files totaling 24,670,034 bytes** remain unchanged. The two top-level thumbnails are exact copies of the supplied `22-final-high-quality.png` and `24-final-desktop-gameplay.png`, inspected before publication.
+
+All **31 static-export and deployment-script tests** passed. Chromium checks against the actual Netlify Dev export verified both direct implementation links, rendered canvases, comparison grouping, and iframe removal on close. The black-hole comparison has five builds and six model columns; the rhythm-game comparison has one build and the other models' placeholders. Both apps occupy **1440 × 1057** on desktop and **390 × 765** on mobile beneath the viewer bar. Astra's game advanced beyond four musical beats after clicking its start button. No uncaught JavaScript errors or external requests occurred during these checks. These are gallery integration and launch checks, not a full evaluation of physics, gameplay, or sound quality.
+
+The bounded publication review scanned all 72 text files and metadata of all 60 original PNGs plus the two thumbnail copies. No confirmed credentials or private-identity linkage were found. Pseudonymous local paths and browser test IDs remain in the raw GitHub evidence. Only the selected screenshot pixels were visually reviewed; this is not a visual privacy review of every evidence image.
+
+Production deployment **`6a9fdccebfaaad00e9b244f1`** publishes **225 files totaling 7,971,255 bytes (7.60 MiB)**. Live HTTPS verification passed for all **43** implementation share pages, original source hashes, thumbnails and attachment/sandbox headers, plus all **12** comparison pages and preview images. All six model profiles remain intact, and twenty representative private routes returned 404. Both new implementations also passed the same desktop/mobile Chromium checks on production. Raw evidence and metadata remain excluded from the website.
+
 ## Qwen and ten new builds: 2026-09-08
 
 The collection now contains **41 HTML builds across eleven prompts and six models**: Astra 11, Opus 4, Grok 10, GLM 5, Gemini 8, and Qwen 3. New submissions cover Qwen 01/02/09, Opus 03/04, Astra 10/11, Grok 10, and GLM 04/05. The original five-model order and colors are retained; Qwen is sixth in teal. Its shared setup records **Pi / xhigh**, **MTPLX (local)**, and the linked **Optimized Speed (4-bit, 8-bit attention)** quantization. Runtime and quantization are separate optional, bounded public profile fields with the same URL validation as provider and harness links.

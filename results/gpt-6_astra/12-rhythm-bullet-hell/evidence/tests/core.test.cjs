@@ -1,0 +1,16 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
+const html=fs.existsSync('index.html')?fs.readFileSync('index.html','utf8'):'';
+const script=html.match(/<script id="sim-core">([\s\S]*?)<\/script>/);
+assert.ok(script,'Standalone application must contain the executable simulation core');
+const context={};vm.createContext(context);vm.runInContext(script[1],context);
+const {Transport,Sim,validateReplay}=context.EchoCore;
+function test(name,fn){fn();console.log('PASS',name)}
+test('tempo change preserves beat continuity and future measure alignment',()=>{const t=new Transport(120);assert.equal(t.beatAt(2),0);assert.equal(t.timeAt(4),4);const b=t.setTempo(150,3);assert.equal(b,4);assert.equal(t.beatAt(4),4);assert.equal(t.beatAt(6),9);assert.equal(t.timeAt(9),6)});
+test('identical seed and fixed inputs produce identical complete logical state',()=>{const a=new Sim({seed:'echo-test',mode:'lab',pattern:'bloom'}),b=new Sim({seed:'echo-test',mode:'lab',pattern:'bloom'});for(let i=0;i<1900;i++){const inp={dx:Math.sin(i/200)>.4?1:-1,dy:0,focus:i%300<100,dash:i%240===0};a.step(inp);b.step(inp)}assert.equal(a.checksum(),b.checksum());assert.ok(a.emitted>100)});
+test('different seeds alter projectile geometry',()=>{const a=new Sim({seed:'A',mode:'lab'}),b=new Sim({seed:'B',mode:'lab'});for(let i=0;i<650;i++){a.step({});b.step({})}assert.notEqual(a.checksum(),b.checksum())});
+test('step grid gates actual projectile emission',()=>{const a=new Sim({mode:'lab',grid:Array(16).fill(false)});for(let i=0;i<1000;i++)a.step({});assert.equal(a.emitted,0);a.applySettings({grid:Array(16).fill(true)});for(let i=0;i<120;i++)a.step({});assert.ok(a.emitted>0)});
+test('swept collision catches fast projectiles and grants invulnerability',()=>{const a=new Sim({mode:'play',grid:Array(16).fill(false)});for(let i=0;i<260;i++)a.step({});const hp=a.player.hp;a.bullets.push({id:1,x:a.player.x-20,y:a.player.y,vx:4800,vy:0,r:4,age:0,life:10,curve:0,accel:0,grazed:false,color:0});a.step({});assert.equal(a.player.hp,hp-1);a.bullets.push({id:2,x:a.player.x-20,y:a.player.y,vx:4800,vy:0,r:4,age:0,life:10,curve:0,accel:0,grazed:false,color:0});a.step({});assert.equal(a.player.hp,hp-1)});
+test('focus movement is slower and diagonal movement normalized',()=>{const a=new Sim(),b=new Sim(),c=new Sim();for(let i=0;i<250;i++){a.step({});b.step({});c.step({})}const x=a.player.x;for(let i=0;i<20;i++){a.step({dx:1});b.step({dx:1,focus:true});c.step({dx:1,dy:1})}assert.ok(a.player.x-x>(b.player.x-x)*2);assert.ok(Math.abs((a.player.x-x)-Math.hypot(c.player.x-x,c.player.y-540))<1)});
+test('dash has cost and timing judgement',()=>{const a=new Sim({mode:'lab',grid:Array(16).fill(false)});for(let i=0;i<240;i++)a.step({});a.step({dash:true});assert.equal(a.attempts,1);assert.equal(a.perfect,1);assert.ok(a.player.cooldown>0);a.step({dash:false});a.step({dash:true});assert.equal(a.attempts,1)});
+test('replay rejects invalid settings and out of range inputs',()=>{assert.throws(()=>validateReplay({version:9}));assert.throws(()=>validateReplay({version:1,engine:'echo-shift-1',config:{bpm:999},actions:[],changes:[],ticks:20}));assert.throws(()=>validateReplay({version:1,engine:'echo-shift-1',config:{bpm:120},actions:[[0,99,0,0,0]],changes:[],ticks:20}));});
+console.log('8 core behavior checks passed');
