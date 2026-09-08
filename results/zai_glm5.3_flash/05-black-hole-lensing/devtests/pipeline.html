@@ -1,0 +1,111 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>pipeline test</title></head><body>
+<canvas id="c" width="320" height="200"></canvas>
+<pre id="out">running…</pre>
+<script>
+(async () => {
+  const out = document.getElementById('out');
+  const log = [];
+  const T = () => performance.now();
+  const txt = await (await fetch('/index.html')).text();
+  const ray = txt.match(/const RAY_FRAG_SRC = `([\s\S]*?)`;/)[1];
+  const vert = txt.match(/const VERT_SRC = `([\s\S]*?)`;/)[1];
+  const blendS = txt.match(/const BLEND_FRAG_SRC = `([\s\S]*?)`;/)[1];
+  const bloomS = txt.match(/const BLOOM_FRAG_SRC = `([\s\S]*?)`;/)[1];
+  const compS = txt.match(/const COMP_FRAG_SRC = `([\s\S]*?)`;/)[1];
+
+  const gl = document.getElementById('c').getContext('webgl2', {preserveDrawingBuffer:true});
+  log.push('webgl2: ' + !!gl + ' floatExt: ' + !!(gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float')));
+  function prog(fs){
+    const p = gl.createProgram();
+    const a = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(a, vert); gl.compileShader(a);
+    const b = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(b, fs); gl.compileShader(b);
+    if(!gl.getCompiled) {}
+    if(!gl.getShaderParameter(b, gl.COMPILE_STATUS)) { log.push('compile fail: ' + gl.getShaderInfoLog(b).slice(0,200)); }
+    gl.attachShader(p,a); gl.attachShader(p,b); gl.linkProgram(p);
+    return p;
+  }
+  function fbo(w, h, f16){
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    if(f16) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex, fb, w, h, status: st === gl.FRAMEBUFFER_COMPLETE ? 'complete' : 'INCOMPLETE' };
+  }
+  const U = (p, n) => gl.getUniformLocation(p, n);
+
+  let t0 = T(); const pRay = prog(ray); const tRayComp = T()-t0;
+  t0 = T(); const pBlend = prog(blendS); const pBloom = prog(bloomS); const pComp = prog(compS); const tOtherComp = T()-t0;
+
+  const scene = fbo(320, 200, true), accA = fbo(320, 200, true), accB = fbo(320, 200, true);
+  const blA = fbo(80, 50, true), blB = fbo(80, 50, true);
+  log.push('f16 fbos: ' + scene.status + ',' + accA.status);
+
+  // set ray uniforms (same as app)
+  gl.useProgram(pRay);
+  gl.uniform2f(U(pRay,'uRes'), 320, 200); gl.uniform2f(U(pRay,'uJit'), 0, 0);
+  gl.uniform1f(U(pRay,'uTime'), 47); gl.uniform1i(U(pRay,'uMode'), 0); gl.uniform1i(U(pRay,'uEnc'), 0);
+  gl.uniform1f(U(pRay,'uFocal'), 1/tan(rad(60)/2));
+  gl.uniform1f(U(pRay,'uRs'), 1); gl.uniform1f(U(pRay,'uHorR'), 0.9); gl.uniform1f(U(pRay,'uSpin'), 0.6); gl.uniform1f(U(pRay,'uEscR'), 28);
+  gl.uniform3f(U(pRay,'uCamPos'), 0, 1.3, -12.3);
+  gl.uniform3f(U(pRay,'uCamR'), 1,0,0); gl.uniform3f(U(pRay,'uCamU'), 0,0.996,-0.087); gl.uniform3f(U(pRay,'uCamF'), 0,0.087,0.996);
+  gl.uniform3f(U(pRay,'uDN'), 0,1,0); gl.uniform3f(U(pRay,'uDU'), 1,0,0); gl.uniform3f(U(pRay,'uDV'), 0,0,-1);
+  gl.uniform1f(U(pRay,'uDin'), 3); gl.uniform1f(U(pRay,'uDout'), 13); gl.uniform1f(U(pRay,'uDh'), 0.32);
+  gl.uniform1f(U(pRay,'uDtemp'), 9200); gl.uniform1f(U(pRay,'uTurb'), 0.62); gl.uniform1f(U(pRay,'uDopK'), 0.75);
+  gl.uniform1f(U(pRay,'uRedK'), 1); gl.uniform1f(U(pRay,'uStepMul'), 1); gl.uniform1i(U(pRay,'uMaxSteps'), 96);
+  function rad(d){ return d*Math.PI/180; } function tan(x){ return Math.tan(x); }
+
+  const px = new Uint8Array(4);
+  function timed(name, fn){
+    t0 = T(); fn(); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px); const dt = T()-t0;
+    log.push(name + ': ' + dt.toFixed(0) + ' ms px=' + [...px].join(','));
+    return dt;
+  }
+
+  // pass 1: ray into f16
+  gl.bindFramebuffer(gl.FRAMEBUFFER, scene.fb);
+  gl.viewport(0,0,320,200);
+  timed('ray→f16 (96 steps)', () => { gl.useProgram(pRay); gl.drawArrays(gl.TRIANGLES,0,3); });
+  // pass 2: blend
+  gl.bindFramebuffer(gl.FRAMEBUFFER, accB.fb);
+  gl.viewport(0,0,320,200);
+  timed('blend f16→f16', () => {
+    gl.useProgram(pBlend);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, scene.tex); gl.uniform1i(U(pBlend,'uCur'),0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, accA.tex); gl.uniform1i(U(pBlend,'uHist'),1);
+    gl.uniform1f(U(pBlend,'uAlpha'), 0.5);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  });
+  // pass 3: bloom
+  timed('bloom bright f16→f16', () => {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, blA.fb); gl.viewport(0,0,80,50);
+    gl.useProgram(pBloom);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, accB.tex); gl.uniform1i(U(pBloom,'uTex'),0);
+    gl.uniform2f(U(pBloom,'uRes'), 80, 50); gl.uniform2f(U(pBloom,'uTexel'), 1/320, 1/200);
+    gl.uniform1f(U(pBloom,'uThresh'), 0.85); gl.uniform1i(U(pBloom,'uPass'), 0);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  });
+  // pass 4: composite to canvas
+  timed('composite f16→canvas 320x200', () => {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0,0,320,200);
+    gl.useProgram(pComp);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, accB.tex); gl.uniform1i(U(pComp,'uTex'),0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, blA.tex); gl.uniform1i(U(pComp,'uBloom'),1);
+    gl.uniform2f(U(pComp,'uRes'), 320, 200);
+    gl.uniform1f(U(pComp,'uExposure'), 1.15); gl.uniform1f(U(pComp,'uContrast'), 1.06); gl.uniform1f(U(pComp,'uBloomStr'), 0.6);
+    gl.uniform1i(U(pComp,'uBeauty'), 1); gl.uniform1i(U(pComp,'uEnc'), 0); gl.uniform1i(U(pComp,'uBloomOn'), 1);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  });
+  // repeat ray for warm number
+  timed('ray→f16 again', () => { gl.bindFramebuffer(gl.FRAMEBUFFER, scene.fb); gl.viewport(0,0,320,200); gl.useProgram(pRay); gl.drawArrays(gl.TRIANGLES,0,3); });
+
+  out.textContent = log.join('\n');
+  document.title = 'TESTDONE';
+})().catch(e => { document.getElementById('out').textContent = 'ERR ' + e.message; document.title = 'TESTERR'; });
+</script></body></html>

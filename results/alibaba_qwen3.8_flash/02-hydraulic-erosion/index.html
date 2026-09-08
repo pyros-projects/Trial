@@ -1,0 +1,3640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>3D Hydraulic Erosion Laboratory</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#141a22; --panel2:#1b232d; --ink:#dfe6ee; --dim:#8b98a8;
+  --accent:#4ec9b0; --accent2:#66aaff; --warn:#ffb454; --bad:#ff6b6b; --line:#243040;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden}
+#app{position:fixed;inset:0;display:block}
+#stage{position:absolute;inset:0;touch-action:none;cursor:crosshair}
+#stage.grab{cursor:grab}
+#stage.grabbing{cursor:grabbing}
+#stage.probe{cursor:help}
+canvas#view{display:block;width:100%;height:100%}
+
+/* ---------- brush cursor ---------- */
+#cursor{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none;
+  border:1.5px solid rgba(255,214,120,.95);box-shadow:0 0 0 1px rgba(0,0,0,.45) inset;
+  transform:translate(-50%,-50%);display:none;mix-blend-mode:screen}
+#cursor.sink{border-color:rgba(120,190,255,.95)}
+#cursor.water{border-color:rgba(110,230,255,.95)}
+
+/* ---------- HUD ---------- */
+#hud{position:absolute;left:12px;top:12px;max-width:min(46vw,430px);pointer-events:none;
+  font-family:var(--mono);font-size:11.5px;line-height:1.45;
+  background:rgba(10,14,20,.72);border:1px solid rgba(90,120,150,.32);border-radius:9px;
+  padding:9px 11px;backdrop-filter:blur(5px)}
+#hud h2{margin:0 0 5px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--accent);display:flex;gap:8px;align-items:center;font-weight:600}
+#hud .grid{display:grid;grid-template-columns:auto 1fr;gap:1px 10px}
+#hud .k{color:var(--dim);white-space:nowrap}
+#hud .v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+#hud .row{display:flex;gap:7px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.pill{padding:1.5px 7px;border-radius:99px;border:1px solid var(--line);background:var(--panel2);
+  font-size:10.5px;letter-spacing:.02em}
+.pill.run{color:#9df0d5;border-color:#2c6153}
+.pill.pause{color:#ffcf8b;border-color:#6a4d20}
+.pill.warn{color:#ffd6a5;border-color:#7a4a1a;background:#2a1c10}
+.pill.bad{color:#ffb3b3;border-color:#7a2a2a;background:#2a1212}
+#bars{margin-top:6px;display:flex;flex-direction:column;gap:3px}
+.bar{display:grid;grid-template-columns:64px 1fr 46px;gap:6px;align-items:center;font-size:10.5px}
+.track{height:5px;border-radius:3px;background:#22303c;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,#2f7fb5,#5fd9c0);width:0%}
+.fill.sed{background:linear-gradient(90deg,#a2662a,#e8b45a)}
+.fill.act{background:linear-gradient(90deg,#3a5f8f,#8ab6ff)}
+
+/* ---------- toolbar ---------- */
+#toolbar{position:absolute;left:50%;transform:translateX(-50%);top:12px;display:flex;gap:6px;
+  flex-wrap:wrap;justify-content:center;max-width:min(62vw,660px)}
+#toolbar button,#panel button,.btn{font:inherit;font-size:12px;color:var(--ink);cursor:pointer;
+  background:linear-gradient(#1d2632,#161d26);border:1px solid #2b3846;border-radius:7px;
+  padding:6px 10px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap;
+  transition:background .12s,border-color .12s,transform .06s}
+#toolbar button:hover,.btn:hover{background:linear-gradient(#26313f,#1b232d);border-color:#3f5164}
+#toolbar button:active,.btn:active{transform:translateY(1px)}
+#toolbar button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+#toolbar button kbd,.hint kbd{font-family:var(--mono);font-size:9.5px;color:var(--dim);
+  border:1px solid #2c3947;border-radius:4px;padding:0 3px;background:#111820}
+#toolToggle{position:absolute;right:12px;top:12px;display:none}
+
+/* ---------- control panel ---------- */
+#panel{position:absolute;right:12px;top:12px;bottom:12px;width:322px;max-height:calc(100% - 24px);
+  background:rgba(16,21,28,.93);border:1px solid rgba(90,120,150,.3);border-radius:11px;
+  display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(7px);
+  box-shadow:0 10px 34px rgba(0,0,0,.45)}
+#panel header{padding:9px 12px;border-bottom:1px solid var(--line);display:flex;
+  justify-content:space-between;align-items:center;gap:8px}
+#panel header h1{margin:0;font-size:12.5px;letter-spacing:.03em;font-weight:650}
+#panelBody{overflow-y:auto;overscroll-behavior:contain;padding:4px 12px 14px;font-size:12px}
+#panelBody::-webkit-scrollbar{width:9px}
+#panelBody::-webkit-scrollbar-thumb{background:#26323f;border-radius:9px}
+details.group{border-bottom:1px solid #1d2733;padding:2px 0}
+details.group>summary{list-style:none;cursor:pointer;padding:8px 2px 7px;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--accent);display:flex;
+  justify-content:space-between;align-items:center;font-weight:600}
+details.group>summary::-webkit-details-marker{display:none}
+details.group>summary::after{content:"\25be";color:var(--dim);font-size:12px}
+details.group[open]>summary::after{content:"\25b4"}
+.ctl{margin:7px 0}
+.ctl label{display:flex;justify-content:space-between;gap:8px;color:var(--dim);font-size:11.5px;margin-bottom:3px}
+.ctl output{color:var(--ink);font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;height:17px;-webkit-appearance:none;appearance:none;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:3px;background:#24313e}
+input[type=range]::-moz-range-track{height:4px;border-radius:3px;background:#24313e}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--accent);border:2px solid #0e141a;margin-top:-4.5px;cursor:pointer}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--accent);
+  border:2px solid #0e141a;cursor:pointer}
+select,input[type=text],input[type=number]{width:100%;font:inherit;font-size:12px;color:var(--ink);
+  background:#101821;border:1px solid #2a3746;border-radius:6px;padding:5px 7px}
+select:focus,input:focus{outline:none;border-color:var(--accent2)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.row2 button,.row3 button{justify-content:center;padding:6px 6px;font-size:11.5px}
+.tools{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.tools button{padding:6px 3px;font-size:11px;justify-content:center}
+.tools button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.modes button{padding:5px 4px;font-size:11px;justify-content:center}
+.modes button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.presets button{padding:7px 5px;font-size:11.5px;justify-content:flex-start}
+.presets button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+.note{color:var(--dim);font-size:10.5px;line-height:1.45;margin:5px 0 2px}
+.check{display:flex;gap:7px;align-items:center;font-size:11.5px;color:var(--dim);margin:6px 0}
+.check input{width:14px;height:14px;accent-color:var(--accent)}
+
+/* ---------- probe ---------- */
+#probe{position:absolute;left:12px;bottom:12px;min-width:236px;font-family:var(--mono);font-size:11px;
+  background:rgba(10,14,20,.78);border:1px solid rgba(90,120,150,.32);border-radius:9px;padding:8px 10px;
+  pointer-events:none;line-height:1.5}
+#probe b{color:var(--accent);font-weight:600}
+#probe .prow{display:flex;justify-content:space-between;gap:12px}
+#probe .pk{color:var(--dim)}
+#minimap{position:absolute;right:12px;bottom:12px;width:132px;height:132px;border-radius:9px;
+  border:1px solid rgba(90,120,150,.32);overflow:hidden;background:#0d141b}
+#minimap canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+#minimap .cap{position:absolute;left:0;right:0;bottom:0;font-family:var(--mono);font-size:9.5px;
+  padding:2px 5px;color:#cfe;background:rgba(8,12,17,.72);text-align:center}
+
+/* ---------- hints + toast ---------- */
+#hints{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;display:flex;gap:9px;
+  flex-wrap:wrap;justify-content:center;max-width:56vw}
+.hint{font-size:10.5px;color:var(--dim);background:rgba(12,17,23,.7);border:1px solid #222e3b;
+  border-radius:6px;padding:3px 7px;font-family:var(--mono)}
+#toasts{position:absolute;left:50%;transform:translateX(-50%);top:58px;display:flex;
+  flex-direction:column;gap:6px;align-items:center;pointer-events:none;z-index:40}
+.toast{font-family:var(--mono);font-size:11.5px;padding:7px 12px;border-radius:8px;
+  background:rgba(20,28,36,.95);border:1px solid #2e3d4d;color:var(--ink);
+  box-shadow:0 6px 18px rgba(0,0,0,.4);max-width:min(78vw,520px)}
+.toast.warn{border-color:#7a4a1a;color:#ffd9a8;background:rgba(38,26,12,.95)}
+.toast.bad{border-color:#7a2a2a;color:#ffc2c2;background:rgba(38,16,16,.95)}
+.toast.fade{opacity:0;transition:opacity .45s}
+
+/* ---------- narrow screens ---------- */
+@media (max-width:900px){
+  #panel{right:8px;left:8px;top:auto;bottom:8px;width:auto;max-height:52%;display:none}
+  #panel.open{display:flex}
+  #toolToggle{display:inline-flex}
+  #hud{max-width:min(78%,330px);font-size:10px;left:8px;top:8px;max-height:42%}
+  #hud #probe{position:static;margin-top:7px;padding-top:6px;border:none;border-top:1px solid rgba(90,120,150,.32);
+    background:none;backdrop-filter:none;pointer-events:none}
+  #toolbar{left:8px;right:8px;transform:none;top:auto;bottom:calc(52% + 16px);max-width:none;justify-content:flex-start}
+  #panel.open ~ #toolbar{bottom:calc(52% + 16px)}
+  #minimap{display:none}
+  #hints{display:none}
+}
+@media (max-height:560px){ #hud{font-size:10px} #probe{display:none} }
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="view" aria-label="3D erosion terrain view"></canvas>
+    <div id="cursor"></div>
+  </div>
+
+  <div id="hud" role="status" aria-live="off">
+    <h2><span id="hudState" class="pill run">running</span><span id="hudMode">Shaded terrain</span></h2>
+    <div class="grid">
+      <span class="k">fps</span><span class="v" id="vFps">—</span>
+      <span class="k">frame</span><span class="v" id="vFrame">—</span>
+      <span class="k">grid</span><span class="v" id="vGrid">—</span>
+      <span class="k">sim time</span><span class="v" id="vTime">—</span>
+      <span class="k">water</span><span class="v" id="vWater">—</span>
+      <span class="k">sediment</span><span class="v" id="vSed">—</span>
+      <span class="k">stability</span><span class="v" id="vStab">—</span>
+    </div>
+    <div id="bars">
+      <div class="bar"><span>water cover</span><span class="track"><span class="fill" id="bWet"></span></span><span class="v" id="tWet">0%</span></div>
+      <div class="bar"><span>flux limited</span><span class="track"><span class="fill sed" id="bCap"></span></span><span class="v" id="tCap">0%</span></div>
+      <div class="bar"><span>sim cost</span><span class="track"><span class="fill act" id="bSim"></span></span><span class="v" id="tSim">0ms</span></div>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button id="btnPause" class="on" title="Pause / resume (Space)">⏸ Pause <kbd>space</kbd></button>
+    <button id="btnStep" title="Advance one simulation step (S)">⏭ Step <kbd>s</kbd></button>
+    <button id="btnReset" title="Reset water, sediment and time (T)">↺ Reset <kbd>t</kbd></button>
+    <button id="btnRegen" title="Generate new terrain from the seed (R)">⛰ New terrain <kbd>r</kbd></button>
+    <button id="btnCam" title="Reset the camera (C)">🧭 Camera <kbd>c</kbd></button>
+    <button id="btnStab" title="Clamp parameters back to a stable range">🛡 Stabilise</button>
+    <button id="btnPanel" style="display:none">☰ Controls</button>
+  </div>
+
+  <button id="toolToggle" class="btn" aria-expanded="false">⚙ Controls</button>
+
+  <aside id="panel" aria-label="Controls">
+    <header>
+      <h1>Hydraulic Erosion Lab</h1>
+      <button class="btn" id="panelClose" title="Hide panel">✕</button>
+    </header>
+    <div id="panelBody"></div>
+  </aside>
+
+  <div id="probe" aria-live="off"><b>probe</b><div class="prow"><span class="pk">move the pointer over terrain</span></div></div>
+
+  <div id="minimap"><canvas id="mmCanvas" width="132" height="132"></canvas><div class="cap">plan view · water + relief</div></div>
+
+  <div id="hints">
+    <span class="hint">drag <kbd>L</kbd> tool</span>
+    <span class="hint">orbit <kbd>R-drag</kbd></span>
+    <span class="hint">pan <kbd>M-drag</kbd>/<kbd>⇧+L</kbd></span>
+    <span class="hint">zoom <kbd>wheel</kbd></span>
+    <span class="hint">tools <kbd>1-8</kbd></span>
+    <span class="hint">views <kbd>z</kbd>/<kbd>x</kbd></span>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+  <input type="file" id="fileIn" accept=".json,application/json" class="sr" tabindex="-1">
+</div>
+<script>
+"use strict";
+/* Self-contained build generated by tools/build.sh.
+   Sources: src/sim.js (model), src/render.js (view), src/app.js (controller). */
+(() => {
+const LAB = {};
+
+const F32 = Float32Array;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+/* ---------------- deterministic randomness ---------------- */
+
+function hashSeed(str) {
+  let h = 2166136261 >>> 0;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  h ^= h >>> 13;
+  h = Math.imul(h, 2654435761) >>> 0;
+  return h >>> 0;
+}
+
+function mulberry32(a) {
+  let s = a >>> 0;
+  return function () {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hash2(x, y, seed) {
+  let h = (x * 374761393 + y * 668265263 + seed * 1442695041) | 0;
+  h = (h ^ (h >>> 13)) | 0;
+  h = Math.imul(h, 1274126177) | 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return h / 4294967296;
+}
+
+const smooth01 = (t) => t * t * (3 - 2 * t);
+
+/* value noise in [-1, 1] */
+function vnoise(x, y, seed) {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const sx = smooth01(x - x0);
+  const sy = smooth01(y - y0);
+  const a = hash2(x0, y0, seed);
+  const b = hash2(x0 + 1, y0, seed);
+  const c = hash2(x0, y0 + 1, seed);
+  const d = hash2(x0 + 1, y0 + 1, seed);
+  const t = a + (b - a) * sx;
+  const u = c + (d - c) * sx;
+  return (t + (u - t) * sy) * 2 - 1;
+}
+
+/* ---------------- terrain generation ---------------- */
+
+function generateHeightfield(sim, style, o) {
+  const n = sim.n;
+  const h = sim.h;
+  const rock = sim.rock;
+  const sed = sim.sed;
+  const seed = hashSeed(String(o.seed));
+  const rng = mulberry32(seed);
+  const relief = o.relief;
+  const oct = Math.max(1, Math.min(9, Math.round(o.octaves)));
+  const rough = clamp(o.roughness, 0.2, 0.9);
+  const ridge = clamp(o.ridge, 0, 1);
+  const island = clamp(o.island, 0, 1);
+  const warp = o.warp;
+  const baseFreq = clamp(o.scale, 1.2, 24);
+
+  let maxH = -1e9;
+  let minH = 1e9;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const u = x / (n - 1);
+      const v = y / (n - 1);
+      let e = 0;
+      let amp = 1;
+      let freq = baseFreq;
+      let norm = 0;
+      const wx = (warp * vnoise(u * 3.1 + 11.7, v * 3.1 - 4.3, seed ^ 0x9e37)) * 0.18;
+      const wy = (warp * vnoise(u * 3.1 - 8.1, v * 3.1 + 2.9, seed ^ 0x5bf0)) * 0.18;
+      for (let k = 0; k < oct; k++) {
+        const su = (u + wx) * freq;
+        const sv = (v + wy) * freq;
+        let a = vnoise(su, sv, seed + k * 101);
+        if (ridge > 0) {
+          const r = 1 - Math.abs(a);
+          a = a * (1 - ridge) + (r * 2 - 1) * ridge;
+        }
+        e += a * amp;
+        norm += amp;
+        amp *= rough;
+        freq *= 2.03;
+      }
+      e /= norm;
+
+      if (style === 'island') {
+        const dx = u - 0.5;
+        const dy = v - 0.5;
+        const d = Math.sqrt(dx * dx + dy * dy) * 2;
+        shape = clamp(1.25 - d * (1.1 + island * 0.9), -0.35, 1.3);
+        e = e * 0.6 + shape * 0.55;
+      } else if (style === 'valley') {
+        const dx = u - 0.5;
+        e = e * 0.5 + (Math.pow(Math.abs(dx) * 2, 1.2) * 0.85 - 0.28);
+      } else if (style === 'canyon') {
+        const me =
+          0.5 + 0.24 * Math.sin(v * 7.3 + seed * 1e-6) + 0.1 * vnoise(u * 5, v * 12, seed);
+        const d = Math.abs(u - me);
+        const cut = Math.exp(-(d * d) / 0.0045) * 0.55;
+        e = e * 0.45 + 0.32 - cut;
+      } else if (style === 'plateau') {
+        e = Math.tanh(e * 1.7) * 0.75;
+      } else if (style === 'plain') {
+        e = e * 0.28;
+      } else {
+        // mountain drainage: broad dome plus ridge detail
+        const dx = u - 0.5;
+        const dy = v - 0.5;
+        const d = Math.sqrt(dx * dx + dy * dy) * 2;
+        e = e * 0.85 + (1 - clamp(d, 0, 1)) ** 1.5 * 0.55 - 0.15;
+      }
+
+      e *= relief;
+      if (e > maxH) maxH = e;
+      if (e < minH) minH = e;
+      h[y * n + x] = e;
+    }
+  }
+
+  // normalise to [0, relief]
+  const span = Math.max(1e-5, maxH - minH);
+  for (let i = 0; i < n * n; i++) h[i] = ((h[i] - minH) / span) * relief;
+
+  // pre-eroded drainage lines so the first frames are already channelised
+  if (style !== 'plain') {
+    const rivers = style === 'canyon' ? 3 : 4;
+    for (let r = 0; r < rivers; r++) {
+      let x = 0.5 + (rng() - 0.5) * 0.55;
+      let y = 0.04 + rng() * 0.12;
+      let dir = Math.PI * 0.5 + (rng() - 0.5) * 0.7;
+      const depth = 0.02 + rng() * 0.05;
+      const steps = Math.round(n * 2.4);
+      for (let k = 0; k < steps; k++) {
+        const gx = Math.round(x * (n - 1));
+        const gy = Math.round(y * (n - 1));
+        if (gx < 1 || gy < 1 || gx >= n - 1 || gy >= n - 1) break;
+        const idx = gy * n + gx;
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            const j = (gy + oy) * n + (gx + ox);
+            if (j < 0 || j >= n * n) continue;
+            h[j] -= (depth * 1) / (1 + ox * ox + oy * oy);
+          }
+        }
+        const hx = (h[Math.min(n - 1, idx + 1)] - h[Math.max(0, idx - 1)]) * 6;
+        const hy = (h[Math.min(n * n - n, idx + n)] - h[Math.max(0, idx - n)]) * 6;
+        let vx = Math.cos(dir) * 0.35 - hx;
+        let vy = Math.sin(dir) * 0.35 - hy;
+        const m = Math.hypot(vx, vy) || 1;
+        vx /= m;
+        vy /= m;
+        dir = Math.atan2(vy, vx) + (rng() - 0.5) * 0.35;
+        x = clamp(x + vx / n, 0, 1);
+        y = clamp(y + vy / n, 0, 1);
+        if (y >= 0.995 || x <= 0.005 || x >= 0.995) break;
+      }
+    }
+  }
+
+  // erodibility: loose debris on flats, hard rock on steep spines
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const i = y * n + x;
+      const l = h[i - (x > 0 ? 1 : 0)];
+      const r = h[i + (x < n - 1 ? 1 : 0)];
+      const u = h[i - (y > 0 ? n : 0)];
+      const d = h[i + (y < n - 1 ? n : 0)];
+      const slope = Math.abs(h[i] - 0.25 * (l + r + u + d));
+      rock[i] = clamp(0.95 - slope * 9 - hash2(x, y, seed ^ 0x1234) * 0.3, 0.08, 1);
+    }
+  }
+
+  if (o.sediment > 0) for (let i = 0; i < n * n; i++) sed[i] = o.sediment * 0.01;
+
+  updateSeaLevel(sim, o.seaLevel);
+
+  // spring sources near the high ground guarantee rivers on frame one
+  sim.springs.length = 0;
+  let tries = 0;
+  while (sim.springs.length < o.springs && tries++ < 6000) {
+    const x = 2 + Math.floor(rng() * (n - 4));
+    const y = 2 + Math.floor(rng() * (n - 4));
+    const i = y * n + x;
+    if (!(h[i] > 0.5 * relief && h[i] > o.seaLevel + 0.02)) continue;
+    let close = false;
+    for (const sp of sim.springs) {
+      if (Math.abs(sp.x - x) + Math.abs(sp.y - y) < n * 0.16) close = true;
+    }
+    if (!close) sim.springs.push({ x, y, r: 1 + Math.floor(rng() * 2) });
+  }
+  for (const sp of sim.springs) {
+    for (let oy = -sp.r; oy <= sp.r; oy++) {
+      for (let ox = -sp.r; ox <= sp.r; ox++) {
+        const x = sp.x + ox;
+        const y = sp.y + oy;
+        if (x < 0 || y < 0 || x >= n || y >= n) continue;
+        sim.w[y * n + x] = 0.02;
+      }
+    }
+  }
+}
+
+function updateSeaLevel(sim, level) {
+  if (!(level > 0)) return;
+  for (let i = 0; i < sim.n * sim.n; i++) {
+    if (sim.h[i] < level) sim.w[i] = (level - sim.h[i]) * 0.85;
+  }
+}
+
+/* ---------------- sim container ---------------- */
+
+LAB.createSim = function (n, params) {
+  const N = n * n;
+  return {
+    n: n,
+    cell: 1 / n,
+    h: new F32(N),
+    w: new F32(N),
+    sed: new F32(N),
+    rock: new F32(N),
+    fx: new F32(N),
+    fy: new F32(N),
+    dw: new F32(N),
+    ds: new F32(N),
+    dh: new F32(N),
+    delta: new F32(N),
+    spd: new F32(N),
+    springs: [],
+    params: Object.assign({}, params),
+    step: 0,
+    time: 0,
+    rng: mulberry32(0x2545f491),
+    recoveries: 0,
+    capped: 0,
+    unstable: false,
+    stats: null,
+  };
+};
+
+LAB.resetWater = function (sim) {
+  sim.w.fill(0);
+  sim.sed.fill(0);
+  sim.fx.fill(0);
+  sim.fy.fill(0);
+  sim.delta.fill(0);
+  sim.spd.fill(0);
+  sim.step = 0;
+  sim.time = 0;
+  sim.recoveries = 0;
+  sim.capped = 0;
+  sim.unstable = false;
+  sim.stats = null;
+  const o = sim.gen;
+  if (o) {
+    updateSeaLevel(sim, o.seaLevel);
+    for (const sp of sim.springs) {
+      for (let oy = -sp.r; oy <= sp.r; oy++) {
+        for (let ox = -sp.r; ox <= sp.r; ox++) {
+          const x = sp.x + ox;
+          const y = sp.y + oy;
+          if (x < 0 || y < 0 || x >= sim.n || y >= sim.n) continue;
+          sim.w[y * sim.n + x] = 0.02;
+        }
+      }
+    }
+  }
+};
+
+LAB.generate = function (sim, style, opts) {
+  const o = Object.assign(
+    {
+      style: style || 'mountain',
+      relief: 0.34,
+      octaves: 5,
+      roughness: 0.45,
+      ridge: 0.45,
+      island: 0,
+      scale: 4.5,
+      seaLevel: 0.012,
+      sediment: 0,
+      warp: 0.6,
+      springs: 5,
+      seed: 'seed',
+    },
+    opts,
+  );
+  sim.gen = o;
+  generateHeightfield(sim, o.style, o);
+  return sim;
+};
+
+/* Default UI parameter values.  Ranges are documented in the control panel;
+1.0 is the "physical" reference point for every coefficient. */
+LAB.DEFAULT_PARAMS = {
+  rain: 0.16,
+  evap: 0.3,
+  erode: 0.6,
+  deposit: 0.5,
+  capacity: 0.5,
+  flow: 0.6,
+  thermal: 0.1,
+  talus: 55,
+};
+
+/* ---------------- one simulation step ---------------- */
+
+const MIN_W = 1e-4;
+
+/* tuning constants for the default parameter scale (1.0 == "normal") */
+LAB.K = {
+  rain: 0.00035, // depth added per substep at rain = 1
+  springGain: 26, // spring multiplier on rainfall
+  acc: 0.42, // flux acceleration from head difference
+  damp: 0.93, // flux memory loss per substep
+  maxFlux: 0.25, // hard flux clamp
+  cfl: 0.55, // max fraction of a cell's water leaving per substep
+  carry: 0.9, // fraction of suspended load that follows the water
+  edgeDrain: 0.5, // water lost off the rim per substep
+  capK: 1.2, // carrying capacity coefficient
+  capSlope: 26, // slope contribution to capacity
+  eroFrac: 0.1, // fraction of the capacity deficit converted to erosion
+  eroMax: 9e-5, // absolute erosion cap per substep and cell
+  eroWater: 26, // how quickly erosion saturates with depth
+  eroThresh: 3e-4, // minimum water speed before hydraulic erosion bites
+  depK: 0.55, // deposition coefficient
+  depFrac: 0.45, // fraction of the surplus load that settles out
+  depMax: 4e-4, // deposition cap per substep
+  evapK: 0.01, // evaporation coefficient
+  soak: 0.0045, // infiltration into the ground
+  talusK: 0.02, // talus collapse coefficient
+};
+
+function substep(sim) {
+  const K = LAB.K;
+  const n = sim.n;
+  const N = n * n;
+  const p = sim.params;
+  const h = sim.h;
+  const w = sim.w;
+  const sed = sim.sed;
+  const rock = sim.rock;
+  const fx = sim.fx;
+  const fy = sim.fy;
+  const dw = sim.dw;
+  const ds = sim.ds;
+  const dh = sim.dh;
+  const delta = sim.delta;
+  const spd = sim.spd;
+
+  /* ---- 1. rainfall and springs ---- */
+  const rain = p.rain * K.rain;
+  if (rain > 0) {
+    const rnd = sim.rng;
+    const gust = 0.55 + 0.45 * Math.sin(sim.step * 0.021);
+    for (let i = 0; i < N; i++) w[i] += rain * gust * (0.35 + 0.65 * rnd());
+    for (const sp of sim.springs) {
+      const amount = rain * K.springGain * gust;
+      for (let oy = -sp.r; oy <= sp.r; oy++) {
+        for (let ox = -sp.r; ox <= sp.r; ox++) {
+          const x = sp.x + ox;
+          const y = sp.y + oy;
+          if (x < 0 || y < 0 || x >= n || y >= n) continue;
+          w[y * n + x] += amount;
+        }
+      }
+    }
+  }
+
+  /* ---- 2. flux update (staggered link momentum) ---- */
+  const acc = K.acc * clamp(p.flow, 0, 3);
+  const damp = K.damp;
+  for (let y = 0; y < n; y++) {
+    const row = y * n;
+    for (let x = 1; x < n; x++) {
+      const i = row + x;
+      const dl = h[i - 1] + w[i - 1] - (h[i] + w[i]);
+      let f = (fx[i] + dl * acc) * damp;
+      if (f > K.maxFlux) f = K.maxFlux;
+      else if (f < -K.maxFlux) f = -K.maxFlux;
+      fx[i] = f;
+    }
+    if (y === 0) {
+      for (let x = 0; x < n; x++) fy[x] = 0;
+      continue;
+    }
+    for (let x = 0; x < n; x++) {
+      const i = row + x;
+      const du = h[i - n] + w[i - n] - (h[i] + w[i]);
+      let f = (fy[i] + du * acc) * damp;
+      if (f > K.maxFlux) f = K.maxFlux;
+      else if (f < -K.maxFlux) f = -K.maxFlux;
+      fy[i] = f;
+    }
+  }
+
+  /* ---- 3. transport water and suspended sediment (conservative) ---- */
+  const cfl = K.cfl;
+  const carry = K.carry;
+  let capped = 0;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const i = y * n + x;
+      const wi = w[i];
+      if (wi <= 0) {
+        spd[i] = 0;
+        continue;
+      }
+      let tL = 0;
+      let tR = 0;
+      let tU = 0;
+      let tD = 0;
+      if (x > 0) {
+        const f = -fx[i];
+        if (f > 0) tL = f;
+      }
+      if (x < n - 1) {
+        const f = fx[i + 1];
+        if (f > 0) tR = f;
+      }
+      if (y > 0) {
+        const f = -fy[i];
+        if (f > 0) tU = f;
+      }
+      if (y < n - 1) {
+        const f = fy[i + n];
+        if (f > 0) tD = f;
+      }
+      const rim = x === 0 || x === n - 1 || y === 0 || y === n - 1;
+      const edge = rim ? wi * K.edgeDrain : 0;
+      const out = tL + tR + tU + tD + edge;
+      if (out <= 1e-9) {
+        spd[i] = spd[i] * 0.7;
+        continue;
+      }
+      const allow = wi * cfl;
+      let sc = 1;
+      if (out > allow) {
+        sc = allow / out;
+        capped++;
+      }
+      const gL = tL * sc;
+      const gR = tR * sc;
+      const gU = tU * sc;
+      const gD = tD * sc;
+      const gE = edge * sc;
+      const removed = gL + gR + gU + gD + gE;
+      w[i] = wi - removed;
+      const si = sed[i];
+      if (si > 0) {
+        const frac = (removed / wi) * carry;
+        if (frac > 0) {
+          const move = si * frac;
+          sed[i] = si - move;
+          const inv = move / removed;
+          if (gL > 0) {
+            dw[i - 1] += gL;
+            ds[i - 1] += gL * inv;
+          }
+          if (gR > 0) {
+            dw[i + 1] += gR;
+            ds[i + 1] += gR * inv;
+          }
+          if (gU > 0) {
+            dw[i - n] += gU;
+            ds[i - n] += gU * inv;
+          }
+          if (gD > 0) {
+            dw[i + n] += gD;
+            ds[i + n] += gD * inv;
+          }
+        }
+      } else {
+        if (gL > 0) dw[i - 1] += gL;
+        if (gR > 0) dw[i + 1] += gR;
+        if (gU > 0) dw[i - n] += gU;
+        if (gD > 0) dw[i + n] += gD;
+      }
+      spd[i] = spd[i] * 0.5 + out * 0.5;
+    }
+  }
+  sim.capped += capped;
+  // apply the transport deltas and leave the buffers clean for the next pass
+  for (let i = 0; i < N; i++) {
+    w[i] += dw[i];
+    sed[i] += ds[i];
+    dw[i] = 0;
+    ds[i] = 0;
+  }
+
+  /* ---- 4. carrying capacity: erode or deposit ---- */
+  const capK = K.capK * clamp(p.capacity, 0, 3);
+  const eroF = K.eroFrac * clamp(p.erode, 0, 3);
+  const depF = K.depFrac * clamp(p.deposit, 0, 3);
+  if (capK > 0 && (eroF > 0 || depF > 0)) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        const wi = w[i];
+        if (wi <= MIN_W) continue;
+        const si = sed[i];
+        const sp = spd[i];
+        const xl = x > 0 ? i - 1 : i;
+        const xr = x < n - 1 ? i + 1 : i;
+        const yu = y > 0 ? i - n : i;
+        const yd = y < n - 1 ? i + n : i;
+        let slope = h[i] + wi - 0.25 * (h[xl] + w[xl] + h[xr] + w[xr] + h[yu] + w[yu] + h[yd] + w[yd]);
+        if (slope < 0) slope = 0;
+        // carrying capacity grows with flow speed and with surface slope
+        const capacity = capK * sp * (0.02 + slope * 20);
+        if (si > capacity) {
+          let dep = (si - capacity) * depF;
+          if (dep > si) dep = si;
+          if (dep > K.depMax) dep = K.depMax;
+          if (dep > 0) {
+            sed[i] = si - dep;
+            h[i] += dep;
+            delta[i] += dep;
+          }
+        } else if (eroF > 0 && sp > K.eroThresh) {
+          let er = (capacity - si) * eroF * rock[i];
+          const lim = K.eroMax * Math.min(1, wi * K.eroWater) * (0.2 + slope * 12);
+          if (er > lim) er = lim;
+          if (er > 0) {
+            sed[i] = si + er;
+            h[i] -= er;
+            delta[i] -= er;
+          }
+        }
+      }
+    }
+  }
+
+  /* ---- 5. thermal / talus erosion ---- */
+  if (p.thermal > 0) {
+    const tanTalus = Math.tan((clamp(p.talus, 5, 80) * Math.PI) / 180);    const crit = Math.max(1e-4, tanTalus * sim.cell * 2);
+    const k = K.talusK * clamp(p.thermal, 0, 3);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        const hi = h[i];
+        let lowest = hi;
+        let li = -1;
+        if (x > 0 && h[i - 1] < lowest) {
+          lowest = h[i - 1];
+          li = i - 1;
+        }
+        if (x < n - 1 && h[i + 1] < lowest) {
+          lowest = h[i + 1];
+          li = i + 1;
+        }
+        if (y > 0 && h[i - n] < lowest) {
+          lowest = h[i - n];
+          li = i - n;
+        }
+        if (y < n - 1 && h[i + n] < lowest) {
+          lowest = h[i + n];
+          li = i + n;
+        }
+        if (li < 0) continue;
+        const diff = hi - lowest;
+        if (diff > crit) {
+          let move = (diff - crit) * k;
+          const half = Math.min(move, diff * 0.08);
+          // pure scatter: the donor is only touched through dh/ds, so terrain
+          // and sediment mass move exactly once
+          dh[i] -= half;
+          dh[li] += half;
+          const sus = Math.min(half * 0.3 * Math.min(1, w[i] * 25), sed[i] * 0.5);
+          if (sus > 0) {
+            sed[i] -= sus;
+            ds[li] += sus;
+          }
+          delta[i] -= half * 0.4;
+          delta[li] += half * 0.4;
+        }
+      }
+    }
+    for (let i = 0; i < N; i++) {
+      h[i] += dh[i];
+      sed[i] += ds[i];
+      dh[i] = 0;
+      ds[i] = 0;
+    }
+  }
+
+  /* ---- 6. evaporation, infiltration and hard clamps ---- */
+  const loss = Math.min(0.85, K.evapK * clamp(p.evap, 0, 4) + K.soak);
+  for (let i = 0; i < N; i++) {
+    const wi = w[i];
+    if (wi > 0) {
+      const nw = wi * (1 - loss);
+      w[i] = nw < 1e-6 ? 0 : nw;
+    }
+    if (sed[i] > 0.35) sed[i] = 0.35;
+    else if (sed[i] < 0) sed[i] = 0;
+    delta[i] *= 0.96;
+  }
+}
+
+function audit(sim) {
+  const N = sim.n * sim.n;
+  const h = sim.h;
+  const w = sim.w;
+  const s = sim.sed;
+  const fx = sim.fx;
+  const fy = sim.fy;
+  let bad = 0;
+  for (let i = 0; i < N; i++) {
+    if (!Number.isFinite(h[i])) {
+      h[i] = 0;
+      bad++;
+    }
+    if (!Number.isFinite(w[i])) {
+      w[i] = 0;
+      bad++;
+    }
+    if (!Number.isFinite(s[i])) {
+      s[i] = 0;
+      bad++;
+    }
+    if (h[i] > 3) h[i] = 3;
+    else if (h[i] < -3) h[i] = -3;
+  }
+  for (let i = 0; i < N; i++) {
+    if (!Number.isFinite(fx[i])) fx[i] = 0;
+    if (!Number.isFinite(fy[i])) fy[i] = 0;
+  }
+  if (bad > 0) {
+    sim.recoveries++;
+    sim.unstable = true;
+  }
+  return bad;
+}
+
+LAB.step = function (sim, substeps) {
+  const k = Math.max(1, Math.min(12, Math.round(substeps)));
+  for (let k2 = 0; k2 < k; k2++) {
+    substep(sim);
+    sim.step++;
+    sim.time += 1 / 60;
+  }
+  if (sim.step % 16 === 0) audit(sim);
+  const N = sim.n * sim.n;
+  let maxW = 0;
+  let maxS = 0;
+  let sumW = 0;
+  let sumS = 0;
+  let wet = 0;
+  for (let i = 0; i < N; i++) {
+    const w = sim.w[i];
+    const s = sim.sed[i];
+    if (w > maxW) maxW = w;
+    if (s > maxS) maxS = s;
+    sumW += w;
+    sumS += s;
+    if (w > 1e-4) wet++;
+  }
+  const st = sim.stats || (sim.stats = {});
+  st.maxW = maxW;
+  st.maxS = maxS;
+  st.sumW = sumW;
+  st.sumS = sumS;
+  st.wet = wet;
+  st.wetFrac = wet / N;
+  st.cappedRatio = sim.capped / (N * k);
+  if (st.cappedRatio > 0.97 || maxW > 0.6) sim.unstable = true;
+  sim.capped = 0;
+  return st;
+};
+
+/* ---------------- state serialisation ---------------- */
+
+function packF32(arr) {
+  const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+  let bin = '';
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  }
+  return btoa(bin);
+}
+
+function unpackF32(b64, size) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i) & 0xff;
+  return new F32(bytes.buffer, 0, size);
+}
+
+LAB.exportState = function (sim) {
+  return {
+    app: 'hydraulic-erosion-lab',
+    version: 1,
+    n: sim.n,
+    step: sim.step,
+    time: sim.time,
+    params: Object.assign({}, sim.params),
+    gen: Object.assign({}, sim.gen),
+    h: packF32(sim.h),
+    w: packF32(sim.w),
+    sed: packF32(sim.sed),
+  };
+};
+
+LAB.generateRock = function (sim) {
+  const n = sim.n;
+  const h = sim.h;
+  const rock = sim.rock;
+  const seed = hashSeed(String((sim.gen && sim.gen.seed) || 'seed'));
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const i = y * n + x;
+      const l = h[i - (x > 0 ? 1 : 0)];
+      const r = h[i + (x < n - 1 ? 1 : 0)];
+      const u = h[i - (y > 0 ? n : 0)];
+      const d = h[i + (y < n - 1 ? n : 0)];
+      const slope = Math.abs(h[i] - 0.25 * (l + r + u + d));
+      rock[i] = clamp(0.95 - slope * 9 - hash2(x, y, seed ^ 0x1234) * 0.3, 0.08, 1);
+    }
+  }
+};
+
+LAB.importState = function (sim, obj) {
+  if (!obj || obj.app !== 'hydraulic-erosion-lab') throw new Error('not a hydraulic-erosion-lab state file');
+  if (typeof obj.n !== 'number' || obj.n < 16 || obj.n > 512) throw new Error('state file has an invalid grid size');
+  if (!obj.h || !obj.w || !obj.sed) throw new Error('state file is missing field arrays');
+  if (obj.n !== sim.n) LAB.resizeSim(sim, obj.n);
+  const size = sim.n * sim.n;
+  try {
+    sim.h.set(unpackF32(obj.h, size));
+    sim.w.set(unpackF32(obj.w, size));
+    sim.sed.set(unpackF32(obj.sed, size));
+  } catch (e) {
+    throw new Error('state file arrays are the wrong length');
+  }
+  sim.fx.fill(0);
+  sim.fy.fill(0);
+  sim.delta.fill(0);
+  sim.spd.fill(0);
+  if (obj.params) sim.params = Object.assign({}, sim.params, obj.params);
+  if (obj.gen) {
+    sim.gen = Object.assign({}, obj.gen);
+    LAB.generateRock(sim);
+  }
+  sim.step = obj.step | 0;
+  sim.time = obj.time || 0;
+  sim.recoveries = 0;
+  sim.unstable = false;
+  audit(sim);
+  return sim;
+};
+
+LAB.resizeSim = function (sim, n) {
+  const N = n * n;
+  sim.n = n;
+  sim.cell = 1 / n;
+  sim.h = new F32(N);
+  sim.w = new F32(N);
+  sim.sed = new F32(N);
+  sim.rock = new F32(N);
+  sim.fx = new F32(N);
+  sim.fy = new F32(N);
+  sim.dw = new F32(N);
+  sim.ds = new F32(N);
+  sim.dh = new F32(N);
+  sim.delta = new F32(N);
+  sim.spd = new F32(N);
+  sim.stats = null;
+  return sim;
+};
+
+/* ---------------- brush tools ---------------- */
+
+LAB.applyBrush = function (sim, tool, cx, cy, radius, strength) {
+  const n = sim.n;
+  const h = sim.h;
+  const w = sim.w;
+  const sed = sim.sed;
+  const r = Math.max(0.6, radius);
+  const r2 = r * r;
+  const x0 = Math.max(0, Math.floor(cx - r));
+  const x1 = Math.min(n - 1, Math.ceil(cx + r));
+  const y0 = Math.max(0, Math.floor(cy - r));
+  const y1 = Math.min(n - 1, Math.ceil(cy + r));
+  let touched = 0;
+  let mean = 0;
+  if (tool === 'smooth' || tool === 'flatten') {
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        mean += h[y * n + x];
+        touched++;
+      }
+    }
+    mean /= Math.max(1, touched);
+  }
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const i = y * n + x;
+      const fall = 1 - Math.sqrt(d2) / r;
+      const k = fall * fall * strength;
+      switch (tool) {
+        case 'raise':
+          h[i] += k * 0.022;
+          break;
+        case 'lower':
+          h[i] -= k * 0.022;
+          break;
+        case 'smooth': {
+          const c =
+            (h[i - (x > 0 ? 1 : 0)] + h[i + (x < n - 1 ? 1 : 0)] + h[i - (y > 0 ? n : 0)] + h[i + (y < n - 1 ? n : 0)]) * 0.25;
+          h[i] += (c - h[i]) * clamp(k * 2, 0, 0.9);
+          break;
+        }
+        case 'flatten':
+          h[i] += (mean - h[i]) * clamp(k * 2, 0, 0.9);
+          break;
+        case 'water':
+          w[i] += k * 0.02;
+          break;
+        case 'sediment': {
+          const add = Math.min(k * 0.012, 0.2);
+          sed[i] += add;
+          h[i] += add * 0.5;
+          break;
+        }
+        case 'dry': {
+          const kk = clamp(k * 2, 0, 1);
+          w[i] *= 1 - kk;
+          if (w[i] < 1e-5) w[i] = 0;
+          sed[i] *= 1 - kk * 0.8;
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+};
+
+LAB.probe = function (sim, gx, gy) {
+  const n = sim.n;
+  const cx = Math.round(gx);
+  const cy = Math.round(gy);
+  if (cx < 0 || cy < 0 || cx >= n || cy >= n) return null;
+  const i = cy * n + cx;
+  const h = sim.h;
+  const xl = cx > 0 ? i - 1 : i;
+  const xr = cx < n - 1 ? i + 1 : i;
+  const yu = cy > 0 ? i - n : i;
+  const yd = cy < n - 1 ? i + n : i;
+  const gx2 = (h[xr] - h[xl]) * 0.5 * n;
+  const gy2 = (h[yd] - h[yu]) * 0.5 * n;
+  const fxs = sim.fx[i] + (cx < n - 1 ? sim.fx[i + 1] : 0);
+  const fys = sim.fy[i] + (cy < n - 1 ? sim.fy[i + n] : 0);
+  return {
+    x: cx,
+    y: cy,
+    elevation: h[i],
+    water: sim.w[i],
+    sediment: sim.sed[i],
+    slopeDeg: (Math.atan(Math.hypot(gx2, gy2)) * 180) / Math.PI,
+    speed: Math.hypot(fxs, fys),
+    flowDir: (Math.atan2(fys, fxs) * 180) / Math.PI,
+    delta: sim.delta[i],
+    rock: sim.rock[i],
+  };
+};
+
+/* ---------------- grayscale PNG export ---------------- */
+
+LAB.fieldPNG = function (sim, mode) {
+  const n = sim.n;
+  const src = mode === 'water' ? sim.w : mode === 'sediment' ? sim.sed : sim.h;
+  const data = new Float32Array(n * n);
+  let lo = Infinity;
+  let hi = -Infinity;
+  const minIsZero = mode === 'water' || mode === 'sediment';
+  for (let i = 0; i < n * n; i++) {
+    data[i] = src[i];
+    if (src[i] < lo) lo = src[i];
+    if (src[i] > hi) hi = src[i];
+  }
+  if (minIsZero) lo = 0;
+  if (!(hi > lo)) hi = lo + 1;
+  const span = hi - lo;
+  const bpl = n * 3;
+  const raw = new Uint8Array((bpl + 1) * n);
+  for (let y = 0; y < n; y++) {
+    const base = y * (bpl + 1);
+    for (let x = 0; x < n; x++) {
+      const v = clamp((data[y * n + x] - lo) / span, 0, 1);
+      const g = Math.round(v * 255);
+      const o = base + 1 + x * 3;
+      raw[o] = g;
+      raw[o + 1] = g;
+      raw[o + 2] = g;
+    }
+  }
+  return { width: n, height: n, bytes: encodePNG(n, n, raw), min: lo, max: hi };
+};
+
+/* --- minimal PNG encoder (zlib stored blocks, no external library) --- */
+
+function adler32(buf) {
+  let a = 1;
+  let b = 0;
+  for (let i = 0; i < buf.length; i++) {
+    a = (a + buf[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
+}
+
+const CRC_TABLE = (function () {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data, out) {
+  const len = data.length;
+  // 4-byte big-endian length, then type + data, then big-endian CRC of both
+  out.push((len >>> 24) & 255, (len >>> 16) & 255, (len >>> 8) & 255, len & 255);
+  const start = out.length;
+  for (let i = 0; i < type.length; i++) out.push(type.charCodeAt(i));
+  for (let i = 0; i < data.length; i++) out.push(data[i]);
+  const crc = crc32(out.slice(start, out.length));
+  out.push((crc >>> 24) & 255, (crc >>> 16) & 255, (crc >>> 8) & 255, crc & 255);
+}
+
+function encodePNG(w, h, raw) {
+  const MAX = 60000;
+  const nBlocks = Math.ceil(raw.length / MAX);
+  const zlib = new Uint8Array(2 + raw.length + nBlocks * 5 + 4);
+  let p = 0;
+  zlib[p++] = 0x78;
+  zlib[p++] = 0x01;
+  for (let i = 0; i < raw.length; i += MAX) {
+    const block = raw.subarray(i, Math.min(raw.length, i + MAX));
+    const last = i + MAX >= raw.length;
+    zlib[p++] = last ? 1 : 0;
+    zlib[p++] = block.length & 255;
+    zlib[p++] = (block.length >> 8) & 255;
+    zlib[p++] = ~block.length & 255;
+    zlib[p++] = (~block.length >> 8) & 255;
+    zlib.set(block, p);
+    p += block.length;
+  }
+  const ad = adler32(raw);
+  zlib[p++] = (ad >>> 24) & 255;
+  zlib[p++] = (ad >>> 16) & 255;
+  zlib[p++] = (ad >>> 8) & 255;
+  zlib[p++] = ad & 255;
+
+  const out = [];
+  for (const b of [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) out.push(b);
+  const ihdr = new Uint8Array([
+    (w >>> 24) & 255,
+    (w >>> 16) & 255,
+    (w >>> 8) & 255,
+    w & 255,
+    (h >>> 24) & 255,
+    (h >>> 16) & 255,
+    (h >>> 8) & 255,
+    h & 255,
+    8,
+    2,
+    0,
+    0,
+    0,
+  ]);
+  pngChunk('IHDR', ihdr, out);
+  pngChunk('IDAT', zlib.subarray(0, p), out);
+  pngChunk('IEND', new Uint8Array(0), out);
+  return new Uint8Array(out);
+}
+
+LAB._test = { substep, audit };
+/* ---------- renderer ---------- */
+/* =====================================================================
+   Renderer: WebGL2 terrain + water renderer, with a Canvas2D fallback.
+
+   Terrain geometry is a static grid mesh.  Heights, water depth, sediment
+   concentration, erosion delta, flow vector and a CPU-computed sun-shadow
+   term are streamed to the GPU as float textures each frame; surface normals
+   are reconstructed in the fragment shader from the height texture so the
+   lighting follows the erosion as it happens.
+   ===================================================================== */
+
+const MODES = [
+  { id: 'shaded', label: 'Shaded terrain' },
+  { id: 'elevation', label: 'Elevation' },
+  { id: 'water', label: 'Water depth' },
+  { id: 'sediment', label: 'Sediment concentration' },
+  { id: 'delta', label: 'Erosion / deposition' },
+  { id: 'slope', label: 'Slope' },
+  { id: 'flow', label: 'Flow direction + speed' },
+];
+
+const clampF = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+/* ------------------------------------------------------------------ */
+/*  matrix helpers (column-major, as WebGL expects)                    */
+/* ------------------------------------------------------------------ */
+function mat4Perspective(out, fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2);
+  const nf = 1 / (near - far);
+  out.fill(0);
+  out[0] = f / aspect;
+  out[5] = f;
+  out[10] = (far + near) * nf;
+  out[11] = -1;
+  out[14] = 2 * far * near * nf;
+  return out;
+}
+
+function mat4LookAt(out, ex, ey, ez, cx, cy, cz) {
+  let zx = ex - cx;
+  let zy = ey - cy;
+  let zz = ez - cz;
+  let l = Math.hypot(zx, zy, zz) || 1;
+  zx /= l;
+  zy /= l;
+  zz /= l;
+  // right = up x z, with up = (0,1,0)
+  let rx = zz; // (0,1,0) x (zx,zy,zz) = (1*zz - 0*zy, 0*zx - 0*zz, 0*zy - 1*zx)
+  let ry = 0;
+  let rz = -zx;
+  l = Math.hypot(rx, ry, rz);
+  if (l < 1e-6) {
+    rx = 1;
+    ry = 0;
+    rz = 0;
+  } else {
+    rx /= l;
+    ry /= l;
+    rz /= l;
+  }
+  const ux = zy * rz - zz * ry;
+  const uy = zz * rx - zx * rz;
+  const uz = zx * ry - zy * rx;
+  out[0] = rx;
+  out[1] = ux;
+  out[2] = zx;
+  out[3] = 0;
+  out[4] = ry;
+  out[5] = uy;
+  out[6] = zy;
+  out[7] = 0;
+  out[8] = rz;
+  out[9] = uz;
+  out[10] = zz;
+  out[11] = 0;
+  out[12] = -(rx * ex + ry * ey + rz * ez);
+  out[13] = -(ux * ex + uy * ey + uz * ez);
+  out[14] = -(zx * ex + zy * ey + zz * ez);
+  out[15] = 1;
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  shaders                                                            */
+/* ------------------------------------------------------------------ */
+
+const TERRAIN_VS = `#version 300 es
+precision highp float;
+uniform sampler2D uData;
+uniform vec2 uTexel;
+uniform float uExag;
+uniform mat4 uProj;
+uniform mat4 uView;
+uniform float uWaterPass;
+uniform float uLineScale;
+in vec2 aGrid;
+out vec3 vPos;
+out vec2 vUV;
+out float vShade;
+out float vDepth;
+out float vSed;
+
+float sampleH(vec2 uv){
+  // manual bilinear so the surface stays smooth even when the data texture
+  // can only be sampled with NEAREST filtering
+  vec2 p = uv / uTexel - 0.5;
+  vec2 f = floor(p);
+  vec2 r = p - f;
+  vec2 a = (f + 0.5) * uTexel;
+  float h00 = texture(uData, a).x;
+  float h10 = texture(uData, a + vec2(uTexel.x, 0.0)).x;
+  float h01 = texture(uData, a + vec2(0.0, uTexel.y)).x;
+  float h11 = texture(uData, a + uTexel).x;
+  return mix(mix(h00, h10, r.x), mix(h01, h11, r.x), r.y);
+}
+
+void main(){
+  vec2 uv = clamp(aGrid, 0.0, 1.0);
+  vec4 d = texture(uData, uv);
+  float h = d.x;
+  vDepth = d.y;
+  vSed = d.z;
+  vShade = d.w;
+  float lift = uWaterPass > 0.5 ? min(vDepth, 0.06) * 0.5 : 0.0;
+  vec3 p = vec3(uv.x, (h + lift) * uExag, uv.y);
+  vPos = p;
+  vUV = uv;
+  gl_Position = uProj * uView * vec4(p, 1.0);
+}`;
+
+const TERRAIN_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uData;
+uniform sampler2D uFlow;
+uniform vec2 uTexel;
+uniform float uCell;
+uniform float uExag;
+uniform int uMode;
+uniform float uContours;
+uniform float uGrid;
+uniform float uWaterPass;
+uniform float uTime;
+uniform vec3 uSun;
+uniform vec3 uCamPos;
+uniform float uFog;
+uniform vec2 uMarker;
+uniform float uMarkerOn;
+in vec3 vPos;
+in vec2 vUV;
+in float vShade;
+in float vDepth;
+in float vSed;
+out vec4 frag;
+
+vec3 ramp5(vec3 a, vec3 b, vec3 c, vec3 d, vec3 e, float t){
+  t = clamp(t, 0.0, 1.0);
+  if (t < 0.25) return mix(a, b, t * 4.0);
+  if (t < 0.5) return mix(b, c, (t - 0.25) * 4.0);
+  if (t < 0.75) return mix(c, d, (t - 0.5) * 4.0);
+  return mix(d, e, (t - 0.75) * 4.0);
+}
+
+void main(){
+  float e = 1.0001;
+  float texStep = uTexel.x * e;
+  float hC = texture(uData, vUV).x;
+  float hL = texture(uData, vUV - vec2(texStep, 0.0)).x;
+  float hR = texture(uData, vUV + vec2(texStep, 0.0)).x;
+  float hU = texture(uData, vUV - vec2(0.0, texStep)).x;
+  float hD = texture(uData, vUV + vec2(0.0, texStep)).x;
+  float d = uCell * e;
+  float dhdx = (hR - hL) * uExag / (2.0 * d);
+  float dhdy = (hD - hU) * uExag / (2.0 * d);
+  vec3 n = normalize(vec3(-dhdx, 1.0, -dhdy));
+  float slope = clamp(length(vec2(dhdx, dhdy)), 0.0, 3.0);
+
+  // ---- surface colour -------------------------------------------------
+  float elev = clamp((hC + 0.05) / 0.45, 0.0, 1.0);
+  vec3 col;
+  if (uMode == 0) {
+    // rock / soil palette driven by height, slope and dampness
+    vec3 low = vec3(0.20, 0.31, 0.21);
+    vec3 soil = vec3(0.36, 0.30, 0.19);
+    vec3 rock = vec3(0.42, 0.40, 0.38);
+    vec3 scree = vec3(0.55, 0.50, 0.44);
+    vec3 snow = vec3(0.86, 0.88, 0.92);
+    col = ramp5(low, soil, rock, scree, snow, elev);
+    col = mix(col, scree * 0.85, clamp(slope * 0.75, 0.0, 0.8));
+    // freshly eroded ground is bare and pale, fresh silt is bright brown
+    float dl = texture(uFlow, vUV).z;
+    col = mix(col, vec3(0.66, 0.58, 0.44), clamp(-dl * 90.0, 0.0, 0.75));
+    col = mix(col, vec3(0.52, 0.42, 0.26), clamp(dl * 70.0, 0.0, 0.6));
+    if (vDepth > 0.0008) col = mix(col, vec3(0.05, 0.11, 0.16), clamp(vDepth * 220.0, 0.0, 0.7));
+  } else if (uMode == 1) {
+    col = ramp5(vec3(0.03, 0.16, 0.34), vec3(0.10, 0.44, 0.62), vec3(0.87, 0.80, 0.52),
+                vec3(0.44, 0.52, 0.30), vec3(0.95, 0.96, 0.98), elev);
+  } else if (uMode == 2) {
+    float w = clamp(vDepth * 55.0, 0.0, 1.0);
+    col = mix(vec3(0.93, 0.90, 0.82), vec3(0.05, 0.22, 0.75), w);
+    col = mix(col, vec3(0.85, 0.10, 0.45), clamp(vSed * 90.0, 0.0, 1.0));
+  } else if (uMode == 3) {
+    float s = clamp(vSed * 140.0, 0.0, 1.0);
+    col = mix(vec3(0.06, 0.16, 0.20), vec3(0.98, 0.62, 0.12), s);
+    if (vSed > 0.006) col = mix(col, vec3(0.92, 0.14, 0.10), clamp((vSed - 0.006) * 260.0, 0.0, 1.0));
+  } else if (uMode == 4) {
+    float dl = texture(uFlow, vUV).z;
+    col = vec3(0.30, 0.32, 0.34);
+    col = mix(col, vec3(0.90, 0.20, 0.12), clamp(-dl * 90.0, 0.0, 1.0));
+    col = mix(col, vec3(0.15, 0.72, 0.35), clamp(dl * 90.0, 0.0, 1.0));
+  } else if (uMode == 5) {
+    // normalise by the TRUE gradient (undo vertical exaggeration) so the ramp
+    // still separates gentle from steep when the view is stretched
+    float sAng = atan(slope / max(0.01, uExag));
+    float s = clamp(sAng / 0.44, 0.0, 1.0);
+    col = mix(vec3(0.06, 0.30, 0.55), vec3(0.98, 0.82, 0.20), smoothstep(0.0, 0.45, s));
+    col = mix(col, vec3(0.92, 0.18, 0.12), smoothstep(0.45, 1.0, s));
+  } else {
+    vec4 f = texture(uFlow, vUV);
+    float sp = clamp(length(f.xy) * 26.0, 0.0, 1.0);
+    float ang = atan(f.y, f.x) / 6.28318 + 0.5;
+    vec3 base = vec3(0.10, 0.12, 0.15);
+    vec3 dirCol = 0.55 + 0.45 * cos(vec3(0.0, 4.1, 2.4) + ang * 6.28318);
+    col = mix(base, dirCol, sp);
+  }
+
+  // ---- lighting -------------------------------------------------------
+  float ndl = max(dot(n, uSun), 0.0);
+  float shade = clamp(vShade, 0.0, 1.0);
+  vec3 sunCol = vec3(1.0, 0.94, 0.82);
+  vec3 sky = vec3(0.44, 0.52, 0.62);
+  vec3 bounce = vec3(0.22, 0.18, 0.14);
+  vec3 light = sky * (0.66 + 0.45 * n.y) + bounce * max(0.0, -n.y) * 0.6;
+  vec3 lit = col * (light + sunCol * ndl * 1.35 * shade);
+  if (uMode == 4) lit = col * 1.15; // keep the diagnostic field readable
+
+  // ---- specular sheen on wet ground -----------------------------------
+  if (vDepth < 0.0004) {
+    vec3 v = normalize(uCamPos - vPos);
+    vec3 hv = normalize(uSun + v);
+    float spec = pow(max(dot(n, hv), 0.0), 40.0) * (1.0 - clamp(slope * 1.4, 0.0, 1.0));
+    lit += sunCol * spec * 0.20 * shade;
+  }
+
+  // ---- contour lines ---------------------------------------------------
+  if (uContours > 0.5 && (uMode == 0 || uMode == 1)) {
+    float interval = 0.02;
+    float hv = hC / interval;
+    float f = abs(fract(hv) - 0.5);
+    float w = fwidth(hv);
+    float ln1 = 1.0 - smoothstep(0.42, 0.5 + w * 0.9, f);
+    float index_ = abs(fract(hv / 5.0) - 0.5);
+    float thick = 1.0 - smoothstep(0.40, 0.5 + w * 0.9, index_);
+    lit = mix(lit, lit * 0.45 + vec3(0.04, 0.05, 0.04), ln1 * 0.5);
+    lit = mix(lit, lit * 0.2 + vec3(0.10, 0.11, 0.06), thick * 0.55);
+  }
+
+  // ---- simulation grid overlay ----------------------------------------
+  if (uGrid > 0.5 && (uMode == 0 || uMode == 1)) {
+    vec2 g = vUV / uTexel;
+        vec2 dmin = min(g, vec2(1.0) - g);
+    float ln2 = 1.0 - smoothstep(0.0, 1.6, min(dmin.x, dmin.y));
+    float major = step(7.5, mod(g.x, 8.0)) + step(7.5, mod(g.y, 8.0));
+    lit = mix(lit, lit * 0.45 + vec3(0.02), clamp(ln2 * (0.25 + major * 0.35), 0.0, 1.0));
+  }
+
+  // ---- water surface extras -------------------------------------------
+  if (uWaterPass > 0.5) {
+    float depth = clamp(vDepth * 40.0, 0.0, 1.0);
+    vec3 clean = vec3(0.10, 0.30, 0.42);
+    vec3 muddy = vec3(0.42, 0.28, 0.13);
+    col = mix(clean, muddy, clamp(vSed * 120.0, 0.0, 1.0));
+    vec3 v = normalize(uCamPos - vPos);
+    float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);
+    vec3 refl = mix(vec3(0.34, 0.42, 0.52), col, 0.35);
+    vec3 wcol = mix(col, refl, 0.35 + 0.5 * fres);
+    vec3 hv = normalize(uSun + v);
+    float glint = pow(max(dot(n, hv), 0.0), 90.0);
+    wcol += sunCol * glint * 0.9 * shade;
+    float spark = pow(max(0.0, sin((vUV.x * 420.0 + uTime * 1.6) * 6.2831) *
+                              sin((vUV.y * 380.0 - uTime * 1.3) * 6.2831)), 18.0);
+    wcol += vec3(0.5, 0.55, 0.6) * spark * 0.35 * depth;
+    lit = wcol;
+  }
+
+  // ---- probe marker ----------------------------------------------------
+  if (uMarkerOn > 0.5) {
+    float dd = length((vUV - uMarker) * vec2(1.0, 1.0));
+    float ring = smoothstep(0.013, 0.009, abs(dd - 0.011));
+    lit = mix(lit, vec3(1.0, 0.85, 0.25), ring * 0.9);
+  }
+
+  // ---- atmospheric depth cue ------------------------------------------
+  float dist = length(uCamPos - vPos);
+  float fog = clamp((dist - uFog * 0.55) / (uFog * 0.85), 0.0, 0.55);
+  lit = mix(lit, vec3(0.50, 0.56, 0.64), fog);
+
+  frag = vec4(pow(clamp(lit, 0.0, 1.0), vec3(0.92)), 1.0);
+}`;
+
+const WATER_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uData;
+uniform vec2 uTexel;
+uniform float uCell;
+uniform float uExag;
+uniform float uTime;
+uniform vec3 uSun;
+uniform vec3 uCamPos;
+uniform float uFog;
+uniform float uOpacity;
+in vec3 vPos;
+in vec2 vUV;
+in float vShade;
+in float vDepth;
+in float vSed;
+out vec4 frag;
+
+void main(){
+  if (vDepth < 0.0008) discard;   // thin films stay transparent so channels read clearly
+  float e = 1.0001;
+  float texStep = uTexel.x * e;
+  // normal of the water surface (terrain + film), with a light chop
+  float hs = texture(uData, vUV).y;
+  float hL = texture(uData, vUV - vec2(texStep, 0.0)).y;
+  float hR = texture(uData, vUV + vec2(texStep, 0.0)).y;
+  float hU = texture(uData, vUV - vec2(0.0, texStep)).y;
+  float hD = texture(uData, vUV + vec2(0.0, texStep)).y;
+  float d = uCell * e;
+  float ripple = 0.00035 * (sin((vUV.x * 260.0 + uTime * 1.4) * 6.2831) + sin((vUV.y * 233.0 - uTime * 1.1) * 6.2831));
+  float dhdx = (hR - hL) * uExag / (2.0 * d) + ripple * 40.0;
+  float dhdy = (hD - hU) * uExag / (2.0 * d) + ripple * 34.0;
+  vec3 n = normalize(vec3(-dhdx, 1.0, -dhdy));
+
+  float depth = clamp(vDepth * 26.0, 0.0, 1.0);
+  vec3 clean = vec3(0.09, 0.34, 0.46);
+  vec3 muddy = vec3(0.45, 0.30, 0.14);
+  vec3 col = mix(clean, muddy, clamp(vSed * 110.0, 0.0, 1.0));
+  col = mix(col * 0.55, col, depth);
+
+  vec3 v = normalize(uCamPos - vPos);
+  float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.2);
+  vec3 skyRef = vec3(0.40, 0.49, 0.60);
+  col = mix(col, skyRef, 0.22 + 0.55 * fres);
+  vec3 hv = normalize(uSun + v);
+  float glint = pow(max(dot(n, hv), 0.0), 120.0);
+  col += vec3(1.0, 0.95, 0.85) * glint * 0.85 * clamp(vShade, 0.0, 1.0);
+
+  // shoreline brightening so thin water reads clearly
+  col += vec3(0.16, 0.13, 0.06) * (1.0 - depth) * 0.7;
+
+  float dist = length(uCamPos - vPos);
+  float fog = clamp((dist - uFog * 0.55) / (uFog * 0.85), 0.0, 0.45);
+  col = mix(col, vec3(0.50, 0.56, 0.64), fog);
+
+  float alpha = clamp(uOpacity * (0.35 + 0.65 * depth) * (0.6 + 0.6 * fres), 0.05, 0.97);
+  frag = vec4(pow(clamp(col, 0.0, 1.0), vec3(0.92)), alpha);
+}`;
+
+const SKY_VS = `#version 300 es
+precision highp float;
+uniform vec3 uRight;
+uniform vec3 uUp;
+uniform vec3 uFwd;
+uniform vec2 uTan;
+out vec3 vRay;
+void main(){
+  vec2 p = (gl_VertexID == 1) ? vec2(3.0, -1.0) : (gl_VertexID == 2) ? vec2(-1.0, 3.0) : vec2(-1.0, -1.0);
+  vRay = normalize(uFwd + uRight * (p.x * uTan.x) + uUp * (p.y * uTan.y));
+  gl_Position = vec4(p, 0.0, 1.0);
+}`;
+
+const SKY_FS = `#version 300 es
+precision highp float;
+uniform vec3 uSun;
+in vec3 vRay;
+out vec4 frag;
+void main(){
+  vec3 d = normalize(vRay);
+  float t = clamp(0.5 - d.y * 0.55, 0.0, 1.0);
+  vec3 top = vec3(0.16, 0.26, 0.40);
+  vec3 horizon = vec3(0.62, 0.68, 0.74);
+  vec3 col = mix(horizon, top, t);
+  float sun = pow(max(dot(d, normalize(uSun)), 0.0), 220.0);
+  col += vec3(1.0, 0.9, 0.7) * sun * 1.6;
+  float halo = pow(max(dot(d, normalize(uSun)), 0.0), 6.0);
+  col += vec3(0.35, 0.30, 0.22) * halo * 0.35;
+  frag = vec4(col, 1.0);
+}`;
+
+/* ------------------------------------------------------------------ */
+/*  WebGL2 renderer                                                     */
+/* ------------------------------------------------------------------ */
+
+function createGLRenderer(canvas, opts) {
+  const gl = canvas.getContext('webgl2', {
+    antialias: true,
+    alpha: false,
+    depth: true,
+    powerPreference: 'high-performance',
+  });
+  if (!gl) return null;
+  const info = { name: 'WebGL2', backend: 'gl' };
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  if (dbg) info.gpu = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+
+  const floatLinear = !!gl.getExtension('OES_texture_float_linear');
+  const useFloatLinear = floatLinear;
+  info.floatLinear = floatLinear;
+
+  let progTerrain = null;
+  let progWater = null;
+  let progSky = null;
+  let meshBuf = null;
+  let idxBuf = null;
+  let idxCount = 0;
+  let meshRes = 0;
+  let dataTex = null;
+  let flowTex = null;
+  let texSize = 0;
+  let dataBuf = null;
+  let flowBuf = null;
+  let shadowBuf = null;
+
+  const uni = {};
+  function uniforms(prog) {
+    const cache = {};
+    const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const u = gl.getActiveUniform(prog, i);
+      cache[u.name] = gl.getUniformLocation(prog, u.name);
+    }
+    return cache;
+  }
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(sh);
+      gl.deleteShader(sh);
+      throw new Error('shader compile failed: ' + log);
+    }
+    return sh;
+  }
+
+  function link(vsSrc, fsSrc) {
+    const p = gl.createProgram();
+    const vs = compile(gl.VERTEX_SHADER, vsSrc);
+    const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.bindAttribLocation(p, 0, 'aGrid');
+    gl.linkProgram(p);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link failed: ' + gl.getProgramInfoLog(p));
+    return p;
+  }
+
+  function buildResources() {
+    try {
+      progTerrain = link(TERRAIN_VS, TERRAIN_FS);
+      progWater = link(TERRAIN_VS, WATER_FS);
+      progSky = link(SKY_VS, SKY_FS);
+    } catch (err) {
+      console.warn('[lab] ' + err.message + ' — falling back to the 2D relief renderer');
+      return false;
+    }
+    uni.terrain = uniforms(progTerrain);
+    uni.water = uniforms(progWater);
+    uni.sky = uniforms(progSky);
+
+    const skyVao = gl.createVertexArray();
+    gl.bindVertexArray(skyVao);
+    uni.skyVao = skyVao;
+
+    uni.vao = gl.createVertexArray();
+    gl.bindVertexArray(uni.vao);
+    uni.meshBuf = gl.createBuffer();
+    uni.idxBuf = gl.createBuffer();
+    gl.bindVertexArray(null);
+
+    dataTex = gl.createTexture();
+    flowTex = gl.createTexture();
+    return true;
+  }
+
+  let ok = false;
+  try {
+    ok = buildResources();
+  } catch (err) {
+    console.warn('[lab] renderer init failed: ' + err.message);
+    ok = false;
+  }
+  if (!ok) return null;
+
+  /* mesh at the requested subdivision */
+  function buildMesh(res) {
+    if (res === meshRes) return;
+    meshRes = res;
+    const verts = new Float32Array((res + 1) * (res + 1) * 2);
+    let k = 0;
+    for (let y = 0; y <= res; y++) {
+      for (let x = 0; x <= res; x++) {
+        verts[k++] = x / res;
+        verts[k++] = y / res;
+      }
+    }
+    const idx = new Uint32Array(res * res * 6);
+    let p = 0;
+    const row = res + 1;
+    for (let y = 0; y < res; y++) {
+      for (let x = 0; x < res; x++) {
+        const a = y * row + x;
+        /* winding chosen so the triangle normal points up (+Y) and the
+           surface stays visible with back-face culling enabled */
+        idx[p++] = a;
+        idx[p++] = a + row;
+        idx[p++] = a + 1;
+        idx[p++] = a + 1;
+        idx[p++] = a + row;
+        idx[p++] = a + row + 1;
+      }
+    }
+    idxCount = p;
+    gl.bindVertexArray(uni.vao);
+    const loc = 0;
+    gl.bindBuffer(gl.ARRAY_BUFFER, uni.meshBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, uni.idxBuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    console.log(`[lab] terrain mesh rebuilt: ${res}\u00b2 quads, ${verts.length / 2} vertices`);
+  }
+
+  function ensureTextures(n) {
+    if (n === texSize) return;
+    texSize = n;
+    dataBuf = new Float32Array(n * n * 4);
+    flowBuf = new Float32Array(n * n * 4);
+    shadowBuf = new Float32Array(n * n);
+    gl.bindTexture(gl.TEXTURE_2D, dataTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, n, n, 0, gl.RGBA, gl.FLOAT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, useFloatLinear ? gl.LINEAR : gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, useFloatLinear ? gl.LINEAR : gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, flowTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, n, n, 0, gl.RGBA, gl.FLOAT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  /* -------- CPU sun shadow (horizon march toward the light) -------- */
+  function computeShadows(sim, azimuthDeg, elevationDeg, steps) {
+    const n = sim.n;
+    const h = sim.h;
+    const out = shadowBuf;
+    if (!(steps > 0)) {
+      out.fill(1);
+      return;
+    }
+    const el = (clampF(elevationDeg, 3, 88) * Math.PI) / 180;
+    const az = (azimuthDeg * Math.PI) / 180;
+    // direction toward the light, in grid space (x right, y down-grid)
+    const dx = Math.sin(az) * Math.cos(el);
+    const dy = Math.cos(az) * Math.cos(el);
+    const tanEl = Math.tan(el);
+    const stride = Math.max(1, Math.round(1 / Math.max(0.35, Math.hypot(dx, dy))));
+    const sx = Math.round(dx / Math.max(1e-4, Math.hypot(dx, dy)) * stride);
+    const sy = Math.round(dy / Math.max(1e-4, Math.hypot(dx, dy)) * stride);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        const h0 = h[i];
+        let shade = 1;
+        for (let k = 1; k <= steps; k++) {
+          const px = x + sx * k;
+          const py = y + sy * k;
+          if (px < 0 || py < 0 || px >= n || py >= n) break;
+          const idx = py * n + px;
+          const hs = h[idx];
+          if (hs > h0 + k * stride * tanEl * 1.02) {
+            const block = (hs - h0 - k * stride * tanEl) / Math.max(1e-4, h0 + k * stride * tanEl);
+            const soft = 1 - clampF(1 - block * 6 - k * 0.02, 0, 1) * 0.9;
+            if (soft < shade) shade = 0.12 + 0.88 * clampF(soft, 0, 1);
+            break;
+          }
+        }
+        out[i] = shade;
+      }
+    }
+  }
+
+  /* -------- stream the fields -------- */
+  function uploadFields(sim) {
+    const n = sim.n;
+    const N = n * n;
+    const d = dataBuf;
+    const f = flowBuf;
+    const h = sim.h;
+    const w = sim.w;
+    const s = sim.sed;
+    const sh = shadowBuf;
+    const fx = sim.fx;
+    const fy = sim.fy;
+    const dl = sim.delta;
+    const sp = sim.spd;
+    for (let i = 0, q = 0; i < N; i++, q += 4) {
+      d[q] = h[i];
+      d[q + 1] = w[i];
+      d[q + 2] = s[i];
+      d[q + 3] = sh[i];
+      f[q] = fx[i];
+      f[q + 1] = fy[i];
+      f[q + 2] = dl[i];
+      f[q + 3] = sp[i];
+    }
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, dataTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, n, n, gl.RGBA, gl.FLOAT, d);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, flowTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, n, n, gl.RGBA, gl.FLOAT, f);
+  }
+
+  /* -------- frame -------- */
+  const proj = new Float32Array(16);
+  const view = new Float32Array(16);
+  let lastMode = -1;
+
+  function render(sim, cam, settings) {
+    const n = sim.n;
+    const targetRes = Math.min(384, Math.max(64, Math.round(n * (settings.subdivision || 2))));
+    buildMesh(targetRes);
+    ensureTextures(n);
+    computeShadows(sim, settings.sunAzimuth, settings.sunElevation, settings.shadowSteps);
+    uploadFields(sim);
+
+    const W = canvas.width;
+    const H = canvas.height;
+    gl.viewport(0, 0, W, H);
+    gl.clearColor(0.5, 0.55, 0.62, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    const aspect = W / Math.max(1, H);
+    mat4Perspective(proj, (settings.fov || 50) * Math.PI / 180, aspect, 0.01, 30);
+    const eye = cam.eye;
+    mat4LookAt(view, eye[0], eye[1], eye[2], cam.target[0], cam.target[1], cam.target[2]);
+    const cell = 1 / n;
+    const time = performance.now() * 0.001;
+    const sunLen = 1;
+    const el = (clampF(settings.sunElevation, 3, 88) * Math.PI) / 180;
+    const az = (settings.sunAzimuth * Math.PI) / 180;
+    const sun = [Math.sin(az) * Math.cos(el) * sunLen, Math.sin(el) * sunLen, Math.cos(az) * Math.cos(el) * sunLen];
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    gl.useProgram(progSky);
+    gl.bindVertexArray(uni.skyVao);
+    const tanH = Math.tan((settings.fov || 50) * Math.PI / 180 / 2);
+    gl.uniform3fv(uni.sky.uRight, cam.basis.right);
+    gl.uniform3fv(uni.sky.uUp, cam.basis.up);
+    gl.uniform3fv(uni.sky.uFwd, cam.basis.fwd);
+    gl.uniform2f(uni.sky.uTan, tanH * aspect, tanH);
+    gl.uniform3fv(uni.sky.uSun, sun);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+    /* Culling stays off on purpose: the heightfield is a one-sided sheet, and
+       with culling on the camera can see straight through steep slopes. */
+    gl.disable(gl.CULL_FACE);
+
+    gl.useProgram(progTerrain);
+    gl.bindVertexArray(uni.vao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, dataTex);
+    gl.uniform1i(uni.terrain.uData, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, flowTex);
+    gl.uniform1i(uni.terrain.uFlow, 1);
+    gl.uniform2f(uni.terrain.uTexel, 1 / n, 1 / n);
+    gl.uniform1i(uni.terrain.uMode, settings.modeIndex | 0);
+    gl.uniform1f(uni.terrain.uCell, cell);
+    gl.uniform1f(uni.terrain.uExag, settings.exaggeration);
+    gl.uniform1f(uni.terrain.uWaterPass, 0);
+    gl.uniformMatrix4fv(uni.terrain.uProj, false, proj);
+    gl.uniformMatrix4fv(uni.terrain.uView, false, view);
+    gl.uniform3fv(uni.terrain.uSun, sun);
+    gl.uniform3fv(uni.terrain.uCamPos, eye);
+    gl.uniform1f(uni.terrain.uFog, cam.distance * 1.4);
+    gl.uniform1f(uni.terrain.uTime, time);
+    gl.uniform1f(uni.terrain.uContours, settings.contours ? 1 : 0);
+    gl.uniform1f(uni.terrain.uGrid, settings.grid ? 1 : 0);
+    if (settings.marker && settings.markerOn) gl.uniform2f(uni.terrain.uMarker, settings.marker[0], settings.marker[1]);
+    gl.uniform1f(uni.terrain.uMarkerOn, settings.markerOn ? 1 : 0);
+    gl.drawElements(gl.TRIANGLES, idxCount, gl.UNSIGNED_INT, 0);
+
+    if (settings.waterOpacity > 0.01) {
+      gl.depthMask(false);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.useProgram(progWater);
+      gl.bindVertexArray(uni.vao);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, dataTex);
+      gl.uniform1i(uni.water.uData, 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, flowTex);
+      gl.uniform2f(uni.water.uTexel, 1 / n, 1 / n);
+      gl.uniform1f(uni.water.uWaterPass, 1);
+      gl.uniform1f(uni.water.uCell, cell);
+      gl.uniform1f(uni.water.uExag, settings.exaggeration);
+      gl.uniform1f(uni.water.uTime, time);
+      gl.uniform3fv(uni.water.uSun, sun);
+      gl.uniform3fv(uni.water.uCamPos, eye);
+      gl.uniform1f(uni.water.uFog, cam.distance * 1.4);
+      gl.uniform1f(uni.water.uOpacity, settings.waterOpacity);
+      gl.drawElements(gl.TRIANGLES, idxCount, gl.UNSIGNED_INT, 0);
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    }
+    gl.bindVertexArray(null);
+    const err = gl.getError();
+    if (err !== 0) return 'gl error 0x' + err.toString(16);
+    return null;
+  }
+
+  /* heightfield ray cast used by the pointer probe */
+  function pick(sim, origin, dir, maxDist) {
+    const n = sim.n;
+    const exag = pick.exag || 1;
+    let t = 0;
+    const step = 0.0025;
+    let px = origin[0] + dir[0] * 0.001;
+    let py = origin[1] + dir[1] * 0.001;
+    let pz = origin[2] + dir[2] * 0.001;
+    for (let k = 0; k < 4000; k++) {
+      t += step;
+      px += dir[0] * step;
+      py += dir[1] * step;
+      pz += dir[2] * step;
+      if (t > maxDist) return null;
+      if (px < -0.02 || pz < -0.02 || px > 1.02 || pz > 1.02) continue;
+      const gx = Math.round(px * (n - 1));
+      const gy = Math.round(pz * (n - 1));
+      if (gx < 0 || gy < 0 || gx >= n || gy >= n) continue;
+      const i = gy * n + gx;
+      const surf = sim.h[i] + Math.min(sim.w[i], 0.25) * 0.85;
+      if (py <= surf * exag && py > surf * exag - 0.06) return { x: gx, y: gy, u: gx / (n - 1), v: gy / (n - 1), dist: t };
+    }
+    return null;
+  }
+  pick.exag = 1;
+
+  function screenRay(cam, w, h, ndcX, ndcY) {
+    const aspect = w / Math.max(1, h);
+    const tan = Math.tan(((cam.fov || 50) * Math.PI) / 180 / 2);
+    const eye = cam.eye;
+    /* The app keeps one authoritative camera frame (world-space right / up /
+       forward). Use it so picking, the sky dome and the view matrix agree. */
+    let f = cam.basis && cam.basis.fwd;
+    let r = cam.basis && cam.basis.right;
+    let u = cam.basis && cam.basis.up;
+    if (!f || !r || !u) {
+      const t = cam.target;
+      let fx = t[0] - eye[0];
+      let fy = t[1] - eye[1];
+      let fz = t[2] - eye[2];
+      const fl = Math.hypot(fx, fy, fz) || 1;
+      fx /= fl;
+      fy /= fl;
+      fz /= fl;
+      r = [-fz, 0, fx];
+      const rl = Math.hypot(r[0], r[2]) || 1;
+      r = [r[0] / rl, 0, r[2] / rl];
+      u = [r[1] * fz - r[2] * fy, r[2] * fx - r[0] * fz, r[0] * fy - r[1] * fx];
+      f = [fx, fy, fz];
+    }
+    const dx = f[0] + r[0] * ndcX * tan * aspect + u[0] * ndcY * tan;
+    const dy = f[1] + r[1] * ndcX * tan * aspect + u[1] * ndcY * tan;
+    const dz = f[2] + r[2] * ndcX * tan * aspect + u[2] * ndcY * tan;
+    const dl = Math.hypot(dx, dy, dz) || 1;
+    return { origin: eye.slice(), dir: [dx / dl, dy / dl, dz / dl] };
+  }
+
+  /* framebuffer readback for the screenshot export (called right after a draw) */
+  let shotBuf = null;
+  function capture() {
+    const W = canvas.width;
+    const H = canvas.height;
+    if (!shotBuf || shotBuf.length !== W * H * 4) shotBuf = new Uint8Array(W * H * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, shotBuf);
+    return { w: W, h: H, data: shotBuf, bottomUp: true };
+  }
+
+  return {
+    info,
+    backend: 'gl',
+    gl,
+    render,
+    pick,
+    capture,
+    screenRay,
+    setExag(v) {
+      pick.exag = v;
+    },
+    lostContext() {
+      return gl.isContextLost();
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Canvas2D fallback: shaded relief map (no 3D, but fully readable)  */
+/* ------------------------------------------------------------------ */
+
+function create2DRenderer(canvas) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  console.warn('[lab] WebGL2 unavailable \u2014 using the 2D shaded-relief fallback');
+  const info = { name: 'Canvas2D relief (degraded)', backend: '2d' };
+  let off = null;
+  let offCtx = null;
+  let imgData = null;
+  let res = 0;
+  let buf = null;
+
+  function render(sim, cam, settings) {
+    const W = canvas.width;
+    const H = canvas.height;
+    const res = Math.min(256, Math.max(64, sim.n));
+    if (!off || off.width !== res) {
+      off = document.createElement('canvas');
+      off.width = res;
+      off.height = res;
+      offCtx = off.getContext('2d');
+      imgData = offCtx.createImageData(res, res);
+      buf = new Float32Array(res * res);
+    }
+    const n = sim.n;
+    const data = imgData.data;
+    const exag = settings.exaggeration;
+    // hillshade from the resampled heightfield
+    for (let y = 0; y < res; y++) {
+      for (let x = 0; x < res; x++) {
+        const sx = Math.min(n - 1, Math.round((x / (res - 1)) * (n - 1)));
+        const sy = Math.min(n - 1, Math.round((y / (res - 1)) * (n - 1)));
+        buf[y * res + x] = sim.h[sy * n + sx] + Math.min(sim.w[sy * n + sx], 0.2) * 0.8;
+      }
+    }
+    const el = (clampF(settings.sunElevation, 3, 88) * Math.PI) / 180;
+    const az = (settings.sunAzimuth * Math.PI) / 180;
+    const lx = -Math.sin(az) * Math.cos(el);
+    const ly = -Math.cos(az) * Math.cos(el);
+    const lz = Math.sin(el);
+    const mode = settings.mode;
+    for (let y = 0; y < res; y++) {
+      for (let x = 0; x < res; x++) {
+        const i = y * res + x;
+        const si = Math.min(n - 1, Math.round((x / (res - 1)) * (n - 1))) + Math.min(n - 1, Math.round((y / (res - 1)) * (n - 1))) * n;
+        const hL = buf[y * res + Math.max(0, x - 1)];
+        const hR = buf[y * res + Math.min(res - 1, x + 1)];
+        const hU = buf[Math.max(0, y - 1) * res + x];
+        const hD = buf[Math.min(res - 1, y + 1) * res + x];
+        const sc = 1 / n;
+        let nx = (-(hR - hL) * exag) / (2 * sc);
+        let ny = (-(hD - hU) * exag) / (2 * sc);
+        let l = Math.hypot(nx, ny, 1);
+        const shade = Math.max(0.05, (nx / l) * lx + (ny / l) * ly + (1 / l) * lz);
+        let r;
+        let g;
+        let b;
+        const hC = buf[i];
+        const w = sim.w[si];
+        const s = sim.sed[si];
+        const dl = sim.delta[si];
+        const e01 = clampF((hC + 0.05) / 0.45, 0, 1);
+        if (mode === 'elevation') {
+          r = 240 - e01 * 60;
+          g = 210 - e01 * 30;
+          b = 140 + e01 * 120;
+        } else if (mode === 'water') {
+          const t = clampF(w * 55, 0, 1);
+          r = 240 - t * 230;
+          g = 230 - t * 180;
+          b = 200 + t * 60;
+        } else if (mode === 'sediment') {
+          const t = clampF(s * 140, 0, 1);
+          r = 20 + t * 230;
+          g = 60 + t * 120;
+          b = 70 - t * 50;
+        } else if (mode === 'delta') {
+          const t = clampF(dl * 90, -1, 1);
+          r = 90 + (t < 0 ? -t * 190 : 0);
+          g = 95 + (t > 0 ? t * 130 : 0);
+          b = 100;
+        } else if (mode === 'slope') {
+          const t = clampF(Math.atan(Math.hypot((hR - hL) / (2 * sc), (hD - hU) / (2 * sc)) / Math.max(0.01, exag)) / 0.44, 0, 1);
+          r = 30 + t * 210;
+          g = 90 + t * 120;
+          b = 150 - t * 130;
+        } else if (mode === 'flow') {
+          const fx = sim.fx[si];
+          const fy = sim.fy[si];
+          const sp = Math.hypot(fx, fy);
+          const ang = (Math.atan2(fy, fx) / (Math.PI * 2) + 0.5) * 6.2831;
+          const t = clampF(sp * 26, 0, 1);
+          r = 25 + t * (0.55 + 0.45 * Math.cos(ang)) * 200;
+          g = 30 + t * (0.55 + 0.45 * Math.cos(ang + 4.1)) * 200;
+          b = 35 + t * (0.55 + 0.45 * Math.cos(ang + 2.4)) * 200;
+        } else {
+          // 'shaded' (and any unknown mode) keeps a readable relief palette
+          const t = e01;
+          r = 52 + t * 168;
+          g = 74 + t * 132;
+          b = 58 + t * 120;
+          if (w > 0.0004) {
+            r = 44 + 60 * clampF(s * 90, 0, 1);
+            g = 92 + 30 * clampF(s * 60, 0, 1);
+            b = 150 - 30 * clampF(w * 20, 0, 1);
+          }
+        }
+        const k = i * 4;
+        const m = 0.35 + 0.75 * shade;
+        data[k] = clampF(r * m, 0, 255);
+        data[k + 1] = clampF(g * m, 0, 255);
+        data[k + 2] = clampF(b * m, 0, 255);
+        data[k + 3] = 255;
+      }
+    }
+    offCtx.putImageData(imgData, 0, 0);
+    ctx.fillStyle = '#5b6570';
+    ctx.fillRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, 0, 0, res, res, 0, 0, W, H);
+    return null;
+  }
+
+  function pick(sim, cam, w, h, px, py) {
+    const u = px / w;
+    const v = py / h;
+    const n = sim.n;
+    return { x: Math.round(u * (n - 1)), y: Math.round(v * (n - 1)), u, v, dist: 1, flat2d: true };
+  }
+
+  return {
+    info,
+    backend: '2d',
+    render,
+    pick,
+    capture() {
+      const buf = new Uint8Array(canvas.width * canvas.height * 4);
+      buf.set(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+      return { w: canvas.width, h: canvas.height, data: buf, bottomUp: false };
+    },
+    screenRay: null,
+    setExag() {},
+    lostContext() {
+      return false;
+    },
+  };
+}
+
+LAB.createRenderer = function (canvas, force2d) {
+  if (!force2d) {
+    let r = null;
+    try {
+      r = createGLRenderer(canvas, {});
+    } catch (err) {
+      console.warn('[lab] WebGL2 renderer threw: ' + err.message);
+      r = null;
+    }
+    if (r) return r;
+  }
+  const r2 = create2DRenderer(canvas);
+  if (r2) return r2;
+  return null;
+};
+
+LAB.MODES = MODES;
+LAB._mat = { mat4Perspective, mat4LookAt };
+
+/* ---------- application ---------- */
+/* =====================================================================
+   Application shell: control panel, camera, pointer tools, render loop,
+   diagnostics, import/export.  Depends on LAB (sim + renderer modules).
+   ===================================================================== */
+
+const APP = {};
+
+const $ = (id) => document.getElementById(id);
+const fix = (v, d) => (Number.isFinite(v) ? v.toFixed(d) : '\u2014');
+const clampNum = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+let sim = null;
+let renderer = null;
+
+function toast(text, kind, ms) {
+  const host = $('toasts');
+  if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind ? ' ' + kind : '');
+  el.textContent = text;
+  host.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('fade');
+    setTimeout(() => el.remove(), 520);
+  }, ms || 2600);
+  while (host.children.length > 4) host.removeChild(host.firstChild);
+  console.log('[lab] ' + text);
+}
+
+/* ------------------------------------------------------------------ */
+/*  state                                                              */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_GEN = {
+  style: 'mountain',
+  relief: 0.34,
+  scale: 4.5,
+  octaves: 5,
+  roughness: 0.45,
+  ridge: 0.5,
+  island: 0,
+  seaLevel: 0.012,
+  sediment: 0,
+  warp: 0.6,
+  springs: 5,
+  seed: 'sierra-01',
+};
+
+const state = {
+  running: true,
+  speed: 1,
+  substeps: 2,
+  res: 128,
+  params: Object.assign({}, LAB.DEFAULT_PARAMS),
+  gen: Object.assign({}, DEFAULT_GEN),
+  view: {
+    mode: 'shaded',
+    exaggeration: 1.6,
+    waterOpacity: 0.8,
+    contours: true,
+    grid: false,
+    sunAzimuth: 132,
+    sunElevation: 36,
+    shadowSteps: 8,
+    subdivision: 2,
+    fov: 50,
+  },
+  brush: { tool: 'raise', radius: 9, strength: 0.55 },
+  preset: 'alpine',
+};
+
+const diag = { frames: 0, simMs: 0, drawMs: 0, fps: 0, lastFpsAt: 0, glErrors: 0 };
+
+const settings = {
+  modeIndex: 0,
+  mode: 'shaded',
+  exaggeration: 1.6,
+  waterOpacity: 0.8,
+  contours: true,
+  grid: false,
+  shadowSteps: 8,
+  sunAzimuth: 132,
+  sunElevation: 36,
+  subdivision: 2,
+  marker: [0.5, 0.5],
+  markerOn: false,
+};
+
+const TOOLS = [
+  { id: 'raise', label: 'Raise', kind: '' },
+  { id: 'lower', label: 'Lower', kind: 'sink' },
+  { id: 'smooth', label: 'Smooth', kind: 'sink' },
+  { id: 'flatten', label: 'Flatten', kind: 'sink' },
+  { id: 'water', label: 'Water', kind: 'water' },
+  { id: 'sediment', label: 'Sediment', kind: 'water' },
+  { id: 'dry', label: 'Dry', kind: 'sink' },
+  { id: 'inspect', label: 'Inspect', kind: 'probe' },
+];
+
+const STYLES = [
+  { id: 'mountain', label: 'Mountain dome' },
+  { id: 'canyon', label: 'Canyon plateau' },
+  { id: 'island', label: 'Island' },
+  { id: 'valley', label: 'River valley' },
+  { id: 'plateau', label: 'Plateau' },
+  { id: 'plain', label: 'Low plain' },
+];
+
+const PRESETS = [
+  {
+    id: 'alpine',
+    label: 'Mountain drainage',
+    gen: { style: 'mountain', relief: 0.34, scale: 4.5, octaves: 5, roughness: 0.45, ridge: 0.5, island: 0, seaLevel: 0.012, springs: 5, sediment: 0, warp: 0.6 },
+    params: { rain: 0.16, evap: 0.3, erode: 0.6, deposit: 0.5, capacity: 0.5, flow: 0.6, thermal: 0.1, talus: 55 },
+    view: { mode: 'shaded', exaggeration: 1.8, waterOpacity: 0.8, contours: true, sunAzimuth: 132, sunElevation: 36 },
+  },
+  {
+    id: 'canyon',
+    label: 'Canyon cutting',
+    gen: { style: 'canyon', relief: 0.3, scale: 3.2, octaves: 4, roughness: 0.4, ridge: 0.25, island: 0, seaLevel: 0.006, springs: 4, sediment: 0.4, warp: 0.45 },
+    params: { rain: 0.3, evap: 0.35, erode: 1.4, deposit: 0.8, capacity: 0.9, flow: 0.75, thermal: 0.35, talus: 42 },
+    view: { mode: 'shaded', exaggeration: 2.0, waterOpacity: 0.8, contours: true, sunAzimuth: 205, sunElevation: 26 },
+  },
+  {
+    id: 'island',
+    label: 'Island rainfall',
+    gen: { style: 'island', relief: 0.3, scale: 5, octaves: 5, roughness: 0.5, ridge: 0.3, island: 0.85, seaLevel: 0.05, springs: 6, sediment: 0.2, warp: 0.7 },
+    params: { rain: 0.5, evap: 0.35, erode: 0.8, deposit: 0.7, capacity: 0.6, flow: 0.65, thermal: 0.18, talus: 50 },
+    view: { mode: 'shaded', exaggeration: 1.9, waterOpacity: 0.88, contours: false, sunAzimuth: 60, sunElevation: 34 },
+  },
+  {
+    id: 'valley',
+    label: 'River valley',
+    gen: { style: 'valley', relief: 0.28, scale: 4, octaves: 5, roughness: 0.45, ridge: 0.35, island: 0, seaLevel: 0.01, springs: 4, sediment: 0.3, warp: 0.55 },
+    params: { rain: 0.3, evap: 0.2, erode: 0.7, deposit: 0.6, capacity: 0.5, flow: 0.6, thermal: 0.12, talus: 52 },
+    view: { mode: 'shaded', exaggeration: 1.9, waterOpacity: 0.82, contours: true, sunAzimuth: 300, sunElevation: 30 },
+  },
+  {
+    id: 'delta',
+    label: 'Delta + floodplain',
+    gen: { style: 'plain', relief: 0.12, scale: 6, octaves: 5, roughness: 0.5, ridge: 0.2, island: 0, seaLevel: 0.035, springs: 3, sediment: 1.4, warp: 0.8 },
+    params: { rain: 0.55, evap: 0.25, erode: 0.9, deposit: 1.2, capacity: 0.8, flow: 0.55, thermal: 0.1, talus: 48 },
+    view: { mode: 'shaded', exaggeration: 2.4, waterOpacity: 0.86, contours: true, sunAzimuth: 150, sunElevation: 22 },
+  },
+  {
+    id: 'stress',
+    label: 'Aggressive stress test',
+    gen: { style: 'mountain', relief: 0.42, scale: 7, octaves: 7, roughness: 0.6, ridge: 0.7, island: 0, seaLevel: 0, springs: 9, sediment: 0.6, warp: 1 },
+    params: { rain: 1, evap: 0, erode: 2.6, deposit: 1.6, capacity: 2.4, flow: 2.2, thermal: 1.6, talus: 24 },
+    view: { mode: 'shaded', exaggeration: 1.5, waterOpacity: 0.7, contours: false, sunAzimuth: 100, sunElevation: 40 },
+    substeps: 3,
+    speed: 2,
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/*  camera                                                             */
+/* ------------------------------------------------------------------ */
+
+const cam = {
+  yaw: 0.72,
+  pitch: 0.52,
+  distance: 2.0,
+  target: [0.5, 0.04, 0.5],
+  fov: 50,
+  eye: [0, 0, 0],
+  basis: { right: [1, 0, 0], up: [0, 1, 0], fwd: [0, 0, -1] },
+  update() {
+    const cp = Math.cos(this.pitch);
+    const sp = Math.sin(this.pitch);
+    const dx = Math.sin(this.yaw) * cp;
+    const dy = sp;
+    const dz = Math.cos(this.yaw) * cp;
+    this.eye = [this.target[0] + dx * this.distance, this.target[1] + dy * this.distance, this.target[2] + dz * this.distance];
+    const f = [-dx, -dy, -dz];
+    /* right = forward x worldUp, up = right x forward (right-handed frame) */
+    let rx = -f[2];
+    let ry = 0;
+    let rz = f[0];
+    const l = Math.hypot(rx, ry, rz) || 1;
+    const r = [rx / l, ry / l, rz / l];
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    this.basis.fwd = f;
+    this.basis.right = r;
+    this.basis.up = u;
+  },
+  orbit(dx, dy) {
+    this.yaw -= dx * 0.0055;
+    this.pitch = clampNum(this.pitch + dy * 0.005, 0.02, 1.5);
+    this.update();
+  },
+  pan(dx, dy) {
+    const k = this.distance * 0.0011;
+    const r = this.basis.right;
+    const u = this.basis.up;
+    for (let i = 0; i < 3; i++) this.target[i] += r[i] * -dx * k + r[1] * 0 + u[i] * dy * k;
+    this.target[0] = clampNum(this.target[0], -0.6, 1.6);
+    this.target[1] = clampNum(this.target[1], -0.4, 1.2);
+    this.target[2] = clampNum(this.target[2], -0.6, 1.6);
+    this.update();
+  },
+  zoom(factor) {
+    this.distance = clampNum(this.distance * factor, 0.12, 7);
+    this.update();
+  },
+  reset() {
+    this.yaw = 0.72;
+    this.target = [0.5, 0.04, 0.5];
+    fitCamera();
+  },
+};
+
+/* Frame the whole 1×1 terrain for the current canvas shape: a portrait phone
+   needs a longer arm and a steeper look-down than a wide desktop window. */
+function fitCamera() {
+  const canvas = $('view');
+  const aspect = (canvas ? canvas.width : 1280) / Math.max(1, canvas ? canvas.height : 800);
+  cam.distance = aspect < 1 ? clampNum(1.3 / Math.max(0.4, aspect), 1.8, 3.2) : clampNum(1.7 + 0.6 / Math.max(1, aspect), 1.7, 2.6);
+  cam.pitch = aspect < 1 ? 0.92 : 0.88;
+  cam.update();
+}
+
+/* ------------------------------------------------------------------ */
+/*  settings plumbing                                                  */
+/* ------------------------------------------------------------------ */
+
+function syncSettings() {
+  const i = Math.max(0, LAB.MODES.findIndex((m) => m.id === state.view.mode));
+  settings.modeIndex = i;
+  settings.mode = LAB.MODES[i].id;
+  settings.exaggeration = state.view.exaggeration;
+  settings.waterOpacity = state.view.waterOpacity;
+  settings.contours = state.view.contours;
+  settings.grid = state.view.grid;
+  settings.shadowSteps = state.view.shadowSteps;
+  settings.sunAzimuth = state.view.sunAzimuth;
+  settings.sunElevation = state.view.sunElevation;
+  settings.subdivision = state.view.subdivision;
+  cam.fov = state.view.fov;
+  cam.update();
+  if (renderer) renderer.setExag(state.view.exaggeration);
+  const el = $('hudMode');
+  if (el) el.textContent = LAB.MODES[i].label;
+}
+
+function setResolution(n) {
+  if (n === sim.n) return;
+  sim = LAB.createSim(n, state.params);
+  LAB.generate(sim, state.gen.style, Object.assign({ seed: state.gen.seed }, state.gen));
+  LAB.resetWater(sim);
+  syncSettings();
+  toast(`Simulation grid set to ${n}\u00b2 (${(n * n).toLocaleString()} cells)`);
+}
+
+/* ------------------------------------------------------------------ */
+/*  boot                                                               */
+/* ------------------------------------------------------------------ */
+
+APP.start = function () {
+  const stage = $('stage');
+  const canvas = $('view');
+  const qs = new URLSearchParams(location.search);
+  const force2d = qs.get('renderer') === '2d' || qs.get('force2d') === '1';
+
+  loadSettings();
+
+  sim = LAB.createSim(state.res, state.params);
+  LAB.generate(sim, state.gen.style, Object.assign({ seed: state.gen.seed }, state.gen));
+  LAB.resetWater(sim);
+
+  try {
+    renderer = LAB.createRenderer(canvas, force2d);
+  } catch (err) {
+    console.warn('[lab] renderer creation threw: ' + err.message);
+  }
+  if (!renderer) {
+    try {
+      renderer = LAB.createRenderer(canvas, true);
+    } catch (err) {
+      console.error('[lab] no renderer available: ' + err.message);
+    }
+  }
+  if (!renderer) {
+    document.body.insertAdjacentHTML('beforeend', '<div class="toast bad">No canvas renderer available in this browser.</div>');
+    return;
+  }
+  console.log(`[lab] renderer ${renderer.backend} \u00b7 ${renderer.info.name} \u00b7 gpu=${renderer.info.gpu} \u00b7 floatLinear=${renderer.info.floatLinear}`);
+
+  /* handle for automated inspection (also handy in the devtools console) */
+  window.lab = {
+    state,
+    cam,
+    settings,
+    diag,
+    get sim() {
+      return sim;
+    },
+    get renderer() {
+      return renderer;
+    },
+    setResolution,
+    syncSettings,
+    step(n) {
+      LAB.step(sim, n || state.substeps);
+      return sim.stats;
+    },
+    runPreset(id) {
+      applyPreset(PRESETS.find((p) => p.id === id) || PRESETS[0]);
+    },
+    setRunning(v) {
+      state.running = !!v;
+      syncPanel();
+    },
+    setTool(t) {
+      state.brush.tool = t;
+      syncPanel();
+    },
+    probe: (x, y) => LAB.probe(sim, x, y),
+    brush: (tool, x, y, r, s) => LAB.applyBrush(sim, tool, x, y, r, s),
+    exportState: () => LAB.exportState(sim),
+    importState(obj) {
+      LAB.importState(sim, obj);
+      if (sim.n !== state.res) {
+        state.res = sim.n;
+        syncPanel();
+      }
+      syncSettings();
+    },
+  };
+
+  cam.update();
+  requestAnimationFrame(() => {
+    resizeCanvas();
+    fitCamera();
+  });
+  buildPanel();
+  buildToolbar();
+  setupInput(stage);
+  setupMinimap();
+  syncSettings();
+
+  /* ---------- stability guard ---------- */
+  const guard = { recoveries: 0, damped: 0 };
+  function checkStability() {
+    if (sim.recoveries > guard.recoveries) {
+      guard.recoveries = sim.recoveries;
+      state.params.flow = Math.max(0.15, state.params.flow * 0.55);
+      state.params.erode = Math.max(0.1, state.params.erode * 0.6);
+      state.params.thermal = Math.max(0.02, state.params.thermal * 0.6);
+      sim.params = Object.assign({}, state.params);
+      sim.fx.fill(0);
+      sim.fy.fill(0);
+      guard.damped++;
+      toast('Instability detected: non-finite values were clamped and flow/erosion damped to keep the run usable (dampings: ' + guard.damped + ').', 'bad', 5200);
+      syncPanel();
+    }
+  }
+
+  /* ---------- frame loop ---------- */
+  const STEP_MS = 1000 / 60;
+  let acc = 0;
+  let last = performance.now();
+  let hudAt = 0;
+  let mmAt = 0;
+  let slowFrames = 0;
+  let lostNoted = false;
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(120, now - last);
+    last = now;
+    const t0 = performance.now();
+
+    if (state.running) {
+      acc += dt * state.speed;
+      let steps = 0;
+      const maxSteps = state.res > 192 ? 3 : 6;
+      while (acc >= STEP_MS && steps < maxSteps) {
+        LAB.step(sim, state.substeps);
+        acc -= STEP_MS;
+        steps++;
+      }
+      if (acc > STEP_MS * 8) acc = STEP_MS * 8;
+      checkStability();
+    } else {
+      acc = 0;
+    }
+    const t1 = performance.now();
+
+    if (renderer.lostContext && renderer.lostContext()) {
+      if (!lostNoted) {
+        lostNoted = true;
+        toast('WebGL context was lost \u2014 reload the page to continue rendering.', 'bad', 6000);
+      }
+      return;
+    }
+
+    const err = renderer.render(sim, cam, settings);
+    const t2 = performance.now();
+
+    if (shotRequest) {
+      const req = shotRequest;
+      shotRequest = null;
+      try {
+        const cap = renderer.capture ? renderer.capture() : null;
+        if (!cap) throw new Error('the renderer cannot read back pixels');
+        const bytes = encodeCanvasPNG(cap);
+        download(new Blob([bytes], { type: 'image/png' }), 'erosion-view-' + sim.n + 'px.png');
+        toast('View snapshot exported (' + (bytes.length / 1024).toFixed(0) + ' KiB, ' + cap.w + '\u00d7' + cap.h + ')');
+      } catch (err2) {
+        req.fail(err2.message);
+      }
+    }
+
+    if (pointerState.stroke && pointerState.mode === 'tool') heldToolApply(dt);
+
+    diag.frames++;
+    diag.simMs = diag.simMs * 0.9 + (t1 - t0) * 0.1;
+    diag.drawMs = diag.drawMs * 0.9 + (t2 - t1) * 0.1;
+    if (err) {
+      diag.glErrors++;
+      if (diag.glErrors === 2) toast('Renderer reported ' + err + ' (see console)', 'warn');
+    }
+    if (now - diag.lastFpsAt > 500) {
+      diag.fps = (diag.frames * 1000) / (now - diag.lastFpsAt);
+      diag.frames = 0;
+      diag.lastFpsAt = now;
+    }
+
+    if (state.running && diag.simMs + diag.drawMs > 34) slowFrames++;
+    else slowFrames = Math.max(0, slowFrames - 2);
+    if (slowFrames > 90 && state.view.subdivision > 1) {
+      state.view.subdivision = 1;
+      slowFrames = 0;
+      syncSettings();
+      toast('Frame budget exceeded: mesh density reduced to 1\u00d7 cells to recover frame rate.', 'warn', 4200);
+      syncPanel();
+    }
+
+    if (now - hudAt > 190) {
+      hudAt = now;
+      updateHud(sim);
+    }
+    if (now - mmAt > 260) {
+      mmAt = now;
+      APP.drawMinimap(sim);
+    }
+  }
+
+  requestAnimationFrame(frame);
+  toast('Lab ready \u00b7 ' + renderer.info.name + (renderer.info.gpu ? ' \u00b7 ' + renderer.info.gpu.slice(0, 46) : ''), null, 3600);
+};
+
+/* ------------------------------------------------------------------ */
+/*  HUD                                                                */
+/* ------------------------------------------------------------------ */
+
+function updateHud(s) {
+  const st = s.stats || { sumW: 0, sumS: 0, maxW: 0, maxS: 0, wetFrac: 0, cappedRatio: 0 };
+  const N = s.n * s.n;
+  $('vFps').textContent = fix(diag.fps, 0) + ' fps';
+  $('vFrame').textContent = diag.simMs.toFixed(1) + '+' + diag.drawMs.toFixed(1) + ' ms';
+  $('vGrid').textContent = s.n + '\u00b2 = ' + N.toLocaleString() + ' cells';
+  $('vTime').textContent = s.step.toLocaleString() + ' steps \u00b7 ' + s.time.toFixed(1) + ' d';
+  $('vWater').textContent = (st.sumW * 1000).toFixed(1) + ' mm\u00b3 \u00b7 max ' + (st.maxW * 1000).toFixed(1) + ' mm';
+  $('vSed').textContent = (st.sumS * 1000).toFixed(2) + ' mm\u00b3 \u00b7 max ' + (st.maxS * 1000).toFixed(2);
+  const bits = [];
+  if (s.recoveries) bits.push(s.recoveries + '\u00d7 clamped');
+  if (s.unstable) bits.push('watch');
+  $('vStab').textContent = (bits.length ? bits.join(' \u00b7 ') : 'ok') + ' \u00b7 ' + (st.cappedRatio * 100).toFixed(0) + '% limited';
+  const wet = clampNum(st.wetFrac || 0, 0, 1);
+  $('bWet').style.width = (wet * 100).toFixed(1) + '%';
+  $('tWet').textContent = (wet * 100).toFixed(0) + '%';
+  const cap = clampNum(st.cappedRatio || 0, 0, 1);
+  $('bCap').style.width = (cap * 100).toFixed(1) + '%';
+  $('tCap').textContent = (cap * 100).toFixed(0) + '%';
+  const cost = clampNum((diag.simMs || 0) / 16.7, 0, 1);
+  $('bSim').style.width = (cost * 100).toFixed(0) + '%';
+  $('tSim').textContent = (diag.simMs || 0).toFixed(1) + 'ms';
+  const hs = $('hudState');
+  hs.textContent = state.running ? 'running' : 'paused';
+  hs.className = 'pill ' + (state.running ? 'run' : 'pause');
+}
+
+/* ------------------------------------------------------------------ */
+/*  probe readout                                                      */
+/* ------------------------------------------------------------------ */
+
+function updateProbe(html) {
+  const el = $('probe');
+  if (!el || el._html === html) return;
+  el._html = html;
+  el.innerHTML = html;
+}
+
+/* ------------------------------------------------------------------ */
+/*  minimap                                                            */
+/* ------------------------------------------------------------------ */
+
+function setupMinimap() {
+  const cv = $('mmCanvas');
+  const ctx = cv.getContext('2d');
+  const S = 66;
+  const img = ctx.createImageData(S, S);
+  const tmp = document.createElement('canvas');
+  tmp.width = S;
+  tmp.height = S;
+  const tmpCtx = tmp.getContext('2d');
+  const shade = new Float32Array(S * S);
+
+  APP.drawMinimap = function (s) {
+    if (!ctx || document.hidden) return;
+    const n = s.n;
+    const d = img.data;
+    const step = (n - 1) / (S - 1);
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const gx = Math.min(n - 1, Math.round(x * step));
+        const gy = Math.min(n - 1, Math.round(y * step));
+        shade[y * S + x] = s.h[gy * n + gx] + Math.min(s.w[gy * n + gx], 0.1);
+      }
+    }
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const k = (y * S + x) * 4;
+        const gx = Math.min(n - 1, Math.round(x * step));
+        const gy = Math.min(n - 1, Math.round(y * step));
+        const si = gy * n + gx;
+        const hL = shade[y * S + Math.max(0, x - 1)];
+        const hR = shade[y * S + Math.min(S - 1, x + 1)];
+        const hU = shade[Math.max(0, y - 1) * S + x];
+        const hD = shade[Math.min(S - 1, y + 1) * S + x];
+        const sh = Math.max(0.12, Math.min(1.4, 0.76 + (hU + hL - hR - hD) * 24));
+        const w = s.w[si];
+        const sed = s.sed[si];
+        const h = s.h[si];
+        let r;
+        let g;
+        let b;
+        if (w > 0.0004) {
+          const t = clampNum(w * 20, 0, 1);
+          r = 46 + 70 * clampNum(sed * 80, 0, 1);
+          g = 96 + 34 * clampNum(sed * 60, 0, 1);
+          b = 156 - 34 * t;
+        } else {
+          const e = clampNum(h / 0.34, 0, 1);
+          r = 58 + e * 155;
+          g = 76 + e * 124;
+          b = 60 + e * 116;
+        }
+        d[k] = clampNum(r * sh, 0, 255);
+        d[k + 1] = clampNum(g * sh, 0, 255);
+        d[k + 2] = clampNum(b * sh, 0, 255);
+        d[k + 3] = 255;
+      }
+    }
+    tmpCtx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmp, 0, 0, S, S, 0, 0, cv.width, cv.height);
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  control panel                                                      */
+/* ------------------------------------------------------------------ */
+
+const registry = [];
+
+function group(title, open) {
+  const d = document.createElement('details');
+  d.className = 'group';
+  d.open = open !== false;
+  const s = document.createElement('summary');
+  s.textContent = title;
+  d.appendChild(s);
+  const body = document.createElement('div');
+  body.className = 'body';
+  d.appendChild(body);
+  $('panelBody').appendChild(d);
+  return body;
+}
+
+function slider(host, label, opts) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ctl';
+  const lab = document.createElement('label');
+  const out = document.createElement('output');
+  lab.append(document.createTextNode(label));
+  lab.append(out);
+  const inp = document.createElement('input');
+  inp.type = 'range';
+  inp.min = opts.min;
+  inp.max = opts.max;
+  inp.step = opts.step;
+  inp.value = opts.get();
+  inp.setAttribute('aria-label', label);
+  const show = () => {
+    out.textContent = opts.fmt ? opts.fmt(Number(inp.value)) : String(inp.value);
+  };
+  show();
+  inp.addEventListener('input', () => {
+    opts.set(Number(inp.value));
+    show();
+    saveSettings();
+  });
+  wrap.append(lab, inp);
+  host.appendChild(wrap);
+  registry.push({ sync: () => { inp.value = opts.get(); show(); } });
+}
+
+function toggle(host, label, opts) {
+  const wrap = document.createElement('label');
+  wrap.className = 'check';
+  const inp = document.createElement('input');
+  inp.type = 'checkbox';
+  inp.checked = !!opts.get();
+  inp.setAttribute('aria-label', label);
+  const span = document.createElement('span');
+  span.textContent = label;
+  wrap.append(inp, span);
+  host.appendChild(wrap);
+  inp.addEventListener('change', () => {
+    opts.set(inp.checked);
+    saveSettings();
+  });
+  registry.push({ sync: () => { inp.checked = !!opts.get(); } });
+}
+
+function selectBox(host, label, opts) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ctl';
+  const lab = document.createElement('label');
+  lab.append(document.createTextNode(label));
+  wrap.appendChild(lab);
+  const sel = document.createElement('select');
+  sel.setAttribute('aria-label', label);
+  for (const o of opts.options) {
+    const op = document.createElement('option');
+    op.value = o.id;
+    op.textContent = o.label;
+    sel.appendChild(op);
+  }
+  sel.value = opts.get();
+  wrap.appendChild(sel);
+  host.appendChild(wrap);
+  sel.addEventListener('change', () => {
+    opts.set(sel.value);
+    saveSettings();
+  });
+  registry.push({ sync: () => { sel.value = opts.get(); } });
+}
+
+function buttonRow(host, buttons, cls) {
+  const wrap = document.createElement('div');
+  wrap.className = cls || 'row2';
+  for (const b of buttons) {
+    const el = document.createElement('button');
+    el.className = 'btn';
+    el.type = 'button';
+    el.textContent = b.label;
+    if (b.title) el.title = b.title;
+    el.dataset.key = b.key || b.label;
+    el.addEventListener('click', () => b.onClick(el));
+    wrap.appendChild(el);
+  }
+  host.appendChild(wrap);
+}
+
+function note(host, text) {
+  const p = document.createElement('p');
+  p.className = 'note';
+  p.textContent = text;
+  host.appendChild(p);
+}
+
+function buildPanel() {
+  const P = state.params;
+  const G = state.gen;
+  const V = state.view;
+  const B = state.brush;
+  let g = group('Simulation', true);
+
+  buttonRow(g, [
+    { label: '\u23f8 Pause', key: 'pause', title: 'Pause / resume (Space)', onClick: () => toggleRun() },
+    { label: '\u2934 Single step', key: 'step', title: 'One simulation step (S)', onClick: () => singleStep() },
+    { label: '\u21ba Reset water + time', key: 'reset', onClick: () => resetRun() },
+    { label: '\u26f0 Regenerate terrain', key: 'regen', onClick: () => regenerate('Terrain regenerated') },
+  ]);
+  selectBox(g, 'Simulation resolution (cells per side)', {
+    get: () => String(state.res),
+    options: [64, 96, 128, 160, 192, 256].map((n) => ({ id: String(n), label: n + ' \u00d7 ' + n + (n === 128 ? ' (default)' : n > 192 ? ' \u2014 heavy' : '') })),
+    set: (v) => setResolution(Number(v)),
+  });
+  slider(g, 'Simulation speed (steps per 1/60 s)', { min: 0.25, max: 4, step: 0.25, get: () => state.speed, set: (v) => { state.speed = v; }, fmt: (v) => v.toFixed(2) + '\u00d7' });
+  slider(g, 'Substeps per step', { min: 1, max: 6, step: 1, get: () => state.substeps, set: (v) => { state.substeps = v; }, fmt: (v) => String(v) });
+  note(g, 'Cost per frame is roughly speed \u00d7 substeps \u00d7 cells. The HUD shows the measured simulation cost so you can see when a setting is too expensive.');
+
+  g = group('Water, flow and sediment', true);
+  slider(g, 'Rainfall / water injection', { min: 0, max: 1, step: 0.01, get: () => P.rain, set: (v) => { P.rain = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Evaporation + infiltration', { min: 0, max: 4, step: 0.02, get: () => P.evap, set: (v) => { P.evap = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Erosion rate (hydraulic)', { min: 0, max: 3, step: 0.02, get: () => P.erode, set: (v) => { P.erode = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Deposition rate', { min: 0, max: 3, step: 0.02, get: () => P.deposit, set: (v) => { P.deposit = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Sediment carrying capacity', { min: 0, max: 3, step: 0.02, get: () => P.capacity, set: (v) => { P.capacity = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Flow strength (water momentum)', { min: 0.05, max: 3, step: 0.05, get: () => P.flow, set: (v) => { P.flow = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Thermal / talus erosion strength', { min: 0, max: 3, step: 0.02, get: () => P.thermal, set: (v) => { P.thermal = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Talus angle (angle of repose)', { min: 5, max: 80, step: 1, get: () => P.talus, set: (v) => { P.talus = v; }, fmt: (v) => v.toFixed(0) + '\u00b0' });
+  note(g, 'Capacity, erosion and deposition are coupled: faster water carries more load, so channels cut down while floodplains and deltas build up.');
+
+  g = group('Terrain generation', false);
+  selectBox(g, 'Relief style', {
+    get: () => G.style,
+    options: STYLES,
+    set: (v) => {
+      G.style = v;
+      regenerate('Relief style: ' + v);
+    },
+  });
+  slider(g, 'Relief (height range)', { min: 0.05, max: 0.6, step: 0.01, get: () => G.relief, set: (v) => { G.relief = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Feature scale (wavelength)', { min: 1.5, max: 12, step: 0.1, get: () => G.scale, set: (v) => { G.scale = v; }, fmt: (v) => v.toFixed(1) });
+  slider(g, 'Octaves (detail levels)', { min: 1, max: 9, step: 1, get: () => G.octaves, set: (v) => { G.octaves = v; }, fmt: (v) => String(v) });
+  slider(g, 'Roughness (persistence)', { min: 0.2, max: 0.9, step: 0.01, get: () => G.roughness, set: (v) => { G.roughness = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Ridge amount', { min: 0, max: 1, step: 0.05, get: () => G.ridge, set: (v) => { G.ridge = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Island falloff', { min: 0, max: 1, step: 0.05, get: () => G.island, set: (v) => { G.island = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Domain warp', { min: 0, max: 1.5, step: 0.05, get: () => G.warp, set: (v) => { G.warp = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Initial water level (sea)', { min: 0, max: 0.12, step: 0.002, get: () => G.seaLevel, set: (v) => { G.seaLevel = v; }, fmt: (v) => v.toFixed(3) });
+  slider(g, 'Initial sediment layer', { min: 0, max: 3, step: 0.05, get: () => G.sediment, set: (v) => { G.sediment = v; }, fmt: (v) => v.toFixed(2) });
+  slider(g, 'Spring sources', { min: 0, max: 12, step: 1, get: () => G.springs, set: (v) => { G.springs = v; }, fmt: (v) => String(v) });
+
+  const seedWrap = document.createElement('div');
+  seedWrap.className = 'ctl';
+  const seedLabel = document.createElement('label');
+  seedLabel.append(document.createTextNode('Deterministic seed'));
+  seedWrap.appendChild(seedLabel);
+  const seedRow = document.createElement('div');
+  seedRow.className = 'row2';
+  const seedInput = document.createElement('input');
+  seedInput.type = 'text';
+  seedInput.value = G.seed;
+  seedInput.setAttribute('aria-label', 'Deterministic seed');
+  seedInput.addEventListener('change', () => {
+    G.seed = seedInput.value || 'seed';
+    regenerate('Terrain regenerated from seed ' + G.seed);
+  });
+  const dice = document.createElement('button');
+  dice.className = 'btn';
+  dice.type = 'button';
+  dice.textContent = '\ud83c\udfb2 Random seed';
+  dice.addEventListener('click', () => {
+    G.seed = Math.random().toString(36).slice(2, 10);
+    seedInput.value = G.seed;
+    regenerate('Terrain regenerated from seed ' + G.seed);
+  });
+  seedRow.append(seedInput, dice);
+  seedWrap.appendChild(seedRow);
+  g.appendChild(seedWrap);
+  registry.push({ sync: () => { seedInput.value = G.seed; } });
+  buttonRow(g, [
+    { label: 'Apply generation', onClick: () => regenerate('Terrain rebuilt from the current generation settings') },
+    { label: 'Generation defaults', onClick: () => { Object.assign(G, DEFAULT_GEN); regenerate('Generation defaults restored'); } },
+  ]);
+
+  g = group('Pointer brush tools', true);
+  const toolsWrap = document.createElement('div');
+  toolsWrap.className = 'tools';
+  for (const t of TOOLS) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'btn';
+    el.dataset.tool = t.id;
+    el.textContent = t.label;
+    el.title = 'Select the ' + t.label + ' tool (key ' + (TOOLS.indexOf(t) + 1) + ')';
+    el.addEventListener('click', () => setTool(t.id));
+    toolsWrap.appendChild(el);
+  }
+  g.appendChild(toolsWrap);
+  registry.push({ sync: () => toolsWrap.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tool === state.brush.tool)) });
+  slider(g, 'Brush radius (cells)', { min: 1, max: 40, step: 0.5, get: () => B.radius, set: (v) => { B.radius = v; }, fmt: (v) => v.toFixed(1) });
+  slider(g, 'Brush strength', { min: 0.02, max: 1, step: 0.01, get: () => B.strength, set: (v) => { B.strength = v; }, fmt: (v) => v.toFixed(2) });
+  note(g, 'Left-drag paints with the selected tool. Shift+left-drag or middle-drag pans, right-drag orbits, wheel zooms, so editing never fights the camera.');
+
+  g = group('Visualisation', true);
+  const modesWrap = document.createElement('div');
+  modesWrap.className = 'modes';
+  for (const m of LAB.MODES) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'btn';
+    el.dataset.mode = m.id;
+    el.textContent = m.label;
+    el.addEventListener('click', () => setMode(m.id));
+    modesWrap.appendChild(el);
+  }
+  g.appendChild(modesWrap);
+  registry.push({ sync: () => modesWrap.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.mode === state.view.mode)) });
+  slider(g, 'Vertical exaggeration', { min: 0.5, max: 8, step: 0.1, get: () => V.exaggeration, set: (v) => { V.exaggeration = v; syncSettings(); }, fmt: (v) => v.toFixed(1) + '\u00d7' });
+  slider(g, 'Water visibility', { min: 0, max: 1, step: 0.02, get: () => V.waterOpacity, set: (v) => { V.waterOpacity = v; syncSettings(); }, fmt: (v) => (v * 100).toFixed(0) + '%' });
+  toggle(g, 'Contour lines (20 m interval)', { get: () => V.contours, set: (v) => { V.contours = v; syncSettings(); } });
+  toggle(g, 'Simulation grid overlay', { get: () => V.grid, set: (v) => { V.grid = v; syncSettings(); } });
+  slider(g, 'Sun azimuth', { min: 0, max: 360, step: 1, get: () => V.sunAzimuth, set: (v) => { V.sunAzimuth = v; syncSettings(); }, fmt: (v) => v.toFixed(0) + '\u00b0' });
+  slider(g, 'Sun elevation', { min: 5, max: 85, step: 1, get: () => V.sunElevation, set: (v) => { V.sunElevation = v; syncSettings(); }, fmt: (v) => v.toFixed(0) + '\u00b0' });
+  selectBox(g, 'Cast shadow quality', {
+    get: () => String(V.shadowSteps),
+    options: [{ id: '0', label: 'Off' }, { id: '4', label: 'Low (4 samples)' }, { id: '8', label: 'Medium (8 samples)' }, { id: '16', label: 'High (16 samples)' }],
+    set: (v) => { V.shadowSteps = Number(v); syncSettings(); },
+  });
+  selectBox(g, 'Mesh density', {
+    get: () => String(V.subdivision),
+    options: [{ id: '1', label: '1\u00d7 cells (fast)' }, { id: '2', label: '2\u00d7 cells (sharp)' }, { id: '3', label: '3\u00d7 cells (heavy)' }],
+    set: (v) => { V.subdivision = Number(v); syncSettings(); },
+  });
+  slider(g, 'Field of view', { min: 25, max: 80, step: 1, get: () => V.fov, set: (v) => { V.fov = v; syncSettings(); }, fmt: (v) => v.toFixed(0) + '\u00b0' });
+
+  g = group('Presets', false);
+  const pw = document.createElement('div');
+  pw.className = 'presets';
+  for (const p of PRESETS) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'btn';
+    el.dataset.preset = p.id;
+    el.textContent = p.label;
+    el.addEventListener('click', () => applyPreset(PRESETS.find((x) => x.id === p.id)));
+    pw.appendChild(el);
+  }
+  g.appendChild(pw);
+  registry.push({ sync: () => pw.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.preset === state.preset)) });
+
+  g = group('Data in / out', false);
+  buttonRow(g, [
+    { label: 'Heightfield PNG', onClick: () => exportPNG('elevation') },
+    { label: 'Water depth PNG', onClick: () => exportPNG('water') },
+    { label: 'Sediment PNG', onClick: () => exportPNG('sediment') },
+    { label: 'Screenshot PNG', onClick: () => screenshot() },
+    { label: 'Export state JSON', onClick: () => exportState() },
+    { label: 'Import state JSON', onClick: () => $('fileIn').click() },
+  ]);
+  buttonRow(g, [
+    { label: 'Save settings', onClick: () => saveSettings(true) },
+    { label: 'Restore settings', onClick: () => { loadSettings(true); regenerate('Settings restored'); } },
+  ]);
+  note(g, 'PNG export writes the live heightfield (or a diagnostic field) as 16-bit grayscale. JSON export/import carries the complete terrain, water and sediment state plus every parameter.');
+}
+
+function syncPanel() {
+  for (const r of registry) {
+    try {
+      r.sync();
+    } catch (e) {
+      void e;
+    }
+  }
+  const p = $('btnPause');
+  if (p) {
+    p.classList.toggle('on', state.running);
+    p.innerHTML = state.running ? '\u23f8 Pause <kbd>space</kbd>' : '\u25b6 Resume <kbd>space</kbd>';
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  actions                                                            */
+/* ------------------------------------------------------------------ */
+
+function toggleRun() {
+  state.running = !state.running;
+  syncPanel();
+  toast(state.running ? 'Running' : 'Paused \u2014 the terrain is frozen while you paint');
+}
+
+function singleStep() {
+  state.running = false;
+  LAB.step(sim, state.substeps);
+  syncPanel();
+  toast('Single step (' + state.substeps + ' substep' + (state.substeps > 1 ? 's' : '') + ')');
+}
+
+function resetRun() {
+  LAB.resetWater(sim);
+  sim.recoveries = 0;
+  sim.unstable = false;
+  toast('Water, sediment, time and stability counters reset');
+}
+
+function regenerate(why) {
+  LAB.generate(sim, state.gen.style, Object.assign({ seed: state.gen.seed }, state.gen));
+  LAB.resetWater(sim);
+  toast(why || 'Terrain regenerated');
+}
+
+function setTool(id) {
+  state.brush.tool = id;
+  const stage = $('stage');
+  if (stage) stage.className = id === 'inspect' ? 'probe' : '';
+  if (cursorEl) cursorEl.style.display = 'none';
+  syncPanel();
+}
+
+function setMode(id) {
+  state.view.mode = id;
+  syncSettings();
+  syncPanel();
+  const m = LAB.MODES.find((x) => x.id === id);
+  toast('View: ' + (m ? m.label : id));
+}
+
+function applyPreset(preset) {
+  if (!preset) return;
+  Object.assign(state.params, preset.params);
+  Object.assign(state.gen, preset.gen);
+  Object.assign(state.view, preset.view || {});
+  if (preset.substeps) state.substeps = preset.substeps;
+  if (preset.speed) state.speed = preset.speed;
+  state.preset = preset.id;
+  sim.params = Object.assign({}, state.params);
+  regenerate('Preset: ' + preset.label);
+  syncSettings();
+  syncPanel();
+  saveSettings();
+}
+
+/* ------------------------------------------------------------------ */
+/*  persistence                                                        */
+/* ------------------------------------------------------------------ */
+
+const LS_KEY = 'hydr-erosion-lab.settings.v1';
+
+function saveSettings(force) {
+  try {
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({ params: state.params, gen: state.gen, view: state.view, brush: state.brush, res: state.res, speed: state.speed, substeps: state.substeps, preset: state.preset }),
+    );
+    if (force) toast('Settings saved in this browser');
+  } catch (e) {
+    if (force) toast('Could not save settings: ' + e.message, 'warn');
+  }
+}
+
+function loadSettings(force) {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(LS_KEY);
+  } catch (e) {
+    if (force) toast('Local storage is not available here', 'warn');
+    return;
+  }
+  if (!raw) return;
+  try {
+    const d = JSON.parse(raw);
+    if (d.params) Object.assign(state.params, d.params);
+    if (d.gen) Object.assign(state.gen, d.gen);
+    if (d.view) Object.assign(state.view, d.view);
+    if (d.brush) Object.assign(state.brush, d.brush);
+    if (Number.isFinite(d.res)) state.res = clampNum(d.res, 32, 256);
+    if (Number.isFinite(d.speed)) state.speed = clampNum(d.speed, 0.25, 4);
+    if (Number.isFinite(d.substeps)) state.substeps = clampNum(d.substeps, 1, 6);
+    if (d.preset) state.preset = d.preset;
+    if (force) toast('Settings restored from this browser');
+  } catch (e) {
+    if (force) toast('Saved settings were unreadable', 'warn');
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  export / import                                                    */
+/* ------------------------------------------------------------------ */
+
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    a.remove();
+  }, 2000);
+}
+
+function exportPNG(mode) {
+  try {
+    const png = LAB.fieldPNG(sim, mode);
+    download(new Blob([png.bytes], { type: 'image/png' }), 'erosion-' + (mode === 'elevation' ? 'heightfield' : mode) + '-' + sim.n + 'px.png');
+    toast((mode === 'elevation' ? 'Heightfield' : mode) + ' exported as ' + sim.n + '\u00d7' + sim.n + ' grayscale PNG (' + (png.bytes.length / 1024).toFixed(0) + ' KiB)');
+  } catch (err) {
+    toast('PNG export failed: ' + err.message, 'bad');
+  }
+}
+
+function screenshot() {
+  shotRequest = { fail: (m) => toast('Screenshot failed: ' + m, 'warn') };
+}
+
+/* readback happens in the frame loop, immediately after the draw call,
+   because the default framebuffer is not guaranteed to survive presentation */
+let shotRequest = null;
+
+function encodeCanvasPNG(cap) {
+  const w = cap.w;
+  const h = cap.h;
+  const out = document.createElement('canvas');
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext('2d');
+  const flipped = new ImageData(w, h);
+  if (cap.bottomUp) {
+    for (let y = 0; y < h; y++) {
+      const src = (h - 1 - y) * w * 4;
+      for (let x = 0; x < w * 4; x++) flipped.data[y * w * 4 + x] = cap.data[src + x];
+    }
+  } else {
+    flipped.data.set(cap.data);
+  }
+  ctx.putImageData(flipped, 0, 0);
+  const url = out.toDataURL('image/png');
+  const bin = atob(url.slice(url.indexOf(',') + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function exportState() {
+  try {
+    const json = JSON.stringify(LAB.exportState(sim));
+    download(new Blob([json], { type: 'application/json' }), 'erosion-state.json');
+    toast('Full simulation state exported (' + (json.length / 1024).toFixed(0) + ' KiB)');
+  } catch (err) {
+    toast('State export failed: ' + err.message, 'bad');
+  }
+}
+
+function importStateText(text) {
+  let obj = null;
+  try {
+    obj = JSON.parse(text);
+  } catch (e) {
+    toast('Import failed: the file is not valid JSON', 'bad');
+    return;
+  }
+  try {
+    const before = sim.n;
+    LAB.importState(sim, obj);
+    if (sim.n !== before) state.res = sim.n;
+    Object.assign(state.params, sim.params);
+    syncSettings();
+    syncPanel();
+    toast('State imported \u2014 terrain, water and sediment restored');
+  } catch (err) {
+    toast('Import rejected: ' + err.message, 'bad', 4200);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  toolbar, keyboard, resize                                          */
+/* ------------------------------------------------------------------ */
+
+function buildToolbar() {
+  $('btnPause').addEventListener('click', () => toggleRun());
+  $('btnStep').addEventListener('click', () => singleStep());
+  $('btnReset').addEventListener('click', () => resetRun());
+  $('btnRegen').addEventListener('click', () => regenerate('Terrain regenerated'));
+  $('btnCam').addEventListener('click', () => {
+    cam.reset();
+    toast('Camera reset');
+  });
+  $('btnStab').addEventListener('click', () => {
+    const P = state.params;
+    P.flow = Math.min(P.flow, 1);
+    P.erode = Math.min(P.erode, 1.2);
+    P.capacity = Math.min(P.capacity, 1.2);
+    P.thermal = Math.min(P.thermal, 0.6);
+    P.rain = Math.min(P.rain, 0.6);
+    sim.params = Object.assign({}, P);
+    sim.fx.fill(0);
+    sim.fy.fill(0);
+    sim.unstable = false;
+    syncPanel();
+    toast('Parameters clamped into the stable range and the flux state cleared');
+  });
+
+  const panel = $('panel');
+  const flip = () => {
+    panel.classList.toggle('open');
+    $('toolToggle').setAttribute('aria-expanded', panel.classList.contains('open') ? 'true' : 'false');
+  };
+  $('toolToggle').addEventListener('click', flip);
+  $('panelClose').addEventListener('click', () => {
+    panel.classList.remove('open');
+    $('toolToggle').setAttribute('aria-expanded', 'false');
+  });
+  if (window.innerWidth <= 900) {
+    // narrow screens: fold the probe into the status card and keep the
+    // control drawer closed so the terrain gets the whole canvas
+    $('hud').appendChild($('probe'));
+    panel.classList.remove('open');
+  }
+
+  $('fileIn').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => importStateText(String(r.result));
+    r.onerror = () => toast('Could not read that file', 'bad');
+    r.readAsText(f);
+    e.target.value = '';
+  });
+
+  window.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (k === ' ') { e.preventDefault(); toggleRun(); }
+    else if (k === 's' || k === 'S') singleStep();
+    else if (k === 't' || k === 'T') resetRun();
+    else if (k === 'r' || k === 'R') regenerate('Terrain regenerated');
+    else if (k === 'c' || k === 'C') { cam.reset(); toast('Camera reset'); }
+    else if (k === 'z' || k === 'Z') cycleMode(-1);
+    else if (k === 'x' || k === 'X') cycleMode(1);
+    else if (k === 'p' || k === 'P') $('toolToggle').click();
+    else if (/^[1-8]$/.test(k)) setTool(TOOLS[Number(k) - 1].id);
+    else if (k === 'ArrowLeft') { e.preventDefault(); cam.orbit(-14, 0); }
+    else if (k === 'ArrowRight') { e.preventDefault(); cam.orbit(14, 0); }
+    else if (k === 'ArrowUp') { e.preventDefault(); cam.orbit(0, -12); }
+    else if (k === 'ArrowDown') { e.preventDefault(); cam.orbit(0, 12); }
+    else if (k === '+' || k === '=') cam.zoom(0.88);
+    else if (k === '-' || k === '_') cam.zoom(1.14);
+  });
+
+  requestAnimationFrame(resizeCanvas);
+}
+
+function cycleMode(dir) {
+  const ids = LAB.MODES.map((m) => m.id);
+  const i = Math.max(0, ids.indexOf(state.view.mode));
+  setMode(ids[(i + dir + ids.length) % ids.length]);
+}
+
+function resizeCanvas() {
+  const canvas = $('view');
+  if (!canvas) return;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(64, Math.round(rect.width * dpr));
+  const h = Math.max(64, Math.round(rect.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+    console.log('[lab] canvas resized to ' + w + '\u00d7' + h + ' (dpr ' + dpr.toFixed(2) + ')');
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  pointer + camera input                                             */
+/* ------------------------------------------------------------------ */
+
+let cursorEl = null;
+
+const pointerState = {
+  strokes: new Map(),
+  stroke: false,
+  mode: null,
+  gesture: null,
+};
+
+function heldToolApply(dt) {
+  let hit = null;
+  for (const s of pointerState.strokes.values()) {
+    if (s.mode === 'tool' && s.hit) hit = s.hit;
+  }
+  if (!hit) return;
+  if (state.brush.tool === 'inspect') return;
+  LAB.applyBrush(sim, state.brush.tool, hit.x, hit.y, state.brush.radius, state.brush.strength * Math.min(2, (dt / 16.7) * 0.7));
+}
+
+function setupInput(stage) {
+  cursorEl = $('cursor');
+  const cursor = cursorEl;
+
+  function local(e) {
+    const rect = stage.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top, rect };
+  }
+
+  function hitTest(e) {
+    if (!renderer) return null;
+    const { x, y, rect } = local(e);
+    if (renderer.backend === '2d') {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const p = renderer.pick(sim, cam, Math.max(1, Math.round(rect.width * dpr)), Math.max(1, Math.round(rect.height * dpr)), x, y);
+      if (!p) return null;
+      return p;
+    }
+    const ndcX = (x / rect.width) * 2 - 1;
+    const ndcY = 1 - (y / rect.height) * 2;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const ray = renderer.screenRay(cam, Math.max(1, Math.round(rect.width * dpr)), Math.max(1, Math.round(rect.height * dpr)), ndcX, ndcY);
+    const hit = renderer.pick(sim, ray.origin, ray.dir, 12);
+    return hit;
+  }
+
+  function brushPx(hit) {
+    if (!hit) return 10;
+    const rect = stage.getBoundingClientRect();
+    const worldR = (state.brush.radius / sim.n) * 1.15;
+    const dist = Math.max(0.06, hit.dist || cam.distance);
+    const px = (worldR * rect.height * 0.5) / (Math.tan(((cam.fov * Math.PI) / 180) / 2) * dist);
+    return clampNum(px, 5, 360);
+  }
+
+  function moveCursor(e, hit) {
+    const rect = stage.getBoundingClientRect();
+    cursor.style.left = e.clientX - rect.left + 'px';
+    cursor.style.top = e.clientY - rect.top + 'px';
+    cursor.style.display = 'block';
+    cursor.style.width = brushPx(hit).toFixed(1) + 'px';
+    cursor.style.height = cursor.style.width;
+    const tool = TOOLS.find((t) => t.id === state.brush.tool);
+    cursor.className = tool ? tool.kind : '';
+  }
+
+  function setMarker(on, u, v) {
+    settings.markerOn = !!on;
+    if (on && u !== undefined) settings.marker = [u, v];
+  }
+
+  function showProbe(hit) {
+    if (!hit) {
+      setMarker(false);
+      return;
+    }
+    const p = LAB.probe(sim, hit.x, hit.y);
+    if (!p) return;
+    setMarker(true, hit.u, hit.v);
+    const rockName = p.rock > 0.7 ? 'bedrock' : p.rock > 0.4 ? 'weathered rock' : 'loose soil';
+    const uu = (hit.u * 100).toFixed(1);
+    const vv = (hit.v * 100).toFixed(1);
+    updateProbe(
+      '<b>cell ' + p.x + ',' + p.y + '  (' + uu + '%, ' + vv + '%)</b>' +
+        '<div class="prow"><span class="pk">elevation</span><span>' + p.elevation.toFixed(4) + ' \u00b7 ' + (p.elevation * 1000).toFixed(0) + ' m</span></div>' +
+        '<div class="prow"><span class="pk">water depth</span><span>' + (p.water * 1000).toFixed(2) + ' mm' + (p.water > 0.0004 ? '' : ' (dry)') + '</span></div>' +
+        '<div class="prow"><span class="pk">suspended load</span><span>' + (p.sediment * 1000).toFixed(3) + ' mm</span></div>' +
+        '<div class="prow"><span class="pk">slope</span><span>' + p.slopeDeg.toFixed(1) + '\u00b0</span></div>' +
+        '<div class="prow"><span class="pk">flow</span><span>' + (p.speed > 1e-5 ? p.speed.toFixed(5) + ' @ ' + p.flowDir.toFixed(0) + '\u00b0' : 'still') + '</span></div>' +
+        '<div class="prow"><span class="pk">net \u0394 height</span><span>' + (p.delta < -1e-6 ? 'eroding ' : p.delta > 1e-6 ? 'building ' : 'steady ') + Math.abs(p.delta * 1000).toFixed(3) + ' mm</span></div>' +
+        '<div class="prow"><span class="pk">erodibility</span><span>' + p.rock.toFixed(2) + ' (' + rockName + ')</span></div>',
+    );
+  }
+
+  function paint(hit, scale) {
+    if (!hit || state.brush.tool === 'inspect') return;
+    LAB.applyBrush(sim, state.brush.tool, hit.x, hit.y, state.brush.radius, state.brush.strength * scale);
+  }
+
+  function segmentPaint(from, to) {
+    if (!to) return;
+    if (!from) {
+      paint(to, 0.5);
+      return;
+    }
+    const d = Math.hypot(to.x - from.x, to.y - from.y);
+    const steps = clampNum(Math.round(d / Math.max(1.2, state.brush.radius * 0.45)), 1, 26);
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps;
+      paint({ x: Math.round(from.x + (to.x - from.x) * t), y: Math.round(from.y + (to.y - from.y) * t) }, 0.42 / steps + 0.1);
+    }
+  }
+
+  stage.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.button > 2) return;
+    e.preventDefault();
+    resizeCanvas();
+    const { x, y } = local(e);
+    let mode;
+    if (pointerState.strokes.size >= 2) mode = 'gesture';
+    else if (e.button === 2) mode = 'orbit';
+    else if (e.button === 1) mode = 'pan';
+    else if (e.shiftKey) mode = 'pan';
+    else if (e.altKey) mode = 'orbit';
+    else mode = state.brush.tool === 'inspect' ? 'probeDown' : 'tool';
+
+    let hit = null;
+    if (mode === 'tool' || mode === 'probeDown') hit = hitTest(e);
+    pointerState.strokes.set(e.pointerId, { mode, x, y, hit });
+    try {
+      stage.setPointerCapture(e.pointerId);
+    } catch (err) {
+      void err;
+    }
+    if (pointerState.strokes.size === 2) {
+      const ids = [...pointerState.strokes.keys()];
+      const a = pointerState.strokes.get(ids[0]);
+      const b = pointerState.strokes.get(ids[1]);
+      for (const id of ids) pointerState.strokes.get(id).mode = 'gesture';
+      pointerState.gesture = { dist: Math.hypot(a.x - b.x, a.y - b.y), angle: Math.atan2(b.y - a.y, b.x - a.x) };
+      mode = 'gesture';
+    }
+    pointerState.stroke = true;
+    pointerState.mode = mode;
+    stage.className = mode === 'tool' ? '' : mode === 'probeDown' ? 'probe' : 'grabbing';
+
+    if (mode === 'tool') {
+      paint(hit, 0.5);
+      moveCursor(e, hit);
+    } else if (mode === 'probeDown') {
+      showProbe(hit);
+      moveCursor(e, hit);
+    }
+  });
+
+  stage.addEventListener('pointermove', (e) => {
+    const { x, y } = local(e);
+    const s = pointerState.strokes.get(e.pointerId);
+
+    if (!s) {
+      const hit = hitTest(e);
+      if (hit) {
+        showProbe(hit);
+        moveCursor(e, hit);
+      } else {
+        cursor.style.display = 'none';
+        setMarker(false);
+      }
+      return;
+    }
+
+    const dx = x - s.x;
+    const dy = y - s.y;
+    s.x = x;
+    s.y = y;
+
+    if (s.mode === 'orbit') {
+      cam.orbit(dx, dy);
+    } else if (s.mode === 'pan') {
+      cam.pan(dx, dy);
+    } else if (s.mode === 'gesture' && pointerState.gesture && pointerState.strokes.size === 2) {
+      const ids = [...pointerState.strokes.keys()];
+      const a = pointerState.strokes.get(ids[0]);
+      const b = pointerState.strokes.get(ids[1]);
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      if (pointerState.gesture.dist > 10) cam.zoom(clampNum(pointerState.gesture.dist / Math.max(10, d), 0.72, 1.38));
+      let da = ang - pointerState.gesture.angle;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      cam.orbit(da * 210, 0);
+      pointerState.gesture = { dist: d, angle: ang };
+    } else if (s.mode === 'tool' || s.mode === 'probeDown') {
+      const hit = hitTest(e);
+      if (s.mode === 'tool') {
+        segmentPaint(s.hit, hit);
+        s.hit = hit;
+      } else {
+        showProbe(hit);
+      }
+      moveCursor(e, hit);
+    }
+  });
+
+  function endPointer(e) {
+    const s = pointerState.strokes.get(e.pointerId);
+    if (!s && !pointerState.stroke) return;
+    try {
+      if (stage.hasPointerCapture && stage.hasPointerCapture(e.pointerId)) stage.releasePointerCapture(e.pointerId);
+    } catch (err) {
+      void err;
+    }
+    pointerState.strokes.delete(e.pointerId);
+    if (pointerState.strokes.size === 0) {
+      pointerState.stroke = false;
+      pointerState.mode = null;
+      pointerState.gesture = null;
+      stage.className = state.brush.tool === 'inspect' ? 'probe' : '';
+    }
+  }
+
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+  stage.addEventListener('pointerleave', (e) => {
+    if (!pointerState.stroke) {
+      cursor.style.display = 'none';
+      setMarker(false);
+    }
+    void e;
+  });
+
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.altKey) {
+      state.brush.radius = clampNum(state.brush.radius * (e.deltaY > 0 ? 0.9 : 1.11), 1, 40);
+      syncPanel();
+      return;
+    }
+    cam.zoom(e.deltaY > 0 ? 1.11 : 0.9);
+  }, { passive: false });
+
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+  });
+
+  window.addEventListener('orientationchange', () => {
+    setTimeout(resizeCanvas, 200);
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  start                                                              */
+/* ------------------------------------------------------------------ */
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => APP.start());
+else APP.start();})();
+</script>
+</body>
+</html>

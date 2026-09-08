@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Amber Protocol — Night Circuit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect fill='%230a0c09' width='16' height='16'/%3E%3Crect fill='%23f0a61a' x='4' y='4' width='8' height='8'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --carbon: #0a0c09;
+    --ink: #12150f;
+    --fog: #1c2118;
+    --paper: #d8c89a;
+    --paper-dim: #9a8c68;
+    --sodium: #f0a61a;
+    --sodium-hot: #ffd36a;
+    --brass: #8d7040;
+    --rust: #7a3a22;
+    --blood: #a32d2d;
+    --teal: #2f8f86;
+    --safe: #6fba6a;
+    --glass: rgba(10, 12, 8, 0.78);
+    --line: rgba(216, 200, 154, 0.18);
+    --hud: "OCR A", "Letter Gothic", "Lucida Console", "Courier New", monospace;
+    --display: "Copperplate Gothic Light", Copperplate, "Century Gothic", Futura, "Arial Narrow", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--carbon); color: var(--paper);
+    font-family: var(--display); overflow: hidden; touch-action: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  body.allow-select, body.allow-select * { -webkit-user-select: text; user-select: text; }
+  #app { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  #stage {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    display: block; background: #070806;
+  }
+  .grain {
+    pointer-events: none; position: absolute; inset: 0; opacity: .09; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.55'/></svg>");
+  }
+  .hud {
+    position: absolute; inset: 0; pointer-events: none;
+    display: grid; grid-template-rows: auto 1fr auto;
+  }
+  .hud > * { pointer-events: auto; }
+  #status {
+    justify-self: stretch; margin: 10px 12px 0;
+    display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+    padding: 7px 10px; background: var(--glass); border: 1px solid var(--line);
+    font-family: var(--hud); font-size: 11px; letter-spacing: .04em; color: var(--paper);
+    backdrop-filter: blur(6px);
+  }
+  #status b { color: var(--sodium); font-weight: 600; }
+  #status .sep { opacity: .35; }
+  #status[data-alert="1"] { border-color: rgba(240,166,26,.45); }
+  #status[data-alert="2"] { border-color: rgba(163,45,45,.7); color: #f0c8c8; }
+  .prompt {
+    pointer-events: none; align-self: end; justify-self: center; margin-bottom: 18px;
+    font-family: var(--hud); font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--sodium-hot); text-shadow: 0 0 12px rgba(240,166,26,.35);
+    min-height: 1.2em;
+  }
+  .dock {
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;
+    padding: 0 12px 12px; pointer-events: none;
+  }
+  .panel {
+    pointer-events: auto; background: var(--glass); border: 1px solid var(--line);
+    padding: 8px 10px; min-width: 148px; backdrop-filter: blur(6px);
+  }
+  .panel h3 {
+    margin: 0 0 6px; font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--paper-dim); font-weight: 500;
+  }
+  .obj { font-size: 13px; line-height: 1.35; color: var(--paper); }
+  .obj em { font-style: normal; color: var(--sodium); }
+  .gadgets { display: flex; gap: 6px; }
+  .gad {
+    pointer-events: auto; cursor: pointer; border: 1px solid var(--line); background: rgba(18,21,15,.85);
+    color: var(--paper); font-family: var(--hud); font-size: 10px; letter-spacing: .06em;
+    padding: 7px 8px; min-width: 72px; text-align: left;
+  }
+  .gad[data-on="1"] { border-color: var(--sodium); color: var(--sodium-hot); box-shadow: inset 0 0 0 1px rgba(240,166,26,.25); }
+  .gad small { display: block; opacity: .65; margin-top: 2px; }
+  .minimap-wrap { pointer-events: none; }
+  #minimap { display: block; width: 148px; height: 104px; background: #0b0d0a; border: 1px solid var(--line); }
+  .touch {
+    display: none; pointer-events: none; position: absolute; inset: 0;
+  }
+  .stick, .tbtn {
+    pointer-events: auto; position: absolute; border: 1px solid var(--line); background: rgba(10,12,8,.45);
+  }
+  #stickBase {
+    left: 18px; bottom: 22px; width: 110px; height: 110px; border-radius: 50%;
+  }
+  #stickKnob {
+    left: 45px; bottom: 49px; width: 56px; height: 56px; border-radius: 50%;
+    background: rgba(240,166,26,.22); border-color: rgba(240,166,26,.45);
+  }
+  .tbtn {
+    right: 16px; width: 64px; height: 64px; border-radius: 50%;
+    font-family: var(--hud); font-size: 11px; color: var(--paper); letter-spacing: .08em;
+  }
+  #btnInteract { bottom: 92px; }
+  #btnRun { bottom: 22px; right: 88px; }
+  #btnUse { bottom: 22px; }
+  #btnPause {
+    top: 56px; right: 12px; width: auto; height: auto; border-radius: 0; padding: 6px 10px;
+  }
+  .overlay {
+    position: absolute; inset: 0; display: none; align-items: stretch; justify-content: center;
+    background: rgba(6,7,5,.72); overflow: auto; padding: 24px 16px;
+  }
+  .overlay.show { display: flex; }
+  .sheet {
+    width: min(760px, 100%); margin: auto; background: linear-gradient(180deg, #171910, #10130d);
+    border: 1px solid rgba(216,200,154,.22); box-shadow: 0 24px 80px rgba(0,0,0,.55);
+    padding: 28px 28px 22px; position: relative;
+  }
+  .sheet:before {
+    content: ""; position: absolute; inset: 8px; border: 1px solid rgba(240,166,26,.12); pointer-events: none;
+  }
+  .kicker {
+    font-family: var(--hud); font-size: 11px; letter-spacing: .28em; text-transform: uppercase;
+    color: var(--sodium); margin: 0 0 8px;
+  }
+  h1 { font-size: clamp(28px, 6vw, 46px); margin: 0 0 6px; letter-spacing: .08em; font-weight: 500; }
+  .lede { color: var(--paper-dim); line-height: 1.5; margin: 0 0 18px; max-width: 54ch; }
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0 20px; }
+  .meta div { border-top: 1px solid var(--line); padding-top: 8px; }
+  .meta span { display: block; font-family: var(--hud); font-size: 10px; letter-spacing: .16em; color: var(--paper-dim); text-transform: uppercase; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button, .filebtn {
+    appearance: none; border: 1px solid rgba(216,200,154,.28); background: #1b1f16; color: var(--paper);
+    font-family: var(--display); letter-spacing: .08em; text-transform: uppercase; font-size: 12px;
+    padding: 10px 14px; cursor: pointer;
+  }
+  button.primary { background: #2a2414; border-color: var(--sodium); color: var(--sodium-hot); }
+  button:hover, .filebtn:hover { border-color: var(--sodium); }
+  button:disabled { opacity: .4; cursor: default; }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--paper-dim); }
+  input, select, textarea {
+    background: #0d0f0b; color: var(--paper); border: 1px solid var(--line); padding: 8px; font-family: var(--hud);
+    font-size: 12px; min-width: 0;
+  }
+  textarea { width: 100%; min-height: 90px; resize: vertical; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .hist { font-family: var(--hud); font-size: 11px; line-height: 1.55; max-height: 140px; overflow: auto; color: var(--paper-dim); }
+  .diagbar {
+    display: none; position: absolute; left: 12px; top: 58px; gap: 6px; flex-wrap: wrap; max-width: 52%;
+  }
+  .diagbar.show { display: flex; }
+  .diagbar label {
+    pointer-events: auto; font-family: var(--hud); font-size: 10px; letter-spacing: .04em;
+    background: rgba(10,12,8,.75); border: 1px solid var(--line); padding: 3px 6px; color: var(--paper-dim);
+  }
+  .toast {
+    position: absolute; left: 50%; top: 58px; transform: translateX(-50%);
+    font-family: var(--hud); font-size: 12px; letter-spacing: .1em; color: var(--sodium-hot);
+    text-shadow: 0 2px 12px #000; pointer-events: none; opacity: 0; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+  .err { color: #e07a6a; font-family: var(--hud); font-size: 12px; min-height: 1em; }
+  @media (max-width: 820px) {
+    .touch { display: block; }
+    #status { font-size: 10px; margin: 6px; padding: 6px; }
+    .panel { min-width: 0; }
+    .dock { padding-bottom: 138px; }
+    .cols { grid-template-columns: 1fr; }
+    .diagbar { max-width: 92%; top: auto; bottom: 150px; }
+  }
+  @media (max-width: 420px) {
+    .sheet { padding: 18px 14px; }
+    h1 { letter-spacing: .04em; }
+    #minimap { width: 112px; height: 80px; }
+    .gad { min-width: 58px; padding: 6px; }
+  }
+  body.reduced-motion * { transition: none !important; animation: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="stage" aria-label="Mission viewport"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="hud">
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="toast" class="toast" role="status"></div>
+    <div class="diagbar" id="diagbar">
+      <label><input type="checkbox" data-diag="nav" /> Nav</label>
+      <label><input type="checkbox" data-diag="ai" /> Guard AI</label>
+      <label><input type="checkbox" data-diag="los" /> Vision rays</label>
+      <label><input type="checkbox" data-diag="snd" /> Sound</label>
+      <label><input type="checkbox" data-diag="lkp" /> Last known</label>
+      <label><input type="checkbox" data-diag="col" /> Collision</label>
+      <label><input type="checkbox" data-diag="perf" /> Timing</label>
+    </div>
+    <div class="prompt" id="prompt"></div>
+    <div class="dock">
+      <div>
+        <div class="panel">
+          <h3>Objective</h3>
+          <div class="obj" id="objtext">Acquire the ledger and extract.</div>
+        </div>
+        <div class="minimap-wrap" style="margin-top:8px">
+          <canvas id="minimap" width="148" height="104" aria-label="Minimap"></canvas>
+        </div>
+      </div>
+      <div>
+        <div class="gadgets" id="gadgets"></div>
+      </div>
+    </div>
+  </div>
+  <div class="touch" id="touch">
+    <div class="stick" id="stickBase"></div>
+    <div class="stick" id="stickKnob"></div>
+    <button class="tbtn" id="btnInteract" type="button" aria-label="Interact">USE</button>
+    <button class="tbtn" id="btnRun" type="button" aria-label="Run">RUN</button>
+    <button class="tbtn" id="btnUse" type="button" aria-label="Use gadget">GAD</button>
+    <button class="tbtn" id="btnPause" type="button" aria-label="Pause">PAUSE</button>
+  </div>
+  <div id="briefing" class="overlay show" role="dialog" aria-label="Mission briefing">
+    <div class="sheet">
+      <p class="kicker">Classified // Night Circuit</p>
+      <h1>AMBER PROTOCOL</h1>
+      <p class="lede">After-hours extraction inside a sodium-lit annex. Steal the ledger, stay unlisted, walk out the way you came.</p>
+      <div class="meta">
+        <div><span>Site</span><strong id="briefSite">Meridian Annex</strong></div>
+        <div><span>Objective</span><strong>Ledger → Extraction</strong></div>
+        <div><span>Rules</span><strong>No lethal force. Noise is a trail.</strong></div>
+      </div>
+      <div class="cols">
+        <div>
+          <label class="field">Mission preset
+            <select id="preset" aria-label="Mission preset">
+              <option value="training">Training Wing — compact drill</option>
+              <option value="nightvault" selected>Night Vault — default annex</option>
+              <option value="blacksite">Black Site — dense security</option>
+              <option value="procedural">Procedural — seed assembled</option>
+            </select>
+          </label>
+          <div class="row">
+            <label class="field">Seed
+              <input id="seed" aria-label="Mission seed" value="1847" />
+            </label>
+            <label class="field">Difficulty
+              <select id="difficulty" aria-label="Difficulty">
+                <option value="easy">Easy — thin patrols</option>
+                <option value="normal" selected>Normal</option>
+                <option value="hard">Hard — long sight, fast radio</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="field">Loadout
+            <div id="briefLoad">Coin · Smoke · EMP</div>
+          </label>
+          <p class="lede" id="briefCopy" style="margin-top:10px">Two floors of habit: a lobby, a watched hall, a locked vault. Terminals lie. Cameras do not.</p>
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" id="btnBegin" type="button" aria-label="Begin infiltration">Begin infiltration</button>
+        <button id="btnSettings" type="button" aria-label="Open settings">Settings</button>
+        <button id="btnHistory" type="button" aria-label="Show run history">Run ledger</button>
+      </div>
+      <p class="kicker" style="margin-top:18px">Move WASD or hold-click · Run Shift · Use E · Gadgets 1–3 · Throw F / right-click · Pause Esc</p>
+    </div>
+  </div>
+  <div id="pause" class="overlay" role="dialog" aria-label="Paused">
+    <div class="sheet">
+      <p class="kicker">Suspended</p>
+      <h1>HOLD</h1>
+      <p class="lede">The annex does not wait politely. Your last footfall still exists.</p>
+      <div class="row">
+        <button class="primary" id="btnResume" type="button" aria-label="Resume mission">Resume</button>
+        <button id="btnRestart" type="button" aria-label="Restart mission">Restart</button>
+        <button id="btnNew" type="button" aria-label="New mission">New mission</button>
+        <button id="btnPauseSettings" type="button" aria-label="Open settings from pause">Settings</button>
+        <button id="btnExport" type="button" aria-label="Export run JSON">Export JSON</button>
+        <label class="filebtn" aria-label="Import run JSON">Import JSON
+          <input id="importFile" type="file" accept="application/json" hidden />
+        </label>
+      </div>
+      <div class="err" id="pauseErr"></div>
+      <textarea id="ioBox" aria-label="Mission JSON" placeholder="Imported or exported mission / replay JSON appears here."></textarea>
+    </div>
+  </div>
+  <div id="settings" class="overlay" role="dialog" aria-label="Settings">
+    <div class="sheet">
+      <p class="kicker">House rules</p>
+      <h1>SETTINGS</h1>
+      <div class="cols">
+        <div>
+          <label class="field">Master volume <input id="volMaster" type="range" min="0" max="100" value="70" aria-label="Master volume" /></label>
+          <label class="field">Effects volume <input id="volFx" type="range" min="0" max="100" value="85" aria-label="Effects volume" /></label>
+          <label class="field"><input id="reducedMotion" type="checkbox" /> Reduced motion / flash</label>
+          <label class="field"><input id="diagToggle" type="checkbox" /> Show diagnostic overlays</label>
+        </div>
+        <div>
+          <p class="kicker">Control remap — click, then press a key</p>
+          <div id="remap"></div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" id="btnSettingsClose" type="button" aria-label="Close settings">Done</button>
+        <button id="btnResetBinds" type="button" aria-label="Reset controls">Reset controls</button>
+      </div>
+    </div>
+  </div>
+  <div id="end" class="overlay" role="dialog" aria-label="Mission result">
+    <div class="sheet">
+      <p class="kicker" id="endKicker">After-action</p>
+      <h1 id="endTitle">EXTRACTED</h1>
+      <p class="lede" id="endLede"></p>
+      <div class="meta" id="endMeta"></div>
+      <div class="row">
+        <button class="primary" id="btnEndRestart" type="button" aria-label="Restart after result">Restart</button>
+        <button id="btnEndNew" type="button" aria-label="New mission after result">New mission</button>
+        <button id="btnEndExport" type="button" aria-label="Export result JSON">Export run</button>
+      </div>
+      <div class="hist" id="endHist"></div>
+    </div>
+  </div>
+  <div id="history" class="overlay" role="dialog" aria-label="Run history">
+    <div class="sheet">
+      <p class="kicker">Local ledger</p>
+      <h1>RUNS</h1>
+      <div class="hist" id="histBody">No recorded runs.</div>
+      <div class="row"><button class="primary" id="btnHistClose" type="button" aria-label="Close run history">Close</button></div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  const TILE = 28;
+  const STORAGE_RUNS = "amber-protocol-runs-v1";
+  const STORAGE_SET = "amber-protocol-settings-v1";
+  const GSTATES = ["patrol", "idle", "suspicious", "investigate", "pursue", "search", "alarm", "return"];
+
+  const DEFAULT_BINDS = {
+    up: "KeyW", down: "KeyS", left: "KeyA", right: "KeyD",
+    up2: "ArrowUp", down2: "ArrowDown", left2: "ArrowLeft", right2: "ArrowRight",
+    run: "ShiftLeft", interact: "KeyE", use: "KeyF",
+    g1: "Digit1", g2: "Digit2", g3: "Digit3", pause: "Escape", diag: "Backquote"
+  };
+
+  const PRESETS = {
+    training: { name: "Training Wing", site: "Annex drill floor", copy: "A short loop: lobby, watched hall, locked closet. Built so the ledger is always reachable." },
+    nightvault: { name: "Night Vault", site: "Meridian Annex", copy: "Default night: rooms, a restricted spine, cameras, and a vault that only opens for a terminal or a pick." },
+    blacksite: { name: "Black Site", site: "Station Kite", copy: "Dense patrols, stacked cameras, and a longer walk home." },
+    procedural: { name: "Assembled Night", site: "Unknown folio", copy: "Rooms grown from the seed, then repaired until loot and exit share a walkable graph." }
+  };
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function hashSeed(s) {
+    if (typeof s === "number" && Number.isFinite(s)) return s >>> 0;
+    const str = String(s || "0");
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+    return h >>> 0;
+  }
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const dist = (ax, ay, bx, by) => Math.hypot(bx - ax, by - ay);
+  const angNorm = a => { while (a <= -Math.PI) a += Math.PI * 2; while (a > Math.PI) a -= Math.PI * 2; return a; };
+  const angLerp = (a, b, t) => a + angNorm(b - a) * t;
+  const nowMs = () => performance.now();
+
+  let settings = {
+    master: 0.7, fx: 0.85, reduced: false, diagUi: false,
+    binds: Object.assign({}, DEFAULT_BINDS)
+  };
+  try {
+    const raw = localStorage.getItem(STORAGE_SET);
+    if (raw) {
+      const o = JSON.parse(raw);
+      settings.master = clamp(+o.master || 0.7, 0, 1);
+      settings.fx = clamp(+o.fx || 0.85, 0, 1);
+      settings.reduced = !!o.reduced;
+      if (o.binds) settings.binds = Object.assign({}, DEFAULT_BINDS, o.binds);
+    }
+  } catch (e) {}
+
+  function saveSettings() {
+    try { localStorage.setItem(STORAGE_SET, JSON.stringify({ master: settings.master, fx: settings.fx, reduced: settings.reduced, binds: settings.binds })); } catch (e) {}
+  }
+
+  const el = id => document.getElementById(id);
+  const canvas = el("stage");
+  const ctx = canvas.getContext("2d");
+  const mini = el("minimap");
+  const mctx = mini.getContext("2d");
+
+  const input = {
+    keys: Object.create(null),
+    pointer: { x: 0, y: 0, down: false, id: null, move: false },
+    stick: { x: 0, y: 0, active: false },
+    runHold: false,
+    interactTap: false,
+    useTap: false,
+    aimX: 0, aimY: 0,
+    focused: true
+  };
+
+  const diag = { nav: false, ai: false, los: false, snd: false, lkp: false, col: false, perf: false };
+  const perf = { fps: 60, frame: 0, acc: 0, last: nowMs(), ms: 0 };
+
+  let audio = { ctx: null, master: null, ready: false, drone: null };
+  let remapWait = null;
+  let toastT = 0;
+  let ui = { screen: "briefing" };
+
+  const state = {
+    mode: "briefing",
+    paused: false,
+    seed: 1847,
+    seedHash: hashSeed(1847),
+    preset: "nightvault",
+    difficulty: "normal",
+    time: 0,
+    alert: 0,
+    objective: "infiltrate",
+    player: null,
+    map: null,
+    guards: [],
+    cameras: [],
+    doors: [],
+    terminals: [],
+    loot: [],
+    covers: [],
+    sounds: [],
+    smokes: [],
+    particles: [],
+    lights: [],
+    alarms: [],
+    lastKnown: null,
+    caught: false,
+    won: false,
+    summary: null,
+    replay: { frames: [], recording: true, playing: false, i: 0 },
+    stats: { detections: 0, alarms: 0, loot: 0, noiseEvents: 0 },
+    interactLock: 0,
+    shake: 0,
+    rng: mulberry32(1847),
+    pathCache: new Map(),
+    debugHits: []
+  };
+
+  function diffMods(d) {
+    if (d === "easy") return { view: 0.78, fov: 0.82, react: 1.35, hear: 1.18, guards: -1, charges: 1, cam: 0.8, catch: 0.9 };
+    if (d === "hard") return { view: 1.22, fov: 1.12, react: 0.72, hear: 0.82, guards: 1, charges: 0, cam: 1.25, catch: 1.15 };
+    return { view: 1, fov: 1, react: 1, hear: 1, guards: 0, charges: 0, cam: 1, catch: 1 };
+  }
+
+  function emptyGrid(w, h, fill) {
+    const g = new Array(h);
+    for (let y = 0; y < h; y++) {
+      g[y] = new Array(w);
+      for (let x = 0; x < w; x++) g[y][x] = fill;
+    }
+    return g;
+  }
+
+  function paintRoom(grid, r, t) {
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      if (grid[y] && grid[y][x] !== undefined) grid[y][x] = t;
+    }
+  }
+  function carveHall(grid, x0, y0, x1, y1, t) {
+    let x = x0, y = y0;
+    while (x !== x1) { if (grid[y]) grid[y][x] = t; x += x < x1 ? 1 : -1; }
+    while (y !== y1) { if (grid[y]) grid[y][x] = t; y += y < y1 ? 1 : -1; }
+    if (grid[y]) grid[y][x] = t;
+  }
+
+  function addDoor(doors, x, y, locked, axis) {
+    doors.push({ x, y, open: false, locked: !!locked, axis: axis || "h", anim: 0, electronic: !!locked, noise: 0 });
+  }
+
+  function roomCenter(r) { return { x: (r.x + r.w / 2) * TILE, y: (r.y + r.h / 2) * TILE }; }
+
+  function buildFromRooms(spec) {
+    const w = spec.w, h = spec.h;
+    const grid = emptyGrid(w, h, 0);
+    const doors = [];
+    const restricted = spec.restricted || [];
+    spec.rooms.forEach(r => paintRoom(grid, r, r.zone === "restricted" ? 2 : 1));
+    (spec.halls || []).forEach(hll => carveHall(grid, hll[0], hll[1], hll[2], hll[3], hll[4] || 1));
+    restricted.forEach(r => paintRoom(grid, r, 2));
+    for (let x = 0; x < w; x++) { grid[0][x] = 0; grid[h - 1][x] = 0; }
+    for (let y = 0; y < h; y++) { grid[y][0] = 0; grid[y][w - 1] = 0; }
+    (spec.doors || []).forEach(d => {
+      grid[d.y][d.x] = d.zone === "restricted" ? 2 : 1;
+      addDoor(doors, d.x, d.y, d.locked, d.axis);
+    });
+    (spec.cover || []).forEach(c => { if (grid[c[1]]) grid[c[1]][c[0]] = 3; });
+    return { w, h, grid, doors, rooms: spec.rooms, entry: spec.entry, extract: spec.extract, loot: spec.loot, terminals: spec.terminals, cameras: spec.cameras, patrols: spec.patrols, lights: spec.lights || [], alarms: spec.alarms || [] };
+  }
+
+  function trainingSpec() {
+    return {
+      w: 26, h: 16,
+      rooms: [
+        { x: 1, y: 1, w: 8, h: 7, name: "Lobby", zone: "public" },
+        { x: 12, y: 1, w: 6, h: 6, name: "Hall", zone: "public" },
+        { x: 19, y: 1, w: 6, h: 6, name: "Security", zone: "public" },
+        { x: 12, y: 9, w: 6, h: 6, name: "Archive", zone: "restricted" },
+        { x: 19, y: 9, w: 6, h: 6, name: "Closet", zone: "restricted" }
+      ],
+      halls: [[9, 4, 11, 4, 1], [18, 4, 18, 4, 1], [14, 7, 14, 8, 2], [18, 12, 18, 12, 2]],
+      doors: [
+        { x: 9, y: 4, axis: "v" }, { x: 18, y: 4, axis: "v" },
+        { x: 14, y: 8, axis: "h" }, { x: 18, y: 12, axis: "v", locked: true, zone: "restricted" }
+      ],
+      cover: [[3, 3], [6, 5], [14, 3], [21, 3], [13, 11], [21, 11]],
+      entry: { x: 3, y: 6 }, extract: { x: 2, y: 2 },
+      loot: [{ x: 22, y: 12, name: "Ledger folio", taken: false }],
+      terminals: [{ x: 22, y: 3, kind: "unlock", done: false }],
+      cameras: [{ x: 20, y: 1, a0: 0.4, a1: 2.4, facing: 1.2 }],
+      patrols: [
+        [{ x: 15, y: 4 }, { x: 10, y: 4 }, { x: 15, y: 3 }, { x: 12, y: 4 }],
+        [{ x: 21, y: 4 }, { x: 15, y: 5 }, { x: 14, y: 10 }, { x: 15, y: 5 }]
+      ],
+      lights: [[3, 2], [14, 3], [21, 2], [14, 11], [22, 11]],
+      alarms: [{ x: 20, y: 5 }]
+    };
+  }
+
+  function nightVaultSpec() {
+    return {
+      w: 36, h: 22,
+      rooms: [
+        { x: 1, y: 1, w: 9, h: 8, name: "Reception", zone: "public" },
+        { x: 13, y: 1, w: 8, h: 6, name: "West Hall", zone: "public" },
+        { x: 24, y: 1, w: 11, h: 7, name: "Records", zone: "public" },
+        { x: 1, y: 12, w: 10, h: 9, name: "Service", zone: "public" },
+        { x: 14, y: 10, w: 8, h: 6, name: "Spine", zone: "restricted" },
+        { x: 25, y: 11, w: 10, h: 10, name: "Vault", zone: "restricted" },
+        { x: 14, y: 17, w: 8, h: 4, name: "Watch", zone: "restricted" }
+      ],
+      halls: [[10, 4, 12, 4, 1], [21, 4, 23, 4, 1], [5, 9, 5, 11, 1], [17, 7, 17, 9, 2], [22, 13, 24, 13, 2], [17, 16, 17, 16, 2]],
+      doors: [
+        { x: 10, y: 4, axis: "v" }, { x: 21, y: 4, axis: "v" }, { x: 5, y: 10, axis: "h" },
+        { x: 17, y: 8, axis: "h" }, { x: 22, y: 13, axis: "v", locked: true, zone: "restricted" },
+        { x: 17, y: 16, axis: "h" }
+      ],
+      cover: [[3, 3], [7, 6], [15, 3], [18, 4], [27, 3], [31, 5], [4, 15], [8, 17], [16, 12], [28, 14], [31, 18]],
+      entry: { x: 3, y: 7 }, extract: { x: 2, y: 2 },
+      loot: [{ x: 31, y: 16, name: "Amber ledger", taken: false }],
+      terminals: [{ x: 30, y: 3, kind: "unlock", done: false }, { x: 16, y: 18, kind: "cameras", done: false }],
+      cameras: [
+        { x: 26, y: 1, a0: 0.6, a1: 2.5, facing: 1.4 },
+        { x: 25, y: 11, a0: -0.4, a1: 1.6, facing: 0.5 },
+        { x: 14, y: 17, a0: -1.2, a1: 0.8, facing: -0.2 }
+      ],
+      patrols: [
+        [{ x: 4, y: 4 }, { x: 11, y: 4 }, { x: 16, y: 4 }, { x: 11, y: 4 }],
+        [{ x: 28, y: 4 }, { x: 22, y: 4 }, { x: 17, y: 6 }, { x: 22, y: 4 }],
+        [{ x: 4, y: 15 }, { x: 8, y: 16 }, { x: 5, y: 12 }],
+        [{ x: 16, y: 12 }, { x: 20, y: 13 }, { x: 16, y: 18 }, { x: 20, y: 13 }]
+      ],
+      lights: [[3, 2], [16, 3], [28, 3], [4, 14], [17, 12], [29, 14], [17, 18]],
+      alarms: [{ x: 27, y: 5 }, { x: 16, y: 11 }]
+    };
+  }
+
+  function blackSiteSpec() {
+    return {
+      w: 40, h: 24,
+      rooms: [
+        { x: 1, y: 1, w: 8, h: 7, name: "Airlock", zone: "public" },
+        { x: 12, y: 1, w: 7, h: 6, name: "Checkpoint", zone: "public" },
+        { x: 22, y: 1, w: 8, h: 6, name: "Office", zone: "public" },
+        { x: 32, y: 1, w: 7, h: 8, name: "Comms", zone: "public" },
+        { x: 1, y: 11, w: 9, h: 7, name: "Locker", zone: "public" },
+        { x: 13, y: 10, w: 8, h: 6, name: "Red hall", zone: "restricted" },
+        { x: 24, y: 10, w: 7, h: 6, name: "Lab", zone: "restricted" },
+        { x: 33, y: 12, w: 6, h: 10, name: "Cage", zone: "restricted" },
+        { x: 13, y: 18, w: 16, h: 5, name: "Lower", zone: "restricted" }
+      ],
+      halls: [[9, 4, 11, 4, 1], [19, 3, 21, 3, 1], [30, 4, 31, 4, 1], [5, 8, 5, 10, 1], [16, 7, 16, 9, 2], [21, 13, 23, 13, 2], [31, 13, 32, 13, 2], [20, 16, 20, 17, 2]],
+      doors: [
+        { x: 9, y: 4, axis: "v" }, { x: 19, y: 3, axis: "v" }, { x: 30, y: 4, axis: "v" },
+        { x: 5, y: 9, axis: "h" }, { x: 16, y: 8, axis: "h" },
+        { x: 21, y: 13, axis: "v", locked: true, zone: "restricted" },
+        { x: 31, y: 13, axis: "v", locked: true, zone: "restricted" },
+        { x: 20, y: 17, axis: "h" }
+      ],
+      cover: [[3, 3], [6, 5], [14, 3], [24, 3], [34, 4], [4, 13], [15, 12], [26, 12], [35, 15], [16, 20], [28, 20]],
+      entry: { x: 3, y: 6 }, extract: { x: 2, y: 2 },
+      loot: [{ x: 36, y: 18, name: "Kite dossier", taken: false }],
+      terminals: [{ x: 35, y: 3, kind: "unlock", done: false }, { x: 26, y: 12, kind: "cameras", done: false }, { x: 15, y: 20, kind: "alarm", done: false }],
+      cameras: [
+        { x: 13, y: 1, a0: 0.3, a1: 2.2, facing: 1 },
+        { x: 23, y: 1, a0: 0.4, a1: 2.4, facing: 1.3 },
+        { x: 24, y: 10, a0: -0.2, a1: 1.8, facing: 0.7 },
+        { x: 33, y: 12, a0: -1, a1: 1.2, facing: 0.2 }
+      ],
+      patrols: [
+        [{ x: 4, y: 3 }, { x: 10, y: 4 }, { x: 14, y: 4 }],
+        [{ x: 24, y: 4 }, { x: 28, y: 4 }, { x: 33, y: 5 }],
+        [{ x: 4, y: 13 }, { x: 8, y: 14 }, { x: 5, y: 11 }],
+        [{ x: 15, y: 12 }, { x: 20, y: 13 }, { x: 16, y: 19 }],
+        [{ x: 26, y: 13 }, { x: 30, y: 14 }, { x: 26, y: 20 }],
+        [{ x: 35, y: 15 }, { x: 35, y: 20 }, { x: 34, y: 14 }]
+      ],
+      lights: [[3, 2], [14, 3], [25, 3], [34, 3], [4, 13], [16, 12], [26, 12], [35, 16], [20, 20]],
+      alarms: [{ x: 34, y: 6 }, { x: 16, y: 11 }, { x: 26, y: 19 }]
+    };
+  }
+
+  function proceduralSpec(rng) {
+    const w = 34, h = 22;
+    const rooms = [];
+    const tries = 40;
+    for (let i = 0; i < tries && rooms.length < 7; i++) {
+      const rw = 5 + (rng() * 6 | 0), rh = 4 + (rng() * 5 | 0);
+      const rx = 1 + (rng() * (w - rw - 2) | 0), ry = 1 + (rng() * (h - rh - 2) | 0);
+      const cand = { x: rx, y: ry, w: rw, h: rh, name: "R" + rooms.length, zone: rooms.length >= 4 ? "restricted" : "public" };
+      if (rooms.some(r => !(cand.x + cand.w + 1 < r.x || r.x + r.w + 1 < cand.x || cand.y + cand.h + 1 < r.y || r.y + r.h + 1 < cand.y))) continue;
+      rooms.push(cand);
+    }
+    if (rooms.length < 4) return nightVaultSpec();
+    rooms.sort((a, b) => a.x - b.x || a.y - b.y);
+    const halls = [];
+    const doors = [];
+    function centerT(r) { return { x: r.x + (r.w >> 1), y: r.y + (r.h >> 1) }; }
+    for (let i = 1; i < rooms.length; i++) {
+      const a = centerT(rooms[i - 1]), b = centerT(rooms[i]);
+      halls.push([a.x, a.y, b.x, a.y, rooms[i].zone === "restricted" ? 2 : 1]);
+      halls.push([b.x, a.y, b.x, b.y, rooms[i].zone === "restricted" ? 2 : 1]);
+    }
+    if (rooms.length > 3) {
+      const a = centerT(rooms[0]), b = centerT(rooms[rooms.length - 1]);
+      halls.push([a.x, a.y, a.x, b.y, 1]);
+      halls.push([a.x, b.y, b.x, b.y, rooms[rooms.length - 1].zone === "restricted" ? 2 : 1]);
+    }
+    rooms.forEach((r, i) => {
+      if (i === 0) return;
+      const prev = rooms[i - 1];
+      const x = r.x < prev.x ? r.x : prev.x + prev.w;
+      const y = clamp((Math.min(r.y + r.h, prev.y + prev.h) + Math.max(r.y, prev.y)) >> 1, 1, h - 2);
+      const dx = clamp(x, 1, w - 2), dy = clamp(y, 1, h - 2);
+      doors.push({ x: dx, y: dy, axis: "v", locked: r.zone === "restricted" && i === rooms.length - 1, zone: r.zone });
+    });
+    const first = rooms[0], last = rooms[rooms.length - 1];
+    const cover = rooms.map(r => [r.x + 1, r.y + 1]);
+    const patrols = rooms.map(r => {
+      const c = centerT(r);
+      return [{ x: c.x, y: c.y }, { x: r.x + 1, y: c.y }, { x: r.x + r.w - 2, y: c.y }];
+    });
+    return {
+      w, h, rooms, halls, doors, cover,
+      entry: { x: first.x + 1, y: first.y + first.h - 2 },
+      extract: { x: first.x + 1, y: first.y + 1 },
+      loot: [{ x: last.x + last.w - 2, y: last.y + last.h - 2, name: "Seeded folio", taken: false }],
+      terminals: [{ x: rooms[Math.min(2, rooms.length - 1)].x + 2, y: rooms[Math.min(2, rooms.length - 1)].y + 1, kind: "unlock", done: false }],
+      cameras: rooms.filter(r => r.zone === "restricted").slice(0, 3).map(r => ({ x: r.x + r.w - 2, y: r.y, a0: 0.2, a1: 2.4, facing: 1.2 })),
+      patrols, lights: rooms.map(r => [r.x + 2, r.y + 1]),
+      alarms: [{ x: last.x + 1, y: last.y + 1 }]
+    };
+  }
+
+  function walkableCell(map, x, y, ignoreDoors) {
+    if (x < 0 || y < 0 || x >= map.w || y >= map.h) return false;
+    const t = map.grid[y][x];
+    if (t !== 1 && t !== 2) return false;
+    if (!ignoreDoors) {
+      const d = doorAt(map, x, y);
+      if (d && !d.open) return false;
+    }
+    return true;
+  }
+
+  function doorAt(map, x, y) {
+    for (let i = 0; i < map.doors.length; i++) {
+      const d = map.doors[i];
+      if (d.x === x && d.y === y) return d;
+    }
+    return null;
+  }
+
+  function flood(map, sx, sy) {
+    const seen = emptyGrid(map.w, map.h, 0);
+    const q = [[sx, sy]];
+    seen[sy][sx] = 1;
+    let n = 0;
+    while (q.length) {
+      const [x, y] = q.pop();
+      n++;
+      const nbs = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
+      for (let i = 0; i < 4; i++) {
+        const nx = nbs[i][0], ny = nbs[i][1];
+        if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h || seen[ny][nx]) continue;
+        const t = map.grid[ny][nx];
+        if (t === 1 || t === 2) { seen[ny][nx] = 1; q.push([nx, ny]); }
+      }
+    }
+    return { seen, n };
+  }
+
+  function validateMap(spec) {
+    const built = buildFromRooms(spec);
+    const f = flood(built, spec.entry.x, spec.entry.y);
+    const lootOk = spec.loot.every(l => f.seen[l.y] && f.seen[l.y][l.x]);
+    const extOk = f.seen[spec.extract.y] && f.seen[spec.extract.y][spec.extract.x];
+    return lootOk && extOk && f.n > 20;
+  }
+
+  function astar(map, x0, y0, x1, y1, canOpen) {
+    x0 |= 0; y0 |= 0; x1 |= 0; y1 |= 0;
+    if (!walkableCell(map, x1, y1, true)) return null;
+    const key = x0 + "," + y0 + ">" + x1 + "," + y1 + (canOpen ? "o" : "c");
+    const hit = state.pathCache.get(key);
+    if (hit && state.time - hit.t < 0.25) return hit.path;
+    const w = map.w, h = map.h;
+    const open = [[x0, y0, 0, 0, null]];
+    const gsc = emptyGrid(w, h, 1e9);
+    const closed = emptyGrid(w, h, 0);
+    gsc[y0][x0] = 0;
+    let path = null;
+    while (open.length) {
+      let bi = 0;
+      for (let i = 1; i < open.length; i++) if (open[i][3] < open[bi][3]) bi = i;
+      const cur = open.splice(bi, 1)[0];
+      const x = cur[0], y = cur[1];
+      if (closed[y][x]) continue;
+      closed[y][x] = 1;
+      if (x === x1 && y === y1) {
+        const pts = [];
+        let n = cur;
+        while (n) { pts.push({ x: n[0], y: n[1] }); n = n[4]; }
+        pts.reverse();
+        path = pts;
+        break;
+      }
+      const nbs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (let i = 0; i < 4; i++) {
+        const nx = x + nbs[i][0], ny = y + nbs[i][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || closed[ny][nx]) continue;
+        const t = map.grid[ny][nx];
+        if (t !== 1 && t !== 2) continue;
+        const d = doorAt(map, nx, ny);
+        if (d && !d.open && (!canOpen || d.locked)) continue;
+        const ng = cur[2] + 1;
+        if (ng >= gsc[ny][nx]) continue;
+        gsc[ny][nx] = ng;
+        const f = ng + Math.abs(nx - x1) + Math.abs(ny - y1);
+        open.push([nx, ny, ng, f, cur]);
+      }
+    }
+    state.pathCache.set(key, { t: state.time, path });
+    if (state.pathCache.size > 220) {
+      const first = state.pathCache.keys().next().value;
+      state.pathCache.delete(first);
+    }
+    return path;
+  }
+
+  function tileAtWorld(map, x, y) {
+    return { x: Math.floor(x / TILE), y: Math.floor(y / TILE) };
+  }
+
+  function losBlocked(map, x0, y0, x1, y1, smokeBlocks) {
+    const steps = Math.max(2, Math.ceil(dist(x0, y0, x1, y1) / 6));
+    let walls = 0;
+    const hits = [];
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const x = lerp(x0, x1, t), y = lerp(y0, y1, t);
+      const cx = Math.floor(x / TILE), cy = Math.floor(y / TILE);
+      if (cx < 0 || cy < 0 || cx >= map.w || cy >= map.h) { walls++; hits.push({ x, y, kind: "edge" }); break; }
+      const cell = map.grid[cy][cx];
+      if (cell === 0 || cell === 3) { walls++; hits.push({ x, y, kind: "solid" }); break; }
+      const d = doorAt(map, cx, cy);
+      if (d && !d.open) { walls++; hits.push({ x, y, kind: "door" }); break; }
+      if (smokeBlocks && inSmoke(x, y)) { walls++; hits.push({ x, y, kind: "smoke" }); break; }
+    }
+    return { blocked: walls > 0, hits, walls };
+  }
+
+  function inSmoke(x, y) {
+    for (let i = 0; i < state.smokes.length; i++) {
+      const s = state.smokes[i];
+      if (dist(x, y, s.x, s.y) < s.r) return true;
+    }
+    return false;
+  }
+
+  function emitSound(x, y, intensity, kind) {
+    state.sounds.push({ x, y, intensity, kind, age: 0, life: 1.1 + intensity * 0.15 });
+    state.stats.noiseEvents++;
+    if (kind !== "step") burst(x, y, 6, "#e8c36a");
+  }
+
+  function hearAt(gx, gy, snd) {
+    const d = dist(gx, gy, snd.x, snd.y);
+    const reach = 70 + snd.intensity * 95;
+    let att = snd.intensity * Math.max(0, 1 - d / reach);
+    const ray = losBlocked(state.map, snd.x, snd.y, gx, gy, false);
+    if (ray.blocked) att *= 0.5;
+    return att;
+  }
+
+  function spawnParticles() {}
+  function burst(x, y, n, col) {
+    if (settings.reduced) n = Math.min(n, 3);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      state.particles.push({ x, y, vx: Math.cos(a) * (20 + Math.random() * 40), vy: Math.sin(a) * (20 + Math.random() * 40), life: 0.35 + Math.random() * 0.4, col, s: 1.2 + Math.random() * 2 });
+    }
+  }
+
+  function makePlayer(map) {
+    const mods = diffMods(state.difficulty);
+    return {
+      x: map.entry.x * TILE + TILE * 0.5,
+      y: map.entry.y * TILE + TILE * 0.5,
+      vx: 0, vy: 0, a: 0, r: 8,
+      walk: 92, run: 168, running: false,
+      noise: 0, seen: 0, hidden: 0,
+      inv: { loot: [] },
+      gadgets: [
+        { id: "coin", name: "Coin", charges: 3 + mods.charges, max: 3 + mods.charges, cd: 0, cool: 0.35 },
+        { id: "smoke", name: "Smoke", charges: 2 + (mods.charges > 0 ? 1 : 0), max: 2 + (mods.charges > 0 ? 1 : 0), cd: 0, cool: 1.2 },
+        { id: "emp", name: "EMP", charges: 1 + (state.difficulty === "easy" ? 1 : 0), max: 1 + (state.difficulty === "easy" ? 1 : 0), cd: 0, cool: 2.4 }
+      ],
+      sel: 0,
+      hacking: 0, hackTarget: null,
+      cloak: 0, emp: 0,
+      stuck: 0
+    };
+  }
+
+  function makeGuard(route, i, mods) {
+    const p = route[0];
+    return {
+      id: i, x: p.x * TILE + TILE * 0.5, y: p.y * TILE + TILE * 0.5,
+      a: 0, state: "patrol", t: 0,
+      route, ri: 0,
+      path: null, pi: 0,
+      view: 175 * mods.view, fov: 0.9 * mods.fov,
+      speed: 78, chase: 128,
+      suspicion: 0, hear: 0.55 * (2 - mods.hear),
+      last: null, searchT: 0, idleT: 0,
+      radio: 0, react: mods.react
+    };
+  }
+
+  function assembleMission(preset, seed, difficulty) {
+    state.seed = seed;
+    state.seedHash = hashSeed(seed);
+    state.preset = preset;
+    state.difficulty = difficulty;
+    state.rng = mulberry32(state.seedHash);
+    state.pathCache.clear();
+    let spec;
+    if (preset === "training") spec = trainingSpec();
+    else if (preset === "blacksite") spec = blackSiteSpec();
+    else if (preset === "procedural") {
+      spec = proceduralSpec(state.rng);
+      let guard = 0;
+      while (!validateMap(spec) && guard++ < 16) spec = proceduralSpec(mulberry32(state.seedHash + guard * 9973));
+      if (!validateMap(spec)) {
+        spec = proceduralSpec(state.rng);
+        spec.halls = spec.halls || [];
+        spec.halls.push([spec.entry.x, spec.entry.y, spec.loot[0].x, spec.entry.y, 1]);
+        spec.halls.push([spec.loot[0].x, spec.entry.y, spec.loot[0].x, spec.loot[0].y, 2]);
+        spec.halls.push([spec.entry.x, spec.entry.y, spec.extract.x, spec.extract.y, 1]);
+      }
+      if (!validateMap(spec)) spec = nightVaultSpec();
+    } else spec = nightVaultSpec();
+    if (!validateMap(spec)) {
+      spec = trainingSpec();
+    }
+    const map = buildFromRooms(spec);
+    map.entry = spec.entry;
+    map.extract = spec.extract;
+    const mods = diffMods(difficulty);
+    let routes = spec.patrols.slice();
+    const want = clamp(routes.length + mods.guards, 1, routes.length);
+    routes = routes.slice(0, want);
+    state.map = map;
+    state.doors = map.doors;
+    state.player = makePlayer(map);
+    state.guards = routes.map((r, i) => makeGuard(r, i, mods));
+    state.cameras = spec.cameras.map((c, i) => Object.assign({ id: i, sweep: 0, dir: 1, detect: 0, disabled: 0, view: 150 * mods.view * mods.cam, fov: 0.48 }, c, { x: c.x * TILE + TILE * 0.5, y: c.y * TILE + TILE * 0.65, tx: c.x, ty: c.y }));
+    state.terminals = spec.terminals.map(t => Object.assign({ progress: 0 }, t, { wx: t.x * TILE + TILE * 0.5, wy: t.y * TILE + TILE * 0.5 }));
+    state.loot = spec.loot.map(l => Object.assign({}, l, { wx: l.x * TILE + TILE * 0.5, wy: l.y * TILE + TILE * 0.5 }));
+    state.lights = spec.lights.map(l => ({ x: l[0] * TILE + TILE * 0.5, y: l[1] * TILE + TILE * 0.5, r: 70 + state.rng() * 24 }));
+    state.alarms = spec.alarms.map(a => ({ x: a.x * TILE + TILE * 0.5, y: a.y * TILE + TILE * 0.5, on: false }));
+    state.covers = [];
+    for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) if (map.grid[y][x] === 3) state.covers.push({ x, y });
+    state.sounds = []; state.smokes = []; state.particles = [];
+    state.lastKnown = null; state.alert = 0; state.time = 0;
+    state.objective = "infiltrate"; state.caught = false; state.won = false;
+    state.summary = null; state.interactLock = 0; state.shake = 0;
+    state.stats = { detections: 0, alarms: 0, loot: 0, noiseEvents: 0 };
+    state.replay = { frames: [], recording: true, playing: false, i: 0 };
+    state.debugHits = [];
+    return map;
+  }
+
+  function circleMove(e, dx, dy, rad) {
+    const map = state.map;
+    const from = tileAtWorld(map, e.x, e.y);
+    const blocked = (px, py) => {
+      const t = tileAtWorld(map, px, py);
+      if (t.x === from.x && t.y === from.y) return false;
+      if (walkableCell(map, t.x, t.y, false)) return false;
+      const cell = map.grid[t.y] ? map.grid[t.y][t.x] : 0;
+      return cell === 0 || cell === 3 || !!(doorAt(map, t.x, t.y) && !doorAt(map, t.x, t.y).open);
+    };
+    const tryAxis = (nx, ny) => {
+      const samples = [[nx, ny], [nx + rad * 0.55, ny], [nx - rad * 0.55, ny], [nx, ny + rad * 0.55], [nx, ny - rad * 0.55]];
+      for (let i = 0; i < samples.length; i++) if (blocked(samples[i][0], samples[i][1])) return false;
+      return true;
+    };
+    let x = e.x + dx, y = e.y + dy;
+    if (!tryAxis(x, e.y)) x = e.x; else e.stuck = 0;
+    if (!tryAxis(x, y)) y = e.y;
+    if (x === e.x && y === e.y && (dx || dy)) e.stuck = (e.stuck || 0) + 1;
+    e.x = x; e.y = y;
+    if (!walkableCell(map, tileAtWorld(map, e.x, e.y).x, tileAtWorld(map, e.x, e.y).y, false)) {
+      const nbs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      for (let i = 0; i < 4; i++) {
+        const nx = from.x + nbs[i][0], ny = from.y + nbs[i][1];
+        if (walkableCell(map, nx, ny, false)) {
+          e.x = nx * TILE + TILE * 0.5;
+          e.y = ny * TILE + TILE * 0.5;
+          break;
+        }
+      }
+    }
+  }
+
+  function nearCover(x, y) {
+    const t = tileAtWorld(state.map, x, y);
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+      const g = state.map.grid[t.y + oy];
+      if (g && g[t.x + ox] === 3) return true;
+    }
+    return false;
+  }
+
+  function canSee(ox, oy, oa, view, fov, tx, ty) {
+    const d = dist(ox, oy, tx, ty);
+    if (d > view) return { see: false, d };
+    const ang = Math.atan2(ty - oy, tx - ox);
+    if (Math.abs(angNorm(ang - oa)) > fov) return { see: false, d };
+    if (state.player && state.player.cloak > 0 && Math.abs(tx - state.player.x) < 0.5 && Math.abs(ty - state.player.y) < 0.5) return { see: false, d };
+    const ray = losBlocked(state.map, ox, oy, tx, ty, true);
+    if (diag.los) state.debugHits.push({ x0: ox, y0: oy, x1: tx, y1: ty, blocked: ray.blocked, hits: ray.hits });
+    return { see: !ray.blocked, d, ray };
+  }
+
+  function followPath(ent, path, speed, dt, canOpen) {
+    if (!path || path.length < 2) return false;
+    if (ent.pi == null) ent.pi = 1;
+    const tgt = path[Math.min(ent.pi, path.length - 1)];
+    const tx = tgt.x * TILE + TILE * 0.5, ty = tgt.y * TILE + TILE * 0.5;
+    const d = dist(ent.x, ent.y, tx, ty);
+    const ang = Math.atan2(ty - ent.y, tx - ent.x);
+    ent.a = angLerp(ent.a, ang, clamp(dt * 8, 0, 1));
+    const step = speed * dt;
+    if (d < 6) {
+      ent.pi++;
+      if (ent.pi >= path.length) return true;
+    } else {
+      const t = tileAtWorld(state.map, ent.x + Math.cos(ang) * 10, ent.y + Math.sin(ang) * 10);
+      const door = doorAt(state.map, t.x, t.y);
+      if (door && !door.open) {
+        if (canOpen && !door.locked) openDoor(door, false);
+        else return false;
+      }
+      circleMove(ent, Math.cos(ang) * Math.min(step, d), Math.sin(ang) * Math.min(step, d), 7);
+    }
+    return false;
+  }
+
+  function openDoor(door, noisy) {
+    if (door.locked) return false;
+    door.open = !door.open;
+    if (noisy !== false) emitSound(door.x * TILE + TILE * 0.5, door.y * TILE + TILE * 0.5, door.open ? 1.15 : 0.7, "door");
+    sfx("door");
+    state.pathCache.clear();
+    return true;
+  }
+
+  function setGuard(g, st) {
+    if (g.state !== st) {
+      g.state = st;
+      g.t = 0;
+      if (st === "pursue" || st === "alarm") sfx("alert");
+    }
+  }
+
+  function broadcast(x, y, reason) {
+    state.lastKnown = { x, y, t: state.time, reason };
+    state.alert = Math.max(state.alert, reason === "sight" ? 2 : 1);
+    if (reason === "alarm" || reason === "sight") {
+      state.stats.alarms += reason === "alarm" ? 1 : 0;
+      state.alarms.forEach(a => a.on = true);
+    }
+    state.guards.forEach(g => {
+      if (g.state === "patrol" || g.state === "idle" || g.state === "return") {
+        g.last = { x, y };
+        setGuard(g, reason === "sight" ? "pursue" : "investigate");
+        g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, Math.floor(x / TILE), Math.floor(y / TILE), true);
+        g.pi = 1;
+      }
+    });
+  }
+
+  function updateGuards(dt) {
+    const p = state.player;
+    state.debugHits = [];
+    p.exposed = false;
+    for (let i = 0; i < state.guards.length; i++) {
+      const g = state.guards[i];
+      g.t += dt;
+      const vis = state.mode === "briefing" ? { see: false, d: 999 } : canSee(g.x, g.y, g.a, g.view, g.fov, p.x, p.y);
+      const conceal = (nearCover(p.x, p.y) ? 0.45 : 1) * (p.running ? 1.15 : 0.85) * (inSmoke(p.x, p.y) ? 0 : 1);
+      if (vis.see && p.cloak <= 0 && conceal > 0) {
+        p.exposed = true;
+        g.suspicion = clamp(g.suspicion + dt * (1.55 / g.react) * conceal * (0.35 + 0.65 * (1 - vis.d / g.view)), 0, 1.2);
+        g.last = { x: p.x, y: p.y };
+        state.lastKnown = { x: p.x, y: p.y, t: state.time, reason: "sight" };
+        if (g.suspicion > 0.28 && (g.state === "patrol" || g.state === "idle")) setGuard(g, "suspicious");
+        if (g.suspicion > 0.72) {
+          if (g.state !== "pursue") { state.stats.detections++; broadcast(p.x, p.y, "sight"); }
+          setGuard(g, "pursue");
+        }
+      } else {
+        g.suspicion = Math.max(0, g.suspicion - dt * 0.18);
+      }
+      let heard = 0, hx = 0, hy = 0;
+      for (let s = 0; s < state.sounds.length; s++) {
+        const h = hearAt(g.x, g.y, state.sounds[s]);
+        if (h > heard) { heard = h; hx = state.sounds[s].x; hy = state.sounds[s].y; }
+      }
+      if (heard > g.hear && g.state !== "pursue" && g.state !== "alarm") {
+        g.last = { x: hx, y: hy };
+        const hot = heard > g.hear * 1.25;
+        if (hot || g.state === "patrol" || g.state === "idle" || g.state === "return" || g.state === "search") {
+          setGuard(g, hot ? "investigate" : "suspicious");
+          if (hot) {
+            const t = tileAtWorld(state.map, hx, hy);
+            g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, t.x, t.y, true);
+            g.pi = 1;
+          }
+        }
+      }
+      const speed = g.state === "pursue" ? g.chase : g.state === "investigate" || g.state === "search" ? g.speed * 1.08 : g.speed;
+      if (g.state === "patrol") {
+        const wp = g.route[g.ri];
+        const tx = wp.x * TILE + TILE * 0.5, ty = wp.y * TILE + TILE * 0.5;
+        if (!g.path) {
+          g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, wp.x, wp.y, true);
+          g.pi = 1;
+        }
+        if (followPath(g, g.path, speed, dt, true) || dist(g.x, g.y, tx, ty) < 10) {
+          g.ri = (g.ri + 1) % g.route.length;
+          g.path = null;
+          if (state.rng() < 0.4) { setGuard(g, "idle"); g.idleT = 0.8 + state.rng() * 1.4; }
+        }
+      } else if (g.state === "idle") {
+        g.a += dt * 0.7;
+        g.idleT -= dt;
+        if (g.idleT <= 0) setGuard(g, "patrol");
+      } else if (g.state === "suspicious") {
+        if (g.last) g.a = angLerp(g.a, Math.atan2(g.last.y - g.y, g.last.x - g.x), dt * 3);
+        if (g.t > 1.1 / g.react) {
+          if (g.last) {
+            const t = tileAtWorld(state.map, g.last.x, g.last.y);
+            g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, t.x, t.y, true);
+            g.pi = 1;
+          }
+          setGuard(g, "investigate");
+        }
+      } else if (g.state === "investigate") {
+        if (g.last && (!g.path || g.t < dt * 2)) {
+          const t = tileAtWorld(state.map, g.last.x, g.last.y);
+          g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, t.x, t.y, true);
+          g.pi = 1;
+        }
+        const done = followPath(g, g.path, speed, dt, true);
+        if (done || (g.last && dist(g.x, g.y, g.last.x, g.last.y) < 16)) {
+          setGuard(g, "search");
+          g.searchT = 3.2;
+        }
+        if (g.t > 8) setGuard(g, "return");
+      } else if (g.state === "pursue") {
+        if (vis.see && p.cloak <= 0) g.last = { x: p.x, y: p.y };
+        if (g.last) {
+          const t = tileAtWorld(state.map, g.last.x, g.last.y);
+          if (!g.path || g.t > 0.28) {
+            g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, t.x, t.y, true);
+            g.pi = 1;
+          }
+          followPath(g, g.path, speed, dt, true);
+          if (dist(g.x, g.y, p.x, p.y) < 16 * diffMods(state.difficulty).catch && vis.see) {
+            fail("A watchman put a hand on your collar.");
+          }
+          if (!vis.see && g.last && dist(g.x, g.y, g.last.x, g.last.y) < 18) {
+            setGuard(g, "search");
+            g.searchT = 4.5;
+          }
+        }
+        g.radio += dt;
+        if (g.radio > 2.2 * g.react && state.alert < 2) {
+          setGuard(g, "alarm");
+        }
+      } else if (g.state === "search") {
+        g.searchT -= dt;
+        g.a += dt * 1.8;
+        if (!g.path || followPath(g, g.path, speed, dt, true)) {
+          const t = tileAtWorld(state.map, g.x, g.y);
+          let path = null;
+          for (let k = 0; k < 10 && !path; k++) {
+            const ox = clamp(t.x + ((state.rng() * 9) | 0) - 4, 1, state.map.w - 2);
+            const oy = clamp(t.y + ((state.rng() * 9) | 0) - 4, 1, state.map.h - 2);
+            if (walkableCell(state.map, ox, oy, true)) path = astar(state.map, t.x, t.y, ox, oy, true);
+          }
+          g.path = path;
+          g.pi = 1;
+        }
+        if (g.searchT <= 0) setGuard(g, "return");
+      } else if (g.state === "alarm") {
+        const a = state.alarms[0] || { x: g.x, y: g.y };
+        const t = tileAtWorld(state.map, a.x, a.y);
+        g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, t.x, t.y, true);
+        g.pi = 1;
+        if (followPath(g, g.path, speed * 1.1, dt, true) || dist(g.x, g.y, a.x, a.y) < 22) {
+          broadcast(g.last ? g.last.x : g.x, g.last ? g.last.y : g.y, "alarm");
+          state.alert = 2;
+          setGuard(g, "pursue");
+        }
+      } else if (g.state === "return") {
+        const wp = g.route[g.ri];
+        g.path = astar(state.map, tileAtWorld(state.map, g.x, g.y).x, tileAtWorld(state.map, g.x, g.y).y, wp.x, wp.y, true);
+        g.pi = 1;
+        if (followPath(g, g.path, speed * 0.9, dt, true) || dist(g.x, g.y, wp.x * TILE + TILE * 0.5, wp.y * TILE + TILE * 0.5) < 12) {
+          setGuard(g, "patrol");
+          g.path = null;
+          if (state.guards.every(gg => gg.state === "patrol" || gg.state === "idle")) {
+            state.alert = Math.max(0, state.alert - 1);
+            if (state.alert === 0) state.alarms.forEach(a => a.on = false);
+          }
+        }
+      }
+    }
+  }
+
+  function updateCameras(dt) {
+    const p = state.player;
+    const mods = diffMods(state.difficulty);
+    for (let i = 0; i < state.cameras.length; i++) {
+      const c = state.cameras[i];
+      if (c.disabled > 0) { c.disabled -= dt; c.detect = 0; continue; }
+      c.sweep += dt * 0.55 * c.dir * mods.cam;
+      if (c.sweep > 1 || c.sweep < 0) c.dir *= -1;
+      c.facing = lerp(c.a0, c.a1, clamp(c.sweep, 0, 1));
+      const vis = state.mode === "briefing" ? { see: false, d: 999 } : canSee(c.x, c.y, c.facing, c.view, c.fov, p.x, p.y);
+      if (vis.see && p.cloak <= 0 && !inSmoke(p.x, p.y)) {
+        c.detect = clamp(c.detect + dt * 0.9 / mods.react, 0, 1);
+        if (c.detect >= 1) {
+          state.stats.detections++;
+          broadcast(p.x, p.y, "alarm");
+          c.detect = 0.4;
+          sfx("cam");
+        }
+      } else c.detect = Math.max(0, c.detect - dt * 0.35);
+    }
+  }
+
+  function useGadget(gx, gy) {
+    const p = state.player;
+    const g = p.gadgets[p.sel];
+    if (!g || g.charges <= 0 || g.cd > 0) { toast("Gadget spent or cooling"); return; }
+    g.charges--;
+    g.cd = g.cool;
+    const ang = Math.atan2(gy - p.y, gx - p.x);
+    if (g.id === "coin") {
+      const land = { x: p.x + Math.cos(ang) * 86, y: p.y + Math.sin(ang) * 86 };
+      const t = tileAtWorld(state.map, land.x, land.y);
+      if (!walkableCell(state.map, t.x, t.y, true)) {
+        land.x = p.x + Math.cos(ang) * 40; land.y = p.y + Math.sin(ang) * 40;
+      }
+      emitSound(land.x, land.y, 2.5, "coin");
+      burst(land.x, land.y, 10, "#f0a61a");
+      sfx("coin");
+    } else if (g.id === "smoke") {
+      const sx = p.x + Math.cos(ang) * 48, sy = p.y + Math.sin(ang) * 48;
+      state.smokes.push({ x: sx, y: sy, r: 46, life: 6.2 });
+      emitSound(sx, sy, 0.7, "smoke");
+      sfx("smoke");
+    } else if (g.id === "emp") {
+      p.emp = 8;
+      state.cameras.forEach(c => { if (dist(c.x, c.y, p.x, p.y) < 150) c.disabled = 8; });
+      state.alarms.forEach(a => a.on = false);
+      state.doors.forEach(d => {
+        if (d.electronic && dist(d.x * TILE + TILE * 0.5, d.y * TILE + TILE * 0.5, p.x, p.y) < 140) {
+          d.locked = false;
+          if (!d.open) openDoor(d, false);
+        }
+      });
+      emitSound(p.x, p.y, 1.35, "emp");
+      burst(p.x, p.y, 18, "#3d9e9a");
+      sfx("emp");
+    }
+  }
+
+  function nearestInteract() {
+    const p = state.player;
+    let best = null, bd = 26;
+    state.doors.forEach(d => {
+      const x = d.x * TILE + TILE * 0.5, y = d.y * TILE + TILE * 0.5;
+      const dd = dist(p.x, p.y, x, y);
+      if (dd < bd) { bd = dd; best = { kind: "door", ref: d, x, y }; }
+    });
+    state.terminals.forEach(t => {
+      const dd = dist(p.x, p.y, t.wx, t.wy);
+      if (dd < bd) { bd = dd; best = { kind: "terminal", ref: t, x: t.wx, y: t.wy }; }
+    });
+    state.loot.forEach(l => {
+      if (l.taken) return;
+      const dd = dist(p.x, p.y, l.wx, l.wy);
+      if (dd < bd) { bd = dd; best = { kind: "loot", ref: l, x: l.wx, y: l.wy }; }
+    });
+    const ex = state.map.extract.x * TILE + TILE * 0.5, ey = state.map.extract.y * TILE + TILE * 0.5;
+    if (dist(p.x, p.y, ex, ey) < 30) best = { kind: "extract", x: ex, y: ey };
+    return best;
+  }
+
+  function interact() {
+    const it = nearestInteract();
+    if (!it) return;
+    if (it.kind === "door") {
+      const pt = tileAtWorld(state.map, state.player.x, state.player.y);
+      if (it.ref.open && pt.x === it.ref.x && pt.y === it.ref.y) { toast("Stand clear to close"); return; }
+      if (it.ref.locked) {
+        it.ref.locked = false;
+        emitSound(it.x, it.y, 1.05, "pick");
+        toast("Pins yield. Door unlocked.");
+        sfx("pick");
+        openDoor(it.ref, true);
+      } else openDoor(it.ref, true);
+    } else if (it.kind === "terminal") {
+      const t = it.ref;
+      if (t.done) { toast("Terminal already spent"); return; }
+      t.done = true;
+      emitSound(t.wx, t.wy, 0.95, "hack");
+      sfx("hack");
+      if (t.kind === "unlock") {
+        state.doors.forEach(d => { if (d.locked) d.locked = false; });
+        toast("Vault latches released.");
+      } else if (t.kind === "cameras") {
+        state.cameras.forEach(c => c.disabled = 20);
+        toast("Cameras fogged for twenty seconds.");
+      } else {
+        state.alarms.forEach(a => a.on = false);
+        state.alert = Math.min(state.alert, 1);
+        toast("Alarm stack silenced.");
+      }
+      burst(t.wx, t.wy, 8, "#2f8f86");
+    } else if (it.kind === "loot") {
+      it.ref.taken = true;
+      state.player.inv.loot.push(it.ref.name);
+      state.stats.loot++;
+      state.objective = "extract";
+      emitSound(it.x, it.y, 0.55, "loot");
+      toast("Ledger taken. Leave through extraction.");
+      sfx("loot");
+    } else if (it.kind === "extract") {
+      if (state.player.inv.loot.length) win();
+      else toast("Nothing to extract. Take the ledger first.");
+    }
+  }
+
+  function updatePlayer(dt, cmd) {
+    const p = state.player;
+    p.gadgets.forEach(g => { if (g.cd > 0) g.cd -= dt; });
+    if (p.cloak > 0) p.cloak -= dt;
+    if (p.emp > 0) p.emp -= dt;
+    let mx = cmd.x, my = cmd.y;
+    const mag = Math.hypot(mx, my);
+    if (mag > 1) { mx /= mag; my /= mag; }
+    p.running = !!(cmd.run && mag > 0.2);
+    const spd = (p.running ? p.run : p.walk);
+    const ax = mx * spd, ay = my * spd;
+    p.vx = lerp(p.vx, ax, clamp(dt * 10, 0, 1));
+    p.vy = lerp(p.vy, ay, clamp(dt * 10, 0, 1));
+    if (mag > 0.15) p.a = Math.atan2(p.vy, p.vx);
+    const ox = p.x, oy = p.y;
+    circleMove(p, p.vx * dt, p.vy * dt, p.r);
+    p.bumpCd = Math.max(0, (p.bumpCd || 0) - dt);
+    if (p.stuck > 0 && p.bumpCd <= 0 && (cmd.x || cmd.y)) {
+      emitSound(p.x, p.y, 0.45, "bump");
+      p.bumpCd = 0.45;
+      p.stuck = 0;
+    }
+    const moved = dist(ox, oy, p.x, p.y);
+    p.noise = moved > 0.2 ? (p.running ? 1 : 0.35) : 0.04;
+    p.stepAcc = (p.stepAcc || 0) + moved;
+    if (p.stepAcc > (p.running ? 22 : 34)) {
+      p.stepAcc = 0;
+      emitSound(p.x, p.y, p.running ? 1.05 : 0.38, "step");
+      if (p.running) sfx("step");
+    }
+    if (cmd.interact) interact();
+    if (cmd.use) {
+      const ax2 = cmd.aimX || (p.x + Math.cos(p.a) * 80);
+      const ay2 = cmd.aimY || (p.y + Math.sin(p.a) * 80);
+      useGadget(ax2, ay2);
+    }
+    if (cmd.sel >= 0) p.sel = cmd.sel;
+    const it = nearestInteract();
+    if (it) {
+      const labels = { door: it.ref && it.ref.locked ? "[E] Lockpick door" : "[E] Door", terminal: "[E] Use terminal", loot: "[E] Take ledger", extract: state.player.inv.loot.length ? "[E] Extract" : "Extraction — ledger missing" };
+      el("prompt").textContent = (p.exposed ? "IN VIEW · " : "") + (labels[it.kind] || "");
+    } else el("prompt").textContent = p.exposed ? "IN VIEW" : (p.running ? "Running — loud" : "");
+    if (state.objective === "infiltrate" && state.loot.some(l => !l.taken)) state.objective = "steal";
+    if (state.player.inv.loot.length) state.objective = "extract";
+  }
+
+  function updateWorld(dt, cmd) {
+    if ((state.mode !== "play" && state.mode !== "briefing") || state.paused) return;
+    state.time += dt;
+    if (state.mode === "play") updatePlayer(dt, cmd);
+    updateGuards(dt);
+    updateCameras(dt);
+    for (let i = state.sounds.length - 1; i >= 0; i--) {
+      state.sounds[i].age += dt;
+      if (state.sounds[i].age > state.sounds[i].life) state.sounds.splice(i, 1);
+    }
+    for (let i = state.smokes.length - 1; i >= 0; i--) {
+      state.smokes[i].life -= dt;
+      if (state.smokes[i].life <= 0) state.smokes.splice(i, 1);
+    }
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const q = state.particles[i];
+      q.life -= dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      if (q.life <= 0) state.particles.splice(i, 1);
+    }
+    state.doors.forEach(d => { d.anim = lerp(d.anim, d.open ? 1 : 0, clamp(dt * (settings.reduced ? 12 : 6), 0, 1)); });
+    state.shake = Math.max(0, state.shake - dt * 4);
+    if (state.alert >= 2 && !settings.reduced) state.shake = Math.max(state.shake, 1.2);
+  }
+
+  function fail(reason) {
+    if (state.mode !== "play") return;
+    state.mode = "fail";
+    state.caught = true;
+    state.paused = true;
+    finish(false, reason);
+  }
+  function win() {
+    if (state.mode !== "play") return;
+    state.mode = "win";
+    state.won = true;
+    state.paused = true;
+    finish(true, "Ledger off-site. You are a rumor.");
+  }
+  function rankOf(s) {
+    if (!s.won) return "BURNED";
+    const t = s.time;
+    const d = s.detections + s.alarms * 2;
+    if (d === 0 && t < 90) return "GHOST";
+    if (d <= 1 && t < 150) return "SILK";
+    if (d <= 3) return "BRASS";
+    return "NOISY";
+  }
+  function scoreOf(s) {
+    let n = s.won ? 1000 : 120;
+    n += s.loot * 250;
+    n -= s.detections * 120;
+    n -= s.alarms * 160;
+    n += Math.max(0, 400 - s.time * 2);
+    return Math.max(0, n | 0);
+  }
+  function finish(won, lede) {
+    const sum = {
+      won, time: state.time, detections: state.stats.detections, alarms: state.stats.alarms,
+      loot: state.stats.loot, seed: state.seed, preset: state.preset, difficulty: state.difficulty,
+      rank: "", score: 0, date: Date.now()
+    };
+    sum.rank = rankOf(sum); sum.score = scoreOf(sum);
+    state.summary = sum;
+    persistRun(sum);
+    showEnd(sum, lede);
+    sfx(won ? "win" : "fail");
+  }
+  function persistRun(sum) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(STORAGE_RUNS) || "[]");
+      arr.unshift(sum);
+      localStorage.setItem(STORAGE_RUNS, JSON.stringify(arr.slice(0, 24)));
+    } catch (e) {}
+  }
+  function loadRuns() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_RUNS) || "[]"); } catch (e) { return []; }
+  }
+
+  function collectCmd() {
+    if (state.replay.playing) {
+      const f = state.replay.frames[state.replay.i];
+      if (!f) return { x: 0, y: 0, run: false, interact: false, use: false, sel: -1, aimX: 0, aimY: 0 };
+      state.replay.i++;
+      return f;
+    }
+    const b = settings.binds;
+    const k = input.keys;
+    let x = 0, y = 0;
+    if (k[b.left] || k[b.left2]) x -= 1;
+    if (k[b.right] || k[b.right2]) x += 1;
+    if (k[b.up] || k[b.up2]) y -= 1;
+    if (k[b.down] || k[b.down2]) y += 1;
+    x += input.stick.x; y += input.stick.y;
+    if (input.pointer.move && input.pointer.down && state.player) {
+      const dx = input.aimX - state.player.x, dy = input.aimY - state.player.y;
+      const dm = Math.hypot(dx, dy);
+      if (dm > 8) { x += dx / dm; y += dy / dm; }
+    }
+    const cmd = {
+      x, y,
+      run: !!(k[b.run] || k.ShiftRight || input.runHold),
+      interact: input.interactTap,
+      use: input.useTap,
+      sel: k[b.g1] ? 0 : k[b.g2] ? 1 : k[b.g3] ? 2 : -1,
+      aimX: input.aimX, aimY: input.aimY
+    };
+    input.interactTap = false;
+    input.useTap = false;
+    if (state.replay.recording && (state.time * 20 | 0) !== ((state.time - 0.016) * 20 | 0)) {
+      state.replay.frames.push(Object.assign({ t: state.time }, cmd));
+    }
+    return cmd;
+  }
+
+  let cam = { x: 0, y: 0 };
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = window.innerWidth, h = window.innerHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function drawCone(x, y, a, fov, view, col) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    const rays = 14;
+    for (let i = 0; i <= rays; i++) {
+      const ang = a - fov + (fov * 2 * i) / rays;
+      let len = view;
+      for (let s = 8; s <= view; s += 10) {
+        const px = x + Math.cos(ang) * s, py = y + Math.sin(ang) * s;
+        const ray = losBlocked(state.map, x, y, px, py, true);
+        if (ray.blocked) { len = s; break; }
+      }
+      ctx.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+    }
+    ctx.closePath();
+    ctx.fillStyle = col;
+    ctx.fill();
+  }
+
+  function render() {
+    const w = window.innerWidth, h = window.innerHeight;
+    const p = state.player, map = state.map;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#070806";
+    ctx.fillRect(0, 0, w, h);
+    if (!map || !p) return;
+    cam.x = lerp(cam.x || p.x, p.x, 0.18);
+    cam.y = lerp(cam.y || p.y, p.y, 0.18);
+    let jx = 0, jy = 0;
+    if (state.shake && !settings.reduced) {
+      jx = (Math.random() - 0.5) * state.shake * 3;
+      jy = (Math.random() - 0.5) * state.shake * 3;
+    }
+    ctx.save();
+    ctx.translate(w / 2 - cam.x + jx, h / 2 - cam.y + jy);
+
+    for (let y = 0; y < map.h; y++) {
+      for (let x = 0; x < map.w; x++) {
+        const t = map.grid[y][x];
+        const px = x * TILE, py = y * TILE;
+        if (t === 0) {
+          ctx.fillStyle = "#0c0e0a";
+          ctx.fillRect(px, py, TILE, TILE);
+          ctx.fillStyle = "#161910";
+          ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+        } else if (t === 3) {
+          ctx.fillStyle = "#2a2416";
+          ctx.fillRect(px, py, TILE, TILE);
+          ctx.fillStyle = "#4a3b20";
+          ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+        } else {
+          ctx.fillStyle = t === 2 ? "#2a1614" : "#1b2116";
+          ctx.fillRect(px, py, TILE, TILE);
+          ctx.strokeStyle = "rgba(216,200,154,0.04)";
+          ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+        }
+      }
+    }
+
+    const ex = map.extract.x * TILE, ey = map.extract.y * TILE;
+    ctx.fillStyle = "rgba(111,186,106,0.22)";
+    ctx.fillRect(ex, ey, TILE, TILE);
+    ctx.strokeStyle = "#6fba6a";
+    ctx.strokeRect(ex + 3, ey + 3, TILE - 6, TILE - 6);
+    const enx = map.entry.x * TILE, eny = map.entry.y * TILE;
+    ctx.strokeStyle = "rgba(216,200,154,0.35)";
+    ctx.strokeRect(enx + 4, eny + 4, TILE - 8, TILE - 8);
+
+    state.doors.forEach(d => {
+      const px = d.x * TILE, py = d.y * TILE;
+      ctx.save();
+      ctx.translate(px + TILE / 2, py + TILE / 2);
+      const open = d.anim;
+      ctx.rotate(d.axis === "v" ? -open * 1.4 : open * 1.4);
+      ctx.fillStyle = d.locked ? "#7a3a22" : "#8d7040";
+      if (d.axis === "v") ctx.fillRect(-3, -TILE / 2, 6, TILE);
+      else ctx.fillRect(-TILE / 2, -3, TILE, 6);
+      ctx.restore();
+    });
+
+    state.terminals.forEach(t => {
+      ctx.fillStyle = t.done ? "#2a4038" : "#2f8f86";
+      ctx.fillRect(t.wx - 7, t.wy - 8, 14, 16);
+      ctx.fillStyle = t.done ? "#688" : "#b8fff4";
+      ctx.fillRect(t.wx - 4, t.wy - 5, 8, 5);
+    });
+    state.loot.forEach(l => {
+      if (l.taken) return;
+      ctx.fillStyle = "#f0a61a";
+      ctx.beginPath(); ctx.rect(l.wx - 6, l.wy - 5, 12, 10); ctx.fill();
+      ctx.fillStyle = "#2a1c08";
+      ctx.fillRect(l.wx - 4, l.wy - 2, 8, 2);
+    });
+
+    state.cameras.forEach(c => {
+      const col = c.disabled > 0 ? "rgba(80,90,90,0.12)" : "rgba(60,150,200,0.16)";
+      drawCone(c.x, c.y, c.facing, c.fov, c.view, col);
+      ctx.fillStyle = c.disabled > 0 ? "#445" : (c.detect > 0.5 ? "#e07a6a" : "#3d9e9a");
+      ctx.beginPath(); ctx.arc(c.x, c.y, 5, 0, Math.PI * 2); ctx.fill();
+    });
+    state.guards.forEach(g => {
+      const hot = g.state === "pursue" || g.state === "alarm";
+      drawCone(g.x, g.y, g.a, g.fov, g.view, hot ? "rgba(163,45,45,0.18)" : "rgba(200,90,50,0.13)");
+    });
+
+    state.smokes.forEach(s => {
+      const grd = ctx.createRadialGradient(s.x, s.y, 4, s.x, s.y, s.r);
+      grd.addColorStop(0, "rgba(160,160,140,0.45)");
+      grd.addColorStop(1, "rgba(160,160,140,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    });
+    state.sounds.forEach(s => {
+      const t = s.age / s.life;
+      ctx.strokeStyle = "rgba(240,166,26," + (0.35 * (1 - t)) + ")";
+      ctx.beginPath(); ctx.arc(s.x, s.y, 10 + t * (40 + s.intensity * 28), 0, Math.PI * 2); ctx.stroke();
+    });
+
+    state.guards.forEach(g => {
+      ctx.save();
+      ctx.translate(g.x, g.y); ctx.rotate(g.a);
+      ctx.fillStyle = "#7a2e2e";
+      ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-7, -6); ctx.lineTo(-7, 6); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      if (diag.ai) {
+        ctx.fillStyle = "#f0d8a0";
+        ctx.font = "10px monospace";
+        ctx.fillText(g.state, g.x - 16, g.y - 12);
+      }
+    });
+
+    ctx.save();
+    ctx.translate(p.x, p.y); ctx.rotate(p.a);
+    ctx.fillStyle = p.cloak > 0 ? "rgba(180,220,210,0.4)" : "#d8c89a";
+    ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-7, -6); ctx.lineTo(-7, 6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    if (state.lastKnown && diag.lkp) {
+      ctx.strokeStyle = "#f0a61a";
+      ctx.beginPath(); ctx.arc(state.lastKnown.x, state.lastKnown.y, 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillText("LKP", state.lastKnown.x + 8, state.lastKnown.y);
+    }
+    state.particles.forEach(q => {
+      ctx.globalAlpha = clamp(q.life * 2, 0, 1);
+      ctx.fillStyle = q.col;
+      ctx.fillRect(q.x, q.y, q.s, q.s);
+      ctx.globalAlpha = 1;
+    });
+
+    if (diag.nav) {
+      ctx.strokeStyle = "rgba(111,186,106,0.35)";
+      state.guards.forEach(g => {
+        if (!g.path) return;
+        ctx.beginPath();
+        g.path.forEach((n, i) => {
+          const x = n.x * TILE + TILE / 2, y = n.y * TILE + TILE / 2;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      });
+    }
+    if (diag.los) {
+      state.debugHits.forEach(r => {
+        ctx.strokeStyle = r.blocked ? "rgba(200,80,80,0.45)" : "rgba(80,200,120,0.35)";
+        ctx.beginPath(); ctx.moveTo(r.x0, r.y0); ctx.lineTo(r.x1, r.y1); ctx.stroke();
+      });
+    }
+    if (diag.snd) {
+      ctx.fillStyle = "#f0a61a";
+      state.sounds.forEach(s => ctx.fillText(s.kind + " " + s.intensity.toFixed(1), s.x, s.y - 8));
+    }
+    if (diag.col) {
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+        if (!walkableCell(map, x, y, false)) ctx.strokeRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2);
+      }
+    }
+
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = settings.reduced ? "rgba(18,20,14,0.28)" : "rgba(8,10,6,0.62)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "destination-out";
+    const lights = state.lights.concat([{ x: p.x, y: p.y, r: 92 }]);
+    lights.forEach(L => {
+      const gx = w / 2 - cam.x + L.x + jx, gy = h / 2 - cam.y + L.y + jy;
+      const grd = ctx.createRadialGradient(gx, gy, 6, gx, gy, L.r);
+      grd.addColorStop(0, "rgba(0,0,0,0.85)");
+      grd.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(gx, gy, L.r, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+
+    if (state.alert >= 2 && !settings.reduced) {
+      ctx.fillStyle = "rgba(120,20,20," + (0.08 + Math.sin(state.time * 7) * 0.04) + ")";
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    drawMini();
+    drawHud();
+  }
+
+  function drawMini() {
+    const map = state.map; if (!map) return;
+    const mw = mini.width, mh = mini.height;
+    mctx.fillStyle = "#0b0d0a";
+    mctx.fillRect(0, 0, mw, mh);
+    const sx = mw / (map.w * TILE), sy = mh / (map.h * TILE);
+    for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+      const t = map.grid[y][x];
+      if (t === 0) continue;
+      mctx.fillStyle = t === 2 ? "#4a221c" : t === 3 ? "#3a3218" : "#2a3224";
+      mctx.fillRect(x * TILE * sx, y * TILE * sy, TILE * sx + 0.5, TILE * sy + 0.5);
+    }
+    mctx.fillStyle = "#6fba6a";
+    mctx.fillRect(map.extract.x * TILE * sx, map.extract.y * TILE * sy, 3, 3);
+    state.guards.forEach(g => { mctx.fillStyle = "#c45c5c"; mctx.fillRect(g.x * sx - 1, g.y * sy - 1, 2, 2); });
+    mctx.fillStyle = "#f0a61a";
+    mctx.fillRect(state.player.x * sx - 1.5, state.player.y * sy - 1.5, 3, 3);
+  }
+
+  function drawHud() {
+    const counts = Object.create(null);
+    GSTATES.forEach(s => counts[s] = 0);
+    state.guards.forEach(g => { counts[g.state] = (counts[g.state] || 0) + 1; });
+    const gs = GSTATES.filter(s => counts[s]).map(s => counts[s] + s[0]).join(" ");
+    const obj = { infiltrate: "INFIL", steal: "STEAL", extract: "EXTRACT" }[state.objective] || state.objective;
+    const bits = [
+      "<b>FPS</b> " + perf.fps,
+      "<span class='sep'>|</span> <b>SEED</b> " + state.seed,
+      "<span class='sep'>|</span> <b>ALERT</b> " + state.alert,
+      "<span class='sep'>|</span> <b>OBJ</b> " + obj,
+      "<span class='sep'>|</span> <b>T</b> " + state.time.toFixed(1),
+      "<span class='sep'>|</span> <b>AI</b> " + (gs || "—"),
+      "<span class='sep'>|</span> <b>NOISE</b> " + (state.player ? state.player.noise.toFixed(2) : "0"),
+      "<span class='sep'>|</span> <b>GAD</b> " + (state.player ? state.player.gadgets[state.player.sel].name : "—"),
+      "<span class='sep'>|</span> <b>PAUSE</b> " + (state.paused ? "YES" : "no")
+    ];
+    if (diag.perf) bits.push("<span class='sep'>|</span> <b>MS</b> " + perf.ms.toFixed(1));
+    const st = el("status");
+    st.innerHTML = bits.join(" ");
+    st.dataset.alert = String(state.alert);
+    const ghtml = state.player.gadgets.map((g, i) =>
+      "<button class='gad' data-on='" + (state.player.sel === i ? "1" : "0") + "' data-i='" + i + "' aria-label='Select " + g.name + "'>" + (i + 1) + " " + g.name + "<small>" + g.charges + "/" + g.max + (g.cd > 0 ? " cd" : "") + "</small></button>"
+    ).join("");
+    if (el("gadgets").dataset.sig !== ghtml) { el("gadgets").innerHTML = ghtml; el("gadgets").dataset.sig = ghtml; }
+    const ot = el("objtext");
+    const texts = {
+      infiltrate: "Enter the annex unseen.",
+      steal: "Take the <em>ledger</em> from the vault.",
+      extract: "Return to the <em>green hatch</em> with the folio."
+    };
+    ot.innerHTML = texts[state.objective] || texts.steal;
+  }
+
+  function ensureAudio() {
+    if (audio.ready) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audio.ctx = new AC();
+    audio.master = audio.ctx.createGain();
+    audio.master.gain.value = settings.master;
+    audio.master.connect(audio.ctx.destination);
+    audio.ready = true;
+    drone();
+  }
+  function vol() { return settings.master * settings.fx; }
+  function beep(freq, dur, type, gain) {
+    if (!audio.ready || vol() <= 0.01) return;
+    const o = audio.ctx.createOscillator();
+    const g = audio.ctx.createGain();
+    o.type = type || "square";
+    o.frequency.value = freq;
+    g.gain.value = (gain || 0.04) * vol();
+    o.connect(g); g.connect(audio.master);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.ctx.currentTime + dur);
+    o.stop(audio.ctx.currentTime + dur);
+  }
+  function noise(dur, freq) {
+    if (!audio.ready || vol() <= 0.01) return;
+    const n = audio.ctx.createBuffer(1, audio.ctx.sampleRate * dur, audio.ctx.sampleRate);
+    const d = n.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = audio.ctx.createBufferSource();
+    src.buffer = n;
+    const f = audio.ctx.createBiquadFilter();
+    f.type = "bandpass"; f.frequency.value = freq || 800;
+    const g = audio.ctx.createGain();
+    g.gain.value = 0.05 * vol();
+    src.connect(f); f.connect(g); g.connect(audio.master);
+    src.start();
+  }
+  function drone() {
+    if (!audio.ready || settings.reduced) return;
+    const o = audio.ctx.createOscillator();
+    const g = audio.ctx.createGain();
+    o.type = "sine"; o.frequency.value = 62;
+    g.gain.value = 0.015 * settings.master;
+    o.connect(g); g.connect(audio.master);
+    o.start();
+    audio.drone = o;
+  }
+  function sfx(kind) {
+    if (!audio.ready) return;
+    if (kind === "door") { beep(140, 0.12, "triangle", 0.05); noise(0.08, 300); }
+    else if (kind === "step") noise(0.04, 180);
+    else if (kind === "alert") { beep(520, 0.09, "square", 0.05); beep(390, 0.16, "square", 0.04); }
+    else if (kind === "cam") beep(880, 0.2, "sawtooth", 0.03);
+    else if (kind === "coin") { beep(980, 0.06, "sine", 0.04); beep(1320, 0.08, "sine", 0.03); }
+    else if (kind === "smoke") noise(0.2, 240);
+    else if (kind === "emp") { beep(80, 0.3, "sawtooth", 0.06); noise(0.2, 90); }
+    else if (kind === "hack") { beep(240, 0.08, "square", 0.03); beep(320, 0.1, "square", 0.03); }
+    else if (kind === "pick") { beep(600, 0.05, "triangle", 0.03); beep(400, 0.08, "triangle", 0.03); }
+    else if (kind === "loot") { beep(440, 0.1, "sine", 0.04); beep(660, 0.14, "sine", 0.04); }
+    else if (kind === "win") { beep(330, 0.12, "sine", 0.05); beep(440, 0.16, "sine", 0.05); beep(660, 0.22, "sine", 0.04); }
+    else if (kind === "fail") { beep(160, 0.3, "sawtooth", 0.05); }
+  }
+
+  function toast(msg) {
+    const t = el("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    toastT = nowMs() + 2200;
+  }
+
+  function showScreen(name) {
+    ui.screen = name;
+    ["briefing", "pause", "settings", "end", "history"].forEach(id => {
+      el(id).classList.toggle("show", id === name);
+    });
+  }
+  function hideOverlays() {
+    ui.screen = "play";
+    ["briefing", "pause", "settings", "end", "history"].forEach(id => el(id).classList.remove("show"));
+  }
+
+  function startMission(opts) {
+    const preset = (opts && opts.preset) || el("preset").value;
+    const seed = (opts && opts.seed != null) ? opts.seed : el("seed").value;
+    const difficulty = (opts && opts.difficulty) || el("difficulty").value;
+    assembleMission(preset, seed, difficulty);
+    cam.x = state.player.x; cam.y = state.player.y;
+    state.mode = "play";
+    state.paused = false;
+    hideOverlays();
+    ensureAudio();
+    if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
+    refreshGadgetsClick();
+    toast(PRESETS[preset].name + " // seed " + seed);
+  }
+
+  function pauseGame() {
+    if (state.mode !== "play") return;
+    state.paused = true;
+    el("pauseErr").textContent = "";
+    el("ioBox").value = exportPayload();
+    showScreen("pause");
+  }
+  function resumeGame() {
+    if (state.mode !== "play" && state.mode !== "fail" && state.mode !== "win") state.mode = "play";
+    if (state.won || state.caught) return;
+    state.paused = false;
+    hideOverlays();
+  }
+
+  function exportPayload() {
+    return JSON.stringify({
+      v: 1, kind: "amber-protocol-run",
+      seed: state.seed, preset: state.preset, difficulty: state.difficulty,
+      summary: state.summary, stats: state.stats, time: state.time,
+      replay: { frames: state.replay.frames }
+    }, null, 2);
+  }
+  function downloadJSON(name, text) {
+    const blob = new Blob([text], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+  function importPayload(text) {
+    const data = JSON.parse(text);
+    if (!data || data.kind !== "amber-protocol-run") throw new Error("Not an Amber Protocol export");
+    el("preset").value = data.preset || "nightvault";
+    el("seed").value = data.seed;
+    el("difficulty").value = data.difficulty || "normal";
+    startMission({ preset: data.preset, seed: data.seed, difficulty: data.difficulty });
+    if (data.replay && data.replay.frames && data.replay.frames.length && data.summary) {
+      state.replay = { frames: data.replay.frames, recording: false, playing: true, i: 0 };
+      toast("Replay loaded — deterministic playback");
+    }
+    return data;
+  }
+
+  function showEnd(sum, lede) {
+    el("endKicker").textContent = sum.won ? "After-action · clean enough" : "After-action · burned";
+    el("endTitle").textContent = sum.won ? "EXTRACTED" : "COMPROMISED";
+    el("endLede").textContent = lede;
+    el("endMeta").innerHTML = [
+      ["Time", sum.time.toFixed(1) + "s"],
+      ["Detections", sum.detections],
+      ["Alarms", sum.alarms],
+      ["Loot", sum.loot],
+      ["Rank", sum.rank],
+      ["Score", sum.score],
+      ["Seed", sum.seed]
+    ].map(p => "<div><span>" + p[0] + "</span><strong>" + p[1] + "</strong></div>").join("");
+    el("endHist").textContent = loadRuns().slice(0, 8).map(r =>
+      (r.won ? "WIN" : "FAIL") + "  " + r.rank + "  " + r.score + "  " + r.preset + " #" + r.seed
+    ).join("\n") || "No other runs.";
+    showScreen("end");
+  }
+
+  function refreshGadgetsClick() {
+    el("gadgets").onclick = ev => {
+      const b = ev.target.closest("[data-i]");
+      if (b) state.player.sel = +b.dataset.i;
+    };
+  }
+
+  function bindUi() {
+    el("preset").onchange = () => {
+      const p = PRESETS[el("preset").value];
+      el("briefSite").textContent = p.site;
+      el("briefCopy").textContent = p.copy;
+    };
+    el("btnBegin").onclick = () => startMission();
+    el("btnSettings").onclick = () => { syncSettingsUi(); showScreen("settings"); };
+    el("btnPauseSettings").onclick = () => { syncSettingsUi(); showScreen("settings"); };
+    el("btnSettingsClose").onclick = () => {
+      saveSettings();
+      if (state.mode === "play") showScreen("pause");
+      else showScreen("briefing");
+    };
+    el("btnHistory").onclick = () => {
+      const runs = loadRuns();
+      el("histBody").textContent = runs.length ? runs.map(r =>
+        (r.won ? "WIN" : "FAIL") + "  " + r.rank + "  " + r.score + "  t" + (r.time | 0) + "  det" + r.detections + "  " + r.preset + " #" + r.seed
+      ).join("\n") : "No recorded runs.";
+      showScreen("history");
+    };
+    el("btnHistClose").onclick = () => showScreen("briefing");
+    el("btnResume").onclick = resumeGame;
+    el("btnRestart").onclick = () => startMission({ preset: state.preset, seed: state.seed, difficulty: state.difficulty });
+    el("btnNew").onclick = () => { state.mode = "briefing"; state.paused = true; showScreen("briefing"); };
+    el("btnEndRestart").onclick = () => startMission({ preset: state.preset, seed: state.seed, difficulty: state.difficulty });
+    el("btnEndNew").onclick = () => { state.mode = "briefing"; showScreen("briefing"); };
+    el("btnExport").onclick = () => { el("ioBox").value = exportPayload(); downloadJSON("amber-run.json", el("ioBox").value); };
+    el("btnEndExport").onclick = () => downloadJSON("amber-run.json", exportPayload());
+    el("importFile").onchange = ev => {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try { el("ioBox").value = reader.result; importPayload(reader.result); el("pauseErr").textContent = ""; }
+        catch (err) { el("pauseErr").textContent = String(err.message || err); }
+      };
+      reader.readAsText(f);
+    };
+    el("volMaster").oninput = () => { settings.master = +el("volMaster").value / 100; if (audio.master) audio.master.gain.value = settings.master; };
+    el("volFx").oninput = () => { settings.fx = +el("volFx").value / 100; };
+    el("reducedMotion").onchange = () => {
+      settings.reduced = el("reducedMotion").checked;
+      document.body.classList.toggle("reduced-motion", settings.reduced);
+    };
+    el("diagToggle").onchange = () => {
+      settings.diagUi = el("diagToggle").checked;
+      el("diagbar").classList.toggle("show", settings.diagUi);
+    };
+    el("diagbar").onchange = ev => {
+      const box = ev.target.closest("[data-diag]");
+      if (box) diag[box.dataset.diag] = box.checked;
+    };
+    el("btnResetBinds").onclick = () => { settings.binds = Object.assign({}, DEFAULT_BINDS); renderRemap(); };
+    el("btnInteract").onpointerdown = e => { e.preventDefault(); input.interactTap = true; };
+    el("btnUse").onpointerdown = e => { e.preventDefault(); input.useTap = true; };
+    el("btnRun").onpointerdown = e => { e.preventDefault(); input.runHold = true; };
+    el("btnRun").onpointerup = () => { input.runHold = false; };
+    el("btnPause").onclick = () => { if (state.paused) resumeGame(); else pauseGame(); };
+    renderRemap();
+    syncSettingsUi();
+  }
+
+  function syncSettingsUi() {
+    el("volMaster").value = (settings.master * 100) | 0;
+    el("volFx").value = (settings.fx * 100) | 0;
+    el("reducedMotion").checked = settings.reduced;
+    el("diagToggle").checked = settings.diagUi;
+    document.body.classList.toggle("reduced-motion", settings.reduced);
+    el("diagbar").classList.toggle("show", settings.diagUi);
+    renderRemap();
+  }
+
+  function renderRemap() {
+    const names = [["up", "Up"], ["down", "Down"], ["left", "Left"], ["right", "Right"], ["run", "Run"], ["interact", "Interact"], ["use", "Use gadget"], ["pause", "Pause"]];
+    el("remap").innerHTML = names.map(([k, lab]) =>
+      "<button type='button' data-bind='" + k + "' aria-label='Remap " + lab + "'>" + lab + " · " + settings.binds[k] + "</button>"
+    ).join(" ");
+    el("remap").onclick = ev => {
+      const b = ev.target.closest("[data-bind]");
+      if (!b) return;
+      remapWait = b.dataset.bind;
+      b.textContent = "Press key…";
+    };
+  }
+
+  function worldFromClient(cx, cy) {
+    return { x: cx - window.innerWidth / 2 + cam.x, y: cy - window.innerHeight / 2 + cam.y };
+  }
+
+  function bindInput() {
+    window.addEventListener("keydown", e => {
+      if (remapWait) {
+        settings.binds[remapWait] = e.code;
+        remapWait = null;
+        renderRemap();
+        e.preventDefault();
+        return;
+      }
+      input.keys[e.code] = true;
+      if (e.code === settings.binds.pause || e.code === "KeyP") {
+        if (state.mode === "play") { if (state.paused) resumeGame(); else pauseGame(); }
+        e.preventDefault();
+      }
+      if (e.code === settings.binds.interact) input.interactTap = true;
+      if (e.code === settings.binds.use) input.useTap = true;
+      if (e.code === settings.binds.diag) {
+        settings.diagUi = !settings.diagUi;
+        el("diagbar").classList.toggle("show", settings.diagUi);
+      }
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
+      if (state.mode === "play" && !state.paused) e.preventDefault();
+    }, { passive: false });
+    window.addEventListener("keyup", e => { input.keys[e.code] = false; });
+    canvas.addEventListener("pointerdown", e => {
+      canvas.setPointerCapture(e.pointerId);
+      input.pointer.down = true;
+      input.pointer.id = e.pointerId;
+      const w = worldFromClient(e.clientX, e.clientY);
+      input.aimX = w.x; input.aimY = w.y;
+      if (state.mode === "play" && !state.paused && e.button === 2) { input.useTap = true; e.preventDefault(); }
+      else if (e.button === 0) input.pointer.move = true;
+    });
+    canvas.addEventListener("pointermove", e => {
+      const w = worldFromClient(e.clientX, e.clientY);
+      input.aimX = w.x; input.aimY = w.y;
+    });
+    canvas.addEventListener("pointerup", () => { input.pointer.down = false; input.pointer.move = false; });
+    canvas.addEventListener("pointercancel", () => { input.pointer.down = false; input.pointer.move = false; input.stick.x = 0; input.stick.y = 0; input.runHold = false; });
+    canvas.addEventListener("contextmenu", e => e.preventDefault());
+    window.addEventListener("blur", () => {
+      input.focused = false;
+      input.keys = Object.create(null);
+      if (state.mode === "play" && !state.paused) pauseGame();
+    });
+    window.addEventListener("focus", () => { input.focused = true; });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && state.mode === "play" && !state.paused) pauseGame();
+    });
+    window.addEventListener("wheel", e => { if (state.mode === "play") e.preventDefault(); }, { passive: false });
+    const base = el("stickBase"), knob = el("stickKnob");
+    let sid = null;
+    function stickAt(cx, cy) {
+      const r = base.getBoundingClientRect();
+      const kx = cx - (r.left + r.width / 2), ky = cy - (r.top + r.height / 2);
+      const m = Math.hypot(kx, ky) || 1;
+      const rad = 36;
+      const nx = kx / m * Math.min(m, rad), ny = ky / m * Math.min(m, rad);
+      input.stick.x = nx / rad; input.stick.y = ny / rad;
+      knob.style.left = (r.left + r.width / 2 + nx - 28) + "px";
+      knob.style.top = (r.top + r.height / 2 + ny - 28) + "px";
+      knob.style.bottom = "auto";
+    }
+    base.addEventListener("pointerdown", e => { sid = e.pointerId; base.setPointerCapture(sid); stickAt(e.clientX, e.clientY); });
+    base.addEventListener("pointermove", e => { if (sid === e.pointerId) stickAt(e.clientX, e.clientY); });
+    const endStick = () => { sid = null; input.stick.x = 0; input.stick.y = 0; knob.style.left = ""; knob.style.top = ""; knob.style.bottom = ""; };
+    base.addEventListener("pointerup", endStick);
+    base.addEventListener("pointercancel", endStick);
+    window.addEventListener("resize", resize);
+  }
+
+  function loop(t) {
+    const dtRaw = Math.min(0.05, (t - perf.last) / 1000 || 0.016);
+    perf.last = t;
+    const t0 = nowMs();
+    if (toastT && nowMs() > toastT) { el("toast").classList.remove("show"); toastT = 0; }
+    if (audio.master) audio.master.gain.value = settings.master;
+    if (!state.paused && (state.mode === "play" || state.mode === "briefing")) {
+      if (state.mode === "briefing") updateWorld(dtRaw, { x: 0, y: 0, run: false, interact: false, use: false, sel: -1, aimX: 0, aimY: 0 });
+      else updateWorld(dtRaw, collectCmd());
+    }
+    render();
+    perf.ms = nowMs() - t0;
+    perf.acc++;
+    if (t - perf.frame > 500) {
+      perf.fps = Math.round(perf.acc * 1000 / (t - perf.frame));
+      perf.acc = 0; perf.frame = t;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  window.HEIST = {
+    getState() {
+      return {
+        mode: state.mode, paused: state.paused, seed: state.seed, preset: state.preset,
+        difficulty: state.difficulty, time: state.time, alert: state.alert, objective: state.objective,
+        fps: perf.fps, noise: state.player && state.player.noise,
+        gadget: state.player && state.player.gadgets[state.player.sel],
+        player: state.player && { x: state.player.x, y: state.player.y, inv: state.player.inv },
+        guards: state.guards.map(g => ({ id: g.id, state: g.state, x: g.x, y: g.y, suspicion: g.suspicion, last: g.last })),
+        cameras: state.cameras.map(c => ({ detect: c.detect, disabled: c.disabled })),
+        doors: state.doors.map(d => ({ x: d.x, y: d.y, open: d.open, locked: d.locked })),
+        sounds: state.sounds.map(s => ({ kind: s.kind, intensity: s.intensity, x: s.x, y: s.y })),
+        lastKnown: state.lastKnown, loot: state.loot, won: state.won, caught: state.caught, summary: state.summary,
+        cam: { x: cam.x, y: cam.y }, view: { w: window.innerWidth, h: window.innerHeight }
+      };
+    },
+    holdKeys(codes, on) {
+      (codes || []).forEach(code => {
+        window.dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, key: code, bubbles: true, cancelable: true }));
+      });
+    },
+    start: startMission,
+    pause: pauseGame,
+    resume: resumeGame,
+    setDiag(flags) { Object.assign(diag, flags); settings.diagUi = true; el("diagbar").classList.add("show"); },
+    emitSound, exportPayload, importPayload,
+    teleport(x, y) { if (state.player) { state.player.x = x; state.player.y = y; } },
+    giveLoot() { state.loot.forEach(l => { if (!l.taken) { l.taken = true; state.player.inv.loot.push(l.name); state.stats.loot++; state.objective = "extract"; } }); }
+  };
+
+  resize();
+  bindUi();
+  bindInput();
+  assembleMission("nightvault", el("seed").value, el("difficulty").value);
+  render();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+
+     

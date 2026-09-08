@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Black Hole · Gravitational Lensing Explorer</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg: rgba(7,9,14,.78);
+  --bd: rgba(110,170,255,.22);
+  --fg: #cfe0f4;
+  --dim: #7d8ba1;
+  --acc: #6fc3ff;
+  --acc2:#ffab5e;
+  --mono: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+}
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+body{ font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:var(--fg); user-select:none; -webkit-user-select:none; }
+canvas#gl, canvas#ov{ position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+canvas#ov{ pointer-events:none; }
+.ui{ z-index:5; }
+body.uihidden .ui{ display:none !important; }
+
+/* ---------- HUD ---------- */
+#hud{
+  position:fixed; top:10px; left:10px; z-index:6;
+  font-family:var(--mono); font-size:11.5px; line-height:1.5;
+  background:var(--bg); border:1px solid var(--bd); border-radius:8px;
+  padding:8px 11px; backdrop-filter: blur(6px); pointer-events:none;
+  white-space:pre; max-width:min(520px, 60vw);
+}
+#hud b{ color:var(--acc); font-weight:600; }
+#hud .warn{ color:#ffd25e; }
+#hudLegend{
+  position:fixed; top:10px; left:10px; transform: translateY(calc(100% + 14px));
+  margin-top:-14px; top:auto; bottom:auto;
+  font-family:var(--mono); font-size:11px; line-height:1.5;
+  background:var(--bg); border:1px solid var(--bd); border-radius:8px;
+  padding:7px 10px; backdrop-filter:blur(6px); pointer-events:none; max-width:340px;
+  position:relative; display:inline-block;
+}
+#legendWrap{ position:fixed; top:10px; left:10px; z-index:6; display:flex; flex-direction:column; gap:6px; pointer-events:none; }
+#legendWrap #hud{ position:static; }
+#legendWrap #hudLegend{ position:static; transform:none; }
+#hudLegend i{ display:inline-block; width:9px; height:9px; border-radius:2px; margin:0 4px -1px 0; }
+
+/* ---------- title ---------- */
+#title{
+  position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:6;
+  font-family:var(--mono); font-size:11px; letter-spacing:.18em; color:var(--dim);
+  background:var(--bg); border:1px solid var(--bd); border-radius:8px; padding:6px 14px;
+  pointer-events:none; backdrop-filter:blur(6px);
+}
+#title b{ color:var(--acc); letter-spacing:.18em; font-weight:600; }
+
+/* ---------- control panel ---------- */
+#panel{
+  position:fixed; top:10px; right:10px; bottom:10px; width:308px; z-index:7;
+  display:flex; flex-direction:column;
+  background:var(--bg); border:1px solid var(--bd); border-radius:10px;
+  backdrop-filter:blur(8px); overflow:hidden;
+}
+#panel.collapsed{ bottom:auto; }
+#panelHead{
+  display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer;
+  border-bottom:1px solid var(--bd); flex:0 0 auto;
+}
+#panelHead h1{ font-size:12px; margin:0; font-weight:600; letter-spacing:.06em; color:var(--acc); flex:1; }
+#panelHead .tog{ font-size:11px; color:var(--dim); font-family:var(--mono); }
+#panelBody{ overflow-y:auto; overflow-x:hidden; padding:6px 8px 12px; flex:1 1 auto; scrollbar-width:thin; scrollbar-color:#335 style; }
+#panel.collapsed #panelBody, #panel.collapsed #panelFoot{ display:none; }
+details.sec{ border:1px solid rgba(110,170,255,.13); border-radius:8px; margin:6px 2px; padding:0; }
+details.sec summary{
+  cursor:pointer; list-style:none; padding:6px 9px; font-size:11px; font-weight:600;
+  letter-spacing:.09em; color:var(--acc2); text-transform:uppercase;
+}
+details.sec summary::-webkit-details-marker{ display:none; }
+details.sec summary::before{ content:"▸ "; color:var(--dim); }
+details.sec[open] summary::before{ content:"▾ "; }
+.secbody{ padding:2px 8px 8px; }
+.ctl{ margin:7px 0 2px; }
+.ctlrow{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.ctlrow label{ font-size:11.5px; color:var(--fg); }
+.ctlrow .val{ font-family:var(--mono); font-size:10.5px; color:var(--acc); white-space:nowrap; }
+input[type=range]{
+  width:100%; margin:3px 0 0; height:18px; accent-color:var(--acc); background:transparent; cursor:ew-resize;
+}
+.chk{ display:flex; align-items:center; gap:8px; margin:7px 0; font-size:11.5px; cursor:pointer; }
+.chk input{ accent-color:var(--acc); width:14px; height:14px; }
+select.sel{
+  width:100%; margin:5px 0 2px; background:#101722; color:var(--fg); border:1px solid var(--bd);
+  border-radius:6px; font-size:11.5px; padding:5px 6px; outline:none;
+}
+.btnrow{ display:flex; flex-wrap:wrap; gap:5px; margin:7px 0 2px; }
+button.btn{
+  flex:1 1 auto; min-width:64px; background:#131c2b; color:var(--fg); border:1px solid var(--bd);
+  border-radius:6px; font-size:11px; padding:6px 7px; cursor:pointer; font-family:inherit;
+}
+button.btn:hover{ background:#1b2740; border-color:var(--acc); }
+button.btn.on{ background:#123352; border-color:var(--acc); color:#fff; }
+.note{ font-size:10.5px; color:var(--dim); margin:5px 0 2px; line-height:1.45; }
+#panelFoot{ flex:0 0 auto; padding:6px 10px; border-top:1px solid var(--bd); font-family:var(--mono); font-size:10px; color:var(--dim); }
+
+/* ---------- ray panel ---------- */
+#rayPanel{
+  position:fixed; left:10px; bottom:10px; width:308px; z-index:7;
+  background:var(--bg); border:1px solid var(--bd); border-radius:10px;
+  backdrop-filter:blur(8px); overflow:hidden; display:none;
+}
+#rayPanel.show{ display:block; }
+#rayHead{ display:flex; align-items:center; padding:7px 10px; border-bottom:1px solid var(--bd); }
+#rayHead h2{ font-size:11.5px; margin:0; font-weight:600; color:var(--acc); flex:1; letter-spacing:.05em; }
+#rayClose{ background:none; border:none; color:var(--dim); font-size:14px; cursor:pointer; padding:0 2px; }
+#rayClose:hover{ color:#fff; }
+#diagram{ display:block; width:100%; height:150px; background:#05070c; border-bottom:1px solid rgba(110,170,255,.1); }
+#rayInfo{ padding:7px 10px 9px; font-family:var(--mono); font-size:10.8px; line-height:1.55; color:var(--fg); max-height:190px; overflow-y:auto; }
+#rayInfo table{ border-collapse:collapse; width:100%; }
+#rayInfo td{ padding:0 4px 0 0; vertical-align:top; }
+#rayInfo td:first-child{ color:var(--dim); white-space:nowrap; }
+#rayInfo .sw{ display:inline-block; width:10px; height:10px; border-radius:2px; border:1px solid #0006; }
+#rayInfo .hd{ color:var(--acc2); margin-top:4px; display:block; }
+
+/* ---------- hint ---------- */
+#hint{
+  position:fixed; bottom:10px; left:50%; transform:translateX(-50%); z-index:6;
+  font-family:var(--mono); font-size:10.5px; color:var(--dim); text-align:center;
+  background:var(--bg); border:1px solid var(--bd); border-radius:8px; padding:5px 12px;
+  pointer-events:none; backdrop-filter:blur(6px); animation: hintfade 1s ease 9s forwards;
+  max-width:92vw;
+}
+@keyframes hintfade{ to{ opacity:.45; } }
+
+/* ---------- error box ---------- */
+#errbox{
+  position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.8); padding:20px;
+}
+#errbox.show{ display:flex; }
+#errcard{
+  max-width:640px; background:#0d121c; border:1px solid #ff5e5e66; border-radius:12px; padding:22px 26px;
+}
+#errcard h2{ color:#ff8484; font-size:16px; margin:0 0 10px; }
+#errcard p{ font-size:13px; line-height:1.6; color:var(--fg); }
+#errcard pre{
+  font-family:var(--mono); font-size:10.5px; background:#05070c; border:1px solid #ffffff14; border-radius:8px;
+  padding:10px; max-height:260px; overflow:auto; color:#ffb0b0; white-space:pre-wrap; user-select:text;
+}
+
+@media (max-width:700px){
+  #panel{ width:min(308px, calc(100vw - 20px)); }
+  #title{ display:none; }
+  #rayPanel{ width:min(308px, calc(100vw - 20px)); }
+  #hint{ display:none; }
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="ov"></canvas>
+
+<div id="legendWrap" class="ui">
+  <div id="hud">booting…</div>
+  <div id="hudLegend"></div>
+</div>
+<div id="title" class="ui"><b>SCHWARZSCHILD-CLASS EXPLORER</b> · GR RAY-TRACED ACCRETION DISK</div>
+
+<div id="panel" class="ui">
+  <div id="panelHead">
+    <h1>◈ CONTROLS</h1><span class="tog" id="panelTog">open</span>
+  </div>
+  <div id="panelBody">
+    <details class="sec" id="secActions" open><summary>Simulation</summary><div class="secbody" id="bodyActions"></div></details>
+    <details class="sec" id="secCam" open><summary>Camera &amp; view</summary><div class="secbody" id="bodyCam"></div></details>
+    <details class="sec" id="secBH"><summary>Black hole</summary><div class="secbody" id="bodyBH"></div></details>
+    <details class="sec" id="secDisk"><summary>Accretion disk</summary><div class="secbody" id="bodyDisk"></div></details>
+    <details class="sec" id="secRel"><summary>Relativistic effects</summary><div class="secbody" id="bodyRel"></div></details>
+    <details class="sec" id="secRender"><summary>Rendering &amp; quality</summary><div class="secbody" id="bodyRender"></div></details>
+    <details class="sec" id="secViz"><summary>Visualization</summary><div class="secbody" id="bodyViz"></div></details>
+    <details class="sec" id="secPresets"><summary>Camera presets</summary><div class="secbody" id="bodyPresets"></div></details>
+  </div>
+  <div id="panelFoot">drag orbit · wheel zoom · right-drag pan · click = pick ray</div>
+</div>
+
+<div id="rayPanel" class="ui">
+  <div id="rayHead"><h2>◉ SELECTED RAY TRACE</h2><button id="rayClose" title="close">✕</button></div>
+  <canvas id="diagram"></canvas>
+  <div id="rayInfo"></div>
+</div>
+
+<div id="hint" class="ui">drag = orbit · wheel = zoom · right-drag = pan · click image = select ray · space = pause · 1–7 = modes · H = hide UI · P = control panel</div>
+
+<div id="errbox"><div id="errcard">
+  <h2 id="errTitle">Renderer error</h2>
+  <p id="errMsg"></p>
+  <pre id="errLog"></pre>
+</div></div>
+
+<noscript><div style="position:fixed;inset:0;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font-family:monospace">This explorer requires JavaScript.</div></noscript>
+<script>

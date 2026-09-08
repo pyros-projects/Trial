@@ -393,7 +393,7 @@
   }
   function modelSetupContent(row) {
     const profile=modelProfile(row);
-    const fields=[['Provider','provider'],['Harness','harness'],['Setting','setting']].filter(([,key])=>profileText(profile[key]));
+    const fields=[['Provider','provider'],['Harness','harness'],['Setting','setting'],['Runtime','runtime'],['Quantization','quantization']].filter(([,key])=>profileText(profile[key]));
     if(!fields.length)return '';
     return `<dl class="setup-facts">${fields.map(([label,key])=>`<div><dt>${label}</dt><dd>${profileLink(profileText(profile[key]),profile[key+'_url'])}</dd></div>`).join('')}</dl><p class="setup-note">Shared setup for this model’s current collection, as I ran it. These labels aren’t equivalent budgets across tools or a complete record of every run.</p>`;
   }

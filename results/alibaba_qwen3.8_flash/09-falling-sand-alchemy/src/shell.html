@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Falling-Sand Alchemy Sandbox</title>
+<style>/*__STYLE__*/</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand"><span class="logo">⧗</span> Falling-Sand <b>Alchemy</b><span class="ver">sandbox v1.0</span></div>
+    <div class="tb-actions">
+      <button id="btn-pause" class="tb primary" title="Pause / resume simulation (Space)">⏸ <span id="pause-label">Pause</span></button>
+      <button id="btn-step" class="tb" title="Advance one simulation step (S)">⏭ Step</button>
+      <button id="btn-reset" class="tb" title="Reload current preset (R)">↺ Reset</button>
+      <button id="btn-clear" class="tb danger" title="Clear all cells (C)">✕ Clear</button>
+      <span class="tb-flag" id="run-flag">RUNNING</span>
+      <button id="btn-help" class="tb" title="Keyboard help (?)">? Help</button>
+      <button id="btn-panel" class="tb only-narrow" title="Toggle control panel">☰ Panel</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <canvas id="view" tabindex="0" aria-label="Falling sand simulation canvas"></canvas>
+
+    <div id="hud" aria-hidden="true">
+      <div class="hud-row"><span class="k">FPS</span><span class="v" id="h-fps">–</span><span class="k">grid</span><span class="v" id="h-grid">–</span></div>
+      <div class="hud-row"><span class="k">active</span><span class="v" id="h-active">–</span><span class="k">cells</span><span class="v" id="h-cells">–</span></div>
+      <div class="hud-row"><span class="k">avg T</span><span class="v" id="h-temp">–</span><span class="k">rxn/t</span><span class="v" id="h-rxn">–</span></div>
+      <div class="hud-row"><span class="k">tool</span><span class="v" id="h-tool">–</span><span class="k">speed</span><span class="v" id="h-speed">–</span></div>
+      <div class="hud-row"><span class="k">mat</span><span class="v" id="h-mat">–</span><span class="k">state</span><span class="v" id="h-state">–</span></div>
+      <div class="hud-mats" id="h-mats"></div>
+    </div>
+
+    <div id="hud-r">
+      <div class="hud-row"><span class="k">mode</span><span class="v" id="h-mode">Material</span></div>
+      <div class="hud-row"><span class="k">steps</span><span class="v" id="h-steps">–</span></div>
+      <div class="hud-row"><span class="k">sim</span><span class="v" id="h-simtime">–</span></div>
+      <div class="hud-row"><span class="k">draw</span><span class="v" id="h-drawtime">–</span></div>
+      <div class="hud-legend" id="h-legend"></div>
+    </div>
+
+    <div id="brush-ring" aria-hidden="true"></div>
+    <div id="crosshair" aria-hidden="true"><i></i><i></i></div>
+    <div id="toast-host" aria-live="polite"></div>
+
+    <div id="help" hidden>
+      <h2>Controls</h2>
+      <div class="help-grid">
+        <b>Drag on canvas</b><span>apply current tool (continuous, interpolated)</span>
+        <b>Right-drag</b><span>erase  ·  <b>Middle-drag / Alt-drag</b> eyedropper</span>
+        <b>Wheel</b><span>brush radius  ·  <b>Shift+wheel</b> amount</span>
+        <b>Space</b><span>pause / resume</span>
+        <b>S</b><span>single step</span>
+        <b>R / C</b><span>reset preset / clear all</span>
+        <b>1…9, 0</b><span>material slot (see swatch tooltip)</span>
+        <b>[ ]</b><span>brush size down / up</span>
+        <b>M</b><span>cycle visualisation mode</span>
+        <b>B E I H W X L F</b><span>brush, erase, pick, heat, wind, explode, wall, fill</span>
+        <b>G</b><span>rotate gravity 45°</span>
+        <b>Tab</b><span>toggle control panel</span>
+        <b>P / O</b><span>export PNG / save state file</span>
+      </div>
+      <h2>Material notes</h2>
+      <p>Salt dissolves into brine that freezes at −6 °C. Lava flashes water to steam and quench-cracks into stone. Acid eats metal, wood and stone (not glass or plastic) and releases hydrogen. A charged wire arcs across a one-cell gap and detonates gunpowder. Plants drink water and grow upward when it is warm. Explosions push a real pressure ring through loose material.</p>
+      <button id="help-close" class="tb">Close</button>
+    </div>
+
+    <div id="splash" hidden><div class="splash-box"><div class="spin"></div><span>Loading sandbox…</span></div></div>
+  </main>
+
+  <aside id="panel" aria-label="Simulation controls">
+    <div class="panel-scroll">
+
+      <section class="grp">
+        <h3>Simulation</h3>
+        <div class="row"><label for="s-speed">Speed</label><input id="s-speed" type="range" min="1" max="240" step="1" value="60"><output id="o-speed">60/s</output></div>
+        <div class="row"><label for="s-sub">Substeps</label><input id="s-sub" type="range" min="1" max="6" step="1" value="1"><output id="o-sub">1</output></div>
+        <div class="row"><label for="s-res">Resolution</label><input id="s-res" type="range" min="1" max="8" step="1" value="3"><output id="o-res">3 px/cell</output></div>
+        <div class="row"><label for="s-gdir">Gravity</label><input id="s-gdir" type="range" min="0" max="7" step="1" value="0"><output id="o-gdir">down</output></div>
+        <div class="row"><label for="s-grav">Gravity force</label><input id="s-grav" type="range" min="0.1" max="2.5" step="0.05" value="1"><output id="o-grav">1.00</output></div>
+        <div class="row"><label for="s-amb">Ambient T</label><input id="s-amb" type="range" min="-40" max="80" step="1" value="20"><output id="o-amb">20 °C</output></div>
+        <div class="row"><label for="s-heat">Heat transfer</label><input id="s-heat" type="range" min="0" max="100" step="1" value="45"><output id="o-heat">45%</output></div>
+        <div class="row"><label for="s-rxn">Reaction rate</label><input id="s-rxn" type="range" min="0" max="200" step="5" value="100"><output id="o-rxn">100%</output></div>
+        <div class="row"><label for="s-mob">Liquid mobility</label><input id="s-mob" type="range" min="5" max="100" step="1" value="55"><output id="o-mob">55%</output></div>
+        <div class="row"><label for="s-diff">Gas diffusion</label><input id="s-diff" type="range" min="5" max="100" step="1" value="50"><output id="o-diff">50%</output></div>
+        <div class="row"><label for="s-fire">Fire intensity</label><input id="s-fire" type="range" min="10" max="250" step="5" value="100"><output id="o-fire">100%</output></div>
+        <div class="row"><label for="s-blast">Explosion power</label><input id="s-blast" type="range" min="10" max="300" step="5" value="100"><output id="o-blast">100%</output></div>
+        <p class="hint">Resolution rebuilds the grid (state is preserved where it overlaps). Lower = fewer cells & faster.</p>
+      </section>
+
+      <section class="grp">
+        <h3>Tool</h3>
+        <div class="tool-grid" id="tool-grid" role="group" aria-label="Tools"></div>
+        <div class="row"><label for="s-brush">Brush radius</label><input id="s-brush" type="range" min="1" max="40" step="1" value="6"><output id="o-brush">6</output></div>
+        <div class="row"><label for="s-shape">Brush shape</label>
+          <select id="s-shape"><option value="circle">circle</option><option value="square">square</option><option value="ring">ring</option></select>
+        </div>
+        <div class="row"><label for="s-amount">Amount</label><input id="s-amount" type="range" min="5" max="100" step="1" value="70"><output id="o-amount">70%</output></div>
+        <div class="row"><label for="s-temp">Paint temperature</label><input id="s-temp" type="range" min="-40" max="1600" step="5" value="20"><output id="o-temp">20 °C</output></div>
+        <label class="check"><input type="checkbox" id="s-tempauto" checked> use material default temperature</label>
+        <div class="row"><label for="s-vel">Paint velocity</label><input id="s-vel" type="range" min="0" max="100" step="1" value="0"><output id="o-vel">0</output></div>
+        <div class="row"><label for="s-scatter">Spray randomness</label><input id="s-scatter" type="range" min="0" max="100" step="1" value="15"><output id="o-scatter">15%</output></div>
+      </section>
+
+      <section class="grp">
+        <h3>Material</h3>
+        <div class="mat-grid" id="mat-grid" role="group" aria-label="Materials"></div>
+      </section>
+
+      <section class="grp">
+        <h3>View</h3>
+        <div class="view-grid" id="view-grid" role="group" aria-label="Visualisation modes"></div>
+        <label class="check"><input type="checkbox" id="s-heatglow" checked> heat glow in material view</label>
+        <label class="check"><input type="checkbox" id="s-particles" checked> show velocity streaks</label>
+      </section>
+
+      <section class="grp">
+        <h3>Presets</h3>
+        <div class="preset-grid" id="preset-grid" role="group" aria-label="Presets"></div>
+        <div class="row"><label for="s-seed">Seed</label><input id="s-seed" type="number" step="1" value="1337" class="seed"><button id="btn-reroll" class="tb small">reroll</button></div>
+        <p class="hint">Presets are seeded — the same seed rebuilds the identical scene.</p>
+      </section>
+
+      <section class="grp">
+        <h3>Data</h3>
+        <div class="btn-row">
+          <button id="btn-save" class="tb" title="Download complete grid state (P material, T temperature, velocity)">⭳ Save state</button>
+          <button id="btn-load" class="tb" title="Load a state file">⭱ Load state</button>
+          <button id="btn-png" class="tb" title="Export the current view as PNG">🖼 Export PNG</button>
+        </div>
+        <input type="file" id="file-state" accept=".json,.sand,.txt,application/json" hidden>
+        <label class="check"><input type="checkbox" id="s-autosave" checked> autosave to this browser (every 10 s, restored on load)</label>
+        <div class="btn-row">
+          <button id="btn-restore" class="tb">↻ Restore autosave</button>
+          <button id="btn-copy" class="tb">⧉ Copy state JSON</button>
+        </div>
+        <p class="hint" id="io-status">no file activity yet</p>
+      </section>
+
+      <section class="grp">
+        <h3>Diagnostics</h3>
+        <p class="hint">Overlay reports live grid state: particle count, active chunks, per-tick reaction count and average temperature. Diagonal read-outs (top right) show the step cost.</p>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<script>/*__SIM__*/
+/*__UI__*/</script>
+</body>
+</html>

@@ -120,7 +120,8 @@ Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set
     {"key": "anthropic_opus5", "label": "Opus 5", "color": "#D8ACE7"},
     {"key": "xai_grok4.6", "label": "Grok 4.6", "color": "#E8AD82"},
     {"key": "zai_glm5.3_flash", "label": "GLM 5.3 Flash", "color": "#DED27B"},
-    {"key": "google_gemini3.8_flash", "label": "Gemini 3.8 Flash", "color": "#91B5FF"}
+    {"key": "google_gemini3.8_flash", "label": "Gemini 3.8 Flash", "color": "#91B5FF"},
+    {"key": "alibaba_qwen3.8_flash", "label": "Qwen 3.8 Flash", "color": "#76D7D6"}
   ]
 }
 ```
@@ -129,7 +130,7 @@ Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set
 
 `siteUrl` supplies the public origin for link-preview images and canonical share URLs. Set it to your own domain when hosting a copy. This file is public presentation configuration. Choose **Refresh** to reload local settings; redeploy to update the public site.
 
-Record the shared harness and setting in `results/<model>/model.toml`. Cards show the setup beneath the model name; **Setup** in the maximized viewer adds provider and harness links. The current collection uses:
+Record the shared harness and setting in `results/<model>/model.toml`. Cards show the setup beneath the model name; **Setup** in the maximized viewer adds provider, harness, and optional runtime and quantization links. The current collection uses:
 
 | Model | Harness | Setting |
 |---|---|---|
@@ -138,6 +139,9 @@ Record the shared harness and setting in `results/<model>/model.toml`. Cards sho
 | Grok 4.6 | [Cursor Desktop](https://cursor.com/) | High Fast |
 | GLM 5.3 Flash | [Pi](https://pi.dev/) | High |
 | Gemini 3.8 Flash | [Antigravity CLI](https://antigravity.google/) | High |
+| Qwen 3.8 Flash | [Pi](https://pi.dev/) | xhigh |
+
+Qwen runs locally through [MTPLX](https://mtplx.com/) using [Youssofal's Optimized Speed quant](https://huggingface.co/Youssofal/Qwen3.8-Flash-Next-MTPLX-Optimized-Speed). The model card describes dynamic 4-bit quantization with 8-bit attention; this setup is recorded separately from the harness and effort setting.
 
 These are the settings I used, with their original labels. They describe this collection; they aren't equivalent budgets or a complete record of each run. See the [model setup format](docs/results.md#shared-model-setup) to edit them. Selected setup fields are public; raw run metadata and evidence stay out of the website export.
 

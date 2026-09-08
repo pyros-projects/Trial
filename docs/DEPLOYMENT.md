@@ -103,13 +103,13 @@ The deployment scripts also accept the Python and screenshot options described a
 | A share page per submitted prompt, plus one compact JPEG comparison preview when Pillow and thumbnails are available | Raw evidence images or additional copies of submitted applications |
 | One screenshot per run: metadata-free WebP up to 1280 pixels with Pillow, or the original selected screenshot otherwise | Extra screenshots, recordings, logs, audio and `evidence/` |
 | Minimal public JSON and CSV | Run `metadata.json`, `report.json`, notes, environments, metrics, manifests and check details |
-| Selected provider, harness, setting, and homepage fields from model-level `model.toml`, in public JSON | Raw TOML files and unrecognized profile fields |
+| Selected provider, harness, setting, runtime, quantization, and homepage fields from model-level `model.toml`, in public JSON | Raw TOML files and unrecognized profile fields |
 
 Model keys and run labels come from folder names. Public model display labels, order and colors are supplied by `/appsettings.json`, which is copied byte-for-byte from `gallery/static/appsettings.json`, including with `--screenshots none`. Unlisted configuration files remain excluded. Tasks are inferred from catalog IDs in run-folder names. HTML-track runs use `index.html`, `result.html`, or `app.html`, in that precedence. Real Apps runs use only `project/gallery/index.html`; they have no top-level HTML fallback. HTML bytes are copied unchanged; the public SHA-256 identifies the exact published bytes.
 
 The supplied reference image is explicitly included as `/deep-swe-snapshot.png` with its original bytes. It is independent of run screenshots and remains included when `--screenshots none` is selected.
 
-Optional `results/<model>/model.toml` profiles are an explicit public input. Only `provider`, `provider_url`, `harness`, `harness_url`, and `setting` are read into the `model_profiles` mapping, once per model present in the export. They supply the setup shown on cards and in the viewer; they do not pull data from run `metadata.json`. See [shared model setup](results.md#shared-model-setup) for the format and scope.
+Optional `results/<model>/model.toml` profiles are an explicit public input. Only `provider`, `provider_url`, `harness`, `harness_url`, `setting`, `runtime`, `runtime_url`, `quantization`, and `quantization_url` are read into the `model_profiles` mapping, once per model present in the export. They supply the setup shown on cards and in the viewer; they do not pull data from run `metadata.json`. See [shared model setup](results.md#shared-model-setup) for the format and scope.
 
 Public catalog entries include `look_for` when present. These short hints power the guidance beside each showcase prompt and the expandable overlay in the maximized viewer; private catalog fields are still excluded.
 

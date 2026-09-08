@@ -635,7 +635,9 @@ window.probe=async origin=>{
         from playwright.sync_api import expect
         self.fixture()
         (self.results / 'UI fixture - not a model evaluation' / 'model.toml').write_text(
-            'harness = "Public harness fixture"\nsetting = "High Fast"\n', encoding='utf-8')
+            'harness = "Public harness fixture"\nsetting = "High Fast"\n'
+            'runtime = "MTPLX (local)"\nruntime_url = "https://runtime.example/"\n'
+            'quantization = "Optimized Speed (4-bit, 8-bit attention)"\nquantization_url = "https://models.example/quant"\n', encoding='utf-8')
         origin, data = self.public_export()
         row = data['results'][0]
         share = origin + row['share_url']
@@ -652,6 +654,8 @@ window.probe=async origin=>{
         self.page.locator('.live-setup summary').click()
         expect(self.page.locator('.live-setup-panel')).to_contain_text('Public harness fixture')
         expect(self.page.locator('.live-setup-panel')).to_contain_text('High Fast')
+        expect(self.page.locator('.live-setup-panel').get_by_role('link', name='MTPLX (local)')).to_have_attribute('href', 'https://runtime.example/')
+        expect(self.page.locator('.live-setup-panel').get_by_role('link', name='Optimized Speed (4-bit, 8-bit attention)')).to_have_attribute('href', 'https://models.example/quant')
         self.page.locator('#close-live-setup').click()
         self.assertEqual(urlsplit(self.page.url).fragment, 'play/' + quote(row['id'], safe='/'))
         self.context.grant_permissions(['clipboard-read', 'clipboard-write'])
@@ -939,6 +943,10 @@ provider_url = 'https://example.com/provider'
 harness = 'Test CLI'
 harness_url = 'https://example.com/harness'
 setting = 'Max'
+runtime = 'MTPLX (local)'
+runtime_url = 'https://runtime.example/'
+quantization = 'Optimized Speed (4-bit, 8-bit attention) <img src=x onerror=alert(1)>'
+quantization_url = 'https://models.example/quant'
 ''', encoding='utf-8')
         other = self.results / 'grok' / '01-fluid-simulation'
         other.mkdir(parents=True)
@@ -952,6 +960,8 @@ setting = 'Max'
         self.page.locator('[data-tab="details"]').click()
         expect(self.page.locator('.model-setup-details')).to_contain_text('Shared setup for this model')
         expect(self.page.locator('.model-setup-details img')).to_have_count(0)
+        expect(self.page.locator('.model-setup-details')).to_contain_text('MTPLX (local)')
+        expect(self.page.locator('.model-setup-details')).to_contain_text('Optimized Speed (4-bit, 8-bit attention) <img src=x onerror=alert(1)>')
         self.page.locator('[data-tab="preview"]').click()
         self.page.locator('#launch-preview').click()
         frame = self.page.frame_locator('#artifact-frame')
@@ -967,6 +977,10 @@ setting = 'Max'
             expect(panel.locator('img')).to_have_count(0)
             expect(panel.get_by_role('link', name='Test CLI')).to_have_attribute('href', 'https://example.com/harness')
             expect(panel.get_by_role('link', name='Test CLI')).to_have_attribute('rel', 'noopener noreferrer')
+            expect(panel.get_by_role('link', name='MTPLX (local)')).to_have_attribute('href', 'https://runtime.example/')
+            quantization = panel.get_by_role('link', name='Optimized Speed (4-bit, 8-bit attention) <img src=x onerror=alert(1)>')
+            expect(quantization).to_have_attribute('href', 'https://models.example/quant')
+            expect(quantization).to_have_attribute('rel', 'noopener noreferrer')
             self.assertEqual(before, self.page.locator('#artifact-frame').bounding_box())
             expect(frame.locator('#increment')).to_have_text('Count: 1')
             bounds = panel.bounding_box()
@@ -991,6 +1005,7 @@ setting = 'Max'
         expect(self.page.locator('.live-setup-panel')).to_contain_text('Cursor Desktop')
         expect(self.page.locator('.live-setup-panel')).to_contain_text('High Fast')
         expect(self.page.locator('.live-setup-panel')).not_to_contain_text('Test CLI')
+        expect(self.page.locator('.live-setup-panel')).not_to_contain_text('MTPLX')
         self.page.locator('#close-live').click()
         profile.write_text('harness = "Test CLI"\nsetting = "Low"\n', encoding='utf-8')
         self.page.locator('#refresh').click()

@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Deformable Physics Playground — cloth, soft bodies &amp; constraints</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#070b14; --panel:rgba(10,17,29,.94); --line:rgba(110,170,230,.22);
+    --acc:#6fd3ff; --acc2:#ffb454; --txt:#cfe3f5; --dim:#7e93ab;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:var(--bg);
+    font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--txt);
+    overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+  #view{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+  /* ---------- toolbar ---------- */
+  #toolbar{position:fixed;top:8px;left:8px;z-index:6;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+    max-width:calc(100vw - 320px);pointer-events:none}
+  #toolbar>*{pointer-events:auto}
+  .btn{background:rgba(14,24,40,.92);border:1px solid var(--line);color:var(--txt);border-radius:8px;
+    padding:6px 10px;font-size:12px;cursor:pointer;line-height:1;white-space:nowrap}
+  .btn:hover{border-color:var(--acc)}
+  .btn.active{background:#123a52;border-color:var(--acc);color:#eaffff;box-shadow:0 0 8px rgba(111,211,255,.35)}
+  .btn.warn{border-color:#8a5a20;color:#ffd9a0}
+  .btn.warn:hover{border-color:var(--acc2)}
+  .tgrp{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .tgrp .btn{border:none;border-radius:0;border-right:1px solid var(--line)}
+  .tgrp .btn:last-child{border-right:none}
+  select{background:rgba(14,24,40,.92);border:1px solid var(--line);color:var(--txt);border-radius:8px;
+    padding:6px 6px;font-size:12px;cursor:pointer;max-width:150px}
+  label.sel{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dim);
+    background:rgba(10,17,29,.7);padding:3px 6px;border-radius:8px;border:1px solid transparent}
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;left:8px;top:52px;z-index:5;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:8px 10px;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    min-width:218px;pointer-events:none;backdrop-filter:blur(4px)}
+  #hud b{color:var(--acc);font-weight:600}
+  #hud .r{display:flex;justify-content:space-between;gap:14px}
+  #hud .r span:last-child{color:#eaf6ff}
+  #pausedBadge{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:7;display:none;
+    background:rgba(60,40,8,.9);border:1px solid var(--acc2);color:#ffd9a0;padding:6px 14px;border-radius:20px;
+    font:600 12px ui-monospace,monospace;letter-spacing:1px}
+  #hint{position:fixed;left:10px;bottom:8px;z-index:4;color:var(--dim);font:10.5px ui-monospace,monospace;
+    pointer-events:none;text-shadow:0 1px 2px #000}
+  /* ---------- control panel ---------- */
+  #panelToggle{position:fixed;top:8px;right:8px;z-index:8}
+  #panel{position:fixed;top:8px;right:8px;bottom:8px;width:288px;z-index:7;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;overflow-y:auto;overflow-x:hidden;padding:10px 12px 16px;
+    backdrop-filter:blur(6px);scrollbar-width:thin}
+  #panel.hidden{display:none}
+  #panel h2{font-size:12px;margin:2px 0 8px;color:#eaf6ff;letter-spacing:.6px}
+  #panel h3{font-size:10.5px;margin:12px 0 4px;color:var(--acc);text-transform:uppercase;letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);padding-bottom:3px}
+  .row{display:grid;grid-template-columns:108px 1fr 46px;gap:6px;align-items:center;margin:3px 0}
+  .row label{font-size:11px;color:var(--txt)}
+  .row .val{font:10.5px ui-monospace,monospace;color:var(--acc2);text-align:right}
+  .row input[type=range]{width:100%;accent-color:var(--acc);height:18px;margin:0;cursor:pointer}
+  .chk{display:flex;align-items:center;gap:8px;font-size:11px;margin:5px 0;cursor:pointer}
+  .chk input{accent-color:var(--acc);width:14px;height:14px;cursor:pointer}
+  #panel .keys{margin-top:14px;font:10px/1.7 ui-monospace,monospace;color:var(--dim)}
+  #panel .keys b{color:var(--txt)}
+  @media (max-width:760px){
+    #toolbar{max-width:calc(100vw - 16px);top:6px}
+    #hud{top:118px;font-size:10px;min-width:190px;padding:6px 8px}
+    #panel{width:min(310px,88vw)}
+    #hint{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Physics simulation canvas"></canvas>
+
+<div id="toolbar" role="toolbar" aria-label="Main toolbar">
+  <button class="btn" id="btnPause" aria-label="Pause or resume simulation">⏸ Pause</button>
+  <button class="btn" id="btnStep" aria-label="Single step">⏭ Step</button>
+  <button class="btn warn" id="btnReset" aria-label="Reset scenario">↺ Reset</button>
+  <div class="tgrp" role="group" aria-label="Tools">
+    <button class="btn active" data-tool="drag" aria-label="Drag tool">Drag</button>
+    <button class="btn" data-tool="pin" aria-label="Pin tool">Pin</button>
+    <button class="btn" data-tool="cut" aria-label="Cut tool">Cut</button>
+    <button class="btn" data-tool="gust" aria-label="Gust tool">Gust</button>
+    <button class="btn" data-tool="spawn" aria-label="Spawn tool">Spawn</button>
+  </div>
+  <label class="sel">object
+    <select id="spawnType" aria-label="Object type to spawn">
+      <option value="rope">rope</option><option value="cloth">cloth</option>
+      <option value="ball">elastic ball</option><option value="blob">soft blob</option>
+      <option value="balloon">balloon</option><option value="circle">static circle</option>
+      <option value="box">static box</option>
+    </select>
+  </label>
+  <label class="sel">scenario
+    <select id="scenarioSel" aria-label="Scenario"></select>
+  </label>
+  <label class="sel">view
+    <select id="vizSel" aria-label="Visualization mode">
+      <option value="render">render</option><option value="particles">particles</option>
+      <option value="constraints">constraints</option><option value="velocity">velocity</option>
+      <option value="stress">stress</option><option value="contacts">contacts</option>
+      <option value="pinned">pinned</option><option value="grid">grid cells</option>
+    </select>
+  </label>
+</div>
+<button class="btn" id="panelToggle" aria-label="Toggle controls panel">☰ Controls</button>
+
+<div id="hud" aria-label="Performance and simulation status">
+  <div class="r"><span>fps</span><span id="hFps">–</span></div>
+  <div class="r"><span>frame</span><span id="hMs">–</span></div>
+  <div class="r"><span>particles</span><span id="hParts">–</span></div>
+  <div class="r"><span>constraints</span><span id="hCons">–</span></div>
+  <div class="r"><span>collision pairs</span><span id="hPairs">–</span></div>
+  <div class="r"><span>solver</span><span id="hSolver">–</span></div>
+  <div class="r"><span>max constraint err</span><span id="hErr">–</span></div>
+  <div class="r"><span>tool</span><span id="hTool">–</span></div>
+  <div class="r"><span>scenario</span><span id="hScene">–</span></div>
+  <div class="r"><span>state</span><span id="hState">–</span></div>
+</div>
+<div id="pausedBadge">⏸ PAUSED — press space to resume</div>
+<div id="hint">space pause · n step · r reset · v view · 1-5 tools · drag cloth, pin, cut, gust, spawn</div>
+
+<div id="panel">
+  <h2>⚙ Controls</h2>
+  <div id="panelBody"></div>
+  <div class="keys">
+    <b>space</b> pause/resume · <b>n</b> single step · <b>r</b> reset<br>
+    <b>v</b> cycle view · <b>1…5</b> select tool<br>
+    <b>drag</b> grab &amp; fling · <b>pin</b> click toggles anchor<br>
+    <b>cut</b> slice constraints · <b>gust</b> click=burst, drag=directed<br>
+    <b>spawn</b> drag to size (rope: start→end)
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Deformable Physics Playground
+   Verlet integration + position-based constraint projection solver.
+   Single self-contained file — no external resources of any kind.
+   ===================================================================== */
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+
+/* ---------------------------- parameters ---------------------------- */
+const DEFAULTS = {
+  gravAng: 0,      // degrees, 0 = straight down
+  grav: 28,        // units/s^2
+  windAng: 0,      // degrees, 0 = +x
+  wind: 0,         // units/s^2 base
+  dtMs: 16.7,      // timestep in ms
+  substeps: 2,
+  iterations: 5,
+  stiff: 0.75,     // structural
+  bend: 0.35,      // bending
+  pressure: 0.85,  // area/pressure constraint strength
+  damp: 0.06,      // velocity damping /s
+  fric: 0.45,
+  rest: 0.25,      // restitution
+  thick: 1.0,      // collision thickness multiplier
+  selfCol: true,
+  tear: 3.0,       // tear threshold: strain ratio (rest lengths)
+  density: 1.0,    // new object density
+  grabK: 0.22,     // interaction strength
+  radius: 4.0,     // interaction radius (world units)
+  shadows: true,
+};
+const params = Object.assign({}, DEFAULTS);
+const dtSec = () => params.dtMs / 1000;
+
+/* materials */
+const MAT = {
+  cloth:   { r: 0.30, sail: 1.60, gscale:  1.00, selfK: 0.55, m: 1.0 },
+  rope:    { r: 0.32, sail: 0.80, gscale:  1.00, selfK: 0.75, m: 1.2 },
+  ball:    { r: 0.42, sail: 0.35, gscale:  1.00, selfK: 1.00, m: 1.6 },
+  blob:    { r: 0.34, sail: 0.50, gscale:  1.00, selfK: 1.00, m: 1.2 },
+  balloon: { r: 0.34, sail: 1.20, gscale: -2.40, selfK: 1.00, m: 0.10 },
+};
+
+/* ---------------------------- canvas / view ------------------------- */
+const canvas = document.getElementById('view');
+const ctx = canvas.getContext('2d');
+const WORLD_H = 44;              // fixed world height in units; y=0 is the floor
+let dpr = 1, cssW = 0, cssH = 0, scale = 1, worldW = 80;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  cssW = window.innerWidth; cssH = window.innerHeight;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  scale = cssH / WORLD_H;
+  worldW = cssW / scale;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------------------------- world state --------------------------- */
+const parts = [];     // particles
+const cons = [];      // distance constraints
+const bodies = [];    // renderable groupings
+const obsts = [];     // static obstacles
+let simT = 0, lastH = 1 / 120;
+let collPairs = 0, maxErr = 0, tornCount = 0;
+const gusts = [], sparks = [], bladeTrail = [], contactsViz = [];
+
+function makePart(x, y, mat, body) {
+  const m = MAT[mat];
+  const mass = params.density * m.m;
+  const p = {
+    x, y, px: x, py: y, mat, body, mass,
+    inv: 1 / mass, pin: false,
+    rad: m.r, phase: Math.random() * TAU,
+  };
+  parts.push(p);
+  return p;
+}
+function setPin(p, on) {
+  p.pin = on;
+  p.inv = on ? 0 : 1 / p.mass;
+}
+function makeCon(a, b, type, kMul, opts) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  // alphaMul: relative compliance (higher = softer)
+  const alphaMul = (opts && opts.alphaMul) ||
+    (type === 'shear' ? 2 : type === 'edge' ? 0.05 : type === 'attach' ? 0.01 : type === 'rope' ? 0.1 : 1);
+  const c = {
+    a, b, rest: Math.hypot(dx, dy), type,
+    k: kMul || 1, strain: 0, dead: false, lam: 0, alphaMul,
+    tearable: !(opts && opts.noTear || type === 'shear' || type === 'edge'),
+    blob: (opts && opts.blob) || null,
+  };
+  cons.push(c);
+  return c;
+}
+function makeBody(type, extra) {
+  const b = Object.assign({ type, parts: [], hue: 0 }, extra);
+  bodies.push(b);
+  return b;
+}
+
+/* ---------------------------- builders ------------------------------ */
+function buildCloth(x0, y0, cols, rows, sp, opts) {
+  opts = opts || {};
+  const sMul = opts.stiffMul || 1;
+  const grid = [];
+  const body = makeBody('cloth', {
+    grid, pattern: opts.pattern || 'solid',
+    colA: opts.colA || [64, 182, 168], colB: opts.colB || [46, 140, 130],
+    tris: [], triRest: [],
+  });
+  for (let r = 0; r < rows; r++) {
+    grid.push([]);
+    for (let c = 0; c < cols; c++) {
+      // world y is up: successive rows hang downward from y0
+      const p = makePart(x0 + c * sp, y0 - r * sp, 'cloth', body);
+      p.gr = r; p.gc = c;
+      grid[r].push(p); body.parts.push(p);
+    }
+  }
+  const noTear = !!opts.noTear;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const p = grid[r][c];
+    if (c + 1 < cols) makeCon(p, grid[r][c + 1], 'struct', 1, { noTear, alphaMul: sMul });
+    if (r + 1 < rows) makeCon(p, grid[r + 1][c], 'struct', 1, { noTear, alphaMul: sMul });
+    if (opts.shear !== false) {
+      if (c + 1 < cols && r + 1 < rows) makeCon(p, grid[r + 1][c + 1], 'shear', 1, { noTear, alphaMul: sMul * 2 });
+      if (c > 0 && r + 1 < rows) makeCon(p, grid[r + 1][c - 1], 'shear', 1, { noTear, alphaMul: sMul * 2 });
+    }
+    if (opts.bend !== false) {
+      if (c + 2 < cols) makeCon(p, grid[r][c + 2], 'bend', 1, { noTear: true });
+      if (r + 2 < rows) makeCon(p, grid[r + 2][c], 'bend', 1, { noTear: true });
+    }
+  }
+  // triangles for rendering
+  for (let r = 0; r + 1 < rows; r++) for (let c = 0; c + 1 < cols; c++) {
+    const a = grid[r][c], b = grid[r][c + 1], d = grid[r + 1][c], e = grid[r + 1][c + 1];
+    body.tris.push([a, b, d], [b, e, d]);
+    body.triRest.push(signedArea(a, b, d), signedArea(b, e, d));
+  }
+  return body;
+}
+function signedArea(a, b, c) { return 0.5 * ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)); }
+
+function buildRope(x0, y0, x1, y1, segLen, opts) {
+  opts = opts || {};
+  const sMul = opts.stiffMul || 0.1;
+  const dMul = opts.densityMul || 1;
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  const n = Math.max(2, Math.round(len / (segLen || 0.7)) + 1);
+  const body = makeBody('rope', { colA: opts.colA || [201, 161, 95] });
+  for (let i = 0; i < n; i++) {
+    const t = n === 1 ? 0 : i / (n - 1);
+    const p = makePart(lerp(x0, x1, t), lerp(y0, y1, t), 'rope', body);
+    if (dMul !== 1) { p.mass *= dMul; p.inv = 1 / p.mass; }
+    body.parts.push(p);
+  }
+  for (let i = 0; i + 1 < n; i++)
+    makeCon(body.parts[i], body.parts[i + 1], 'rope', 1, { noTear: !!opts.noTear, blob: opts.blob, alphaMul: sMul });
+  if (opts.bend !== false)
+    for (let i = 0; i + 2 < n; i++)
+      makeCon(body.parts[i], body.parts[i + 2], 'bend', 1, { noTear: true });
+  return body;
+}
+
+function buildBall(cx, cy, R, opts) {
+  opts = opts || {};
+  const sMul = opts.stiffMul || 0.02;
+  const rings = clamp(Math.round(R / 0.85), 2, 5);
+  const body = makeBody('ball', { colA: opts.colA || [242, 140, 59], R });
+  let prevRing = null;
+  const center = makePart(cx, cy, 'ball', body);
+  body.parts.push(center);
+  for (let k = 1; k <= rings; k++) {
+    const rad = R * k / rings;
+    const n = Math.max(6, Math.round(TAU * rad / 0.85));
+    const ring = [];
+    for (let j = 0; j < n; j++) {
+      const a = j / n * TAU;
+      ring.push(makePart(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, 'ball', body));
+    }
+    body.parts.push(...ring);
+    for (let j = 0; j < n; j++) {
+      makeCon(ring[j], ring[(j + 1) % n], 'struct', 1, { noTear: true, alphaMul: sMul });          // hoop
+      if (k === 1) makeCon(ring[j], center, 'struct', 1, { noTear: true, alphaMul: sMul });        // spoke
+      else {
+        const t = j / n * prevRing.length;
+        const p0 = prevRing[Math.floor(t) % prevRing.length];
+        const p1 = prevRing[(Math.floor(t) + 1) % prevRing.length];
+        makeCon(ring[j], p0, 'struct', 1, { noTear: true, alphaMul: sMul });
+        makeCon(ring[j], p1, 'shear', 1, { noTear: true, alphaMul: sMul * 1.5 });
+        makeCon(ring[j], prevRing[(Math.floor(t) + prevRing.length - 1) % prevRing.length], 'shear', 1, { noTear: true, alphaMul: sMul * 1.5 });
+      }
+      makeCon(ring[j], ring[(j + 2) % n], 'bend', 1, { noTear: true });
+    }
+    if (k > 1) for (let j = 0; j < prevRing.length; j++)
+      makeCon(prevRing[j], prevRing[(j + 2) % prevRing.length], 'bend', 1, { noTear: true });
+    prevRing = ring;
+  }
+  body.ring = prevRing;
+  return body;
+}
+
+function buildBlob(cx, cy, R, opts) {
+  opts = opts || {};
+  const mat = opts.balloon ? 'balloon' : 'blob';
+  const n = clamp(Math.round(TAU * R / 0.7), 12, 40);
+  const body = makeBody('blob', {
+    balloon: !!opts.balloon, dead: false,
+    colA: opts.colA || (opts.balloon ? [226, 87, 76] : [226, 111, 168]),
+  });
+  for (let j = 0; j < n; j++) {
+    const a = j / n * TAU;
+    body.parts.push(makePart(cx + Math.cos(a) * R, cy + Math.sin(a) * R, mat, body));
+  }
+  const blob = { restArea: Math.abs(signedPolyArea(body.parts)) * 0.85, k: 1, body };
+  body.blob = blob;
+  for (let j = 0; j < n; j++) {
+    makeCon(body.parts[j], body.parts[(j + 1) % n], 'edge', 1, { noTear: !!opts.noTear, blob });
+    makeCon(body.parts[j], body.parts[(j + 2) % n], 'bend', 1, { noTear: true });
+  }
+  return body;
+}
+function signedPolyArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return 0.5 * a;
+}
+
+function addCircleObst(x, y, r) { obsts.push({ type: 'circle', x, y, r }); }
+function addBoxObst(x, y, hw, hh, ang) { obsts.push({ type: 'box', x, y, hw, hh, ang: ang || 0 }); }
+
+/* ---------------------------- scenarios ----------------------------- */
+const FLOOR = 0, CEIL = WORLD_H;
+function clearWorld() {
+  parts.length = 0; cons.length = 0; bodies.length = 0; obsts.length = 0;
+  gusts.length = 0; sparks.length = 0; bladeTrail.length = 0; contactsViz.length = 0;
+  grabs.length = 0; simT = 0; tornCount = 0;
+}
+
+const SCENARIOS = {
+  flag: {
+    label: 'Flag & Wind',
+    params: { wind: 11, windAng: 0, damp: 0.05, rest: 0.3 },
+    build() {
+      const px = Math.max(4, worldW * 0.21);
+      const w = Math.min(17, worldW * 0.55), h = Math.min(9, CEIL * 0.24);
+      const anchorY = CEIL * 0.62;                     // top of the hoist edge
+      const mastBot = anchorY - h - 0.6;               // cover the full pinned column
+      addBoxObst(px, (CEIL + mastBot) / 2, 0.45, (CEIL - mastBot) / 2, 0);
+      const cloth = buildCloth(px + 0.55, anchorY - 0.4, Math.round(w / 0.85), Math.round(h / 0.85), 0.85,
+        { pattern: 'stripes', colA: [192, 57, 43], colB: [232, 228, 218] });
+      for (const p of cloth.grid) setPin(p[0], true);          // hoist edge
+      // a couple of targets on the ground
+      buildBall(worldW * 0.44, 2.25, 2.1, { colA: [242, 140, 59] });
+      buildBall(worldW * 0.58, 1.85, 1.7, { colA: [155, 130, 240] });
+    }
+  },
+  drape: {
+    label: 'Cloth Drape',
+    params: { wind: 2 },
+    build() {
+      addCircleObst(worldW * 0.40, CEIL * 0.52, 4.2);
+      addCircleObst(worldW * 0.63, CEIL * 0.30, 3.0);
+      addBoxObst(worldW * 0.80, CEIL * 0.62, 5.5, 0.7, -0.35);  // ramp
+      addBoxObst(worldW * 0.18, CEIL * 0.44, 0.6, 3.2, 0);      // pillar edge
+      const w = Math.min(15, worldW * 0.55);
+      buildCloth(worldW * 0.5 - w / 2, CEIL * 0.86, Math.round(w / 0.85), 12, 0.85,
+        { pattern: 'solid', colA: [70, 130, 210], colB: [52, 100, 170] });
+      buildBall(worldW * 0.30, 2.2, 2.2, { colA: [242, 140, 59] });
+    }
+  },
+  bridge: {
+    label: 'Bridge Under Load',
+    params: { tear: 3.0, fric: 0.55 },
+    build() {
+      const x0 = worldW * 0.14, x1 = worldW * 0.86, deckY = CEIL * 0.40;
+      addBoxObst(x0, deckY - 4, 0.9, 4.5, 0);
+      addBoxObst(x1, deckY - 4, 0.9, 4.5, 0);
+      const span = x1 - x0 - 2.4;
+      const cols = clamp(Math.round(span / 0.9), 8, 70);
+      const deck = buildCloth(x0 + 1.2, deckY, cols, 3, span / (cols - 1), {
+        pattern: 'planks', colA: [169, 113, 63], colB: [138, 90, 48], stiffMul: 0.08,
+      });
+      for (let r = 0; r < 3; r++) { setPin(deck.grid[r][0], true); setPin(deck.grid[r][cols - 1], true); }
+      // loading
+      for (let i = 0; i < 2; i++) {
+        const b = buildBall(x0 + span * (0.34 + 0.28 * i), deckY + 3.2, 2.6, { colA: [130, 140, 155] });
+        for (const p of b.parts) { p.mass *= 1.5; p.inv = p.pin ? 0 : 1 / p.mass; }
+      }
+      buildBlob(worldW * 0.5, deckY + 12, 2.6, { colA: [226, 111, 168] });
+    }
+  },
+  stack: {
+    label: 'Soft-Body Stack',
+    params: { fric: 0.7, rest: 0.12, damp: 0.08 },
+    build() {
+      const r = 2.1, gx = worldW * 0.40;
+      // shallow pit walls keep the pyramid together
+      addBoxObst(gx - 7.6, 2.2, 0.7, 2.2, 0);
+      addBoxObst(gx + 7.6, 2.2, 0.7, 2.2, 0);
+      const spots = [[gx, r + 0.05], [gx - r * 1.75, r * 3.1 + 0.05], [gx + r * 1.75, r * 3.1 + 0.05],
+                     [gx - r * 0.9, r * 5.15 + 0.05], [gx + r * 0.9, r * 5.15 + 0.05], [gx, r * 7.2 + 0.05]];
+      const cols = [[242, 140, 59], [155, 130, 240], [80, 200, 120], [240, 100, 100], [100, 190, 230], [230, 190, 90]];
+      spots.forEach((s, i) => buildBall(s[0], s[1], r, { colA: cols[i] }));
+      buildBlob(worldW * 0.72, r + 0.3, 2.4, { colA: [226, 111, 168] });
+      buildRope(worldW * 0.12, CEIL - 1, worldW * 0.12, CEIL * 0.5, 0.7);
+      setPin(parts[parts.length - 1], false);
+      setPin(bodies[bodies.length - 1].parts[0], true);
+    }
+  },
+  ropes: {
+    label: 'Rope Net & Pendulums',
+    params: { wind: 4 },
+    build() {
+      const x0 = worldW * 0.18, x1 = worldW * 0.82, netY = CEIL * 0.55;
+      addBoxObst(x0, netY - 3.4, 0.7, 3.8, 0);
+      addBoxObst(x1, netY - 3.4, 0.7, 3.8, 0);
+      const w = x1 - x0;
+      const net = buildCloth(x0, netY, Math.round(w / 0.9), 4, w / Math.round(w / 0.9),
+        { shear: true, pattern: 'solid', colA: [201, 161, 95], colB: [170, 130, 70], stiffMul: 0.5 });
+      for (let c = 0; c < net.grid[0].length; c += 2) setPin(net.grid[0][c], true);
+      const b = buildBall(worldW * 0.5, netY - 5, 2.9, { colA: [130, 140, 155] });
+      for (const p of b.parts) { p.mass *= 1.4; p.inv = p.pin ? 0 : 1 / p.mass; }
+      // pendulums with blob bobs
+      const pl = buildRope(worldW * 0.07, CEIL - 1, worldW * 0.07, CEIL * 0.42, 0.7, { noTear: true });
+      setPin(pl.parts[0], true);
+      const bl = buildBlob(worldW * 0.07, CEIL * 0.42 - 2, 2.2, { colA: [80, 200, 120] });
+      makeCon(pl.parts[pl.parts.length - 1], bl.parts[0], 'attach', 1, { noTear: true });
+      const pr = buildRope(worldW * 0.93, CEIL - 1, worldW * 0.93, CEIL * 0.42, 0.7, { noTear: true });
+      setPin(pr.parts[0], true);
+      const br = buildBlob(worldW * 0.93, CEIL * 0.42 - 2, 2.2, { colA: [226, 111, 168] });
+      makeCon(pr.parts[pr.parts.length - 1], br.parts[0], 'attach', 1, { noTear: true });
+      // give them a swing
+      for (const p of bl.parts) { p.px = p.x - 0.18; }
+      for (const p of br.parts) { p.px = p.x + 0.18; }
+    }
+  },
+  balloons: {
+    label: 'Balloon Chamber',
+    params: { wind: 3, rest: 0.3 },
+    build() {
+      addBoxObst(worldW * 0.06, CEIL * 0.5, 0.8, CEIL * 0.5, 0);
+      addBoxObst(worldW * 0.94, CEIL * 0.5, 0.8, CEIL * 0.5, 0);
+      addBoxObst(worldW * 0.35, CEIL - 1.2, 7, 0.6, 0);          // ceiling shelf
+      addBoxObst(worldW * 0.70, CEIL * 0.28, 4.5, 0.6, 0.25);
+      const cols = [[226, 87, 76], [226, 177, 60], [76, 201, 226], [124, 226, 60], [177, 60, 226]];
+      for (let i = 0; i < 4; i++) {
+        const bx = worldW * (0.16 + 0.18 * i), by = CEIL * 0.62;
+        const bal = buildBlob(bx, by, 2.5 + 0.25 * (i % 2), { balloon: true, colA: cols[i] });
+        const rope = buildRope(bx, 1.2, bx, by - 2.5 - 0.25 * (i % 2) - 0.4, 0.7, { noTear: true, densityMul: 0.12 });
+        setPin(rope.parts[0], true);
+        makeCon(rope.parts[rope.parts.length - 1], bal.parts[Math.round(bal.parts.length * 0.75)], 'attach', 1, { noTear: true });
+      }
+      buildBall(worldW * 0.55, 2.0, 2.0, { colA: [242, 140, 59] });
+    }
+  },
+  stress: {
+    label: 'Destructive Stress Test',
+    params: { tear: 1.3, wind: 5 },
+    build() {
+      const w = Math.min(22, worldW * 0.62);
+      const curtain = buildCloth(worldW * 0.5 - w / 2, CEIL - 1.4, Math.round(w / 0.85), Math.round(15 / 0.85), 0.85,
+        { pattern: 'solid', colA: [150, 90, 200], colB: [110, 60, 160] });
+      const top = curtain.grid[0];
+      for (let c = 0; c < top.length; c += 3) setPin(top[c], true);
+      // wrecking balls on ropes
+      const mk = (x, vx, col) => {
+        const rope = buildRope(x, CEIL - 1, x, CEIL * 0.45, 0.6, { noTear: true });
+        setPin(rope.parts[0], true);
+        const ball = buildBall(x, CEIL * 0.45 - 2.4, 2.5, { colA: col });
+        for (const p of ball.parts) { p.mass *= 4; p.inv = p.pin ? 0 : 1 / p.mass; }
+        makeCon(rope.parts[rope.parts.length - 1], ball.ring[0], 'attach', 1, { noTear: true });
+        for (const p of ball.parts) p.px = p.x - vx * 0.35;
+        return ball;
+      };
+      mk(worldW * 0.16, -14, [120, 130, 145]);
+      mk(worldW * 0.84, 14, [120, 130, 145]);
+      // crates
+      addBoxObst(worldW * 0.30, 1.4, 1.4, 1.4, 0);
+      addBoxObst(worldW * 0.30, 4.2, 1.4, 1.4, 0.1);
+      addBoxObst(worldW * 0.72, 1.2, 1.2, 1.2, 0.3);
+      buildBall(worldW * 0.5, 3.2, 2.2, { colA: [242, 140, 59] });
+    }
+  },
+};
+
+let scenarioName = 'flag';
+function loadScenario(name) {
+  scenarioName = name;
+  clearWorld();
+  const sc = SCENARIOS[name];
+  // restore defaults, then apply scenario overrides
+  Object.assign(params, DEFAULTS, sc.params || {});
+  sc.build();
+  syncUI();
+  updateHUDNow();
+}
+
+/* ---------------------------- spatial hash -------------------------- */
+let gCounts = new Int32Array(0), gItems = new Int32Array(0), gStart = new Int32Array(0),
+    gCursor = new Int32Array(0), pCell = new Int32Array(0);
+let gCols = 1, gRows = 1, gCell = 1, gridMaxCount = 1;
+
+function rebuildGrid() {
+  let rmax = 0.1;
+  for (let i = 0; i < parts.length; i++) if (parts[i].rad > rmax) rmax = parts[i].rad;
+  gCell = Math.max(0.8, 2 * rmax * params.thick);
+  gCols = Math.max(1, Math.ceil(worldW / gCell) + 2);
+  gRows = Math.max(1, Math.ceil(WORLD_H / gCell) + 2);
+  const nc = gCols * gRows;
+  if (gCounts.length < nc) { gCounts = new Int32Array(nc); gStart = new Int32Array(nc + 1); gCursor = new Int32Array(nc); }
+  if (gItems.length < parts.length) { gItems = new Int32Array(parts.length); pCell = new Int32Array(parts.length); }
+  gCounts.fill(0, 0, nc);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    const cx = clamp(Math.floor(p.x / gCell) + 1, 0, gCols - 1);
+    const cy = clamp(Math.floor(p.y / gCell) + 1, 0, gRows - 1);
+    const c = cy * gCols + cx;
+    pCell[i] = c; gCounts[c]++;
+  }
+  let acc = 0;
+  for (let c = 0; c < nc; c++) { gStart[c] = acc; gCursor[c] = acc; acc += gCounts[c]; }
+  gStart[nc] = acc;
+  gridMaxCount = 1;
+  for (let i = 0; i < parts.length; i++) {
+    const c = pCell[i];
+    gItems[gCursor[c]++] = i;
+    if (gCounts[c] > gridMaxCount) gridMaxCount = gCounts[c];
+  }
+}
+
+/* ---------------------------- solver -------------------------------- */
+function gravityVec() {
+  const a = params.gravAng * Math.PI / 180;
+  return { x: Math.sin(a) * params.grav, y: -Math.cos(a) * params.grav };
+}
+function windVec(p) {
+  const m = MAT[p.mat];
+  if (params.wind <= 0.001) return 0;
+  const a = params.windAng * Math.PI / 180;
+  const flut = 1 + 0.45 * Math.sin(simT * 6.3 + p.phase) + 0.25 * Math.sin(simT * 11.7 + 2.3 * p.phase);
+  return params.wind * m.sail * flut;
+}
+function gustAccel(p, out) {
+  out.x = 0; out.y = 0;
+  for (let i = 0; i < gusts.length; i++) {
+    const g = gusts[i];
+    const env = g.life / g.ttl;
+    const dx = p.x - g.x, dy = p.y - g.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > g.rad * g.rad) continue;
+    const fall = 1 - Math.sqrt(d2) / g.rad;
+    if (g.burst) {
+      const d = Math.sqrt(d2) + 1e-6;
+      out.x += dx / d * g.speed * fall * fall * env;
+      out.y += dy / d * g.speed * fall * fall * env;
+    } else {
+      out.x += g.dx * g.speed * fall * fall * env;
+      out.y += g.dy * g.speed * fall * fall * env;
+    }
+  }
+}
+const _ga = { x: 0, y: 0 };
+
+function integrate(h, dampF, g) {
+  const h2 = h * h;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.inv === 0) continue;
+    const m = MAT[p.mat];
+    let ax = g.x * m.gscale, ay = g.y * m.gscale;
+    const w = windVec(p);
+    if (w !== 0) { ax += Math.cos(params.windAng * Math.PI / 180) * w; ay += Math.sin(params.windAng * Math.PI / 180) * w; }
+    if (gusts.length) { gustAccel(p, _ga); ax += _ga.x; ay += _ga.y; }
+    let vx = (p.x - p.px) * dampF, vy = (p.y - p.py) * dampF;
+    p.px = p.x; p.py = p.y;
+    p.x += vx + ax * h2;
+    p.y += vy + ay * h2;
+  }
+}
+
+function applyGrab() {
+  for (let i = 0; i < grabs.length; i++) {
+    const gr = grabs[i], p = gr.p;
+    if (p.inv === 0) continue;
+    // gentle per-substep pull so the solver can distribute strain to
+    // neighbours instead of concentrating it at the grabbed patch
+    const k = Math.min(0.6, params.grabK * gr.w);
+    p.x += (mouse.wx + gr.ox - p.x) * k;
+    p.y += (mouse.wy + gr.oy - p.y) * k;
+  }
+}
+
+/* XPBD distance constraints: compliance gives iteration-count-independent
+   softness, so cloth sags, folds and billows regardless of solver settings. */
+function solveDistance(alphaS, alphaB, final) {
+  const h2inv = 1 / (lastH * lastH);
+  for (let i = 0; i < cons.length; i++) {
+    const c = cons[i];
+    if (c.dead) continue;
+    const a = c.a, b = c.b;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < 1e-9) continue;
+    const w = a.inv + b.inv;
+    const at = (c.type === 'bend' ? alphaB : alphaS) * c.alphaMul * h2inv;
+    if (w + at <= 1e-12) continue;
+    const C = d - c.rest;
+    const dl = (-C - at * c.lam) / (w + at);
+    c.lam += dl;
+    const nx = dx / d, ny = dy / d;
+    a.x -= nx * dl * a.inv; a.y -= ny * dl * a.inv;
+    b.x += nx * dl * b.inv; b.y += ny * dl * b.inv;
+    if (final) {
+      c.strain = Math.abs(d - c.rest) / c.rest;
+      if (c.strain > maxErr && c.type !== 'bend') maxErr = c.strain;
+    }
+  }
+}
+
+function solvePressure(kP) {
+  for (const body of bodies) {
+    if (body.type !== 'blob' || body.dead) continue;
+    const ring = body.parts, n = ring.length;
+    const blob = body.blob;
+    let A = 0;
+    for (let i = 0; i < n; i++) {
+      const p = ring[i], q = ring[(i + 1) % n];
+      A += p.x * q.y - q.x * p.y;
+    }
+    A *= 0.5;
+    const Cp = (A - blob.restArea) / blob.restArea;
+    if (finalPassErr && Math.abs(Cp) > maxErr) maxErr = Math.abs(Cp);
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      const prev = ring[(i - 1 + n) % n], next = ring[(i + 1) % n], p = ring[i];
+      const gx = 0.5 * (next.y - prev.y), gy = 0.5 * (prev.x - next.x);
+      _gx[i] = gx; _gy[i] = gy;
+      sum += (gx * gx + gy * gy) * p.inv;
+    }
+    if (sum < 1e-9) continue;
+    const s = -kP * Cp / sum;
+    for (let i = 0; i < n; i++) {
+      const p = ring[i];
+      p.x += s * _gx[i] * p.inv;
+      p.y += s * _gy[i] * p.inv;
+    }
+  }
+}
+const _gx = new Float64Array(64), _gy = new Float64Array(64);
+let finalPassErr = false;
+
+/* contact velocity response: friction + restitution.
+   pvx/pvy are the particle velocity captured BEFORE the positional
+   correction, so the correction itself never injects energy. */
+function contactVel(p, nx, ny, final, pvx, pvy) {
+  const vn = pvx * nx + pvy * ny;
+  if (vn >= 0) return false;
+  let nvx = (pvx - vn * nx) * (1 - params.fric);
+  let nvy = (pvy - vn * ny) * (1 - params.fric);
+  if (final && -vn > 0.5 && params.rest > 0.001) {
+    nvx += -params.rest * vn * nx;
+    nvy += -params.rest * vn * ny;
+  }
+  p.px = p.x - nvx; p.py = p.y - nvy;
+  recordContact(p.x, p.y, nx, ny, final, -vn);
+  return true;
+}
+
+function collideBounds(p, final) {
+  const r = p.rad * params.thick;
+  const pvx = p.x - p.px, pvy = p.y - p.py;
+  let hit = false, nx = 0, ny = 0;
+  if (p.y < r) { p.y = r; nx = 0; ny = 1; hit = true; }
+  else if (p.y > CEIL - r) { p.y = CEIL - r; nx = 0; ny = -1; hit = true; }
+  if (p.x < r) { p.x = r; nx = 1; ny = 0; hit = true; }
+  else if (p.x > worldW - r) { p.x = worldW - r; nx = -1; ny = 0; hit = true; }
+  if (hit) contactVel(p, nx, ny, final, pvx, pvy);
+}
+
+function collideObst(p, o, final) {
+  const r = p.rad * params.thick;
+  if (o.type === 'circle') {
+    const dx = p.x - o.x, dy = p.y - o.y;
+    const R = o.r + r;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= R * R) return;
+    const pvx = p.x - p.px, pvy = p.y - p.py;
+    const d = Math.sqrt(d2) || 1e-6;
+    const nx = dx / d, ny = dy / d;
+    p.x = o.x + nx * R; p.y = o.y + ny * R;
+    contactVel(p, nx, ny, final, pvx, pvy);
+    return;
+  }
+  // box (possibly rotated)
+  const ca = Math.cos(o.ang), sa = Math.sin(o.ang);
+  const rx = p.x - o.x, ry = p.y - o.y;
+  let lx = ca * rx + sa * ry, ly = -sa * rx + ca * ry;
+  const cx = clamp(lx, -o.hw, o.hw), cy = clamp(ly, -o.hh, o.hh);
+  let nx, ny;
+  if (cx === lx && cy === ly) {
+    // center inside: push along min-penetration axis
+    const pxn = o.hw - Math.abs(lx), pyn = o.hh - Math.abs(ly);
+    if (pxn < pyn) { nx = lx >= 0 ? 1 : -1; ny = 0; lx = nx * (o.hw + r); ly = cy; }
+    else { nx = 0; ny = ly >= 0 ? 1 : -1; lx = cx; ly = ny * (o.hh + r); }
+  } else {
+    const dx = lx - cx, dy = ly - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d >= r) return;
+    if (d < 1e-9) { nx = 0; ny = 1; } else { nx = dx / d; ny = dy / d; }
+    lx = cx + nx * r; ly = cy + ny * r;
+  }
+  // back to world
+  const pvx = p.x - p.px, pvy = p.y - p.py;
+  p.x = o.x + ca * lx - sa * ly;
+  p.y = o.y + sa * lx + ca * ly;
+  const wnx = ca * nx - sa * ny, wny = sa * nx + ca * ny;
+  contactVel(p, wnx, wny, final, pvx, pvy);
+}
+
+function recordContact(x, y, nx, ny, final, impact) {
+  if (!final) return;
+  collPairs++;
+  if (contactsViz.length < 500) contactsViz.push({ x, y, nx, ny });
+  if (impact > 4.2 && sparks.length < 240)
+    sparks.push({ x, y, nx, ny, life: 0.32, ttl: 0.32 });
+}
+
+function collidePP(final) {
+  rebuildGrid();
+  const thick = params.thick;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.inv === 0) continue;
+    const cx = clamp(Math.floor(p.x / gCell) + 1, 0, gCols - 1);
+    const cy = clamp(Math.floor(p.y / gCell) + 1, 0, gRows - 1);
+    const ri = p.rad * thick;
+    for (let oy = -1; oy <= 1; oy++) {
+      const yy = cy + oy; if (yy < 0 || yy >= gRows) continue;
+      for (let ox = -1; ox <= 1; ox++) {
+        const xx = cx + ox; if (xx < 0 || xx >= gCols) continue;
+        const c = yy * gCols + xx;
+        for (let k = gStart[c]; k < gStart[c + 1]; k++) {
+          const j = gItems[k];
+          if (j <= i) continue;
+          const q = parts[j];
+          const self = q.body === p.body ? MAT[p.mat].selfK : 1;
+          const minD = (ri + q.rad * thick) * self;
+          let dx = q.x - p.x, dy = q.y - p.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= minD * minD || d2 < 1e-12) continue;
+          const d = Math.sqrt(d2);
+          const nx = dx / d, ny = dy / d;
+          const pen = minD - d;
+          const w = p.inv + q.inv;
+          if (w === 0) continue;
+          // capture velocities BEFORE position correction (Verlet: a position
+          // push must not become velocity)
+          const pvx = p.x - p.px, pvy = p.y - p.py;
+          const qvx = q.x - q.px, qvy = q.y - q.py;
+          p.x -= nx * pen * (p.inv / w); p.y -= ny * pen * (p.inv / w);
+          q.x += nx * pen * (q.inv / w); q.y += ny * pen * (q.inv / w);
+          // tangential friction on the relative velocity
+          const rvx = qvx - pvx, rvy = qvy - pvy;
+          const vn = rvx * nx + rvy * ny;
+          const tvx = rvx - vn * nx, tvy = rvy - vn * ny;
+          const f = params.fric * 0.5;
+          const ipx = tvx * f * (p.inv / w), ipy = tvy * f * (p.inv / w);
+          const iqx = tvx * f * (q.inv / w), iqy = tvy * f * (q.inv / w);
+          p.px = p.x - (pvx + ipx); p.py = p.y - (pvy + ipy);
+          q.px = q.x - (qvx - iqx); q.py = q.y - (qvy - iqy);
+          if (final) {
+            collPairs++;
+            const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+            if (contactsViz.length < 500) contactsViz.push({ x: mx, y: my, nx, ny });
+            if (-vn > 4.5 && sparks.length < 240) sparks.push({ x: mx, y: my, nx, ny, life: 0.3, ttl: 0.3 });
+          }
+        }
+      }
+    }
+  }
+}
+
+function collide(final) {
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.inv === 0) continue;
+    collideBounds(p, final);
+    for (let o = 0; o < obsts.length; o++) collideObst(p, obsts[o], final);
+  }
+  collidePP(final);
+}
+
+function tearCheck() {
+  const thr = params.tear;
+  for (let i = cons.length - 1; i >= 0; i--) {
+    const c = cons[i];
+    if (c.dead) continue;
+    if (!c.tearable || c.strain <= thr) { c.heat = 0; continue; }
+    // must stay overloaded for 2 consecutive substeps: transient spikes
+    // (grab impacts) are absorbed, sustained overload tears
+    c.heat = (c.heat || 0) + 1;
+    if (c.heat < 2) continue;
+    c.dead = true;
+    tornCount++;
+    if (c.blob) c.blob.body.dead = true;
+    killSparksAt(c.a);
+  }
+  // compact
+  let w = 0;
+  for (let i = 0; i < cons.length; i++) if (!cons[i].dead) cons[w++] = cons[i];
+  cons.length = w;
+}
+function killSparksAt(p) {
+  if (sparks.length < 240 && Math.random() < 0.4)
+    sparks.push({ x: p.x, y: p.y, nx: rand(-1, 1), ny: rand(-1, 1), life: 0.4, ttl: 0.4, tear: true });
+}
+
+function physicsStep(dt) {
+  window.__steps = (window.__steps || 0) + 1;
+  window.__lastStepWall = performance.now();
+  const sub = params.substeps, it = params.iterations, h = dt / sub;
+  const dampF = Math.pow(1 - params.damp, h);
+  const g = gravityVec();
+  // compliance: stiffer slider → smaller compliance (XPBD α, in mass·length² units).
+  // equilibrium stretch per link ≈ force·α, so these scales give physically
+  // meaningful 0.1%–8% strain across the slider range.
+  const alphaS = 4e-3 * Math.pow(1 - params.stiff, 1.2);
+  const alphaB = 5e-2 * Math.pow(1 - params.bend, 1.2);
+  const kP = 1 - Math.pow(1 - params.pressure, 1 / it);
+  simT += dt; lastH = h;
+  maxErr = 0; collPairs = 0;
+  contactsViz.length = 0;
+  finalPassErr = true;
+  for (let s = 0; s < sub; s++) {
+    for (let i = 0; i < cons.length; i++) cons[i].lam = 0;
+    updateGusts(h);
+    integrate(h, dampF, g);
+    applyGrab();
+    for (let it2 = 0; it2 < it; it2++) {
+      const final = it2 === it - 1;
+      solveDistance(alphaS, alphaB, final);
+      solvePressure(kP);
+      collide(final);
+    }
+    tearCheck();
+  }
+}
+
+/* paused dragging: relax constraints toward the pointer without integration */
+function relaxPaused() {
+  const it = 4;
+  const alphaS = 4e-3 * Math.pow(1 - params.stiff, 1.2);
+  const alphaB = 5e-2 * Math.pow(1 - params.bend, 1.2);
+  const kP = 1 - Math.pow(1 - params.pressure, 1 / it);
+  applyGrab();
+  finalPassErr = false;
+  for (let i = 0; i < it; i++) {
+    solveDistance(alphaS, alphaB, false);
+    solvePressure(kP);
+    collide(false);
+  }
+}
+
+/* ---------------------------- gusts --------------------------------- */
+function updateGusts(h) {
+  for (let i = gusts.length - 1; i >= 0; i--) {
+    gusts[i].life -= h;
+    if (gusts[i].life <= 0) gusts.splice(i, 1);
+  }
+}
+
+/* ---------------------------- pointer & tools ----------------------- */
+const mouse = { x: 0, y: 0, wx: 0, wy: 0, down: false, inside: false };
+let tool = 'drag';
+let grabs = [];            // {p, ox, oy, w}
+let cutLast = null;        // last cut segment point
+let gustStart = null;
+let spawnAnchor = null;
+
+function toWorld(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  mouse.x = x; mouse.y = y;
+  mouse.wx = x / scale;
+  mouse.wy = (cssH - y) / scale;
+}
+canvas.addEventListener('pointerdown', e => {
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {} // synthetic events may not support capture
+  toWorld(e); mouse.down = true; mouse.inside = true;
+  toolDown();
+});
+canvas.addEventListener('pointermove', e => {
+  toWorld(e); mouse.inside = true;
+  toolMove();
+});
+window.addEventListener('pointerup', e => {
+  if (!mouse.down) return;
+  toWorld(e); mouse.down = false;
+  toolUp();
+});
+canvas.addEventListener('pointerleave', () => { mouse.inside = false; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+function toolDown() {
+  switch (tool) {
+    case 'drag': {
+      grabs = [];
+      const R = params.radius;
+      let best = null, bd = 1e9;
+      for (const p of parts) {
+        if (p.inv === 0) continue;
+        const d = Math.hypot(p.x - mouse.wx, p.y - mouse.wy);
+        if (d < R) grabs.push({ p, ox: p.x - mouse.wx, oy: p.y - mouse.wy, w: clamp(Math.pow(1 - d / R, 1.5), 0.15, 1) });
+        if (d < bd) { bd = d; best = p; }
+      }
+      if (!grabs.length && best && bd < R * 2) grabs.push({ p: best, ox: best.x - mouse.wx, oy: best.y - mouse.wy, w: 1 });
+      break;
+    }
+    case 'pin': {
+      let best = null, bd = 1e9;
+      const R = Math.max(1.3, params.radius * 0.45);
+      for (const p of parts) {
+        const d = Math.hypot(p.x - mouse.wx, p.y - mouse.wy);
+        if (d < bd) { bd = d; best = p; }
+      }
+      if (best && bd < R) {
+        setPin(best, !best.pin);
+        sparks.push({ x: best.x, y: best.y, nx: 0, ny: 1, life: 0.4, ttl: 0.4, ring: true });
+      }
+      break;
+    }
+    case 'cut':
+      cutLast = { x: mouse.wx, y: mouse.wy };
+      break;
+    case 'gust':
+      gustStart = { x: mouse.wx, y: mouse.wy, t: performance.now() };
+      break;
+    case 'spawn':
+      spawnAnchor = { x: mouse.wx, y: mouse.wy };
+      break;
+  }
+}
+function toolMove() {
+  if (tool === 'cut' && mouse.down && cutLast) {
+    cutAlong(cutLast.x, cutLast.y, mouse.wx, mouse.wy);
+    bladeTrail.push({ x0: cutLast.x, y0: cutLast.y, x1: mouse.wx, y1: mouse.wy, life: 0.35, ttl: 0.35 });
+    cutLast = { x: mouse.wx, y: mouse.wy };
+  }
+}
+function toolUp() {
+  if (tool === 'gust' && gustStart) {
+    const dx = mouse.wx - gustStart.x, dy = mouse.wy - gustStart.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 0.9) {
+      gusts.push({ x: gustStart.x, y: gustStart.y, burst: true, speed: 140 + params.grabK * 320, rad: params.radius * 2.4, life: 0.32, ttl: 0.32 });
+    } else {
+      gusts.push({
+        x: gustStart.x, y: gustStart.y, burst: false,
+        dx: dx / d, dy: dy / d,
+        speed: clamp(d * 8, 70, 320) * (0.5 + params.grabK),
+        rad: params.radius * 1.8, life: 0.4, ttl: 0.4,
+      });
+    }
+    gustStart = null;
+  }
+  if (tool === 'spawn' && spawnAnchor) {
+    spawnObject(spawnAnchor.x, spawnAnchor.y, mouse.wx, mouse.wy, document.getElementById('spawnType').value);
+    spawnAnchor = null;
+  }
+  grabs = [];
+  cutLast = null;
+}
+
+function cutAlong(x0, y0, x1, y1) {
+  const minX = Math.min(x0, x1) - 0.2, maxX = Math.max(x0, x1) + 0.2;
+  const minY = Math.min(y0, y1) - 0.2, maxY = Math.max(y0, y1) + 0.2;
+  let removed = 0;
+  for (const c of cons) {
+    if (c.dead) continue;
+    const a = c.a, b = c.b;
+    if ((a.x < minX && b.x < minX) || (a.x > maxX && b.x > maxX) ||
+        (a.y < minY && b.y < minY) || (a.y > maxY && b.y > maxY)) continue;
+    if (segInt(x0, y0, x1, y1, a.x, a.y, b.x, b.y)) {
+      c.dead = true; removed++;
+      if (c.blob) c.blob.body.dead = true;
+    }
+  }
+  if (removed) {
+    let w = 0;
+    for (let i = 0; i < cons.length; i++) if (!cons[i].dead) cons[w++] = cons[i];
+    cons.length = w;
+  }
+}
+function segInt(ax, ay, bx, by, cx, cy, dx, dy) {
+  const r1x = bx - ax, r1y = by - ay, r2x = dx - cx, r2y = dy - cy;
+  const den = r1x * r2y - r1y * r2x;
+  if (Math.abs(den) < 1e-12) return false;
+  const t = ((cx - ax) * r2y - (cy - ay) * r2x) / den;
+  const u = ((cx - ax) * r1y - (cy - ay) * r1x) / den;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+const BALLOON_COLS = [[226, 87, 76], [226, 177, 60], [76, 201, 226], [124, 226, 60], [177, 60, 226]];
+function spawnObject(x0, y0, x1, y1, type) {
+  switch (type) {
+    case 'rope': {
+      if (Math.hypot(x1 - x0, y1 - y0) < 1.5) { y1 = y0 - 6; }
+      const rope = buildRope(x0, y0, x1, y1, 0.7);
+      setPin(rope.parts[0], true);
+      break;
+    }
+    case 'cloth': {
+      const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+      const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+      const cols = clamp(Math.round((xb - xa) / 0.85), 3, 42);
+      const rows = clamp(Math.round((yb - ya) / 0.85), 3, 30);
+      if (cols < 3 || rows < 3) return;
+      buildCloth(xa, ya, cols, rows, (xb - xa) / (cols - 1) || 0.85,
+        { pattern: 'solid', colA: [70, 130, 210], colB: [52, 100, 170] });
+      break;
+    }
+    case 'ball': buildBall(x0, y0, clamp(Math.hypot(x1 - x0, y1 - y0), 1, 9), { colA: [242, 140, 59] }); break;
+    case 'blob': buildBlob(x0, y0, clamp(Math.hypot(x1 - x0, y1 - y0), 1.2, 8), { colA: [226, 111, 168] }); break;
+    case 'balloon': buildBlob(x0, y0, clamp(Math.hypot(x1 - x0, y1 - y0), 1.2, 8),
+      { balloon: true, colA: BALLOON_COLS[(Math.random() * BALLOON_COLS.length) | 0] }); break;
+    case 'circle': addCircleObst(x0, y0, clamp(Math.hypot(x1 - x0, y1 - y0), 0.8, 14)); break;
+    case 'box': {
+      const hw = Math.max(0.5, Math.abs(x1 - x0) / 2), hh = Math.max(0.5, Math.abs(y1 - y0) / 2);
+      addBoxObst((x0 + x1) / 2, (y0 + y1) / 2, hw, hh, 0);
+      break;
+    }
+  }
+  updateHUDNow();
+}
+
+/* ---------------------------- rendering ----------------------------- */
+const colCache = new Map();
+function rgb(r, g, b) {
+  const key = ((r >> 2) << 12) | ((g >> 2) << 6) | (b >> 2);
+  let s = colCache.get(key);
+  if (!s) {
+    if (colCache.size > 6000) colCache.clear();
+    s = `rgb(${r & ~3},${g & ~3},${b & ~3})`;
+    colCache.set(key, s);
+  }
+  return s;
+}
+function mix(c1, c2, t) {
+  return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+}
+const STRESS_COL = [255, 60, 40];
+function stressMix(base, strain) {
+  const thr = params.tear;
+  const s = clamp((strain - thr * 0.45) / (thr * 0.55), 0, 1);
+  return s <= 0 ? base : [lerp(base[0], STRESS_COL[0], s), lerp(base[1], STRESS_COL[1], s), lerp(base[2], STRESS_COL[2], s)];
+}
+/* 0..1 normalized strain colormap: blue → cyan → yellow → red */
+function strainColor(t) {
+  t = clamp(t, 0, 1);
+  if (t < 0.4) return [40 + t * 2.5 * 215, 90 + t * 2.5 * 60, 255 - t * 2.5 * 75];
+  if (t < 0.75) { const u = (t - 0.4) / 0.35; return [255, 150 + u * 70, 180 - u * 120]; }
+  const u = (t - 0.75) / 0.25; return [255, 220 - u * 170, 60 - u * 20];
+}
+
+function render() {
+  const k = dpr * scale;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // background (screen space)
+  const grd = ctx.createLinearGradient(0, 0, 0, cssH);
+  grd.addColorStop(0, '#070b16');
+  grd.addColorStop(0.55, '#0b1424');
+  grd.addColorStop(1, '#0d1828');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.setTransform(k, 0, 0, -k, 0, cssH * dpr);
+  const lw = px => px / scale;
+
+  // faint unit grid
+  ctx.strokeStyle = 'rgba(120,160,220,0.055)';
+  ctx.lineWidth = lw(1);
+  ctx.beginPath();
+  for (let x = 0; x <= worldW; x += 5) { ctx.moveTo(x, 0); ctx.lineTo(x, CEIL); }
+  for (let y = 0; y <= CEIL; y += 5) { ctx.moveTo(0, y); ctx.lineTo(worldW, y); }
+  ctx.stroke();
+
+  // ground slab
+  const gg = ctx.createLinearGradient(0, 0, 0, -5);
+  gg.addColorStop(0, '#17222f');
+  gg.addColorStop(1, '#0a0f16');
+  ctx.fillStyle = gg;
+  ctx.fillRect(-1, -6, worldW + 2, 6);
+  ctx.fillStyle = 'rgba(111,211,255,0.5)';
+  ctx.fillRect(-1, -0.14, worldW + 2, 0.14);
+
+  if (params.shadows) drawShadows();
+
+  // obstacles
+  for (const o of obsts) drawObstacle(o);
+
+  // bodies
+  const viz = vizMode;
+  const dim = (viz === 'pinned' || viz === 'contacts') ? 0.28 : 1;
+  for (const b of bodies) drawBody(b, viz, dim);
+
+  if (viz === 'grid') drawGridViz();
+  if (viz === 'contacts') drawContacts();
+  if (viz === 'stress' || viz === 'constraints' || viz === 'pinned') drawConstraintLines(viz);
+  if (viz === 'velocity') drawVelocity();
+
+  drawPins(viz);
+  drawSparks();
+  drawBladeTrail();
+  drawToolCursor();
+
+  // wind indicator (screen space)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (params.wind > 0.01) drawWindArrow();
+}
+
+function bodyAvg(b) {
+  let sx = 0, sy = 0, n = b.parts.length;
+  for (const p of b.parts) { sx += p.x; sy += p.y; }
+  return { x: sx / n, y: sy / n };
+}
+
+function drawShadows() {
+  ctx.fillStyle = 'rgba(0,0,0,0.34)';
+  const draw = (x, h, rad) => {
+    const a = clamp(1 - h / (CEIL * 1.05), 0, 1) * 0.34;
+    if (a < 0.03) return;
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.ellipse(x, -0.25, rad * 1.15, rad * 0.28 + 0.25, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  };
+  for (const b of bodies) {
+    const c = bodyAvg(b);
+    let rad = 0;
+    for (const p of b.parts) rad = Math.max(rad, Math.abs(p.x - c.x));
+    draw(c.x, c.y, Math.max(rad, 1));
+  }
+  for (const o of obsts) {
+    const r = o.type === 'circle' ? o.r : Math.max(o.hw, o.hh);
+    draw(o.x, o.y - (o.type === 'box' ? o.hh : 0), r);
+  }
+}
+
+function drawObstacle(o) {
+  ctx.save();
+  ctx.translate(o.x, o.y);
+  if (o.type === 'circle') {
+    const g = ctx.createRadialGradient(-o.r * 0.35, o.r * 0.35, o.r * 0.1, 0, 0, o.r);
+    g.addColorStop(0, '#77879b');
+    g.addColorStop(1, '#39434f');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, o.r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#1c242e'; ctx.lineWidth = 2.4 / scale; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.13)';
+    ctx.beginPath(); ctx.ellipse(-o.r * 0.32, o.r * 0.38, o.r * 0.3, o.r * 0.16, -0.5, 0, TAU); ctx.fill();
+  } else {
+    ctx.rotate(o.ang);
+    const g = ctx.createLinearGradient(0, -o.hh, 0, o.hh);
+    g.addColorStop(0, '#66758a');
+    g.addColorStop(1, '#333d49');
+    ctx.fillStyle = g;
+    roundRect(ctx, -o.hw, -o.hh, o.hw * 2, o.hh * 2, Math.min(o.hw, o.hh) * 0.22);
+    ctx.fill();
+    ctx.strokeStyle = '#1c242e'; ctx.lineWidth = 2.4 / scale; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = 1.2 / scale;
+    ctx.beginPath(); ctx.moveTo(-o.hw + 0.3, o.hh - 0.3); ctx.lineTo(o.hw - 0.3, o.hh - 0.3); ctx.stroke();
+  }
+  ctx.restore();
+}
+function roundRect(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function drawBody(b, viz, dim) {
+  if (viz === 'particles' || viz === 'grid') { drawBodyParticles(b); return; }
+  if (b.type === 'cloth') drawCloth(b, viz, dim);
+  else if (b.type === 'rope') drawRope(b, viz, dim);
+  else if (b.type === 'ball' || b.type === 'blob') drawBlobShape(b, viz, dim);
+}
+
+function triColor(body, i, a, bb, c) {
+  const A = signedArea(a, bb, c);
+  const rest = body.triRest[i] || 1e-6;
+  const q = A / rest;
+  const sq = Math.sqrt(Math.abs(q) + 1e-6);
+  let light = 0.42 + 0.58 * Math.min(1, sq);
+  if (q < 0) light *= 0.55;                       // folded over → darker
+  const cy = (a.y + bb.y + c.y) / 3;
+  light += 0.07 * clamp((cy - 4) / CEIL, 0, 1);   // subtle vertical sheen
+  const baseCol = body.pattern === 'stripes'
+    ? ((a.body && Math.round(((a.y + bb.y + c.y) / 3 - body.grid[0][0].y) / 1.7)) % 2 === 0 ? body.colA : body.colB)
+    : (body.pattern === 'planks'
+      ? (triColIndex(body, a) % 2 === 0 ? body.colA : body.colB)
+      : body.colA);
+  let col = [baseCol[0] * light, baseCol[1] * light, baseCol[2] * light];
+  const strain = Math.max(sq - 1, 0) + (q < 0 ? 0.35 : 0);
+  return stressMix(col, strain);
+}
+function triColor(body, i, a, bb, c) {
+  const A = signedArea(a, bb, c);
+  const rest = body.triRest[i] || 1e-6;
+  const q = A / rest;
+  const sq = Math.sqrt(Math.abs(q) + 1e-6);
+  let light = 0.42 + 0.58 * Math.min(1, sq);
+  if (q < 0) light *= 0.55;                       // folded over → darker
+  const cy = (a.y + bb.y + c.y) / 3;
+  light += 0.07 * clamp((cy - 4) / CEIL, 0, 1);   // subtle vertical sheen
+  let baseCol;
+  if (body.pattern === 'stripes') {
+    const row = Math.min(a.gr ?? 0, bb.gr ?? 0, c.gr ?? 0);
+    baseCol = (row % 2 === 0) ? body.colA : body.colB;
+  } else if (body.pattern === 'planks') {
+    const col = Math.round(((a.gc ?? 0) + (bb.gc ?? 0) + (c.gc ?? 0)) / 3);
+    baseCol = (col % 2 === 0) ? body.colA : body.colB;
+  } else baseCol = body.colA;
+  let col = [baseCol[0] * light, baseCol[1] * light, baseCol[2] * light];
+  const strain = Math.max(sq - 1, 0) + (q < 0 ? 0.35 : 0);
+  return stressMix(col, strain);
+}
+
+function drawCloth(b, viz, dim) {
+  const stress = viz === 'stress';
+  ctx.globalAlpha = dim;
+  const tris = b.tris;
+  for (let i = 0; i < tris.length; i++) {
+    const [a, bb, c] = tris[i];
+    let col;
+    if (stress) {
+      const q = signedArea(a, bb, c) / (b.triRest[i] || 1e-6);
+      const t = (clamp(Math.sqrt(Math.abs(q) + 1e-6) - 1, 0, 1) + (q < 0 ? 0.35 : 0)) / Math.max(0.1, params.tear - 1);
+      col = strainColor(t);
+    } else col = triColor(b, i, a, bb, c);
+    ctx.fillStyle = rgb(col[0], col[1], col[2]);
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = 1 / scale;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(bb.x, bb.y); ctx.lineTo(c.x, c.y);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawRope(b, viz, dim) {
+  const pts = b.parts, n = pts.length;
+  if (n < 2) return;
+  const stress = viz === 'stress';
+  ctx.globalAlpha = dim;
+  ctx.lineCap = 'round';
+  const wOut = Math.max(2.6 / scale, MAT.rope.r * 2 * params.thick + 1.6 / scale);
+  const wIn = Math.max(1.4 / scale, MAT.rope.r * 1.5 * params.thick);
+  for (let i = 0; i + 1 < n; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n - 1, i + 2)];
+    let col = stress
+      ? strainColor(clamp((Math.hypot(p2.x - p1.x, p2.y - p1.y) / 0.7 - 1) / Math.max(0.1, params.tear - 1), 0, 1))
+      : [b.colA[0], b.colA[1], b.colA[2]];
+    // outline
+    ctx.strokeStyle = rgb(col[0] * 0.35, col[1] * 0.35, col[2] * 0.35);
+    ctx.lineWidth = wOut;
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y);
+    ctx.quadraticCurveTo(p2.x, p2.y, (p2.x + p3.x) / 2, (p2.y + p3.y) / 2);
+    ctx.stroke();
+    // core
+    ctx.strokeStyle = rgb(col[0], col[1], col[2]);
+    ctx.lineWidth = wIn;
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y);
+    ctx.quadraticCurveTo(p2.x, p2.y, (p2.x + p3.x) / 2, (p2.y + p3.y) / 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function smoothClosed(pts) {
+  const n = pts.length;
+  ctx.beginPath();
+  ctx.moveTo((pts[n - 1].x + pts[0].x) / 2, (pts[n - 1].y + pts[0].y) / 2);
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    ctx.quadraticCurveTo(p.x, p.y, (p.x + q.x) / 2, (p.y + q.y) / 2);
+  }
+  ctx.closePath();
+}
+
+function avgBlobStrain(b) {
+  const ring = b.ring || b.parts;
+  let mx = 0;
+  for (const c of cons) {
+    if (c.blob === b.blob) mx = Math.max(mx, c.strain);
+  }
+  return mx;
+}
+
+function drawBlobShape(b, viz, dim) {
+  const ring = b.ring || b.parts;
+  if (!ring || ring.length < 3) { drawBodyParticles(b); return; }
+  const c = bodyAvg(b);
+  let R = 0;
+  for (const p of ring) R = Math.max(R, Math.hypot(p.x - c.x, p.y - c.y));
+  const strain = (b.type === 'blob' && !b.dead) ? avgBlobStrain(b) : 0;
+  let colA = stressMix(b.colA, strain);
+  ctx.globalAlpha = dim;
+  if (b.dead) {
+    // cut blob: draw as an open squiggly chain
+    ctx.strokeStyle = rgb(colA[0] * 0.5, colA[1] * 0.5, colA[2] * 0.5);
+    ctx.lineWidth = Math.max(2.4 / scale, MAT.blob.r * 2 * params.thick);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ring[0].x, ring[0].y);
+    for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i].x, ring[i].y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    return;
+  }
+  smoothClosed(ring);
+  const g = ctx.createRadialGradient(c.x - R * 0.35, c.y + R * 0.35, R * 0.15, c.x, c.y, R * 1.25);
+  g.addColorStop(0, rgb(Math.min(255, colA[0] * 1.45), Math.min(255, colA[1] * 1.45), Math.min(255, colA[2] * 1.45)));
+  g.addColorStop(0.75, rgb(colA[0] * 0.85, colA[1] * 0.85, colA[2] * 0.9));
+  g.addColorStop(1, rgb(colA[0] * 0.5, colA[1] * 0.5, colA[2] * 0.58));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = rgb(colA[0] * 0.4, colA[1] * 0.4, colA[2] * 0.46);
+  ctx.lineWidth = Math.max(1.6 / scale, 0.16);
+  ctx.stroke();
+  // specular
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.beginPath();
+  ctx.ellipse(c.x - R * 0.32, c.y + R * 0.4, R * 0.3, R * 0.16, -0.6, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawBodyParticles(b) {
+  const hue = b.type === 'cloth' ? 'rgba(111,211,255,' : b.type === 'rope' ? 'rgba(226,177,96,' :
+              b.type === 'ball' ? 'rgba(255,150,80,' : b.balloon ? 'rgba(255,110,110,' : 'rgba(240,120,190,';
+  ctx.fillStyle = hue + '0.95)';
+  for (const p of b.parts) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(1.4 / scale, p.rad * 0.8), 0, TAU);
+    ctx.fill();
+  }
+}
+
+function drawConstraintLines(viz) {
+  ctx.globalAlpha = viz === 'pinned' ? 0.35 : 0.85;
+  ctx.lineWidth = Math.max(0.8 / scale, 0.05);
+  if (viz === 'stress') {
+    // color by strain normalized to the tear threshold (bucketed for perf)
+    const thr = Math.max(0.1, params.tear - 1);
+    const buckets = Array.from({ length: 10 }, () => []);
+    for (const c of cons) {
+      if (c.type === 'bend') continue;
+      buckets[Math.min(9, (clamp(c.strain / thr, 0, 1) * 10) | 0)].push(c);
+    }
+    for (let b = 0; b < 10; b++) {
+      const list = buckets[b];
+      if (!list.length) continue;
+      const col = strainColor((b + 0.5) / 10);
+      ctx.strokeStyle = rgb(col[0], col[1], col[2]);
+      ctx.beginPath();
+      for (const c of list) { ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); }
+      ctx.stroke();
+    }
+  } else {
+    ctx.beginPath();
+    for (const c of cons) {
+      ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y);
+    }
+    ctx.strokeStyle = viz === 'pinned' ? 'rgba(140,170,200,0.5)' : 'rgba(120,200,235,0.75)';
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawVelocity() {
+  const h = lastH;
+  for (const p of parts) {
+    const vx = (p.x - p.px) / h, vy = (p.y - p.py) / h;
+    const sp = Math.hypot(vx, vy);
+    const t = clamp(sp / 22, 0, 1);
+    const col = [30 + 225 * t, 120 + 60 * (1 - Math.abs(t - 0.5) * 2), 255 * (1 - t)];
+    ctx.strokeStyle = rgb(col[0], col[1], col[2]);
+    ctx.lineWidth = Math.max(1 / scale, 0.07);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + vx * 0.055, p.y + vy * 0.055);
+    ctx.stroke();
+  }
+}
+
+function drawContacts() {
+  ctx.lineWidth = Math.max(1.2 / scale, 0.08);
+  for (const c of contactsViz) {
+    ctx.strokeStyle = 'rgba(255,190,80,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(c.x + c.nx * 0.8, c.y + c.ny * 0.8);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,240,160,0.95)';
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, Math.max(1.6 / scale, 0.12), 0, TAU);
+    ctx.fill();
+  }
+}
+
+function drawGridViz() {
+  // uses last broad-phase grid stats
+  const cell = gCell;
+  for (let cy = 0; cy < gRows; cy++) {
+    for (let cx = 0; cx < gCols; cx++) {
+      const n = gCounts[cy * gCols + cx];
+      if (!n) continue;
+      const a = 0.08 + 0.5 * (n / gridMaxCount);
+      ctx.fillStyle = `rgba(111,211,255,${a.toFixed(3)})`;
+      ctx.fillRect((cx - 1) * cell, (cy - 1) * cell, cell, cell);
+    }
+  }
+  ctx.strokeStyle = 'rgba(111,211,255,0.16)';
+  ctx.lineWidth = 1 / scale;
+  ctx.strokeRect(0, 0, worldW, CEIL);
+}
+
+function drawPins(viz) {
+  const big = viz === 'pinned';
+  for (const p of parts) {
+    if (!p.pin) continue;
+    const r = (big ? 0.55 : 0.34) + p.rad * params.thick;
+    ctx.strokeStyle = '#ffb454';
+    ctx.lineWidth = Math.max(1.4 / scale, 0.1);
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#ffb454';
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.2 / scale, 0.09), 0, TAU); ctx.fill();
+    if (big) {
+      ctx.strokeStyle = 'rgba(255,180,84,0.4)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, r + 0.3, 0, TAU); ctx.stroke();
+    }
+  }
+}
+
+function drawSparks() {
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i];
+    s.life -= 1 / 60;
+    if (s.life <= 0) { sparks.splice(i, 1); continue; }
+    const a = s.life / s.ttl;
+    if (s.ring) {
+      ctx.strokeStyle = `rgba(255,180,84,${(a * 0.9).toFixed(3)})`;
+      ctx.lineWidth = 1.6 / scale;
+      ctx.beginPath(); ctx.arc(s.x, s.y, (1 - a) * 1.6 + 0.2, 0, TAU); ctx.stroke();
+    } else if (s.tear) {
+      ctx.strokeStyle = `rgba(255,90,60,${(a * 0.9).toFixed(3)})`;
+      ctx.lineWidth = 1.6 / scale;
+      ctx.beginPath(); ctx.arc(s.x, s.y, (1 - a) * 1.2 + 0.1, 0, TAU); ctx.stroke();
+    } else {
+      ctx.strokeStyle = `rgba(255,220,130,${(a * 0.75).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1.2 / scale, 0.07);
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.x + s.nx * 0.9 * a, s.y + s.ny * 0.9 * a);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawBladeTrail() {
+  for (let i = bladeTrail.length - 1; i >= 0; i--) {
+    const s = bladeTrail[i];
+    s.life -= 1 / 60;
+    if (s.life <= 0) { bladeTrail.splice(i, 1); continue; }
+    const a = s.life / s.ttl;
+    ctx.strokeStyle = `rgba(255,120,120,${(a * 0.8).toFixed(3)})`;
+    ctx.lineWidth = 2 / scale;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(s.x0, s.y0); ctx.lineTo(s.x1, s.y1); ctx.stroke();
+  }
+}
+
+function drawToolCursor() {
+  if (!mouse.inside) return;
+  const x = mouse.wx, y = mouse.wy, R = params.radius;
+  ctx.lineWidth = Math.max(1.2 / scale, 0.07);
+  if (tool === 'drag' || tool === 'pin') {
+    ctx.strokeStyle = tool === 'drag' ? 'rgba(111,211,255,0.7)' : 'rgba(255,180,84,0.8)';
+    ctx.beginPath(); ctx.arc(x, y, tool === 'pin' ? Math.max(1.3, R * 0.45) : R, 0, TAU); ctx.stroke();
+    if (tool === 'drag') {
+      for (const g of grabs) {
+        ctx.strokeStyle = 'rgba(111,211,255,0.35)';
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(g.p.x, g.p.y); ctx.stroke();
+        ctx.fillStyle = 'rgba(200,240,255,0.9)';
+        ctx.beginPath(); ctx.arc(g.p.x, g.p.y, Math.max(1.6 / scale, 0.12), 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(111,211,255,0.9)';
+      ctx.beginPath(); ctx.arc(x, y, Math.max(1.8 / scale, 0.1), 0, TAU); ctx.fill();
+    }
+  } else if (tool === 'cut') {
+    ctx.strokeStyle = 'rgba(255,110,110,0.9)';
+    const l = Math.max(0.7, R * 0.25);
+    ctx.beginPath();
+    ctx.moveTo(x - l, y - l); ctx.lineTo(x + l, y + l);
+    ctx.moveTo(x + l, y - l); ctx.lineTo(x - l, y + l);
+    ctx.stroke();
+  } else if (tool === 'gust') {
+    ctx.strokeStyle = 'rgba(160,230,180,0.8)';
+    const d = gustStart ? { x: mouse.wx - gustStart.x, y: mouse.wy - gustStart.y } : null;
+    const baseA = d && Math.hypot(d.x, d.y) > 0.9 ? Math.atan2(d.y, d.x) : -Math.PI / 2;
+    for (let i = -2; i <= 2; i++) {
+      const a = baseA + i * 0.28;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * R * 0.3, y + Math.sin(a) * R * 0.3);
+      ctx.lineTo(x + Math.cos(a) * R, y + Math.sin(a) * R);
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(x, y, R * 0.25, 0, TAU); ctx.stroke();
+  } else if (tool === 'spawn' && spawnAnchor) {
+    const t = document.getElementById('spawnType').value;
+    ctx.strokeStyle = 'rgba(140,255,200,0.85)';
+    ctx.setLineDash([0.4, 0.3]);
+    if (t === 'rope') {
+      ctx.beginPath(); ctx.moveTo(spawnAnchor.x, spawnAnchor.y); ctx.lineTo(x, y); ctx.stroke();
+    } else if (t === 'cloth') {
+      ctx.strokeRect(Math.min(x, spawnAnchor.x), Math.min(y, spawnAnchor.y), Math.abs(x - spawnAnchor.x), Math.abs(y - spawnAnchor.y));
+    } else if (t === 'box') {
+      ctx.strokeRect(Math.min(x, spawnAnchor.x), Math.min(y, spawnAnchor.y), Math.abs(x - spawnAnchor.x), Math.abs(y - spawnAnchor.y));
+    } else {
+      const r = clamp(Math.hypot(x - spawnAnchor.x, y - spawnAnchor.y), t === 'circle' || t === 'box' ? 0.8 : 1, 14);
+      ctx.beginPath(); ctx.arc(spawnAnchor.x, spawnAnchor.y, r, 0, TAU); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+}
+
+function drawWindArrow() {
+  const cx = cssW / 2, cy = Math.max(cssW < 760 ? 150 : 100, cssH * 0.14);
+  const a = params.windAng * Math.PI / 180;
+  const len = clamp(18 + params.wind * 2.2, 18, 70);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-a);
+  ctx.strokeStyle = 'rgba(140,220,180,0.85)';
+  ctx.fillStyle = 'rgba(140,220,180,0.85)';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(len / 2, 0); ctx.lineTo(len / 2 - 8, -5); ctx.lineTo(len / 2 - 8, 5); ctx.closePath(); ctx.fill();
+  ctx.rotate(a);
+  ctx.font = '10px ui-monospace,monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`wind ${params.wind.toFixed(1)}`, 0, -12);
+  ctx.restore();
+}
+
+/* ---------------------------- UI ------------------------------------ */
+const SLIDERS = [
+  ['World', null],
+  ['gravAng', 'gravity angle', -180, 180, 5, v => `${v}°`],
+  ['grav', 'gravity strength', 0, 60, 1, v => v.toFixed(0)],
+  ['windAng', 'wind angle', -180, 180, 5, v => `${v}°`],
+  ['wind', 'wind strength', 0, 30, 0.5, v => v.toFixed(1)],
+  ['Solver', null],
+  ['dtMs', 'timestep', 4, 34, 0.1, v => `${v.toFixed(1)} ms`],
+  ['substeps', 'substeps', 1, 6, 1, v => v.toFixed(0)],
+  ['iterations', 'iterations', 1, 15, 1, v => v.toFixed(0)],
+  ['stiff', 'structural stiffness', 0.1, 1, 0.01, v => v.toFixed(2)],
+  ['bend', 'bending stiffness', 0, 1, 0.01, v => v.toFixed(2)],
+  ['pressure', 'pressure strength', 0, 1, 0.01, v => v.toFixed(2)],
+  ['damp', 'damping', 0, 0.6, 0.01, v => v.toFixed(2)],
+  ['Material', null],
+  ['fric', 'friction', 0, 1, 0.01, v => v.toFixed(2)],
+  ['rest', 'restitution', 0, 0.9, 0.01, v => v.toFixed(2)],
+  ['thick', 'collision thickness', 0.3, 2.5, 0.05, v => `×${v.toFixed(2)}`],
+  ['tear', 'tear threshold', 1.05, 4, 0.05, v => `+${((v - 1) * 100).toFixed(0)}%`],
+  ['density', 'density (new objects)', 0.2, 4, 0.1, v => v.toFixed(1)],
+  ['Interaction', null],
+  ['grabK', 'interaction strength', 0.05, 1, 0.05, v => v.toFixed(2)],
+  ['radius', 'interaction radius', 1.5, 12, 0.5, v => v.toFixed(1)],
+];
+const sliderEls = {};
+function buildPanel() {
+  const body = document.getElementById('panelBody');
+  for (const def of SLIDERS) {
+    if (def[1] === null) {
+      const h = document.createElement('h3');
+      h.textContent = def[0];
+      body.appendChild(h);
+      continue;
+    }
+    const [key, label, min, max, step, fmt] = def;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const lab = document.createElement('label');
+    lab.textContent = label;
+    lab.htmlFor = 'sl_' + key;
+    const inp = document.createElement('input');
+    inp.type = 'range'; inp.id = 'sl_' + key;
+    inp.min = min; inp.max = max; inp.step = step;
+    inp.value = params[key];
+    inp.setAttribute('aria-label', label);
+    const val = document.createElement('span');
+    val.className = 'val';
+    inp.addEventListener('input', () => {
+      params[key] = parseFloat(inp.value);
+      val.textContent = fmt(params[key]);
+    });
+    val.textContent = fmt(params[key]);
+    row.appendChild(lab); row.appendChild(inp); row.appendChild(val);
+    body.appendChild(row);
+    sliderEls[key] = { inp, val, fmt };
+  }
+  // checkboxes
+  const mkChk = (key, label) => {
+    const l = document.createElement('label');
+    l.className = 'chk';
+    const c = document.createElement('input');
+    c.type = 'checkbox'; c.checked = params[key];
+    c.setAttribute('aria-label', label);
+    c.addEventListener('change', () => { params[key] = c.checked; });
+    l.appendChild(c);
+    l.appendChild(document.createTextNode(label));
+    body.appendChild(l);
+    sliderEls[key] = { chk: c };
+  };
+  mkChk('selfCol', 'self-collision (same body)');
+  mkChk('shadows', 'shadows');
+}
+function syncUI() {
+  for (const key in sliderEls) {
+    const el = sliderEls[key];
+    if (el.chk) el.chk.checked = !!params[key];
+    else { el.inp.value = params[key]; el.val.textContent = el.fmt(params[key]); }
+  }
+  document.getElementById('scenarioSel').value = scenarioName;
+}
+
+let vizMode = 'render';
+let paused = false;
+
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll('#toolbar [data-tool]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tool === t));
+  updateHUDNow();
+}
+function setViz(v) {
+  vizMode = v;
+  document.getElementById('vizSel').value = v;
+}
+function togglePause() {
+  paused = !paused;
+  document.getElementById('btnPause').textContent = paused ? '▶ Resume' : '⏸ Pause';
+  document.getElementById('btnPause').classList.toggle('active', paused);
+  document.getElementById('pausedBadge').style.display = paused ? 'block' : 'none';
+  updateHUDNow();
+}
+
+function wireUI() {
+  document.getElementById('btnPause').addEventListener('click', togglePause);
+  document.getElementById('btnStep').addEventListener('click', () => { if (!paused) togglePause(); physicsStep(dtSec()); updateHUDNow(); });
+  document.getElementById('btnReset').addEventListener('click', () => { loadScenario(scenarioName); });
+  document.querySelectorAll('#toolbar [data-tool]').forEach(b =>
+    b.addEventListener('click', () => setTool(b.dataset.tool)));
+  document.getElementById('scenarioSel').addEventListener('change', e => loadScenario(e.target.value));
+  document.getElementById('vizSel').addEventListener('change', e => setViz(e.target.value));
+  document.getElementById('panelToggle').addEventListener('click', () =>
+    document.getElementById('panel').classList.toggle('hidden'));
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.key === 'n' || e.key === 'N') { if (!paused) togglePause(); physicsStep(dtSec()); }
+    else if (e.key === 'r' || e.key === 'R') loadScenario(scenarioName);
+    else if (e.key === 'v' || e.key === 'V') {
+      const modes = ['render', 'particles', 'constraints', 'velocity', 'stress', 'contacts', 'pinned', 'grid'];
+      setViz(modes[(modes.indexOf(vizMode) + 1) % modes.length]);
+    } else if (e.key >= '1' && e.key <= '5') {
+      setTool(['drag', 'pin', 'cut', 'gust', 'spawn'][+e.key - 1]);
+    }
+  });
+}
+
+/* ---------------------------- HUD ----------------------------------- */
+const H = id => document.getElementById(id);
+let fpsEMA = 60, msEMA = 16;
+function updateHUDNow() {
+  H('hFps').textContent = fpsEMA.toFixed(0);
+  H('hMs').textContent = msEMA.toFixed(1) + ' ms';
+  H('hParts').textContent = parts.length;
+  H('hCons').textContent = cons.length;
+  H('hPairs').textContent = collPairs;
+  H('hSolver').textContent = `${params.substeps}×${params.iterations} @ ${params.dtMs.toFixed(1)}ms`;
+  H('hErr').textContent = (maxErr * 100).toFixed(1) + '%';
+  H('hTool').textContent = tool + (tool === 'spawn' ? ` (${document.getElementById('spawnType').value})` : '');
+  H('hScene').textContent = SCENARIOS[scenarioName].label;
+  H('hState').textContent = paused ? 'PAUSED' : 'RUNNING';
+  H('hState').style.color = paused ? '#ffb454' : '#7ce2a0';
+}
+
+/* ---------------------------- main loop ------------------------------ */
+let lastFrame = performance.now(), acc = 0, hudTimer = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  window.__frames = (window.__frames || 0) + 1;
+  let dtm = now - lastFrame; lastFrame = now;
+  if (dtm > 100) dtm = 100;
+  msEMA = lerp(msEMA, dtm, 0.08);
+  fpsEMA = lerp(fpsEMA, 1000 / Math.max(dtm, 0.01), 0.08);
+
+  if (!paused) {
+    acc += dtm / 1000;
+    const dt = dtSec();
+    let n = 0;
+    while (acc >= dt && n < 3) { physicsStep(dt); acc -= dt; n++; }
+    if (n === 3) acc = 0;
+  } else if (mouse.down && grabs.length) {
+    relaxPaused();
+  }
+  render();
+  hudTimer += dtm;
+  if (hudTimer > 180) { hudTimer = 0; updateHUDNow(); }
+}
+
+/* ---------------------------- boot ---------------------------------- */
+(function boot() {
+  const sel = document.getElementById('scenarioSel');
+  for (const key in SCENARIOS) {
+    const o = document.createElement('option');
+    o.value = key; o.textContent = SCENARIOS[key].label;
+    sel.appendChild(o);
+  }
+  buildPanel();
+  wireUI();
+  // expose a small diagnostic handle (used by automated validation)
+  window.__sim = {
+    params, parts, cons, bodies, obsts, gusts,
+    get scenario() { return scenarioName; },
+    get paused() { return paused; },
+    get viz() { return vizMode; },
+    get toolName() { return tool; },
+    get grabCount() { return grabs.length; },
+    get collPairs() { return collPairs; },
+    get maxErr() { return maxErr; },
+    get torn() { return tornCount; },
+    stats() {
+      return {
+        particles: parts.length, constraints: cons.length, bodies: bodies.length,
+        obstacles: obsts.length, pairs: collPairs, maxErr, torn: tornCount,
+        scenario: scenarioName, paused, viz: vizMode, tool, pinned: parts.reduce((a, p) => a + (p.pin ? 1 : 0), 0),
+      };
+    },
+    // deterministic test hook: advance the simulation exactly n steps
+    step(n) { for (let i = 0; i < n; i++) physicsStep(dtSec()); return { particles: parts.length, constraints: cons.length, pairs: collPairs, maxErr, torn: tornCount }; },
+  };
+  loadScenario('flag');
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

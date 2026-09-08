@@ -43,7 +43,10 @@ HTML_NAMES = ('index.html', 'result.html', 'app.html')
 SCREENSHOT_NAMES = tuple(f'{name}{ext}' for name in ('screenshot', 'preview') for ext in ('.png','.webp','.jpg','.jpeg'))
 PUBLIC_FILES = set(HTML_NAMES + SCREENSHOT_NAMES + ('project.zip','report.json'))
 MODEL_PROFILE_MAX_BYTES = 16 * 1024
-MODEL_PROFILE_FIELDS = {'provider': 200, 'provider_url': 2048, 'harness': 200, 'harness_url': 2048, 'setting': 500}
+MODEL_PROFILE_FIELDS = {
+    'provider': 200, 'provider_url': 2048, 'harness': 200, 'harness_url': 2048, 'setting': 500,
+    'runtime': 200, 'runtime_url': 2048, 'quantization': 200, 'quantization_url': 2048,
+}
 
 
 def utc_iso(timestamp: float | None = None) -> str:
@@ -88,7 +91,7 @@ def load_model_profiles(results_root: Path, model_keys: Iterable[str]) -> dict[s
             value = settings.get(field)
             if isinstance(value, str) and 0 < len(value) <= limit and value.strip() and not any(unicodedata.category(char).startswith('C') for char in value):
                 profile[field] = value.strip()
-        for label in ('provider', 'harness'):
+        for label in ('provider', 'harness', 'runtime', 'quantization'):
             field = label + '_url'
             url = profile.get(field)
             if not url:

@@ -354,6 +354,10 @@ provider_url = "https://provider.example/"
 harness = "Harness"
 harness_url = "https://harness.example/"
 setting = "High reasoning"
+runtime = "Local runtime"
+runtime_url = "https://runtime.example/"
+quantization = "4-bit with 8-bit attention"
+quantization_url = "https://models.example/quant"
 label = "PRIVATE-LABEL"
 color = "PRIVATE-COLOR"
 notes = "PRIVATE-NOTE"
@@ -374,7 +378,9 @@ token = "PRIVATE-TOKEN"
         with mock.patch.object(Path, "open", checked_open):
             _, public = self.export(screenshots="none")
         expected = {"Model One": {"provider": "Provider", "provider_url": "https://provider.example/",
-                                  "harness": "Harness", "harness_url": "https://harness.example/", "setting": "High reasoning"}}
+                                  "harness": "Harness", "harness_url": "https://harness.example/", "setting": "High reasoning",
+                                  "runtime": "Local runtime", "runtime_url": "https://runtime.example/",
+                                  "quantization": "4-bit with 8-bit attention", "quantization_url": "https://models.example/quant"}}
         self.assertEqual(local["model_profiles"], expected)
         self.assertEqual(public["model_profiles"], expected)
         self.assertFalse(list(self.output.rglob("*.toml")))

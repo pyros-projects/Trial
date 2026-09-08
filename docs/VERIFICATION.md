@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## Qwen and ten new builds: 2026-09-08
+
+The collection now contains **41 HTML builds across eleven prompts and six models**: Astra 11, Opus 4, Grok 10, GLM 5, Gemini 8, and Qwen 3. New submissions cover Qwen 01/02/09, Opus 03/04, Astra 10/11, Grok 10, and GLM 04/05. The original five-model order and colors are retained; Qwen is sixth in teal. Its shared setup records **Pi / xhigh**, **MTPLX (local)**, and the linked **Optimized Speed (4-bit, 8-bit attention)** quantization. Runtime and quantization are separate optional, bounded public profile fields with the same URL validation as provider and harness links.
+
+All **13 focused checks** passed: nine profile checks, two public-export profile checks, and two Chromium profile/share checks. Coverage includes local/public parity, rejected URLs and unknown fields, escaped labels, responsive Setup panels at 1440/768/390/320 pixels, and opening Setup without restarting the live app. JavaScript syntax and package whitespace checks passed. All ten submitted HTML files also launched in the actual public sandbox at 1440 × 1057 beneath the 43-pixel viewer bar, with no uncaught JavaScript errors during the smoke check. The six-model comparison renders as **3 + 3**, and Qwen's runtime/quantization links remain readable on mobile. These are launch and gallery checks, not evaluations of each application's complete task requirements.
+
+All **467 original files totaling 114,180,613 bytes** remain unchanged. Ten top-level screenshots are exact copies of supplied images, individually inspected before publication. The bounded pre-publication audit found no confirmed real credentials or private-identity linkage in the reviewed text and media metadata; pseudonymous local paths and diagnostic IDs remain in raw evidence on GitHub. Raw evidence stays outside Netlify. The [gallery image](gallery-results-preview.png), [six-model comparison](prompt-comparison-preview.png), and [Qwen setup](qwen-setup-preview.png) record the updated presentation.
+
+Production deployment **`6a9fac2d467bf9483fcba785`** publishes **217 files totaling 7,592,208 bytes (7.24 MiB)**. Live HTTPS checks passed for all **41** implementation share pages, source SHA-256 values, attachment/sandbox headers and thumbnails; all **11** comparison pages and images; and all **six** model profiles. Eighteen representative private routes returned 404.
+
 ## Disposable Real Apps demos: 2026-09-08
 
 All ten Real Apps prompts now require a generated `project/gallery/index.html` alongside the complete local application. Every prompt embeds the same static-demo contract and adds task-specific in-memory workflows. Canonical application/runtime blocks, all original acceptance documents, and public fixtures retain their existing hashes. Demo-only actor, device, transport, and recovery simulations are explicitly separated from genuine backend acceptance checks.

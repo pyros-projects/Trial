@@ -62,6 +62,36 @@ class ModelProfileTests(unittest.TestCase):
         self.path.mkdir()
         self.assertEqual(self.profiles(), {})
 
+    def test_runtime_and_quantization_are_public_setup_fields(self):
+        self.write_profile(runtime=" MTPLX (local) ", runtime_url="https://runtime.example/",
+                           quantization=" Optimized Speed (4-bit, 8-bit attention) ",
+                           quantization_url="https://models.example/quant", runtime_token="PRIVATE",
+                           quantizer_notes="PRIVATE")
+        self.assertEqual(self.state.data()["model_profiles"], {"Model One": {
+            "runtime": "MTPLX (local)", "runtime_url": "https://runtime.example/",
+            "quantization": "Optimized Speed (4-bit, 8-bit attention)",
+            "quantization_url": "https://models.example/quant",
+        }})
+
+    def test_runtime_and_quantization_require_bounded_labels_and_safe_urls(self):
+        for label in ("runtime", "quantization"):
+            with self.subTest(field=label):
+                url_field = label + "_url"
+                self.write_profile(**{label: "L" * 200, url_field: "https://example.test/config?q=info#details"})
+                self.assertEqual(self.profiles(), {"Model One": {
+                    label: "L" * 200, url_field: "https://example.test/config?q=info#details",
+                }})
+                for value in ("L" * 201, "line\nbreak", "hidden\u202econtrol", " ", 7, ["invalid"]):
+                    self.write_profile(**{label: value, url_field: "https://example.test/"})
+                    self.assertEqual(self.profiles(), {})
+                self.write_profile(**{url_field: "https://example.test/"})
+                self.assertEqual(self.profiles(), {})
+                for url in ("javascript:alert(1)", "//example.test/", "https://user:secret@example.test/",
+                            "https://example.test\n/", "https://example.test\\path", "https://example.test:99999/",
+                            "https://example.test/" + "x" * 2048):
+                    self.write_profile(**{label: "Label", url_field: url})
+                    self.assertEqual(self.profiles(), {"Model One": {label: "Label"}})
+
     def test_model_profiles_bound_strings_and_reject_control_characters(self):
         self.write_profile(provider="P" * 200, harness="H" * 200, setting="S" * 500)
         self.assertEqual(self.profiles()["Model One"]["setting"], "S" * 500)

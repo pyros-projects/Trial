@@ -90,9 +90,18 @@ harness_url = "https://developers.openai.com/codex/cli"
 setting = "Max"
 ```
 
-The supported fields are `provider`, `provider_url`, `harness`, `harness_url`, and `setting`. All are optional strings. Keep setting labels as reported by the tool, such as `High Fast`; the gallery does not translate them into comparable budgets. Provider and harness URLs must be absolute HTTP(S) links without credentials. Model names, colors, and sorting remain in [`appsettings.json`](../gallery/static/appsettings.json).
+The supported text fields are `provider`, `harness`, `setting`, `runtime`, and `quantization`, with optional links in `provider_url`, `harness_url`, `runtime_url`, and `quantization_url`. All fields are optional strings. Keep setting labels as reported by the tool, such as `High Fast` or `xhigh`; the gallery does not translate them into comparable budgets. Use `runtime` for the inference runtime and `quantization` for the selected model variant, separately from provider and harness. For example:
 
-Cards show the harness and setting. The viewer's **Setup** panel and **Build details** show the full selected profile, with external links. Opening Setup leaves the live app running; switching models updates the profile. Local **Refresh** reloads these files. Rebuild and redeploy to update the public snapshot.
+```toml
+runtime = "MTPLX (local)"
+runtime_url = "https://mtplx.com"
+quantization = "Optimized Speed (4-bit, 8-bit attention)"
+quantization_url = "https://huggingface.co/Youssofal/Qwen3.8-Flash-Next-MTPLX-Optimized-Speed"
+```
+
+Labels are limited to 200 characters, except `setting` at 500; URLs are limited to 2,048 characters. Links require their corresponding label and an absolute HTTP(S) URL without credentials, whitespace, or control characters. Model names, colors, and sorting remain in [`appsettings.json`](../gallery/static/appsettings.json).
+
+Cards show the harness and setting. The viewer's **Setup** panel and **Build details** also show the provider, runtime, and quantization when supplied, with their external links. Opening Setup leaves the live app running; switching models updates the profile. Local **Refresh** reloads these files. Rebuild and redeploy to update the public snapshot.
 
 The local and public inventories expose these selected fields once per model in `model_profiles`. Unknown fields are ignored, and raw TOML files are not copied to the website. Missing, malformed, oversized, or linked files leave builds available without a profile. This is intentionally public configuration: do not put secrets or private notes here.
 

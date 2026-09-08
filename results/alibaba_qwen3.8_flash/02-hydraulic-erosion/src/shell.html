@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>3D Hydraulic Erosion Laboratory</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#141a22; --panel2:#1b232d; --ink:#dfe6ee; --dim:#8b98a8;
+  --accent:#4ec9b0; --accent2:#66aaff; --warn:#ffb454; --bad:#ff6b6b; --line:#243040;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden}
+#app{position:fixed;inset:0;display:block}
+#stage{position:absolute;inset:0;touch-action:none;cursor:crosshair}
+#stage.grab{cursor:grab}
+#stage.grabbing{cursor:grabbing}
+#stage.probe{cursor:help}
+canvas#view{display:block;width:100%;height:100%}
+
+/* ---------- brush cursor ---------- */
+#cursor{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none;
+  border:1.5px solid rgba(255,214,120,.95);box-shadow:0 0 0 1px rgba(0,0,0,.45) inset;
+  transform:translate(-50%,-50%);display:none;mix-blend-mode:screen}
+#cursor.sink{border-color:rgba(120,190,255,.95)}
+#cursor.water{border-color:rgba(110,230,255,.95)}
+
+/* ---------- HUD ---------- */
+#hud{position:absolute;left:12px;top:12px;max-width:min(46vw,430px);pointer-events:none;
+  font-family:var(--mono);font-size:11.5px;line-height:1.45;
+  background:rgba(10,14,20,.72);border:1px solid rgba(90,120,150,.32);border-radius:9px;
+  padding:9px 11px;backdrop-filter:blur(5px)}
+#hud h2{margin:0 0 5px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--accent);display:flex;gap:8px;align-items:center;font-weight:600}
+#hud .grid{display:grid;grid-template-columns:auto 1fr;gap:1px 10px}
+#hud .k{color:var(--dim);white-space:nowrap}
+#hud .v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+#hud .row{display:flex;gap:7px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.pill{padding:1.5px 7px;border-radius:99px;border:1px solid var(--line);background:var(--panel2);
+  font-size:10.5px;letter-spacing:.02em}
+.pill.run{color:#9df0d5;border-color:#2c6153}
+.pill.pause{color:#ffcf8b;border-color:#6a4d20}
+.pill.warn{color:#ffd6a5;border-color:#7a4a1a;background:#2a1c10}
+.pill.bad{color:#ffb3b3;border-color:#7a2a2a;background:#2a1212}
+#bars{margin-top:6px;display:flex;flex-direction:column;gap:3px}
+.bar{display:grid;grid-template-columns:64px 1fr 46px;gap:6px;align-items:center;font-size:10.5px}
+.track{height:5px;border-radius:3px;background:#22303c;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,#2f7fb5,#5fd9c0);width:0%}
+.fill.sed{background:linear-gradient(90deg,#a2662a,#e8b45a)}
+.fill.act{background:linear-gradient(90deg,#3a5f8f,#8ab6ff)}
+
+/* ---------- toolbar ---------- */
+#toolbar{position:absolute;left:50%;transform:translateX(-50%);top:12px;display:flex;gap:6px;
+  flex-wrap:wrap;justify-content:center;max-width:min(62vw,660px)}
+#toolbar button,#panel button,.btn{font:inherit;font-size:12px;color:var(--ink);cursor:pointer;
+  background:linear-gradient(#1d2632,#161d26);border:1px solid #2b3846;border-radius:7px;
+  padding:6px 10px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap;
+  transition:background .12s,border-color .12s,transform .06s}
+#toolbar button:hover,.btn:hover{background:linear-gradient(#26313f,#1b232d);border-color:#3f5164}
+#toolbar button:active,.btn:active{transform:translateY(1px)}
+#toolbar button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+#toolbar button kbd,.hint kbd{font-family:var(--mono);font-size:9.5px;color:var(--dim);
+  border:1px solid #2c3947;border-radius:4px;padding:0 3px;background:#111820}
+#toolToggle{position:absolute;right:12px;top:12px;display:none}
+
+/* ---------- control panel ---------- */
+#panel{position:absolute;right:12px;top:12px;bottom:12px;width:322px;max-height:calc(100% - 24px);
+  background:rgba(16,21,28,.93);border:1px solid rgba(90,120,150,.3);border-radius:11px;
+  display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(7px);
+  box-shadow:0 10px 34px rgba(0,0,0,.45)}
+#panel header{padding:9px 12px;border-bottom:1px solid var(--line);display:flex;
+  justify-content:space-between;align-items:center;gap:8px}
+#panel header h1{margin:0;font-size:12.5px;letter-spacing:.03em;font-weight:650}
+#panelBody{overflow-y:auto;overscroll-behavior:contain;padding:4px 12px 14px;font-size:12px}
+#panelBody::-webkit-scrollbar{width:9px}
+#panelBody::-webkit-scrollbar-thumb{background:#26323f;border-radius:9px}
+details.group{border-bottom:1px solid #1d2733;padding:2px 0}
+details.group>summary{list-style:none;cursor:pointer;padding:8px 2px 7px;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--accent);display:flex;
+  justify-content:space-between;align-items:center;font-weight:600}
+details.group>summary::-webkit-details-marker{display:none}
+details.group>summary::after{content:"\25be";color:var(--dim);font-size:12px}
+details.group[open]>summary::after{content:"\25b4"}
+.ctl{margin:7px 0}
+.ctl label{display:flex;justify-content:space-between;gap:8px;color:var(--dim);font-size:11.5px;margin-bottom:3px}
+.ctl output{color:var(--ink);font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;height:17px;-webkit-appearance:none;appearance:none;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:3px;background:#24313e}
+input[type=range]::-moz-range-track{height:4px;border-radius:3px;background:#24313e}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--accent);border:2px solid #0e141a;margin-top:-4.5px;cursor:pointer}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--accent);
+  border:2px solid #0e141a;cursor:pointer}
+select,input[type=text],input[type=number]{width:100%;font:inherit;font-size:12px;color:var(--ink);
+  background:#101821;border:1px solid #2a3746;border-radius:6px;padding:5px 7px}
+select:focus,input:focus{outline:none;border-color:var(--accent2)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.row2 button,.row3 button{justify-content:center;padding:6px 6px;font-size:11.5px}
+.tools{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.tools button{padding:6px 3px;font-size:11px;justify-content:center}
+.tools button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.modes button{padding:5px 4px;font-size:11px;justify-content:center}
+.modes button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.presets button{padding:7px 5px;font-size:11.5px;justify-content:flex-start}
+.presets button.on{border-color:#2f7a68;background:linear-gradient(#1c3b34,#162824);color:#a9f0dc}
+.note{color:var(--dim);font-size:10.5px;line-height:1.45;margin:5px 0 2px}
+.check{display:flex;gap:7px;align-items:center;font-size:11.5px;color:var(--dim);margin:6px 0}
+.check input{width:14px;height:14px;accent-color:var(--accent)}
+
+/* ---------- probe ---------- */
+#probe{position:absolute;left:12px;bottom:12px;min-width:236px;font-family:var(--mono);font-size:11px;
+  background:rgba(10,14,20,.78);border:1px solid rgba(90,120,150,.32);border-radius:9px;padding:8px 10px;
+  pointer-events:none;line-height:1.5}
+#probe b{color:var(--accent);font-weight:600}
+#probe .prow{display:flex;justify-content:space-between;gap:12px}
+#probe .pk{color:var(--dim)}
+#minimap{position:absolute;right:12px;bottom:12px;width:132px;height:132px;border-radius:9px;
+  border:1px solid rgba(90,120,150,.32);overflow:hidden;background:#0d141b}
+#minimap canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+#minimap .cap{position:absolute;left:0;right:0;bottom:0;font-family:var(--mono);font-size:9.5px;
+  padding:2px 5px;color:#cfe;background:rgba(8,12,17,.72);text-align:center}
+
+/* ---------- hints + toast ---------- */
+#hints{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;display:flex;gap:9px;
+  flex-wrap:wrap;justify-content:center;max-width:56vw}
+.hint{font-size:10.5px;color:var(--dim);background:rgba(12,17,23,.7);border:1px solid #222e3b;
+  border-radius:6px;padding:3px 7px;font-family:var(--mono)}
+#toasts{position:absolute;left:50%;transform:translateX(-50%);top:58px;display:flex;
+  flex-direction:column;gap:6px;align-items:center;pointer-events:none;z-index:40}
+.toast{font-family:var(--mono);font-size:11.5px;padding:7px 12px;border-radius:8px;
+  background:rgba(20,28,36,.95);border:1px solid #2e3d4d;color:var(--ink);
+  box-shadow:0 6px 18px rgba(0,0,0,.4);max-width:min(78vw,520px)}
+.toast.warn{border-color:#7a4a1a;color:#ffd9a8;background:rgba(38,26,12,.95)}
+.toast.bad{border-color:#7a2a2a;color:#ffc2c2;background:rgba(38,16,16,.95)}
+.toast.fade{opacity:0;transition:opacity .45s}
+
+/* ---------- narrow screens ---------- */
+@media (max-width:900px){
+  #panel{right:8px;left:8px;top:auto;bottom:8px;width:auto;max-height:52%;display:none}
+  #panel.open{display:flex}
+  #toolToggle{display:inline-flex}
+  #hud{max-width:min(78%,330px);font-size:10px;left:8px;top:8px;max-height:42%}
+  #hud #probe{position:static;margin-top:7px;padding-top:6px;border:none;border-top:1px solid rgba(90,120,150,.32);
+    background:none;backdrop-filter:none;pointer-events:none}
+  #toolbar{left:8px;right:8px;transform:none;top:auto;bottom:calc(52% + 16px);max-width:none;justify-content:flex-start}
+  #panel.open ~ #toolbar{bottom:calc(52% + 16px)}
+  #minimap{display:none}
+  #hints{display:none}
+}
+@media (max-height:560px){ #hud{font-size:10px} #probe{display:none} }
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="view" aria-label="3D erosion terrain view"></canvas>
+    <div id="cursor"></div>
+  </div>
+
+  <div id="hud" role="status" aria-live="off">
+    <h2><span id="hudState" class="pill run">running</span><span id="hudMode">Shaded terrain</span></h2>
+    <div class="grid">
+      <span class="k">fps</span><span class="v" id="vFps">—</span>
+      <span class="k">frame</span><span class="v" id="vFrame">—</span>
+      <span class="k">grid</span><span class="v" id="vGrid">—</span>
+      <span class="k">sim time</span><span class="v" id="vTime">—</span>
+      <span class="k">water</span><span class="v" id="vWater">—</span>
+      <span class="k">sediment</span><span class="v" id="vSed">—</span>
+      <span class="k">stability</span><span class="v" id="vStab">—</span>
+    </div>
+    <div id="bars">
+      <div class="bar"><span>water cover</span><span class="track"><span class="fill" id="bWet"></span></span><span class="v" id="tWet">0%</span></div>
+      <div class="bar"><span>flux limited</span><span class="track"><span class="fill sed" id="bCap"></span></span><span class="v" id="tCap">0%</span></div>
+      <div class="bar"><span>sim cost</span><span class="track"><span class="fill act" id="bSim"></span></span><span class="v" id="tSim">0ms</span></div>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button id="btnPause" class="on" title="Pause / resume (Space)">⏸ Pause <kbd>space</kbd></button>
+    <button id="btnStep" title="Advance one simulation step (S)">⏭ Step <kbd>s</kbd></button>
+    <button id="btnReset" title="Reset water, sediment and time (T)">↺ Reset <kbd>t</kbd></button>
+    <button id="btnRegen" title="Generate new terrain from the seed (R)">⛰ New terrain <kbd>r</kbd></button>
+    <button id="btnCam" title="Reset the camera (C)">🧭 Camera <kbd>c</kbd></button>
+    <button id="btnStab" title="Clamp parameters back to a stable range">🛡 Stabilise</button>
+    <button id="btnPanel" style="display:none">☰ Controls</button>
+  </div>
+
+  <button id="toolToggle" class="btn" aria-expanded="false">⚙ Controls</button>
+
+  <aside id="panel" aria-label="Controls">
+    <header>
+      <h1>Hydraulic Erosion Lab</h1>
+      <button class="btn" id="panelClose" title="Hide panel">✕</button>
+    </header>
+    <div id="panelBody"></div>
+  </aside>
+
+  <div id="probe" aria-live="off"><b>probe</b><div class="prow"><span class="pk">move the pointer over terrain</span></div></div>
+
+  <div id="minimap"><canvas id="mmCanvas" width="132" height="132"></canvas><div class="cap">plan view · water + relief</div></div>
+
+  <div id="hints">
+    <span class="hint">drag <kbd>L</kbd> tool</span>
+    <span class="hint">orbit <kbd>R-drag</kbd></span>
+    <span class="hint">pan <kbd>M-drag</kbd>/<kbd>⇧+L</kbd></span>
+    <span class="hint">zoom <kbd>wheel</kbd></span>
+    <span class="hint">tools <kbd>1-8</kbd></span>
+    <span class="hint">views <kbd>z</kbd>/<kbd>x</kbd></span>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+  <input type="file" id="fileIn" accept=".json,application/json" class="sr" tabindex="-1">
+</div>
