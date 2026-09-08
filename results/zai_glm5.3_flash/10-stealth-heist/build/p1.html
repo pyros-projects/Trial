@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Shadow Protocol — Procedural Stealth Heist</title>
+<style>
+:root{
+  --bg:#05070d; --panel:rgba(10,15,28,.94); --line:#26314f; --ink:#dfe8ff; --dim:#8fa0c5;
+  --acc:#ffd75e; --acc2:#59e0ff; --bad:#ff5d5d; --ok:#6fe3a0; --warn:#ffb14e;
+}
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+html,body{height:100%; overflow:hidden; background:var(--bg); overscroll-behavior:none}
+body{font-family:ui-monospace,'Cascadia Code','SF Mono',Consolas,Menlo,monospace; color:var(--ink); user-select:none; -webkit-user-select:none; touch-action:none}
+#app{position:fixed; inset:0; overflow:hidden}
+canvas#game{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:none}
+.hidden{display:none !important}
+button{font:inherit; color:inherit; background:none; border:none; cursor:pointer}
+/* ---------- HUD ---------- */
+#hud{position:absolute; inset:0; pointer-events:none; z-index:5}
+#status{position:absolute; top:calc(8px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left));
+  font-size:11px; line-height:1.55; color:var(--dim); background:rgba(4,8,16,.62); border:1px solid #1a2440;
+  border-left:3px solid var(--acc2); padding:5px 9px; border-radius:6px; white-space:pre; letter-spacing:.02em}
+#topCenter{position:absolute; top:calc(8px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); text-align:center; width:min(440px,60vw)}
+#objList{font-size:11px; letter-spacing:.06em; text-shadow:0 1px 3px #000; margin-bottom:6px}
+#objList .done{color:var(--ok)} #objList .opt{color:var(--dim)} #objList .main{color:var(--acc)}
+#alertWrap{height:7px; border-radius:4px; background:#131a2c; border:1px solid #223052; overflow:hidden; position:relative}
+#alertFill{height:100%; width:0%; background:var(--ok); transition:width .18s linear}
+#alertLabel{position:absolute; right:4px; top:-3px; font-size:9px; color:var(--dim); letter-spacing:.2em; text-shadow:0 1px 2px #000}
+#mmWrap{position:absolute; top:calc(8px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right));
+  background:rgba(4,8,16,.66); border:1px solid #1a2440; border-radius:6px; padding:4px}
+#minimap{display:block; border-radius:3px}
+#mmLabel{font-size:8px; letter-spacing:.3em; color:var(--dim); text-align:center; margin-top:2px}
+#gadgetBar{position:absolute; bottom:calc(12px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; gap:8px}
+.slot{width:52px; height:52px; border-radius:9px; background:rgba(8,13,26,.8); border:1px solid #223052; position:relative;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto}
+.slot .ic{font-size:19px; line-height:1}
+.slot .nm{font-size:7px; letter-spacing:.08em; color:var(--dim); margin-top:2px}
+.slot .ct{position:absolute; top:2px; right:4px; font-size:10px; color:var(--acc)}
+.slot.active{border-color:var(--acc); box-shadow:0 0 10px rgba(255,215,94,.35); background:rgba(30,26,10,.85)}
+.slot.empty .ct{color:var(--bad)} .slot.empty .ic{opacity:.35}
+.slot .cd{position:absolute; inset:0; border-radius:8px; background:conic-gradient(rgba(0,0,0,.72) var(--cd,0%), transparent 0)}
+.slot .key{position:absolute; bottom:1px; left:4px; font-size:8px; color:var(--dim)}
+#prompt{position:absolute; bottom:calc(78px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+  background:rgba(6,10,20,.85); border:1px solid #2a3a63; border-radius:6px; padding:5px 12px; font-size:12px; letter-spacing:.05em; color:var(--ink); white-space:nowrap}
+#prompt b{color:var(--acc)}
+#toasts{position:absolute; bottom:calc(140px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:4px}
+.toast{background:rgba(8,13,26,.88); border:1px solid #26314f; border-left:3px solid var(--acc2); border-radius:5px;
+  padding:4px 12px; font-size:11px; letter-spacing:.04em; animation:toastIn .18s ease-out; white-space:nowrap}
+.toast.bad{border-left-color:var(--bad)} .toast.good{border-left-color:var(--ok)}
+@keyframes toastIn{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+#spotted{position:absolute; top:34%; left:50%; transform:translate(-50%,-50%); font-size:34px; font-weight:700; letter-spacing:.35em;
+  color:var(--bad); text-shadow:0 0 22px rgba(255,60,60,.8); animation:spotPulse .5s infinite alternate}
+@keyframes spotPulse{from{opacity:.55}to{opacity:1}}
+#replayBanner{position:absolute; bottom:calc(74px + env(safe-area-inset-bottom)); left:12px; font-size:11px; letter-spacing:.2em;
+  color:var(--acc2); background:rgba(6,10,20,.8); border:1px solid #2a3a63; padding:4px 10px; border-radius:5px}
+/* ---------- screens ---------- */
+.screen{position:absolute; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 30%, rgba(20,30,58,.88), rgba(4,6,12,.96)); backdrop-filter:blur(3px); overflow:auto; padding:14px}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px 22px; width:min(640px,94vw);
+  max-height:94vh; overflow:auto; box-shadow:0 24px 80px rgba(0,0,0,.6); pointer-events:auto}
+.panel.wide{width:min(780px,96vw)}
+.panel.narrow{width:min(420px,94vw)}
+h1{font-size:26px; letter-spacing:.3em; color:var(--ink); text-shadow:0 0 24px rgba(89,224,255,.35)}
+h2{font-size:17px; letter-spacing:.25em; margin-bottom:12px; color:var(--acc)}
+.sub{color:var(--dim); font-size:11px; letter-spacing:.28em; margin:2px 0 14px}
+.lbl{display:block; font-size:9px; letter-spacing:.28em; color:var(--dim); margin:12px 0 5px}
+.desc{font-size:11px; color:var(--dim); line-height:1.5; margin-bottom:8px}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.btns{margin-top:12px}
+.btn{border:1px solid #2c3a60; background:#101830; border-radius:8px; padding:9px 14px; font-size:12px; letter-spacing:.1em; transition:all .12s}
+.btn:hover{border-color:var(--acc2); background:#16224a}
+.btn.primary{background:linear-gradient(180deg,#2a3c1c,#1d2e14); border-color:#4d7a35; color:#c9f2ae}
+.btn.primary:hover{background:#33491f; border-color:var(--ok)}
+.btn.ghost{background:transparent; border-color:#223052; color:var(--dim)}
+.btn.ghost:hover{color:var(--ink)}
+.btn.sq{padding:9px 11px}
+.tin{background:#0a1122; border:1px solid #223052; border-radius:7px; color:var(--ink); padding:8px 10px; font:inherit; font-size:13px; width:150px; user-select:text}
+.tin:focus{outline:none; border-color:var(--acc2)}
+.seg{display:flex; gap:6px; flex-wrap:wrap}
+.seg .btn.on{border-color:var(--acc); color:var(--acc); background:#241f0d}
+.menuCols{display:flex; gap:20px; flex-wrap:wrap}
+.menuCols .col{flex:1 1 300px; min-width:270px}
+#menuMap{width:100%; border:1px solid #1a2440; border-radius:8px; background:#070b14; margin-bottom:8px}
+.stats{font-size:11px; color:var(--dim); line-height:1.7; white-space:pre-line}
+.objPreview{font-size:11px; line-height:1.7; margin-top:6px}
+table.hist{width:100%; border-collapse:collapse; font-size:10px; color:var(--dim); margin-top:4px}
+table.hist td,table.hist th{padding:3px 6px; border-bottom:1px solid #18233e; text-align:left; letter-spacing:.05em}
+table.hist th{color:#5a6a90; font-weight:400; font-size:9px; letter-spacing:.2em}
+table.hist tr.best td{color:var(--acc)}
+#endStats{width:100%; border-collapse:collapse; font-size:12px; margin:10px 0}
+#endStats td{padding:5px 4px; border-bottom:1px solid #18233e}
+#endStats td:last-child{text-align:right; color:var(--acc)}
+#rankBadge{width:64px; height:64px; border-radius:12px; border:2px solid var(--acc); color:var(--acc); font-size:34px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; margin:6px auto 2px; box-shadow:0 0 26px rgba(255,215,94,.3); letter-spacing:0}
+#endTitle{text-align:center}
+.hint{font-size:10px; color:var(--dim); margin-top:10px; line-height:1.6}
+.helpTable{width:100%; border-collapse:collapse; font-size:11px}
+.helpTable td{padding:4px 6px; border-bottom:1px solid #18233e}
+.keycap{display:inline-block; background:#141d36; border:1px solid #33436e; border-bottom-width:2px; border-radius:5px;
+  padding:1px 7px; font-size:10px; color:var(--acc2); margin-right:4px}
+ul.tips{font-size:11px; color:var(--dim); line-height:1.8; padding-left:18px}
+/* settings */
+.slider{display:flex; align-items:center; gap:10px; margin:8px 0}
+.slider label{font-size:11px; color:var(--dim); width:130px; letter-spacing:.06em}
+.slider input[type=range]{flex:1; accent-color:var(--acc2)}
+.slider output{font-size:11px; color:var(--ink); width:36px; text-align:right}
+.chk{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--dim); margin:8px 0; cursor:pointer}
+.chk input{accent-color:var(--acc2); width:15px; height:15px}
+.bindRow{display:flex; align-items:center; justify-content:space-between; padding:4px 0; border-bottom:1px solid #18233e; font-size:11px}
+.bindRow .cap{min-width:64px; text-align:center}
+.bindRow .cap.listen{border-color:var(--acc); color:var(--acc)}
+/* diagnostics */
+#diagPanel{position:absolute; top:calc(64px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right)); z-index:15;
+  width:190px; padding:12px 14px}
+#diagPanel .lbl{margin-top:2px}
+#diagPanel .chk{margin:5px 0}
+/* touch UI */
+#touchUI{position:absolute; inset:0; z-index:8; pointer-events:none}
+#joy{position:absolute; width:110px; height:110px; border-radius:50%; border:1px solid rgba(90,120,190,.4); background:rgba(10,16,30,.35); display:none}
+#joyKnob{position:absolute; left:50%; top:50%; width:44px; height:44px; border-radius:50%; background:rgba(89,224,255,.25); border:1px solid rgba(89,224,255,.6); transform:translate(-50%,-50%)}
+.tbtn{position:absolute; pointer-events:auto; width:62px; height:62px; border-radius:50%; background:rgba(12,20,40,.72);
+  border:1px solid #2c3a60; color:var(--ink); font-size:10px; letter-spacing:.08em; display:flex; align-items:center; justify-content:center}
+.tbtn:active{background:rgba(40,60,110,.8); border-color:var(--acc2)}
+.tbtn.on{border-color:var(--acc); color:var(--acc)}
+#tbUse{right:calc(18px + env(safe-area-inset-right)); bottom:calc(112px + env(safe-area-inset-bottom))}
+#tbGadget{right:calc(92px + env(safe-area-inset-right)); bottom:calc(38px + env(safe-area-inset-bottom))}
+#tbRun{right:calc(18px + env(safe-area-inset-right)); bottom:calc(188px + env(safe-area-inset-bottom))}
+#tbSlot{right:calc(92px + env(safe-area-inset-right)); bottom:calc(114px + env(safe-area-inset-bottom)); width:52px; height:52px}
+/* import */
+#impText{width:100%; height:130px; background:#0a1122; border:1px solid #223052; border-radius:7px; color:var(--dim);
+  font:inherit; font-size:10px; padding:8px; resize:vertical; user-select:text}
+@media (max-width:700px){
+  #status{font-size:9px; max-width:46vw; white-space:pre-wrap}
+  #topCenter{width:46vw} #objList{font-size:9px}
+  #minimap{max-width:120px; height:auto}
+  .slot{width:44px; height:44px} .slot .ic{font-size:16px}
+  h1{font-size:19px}
+  .panel{padding:14px}
+}
+body.reduced *{animation:none !important; transition:none !important}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="status"><div id="statusA">—</div><div id="statusB">—</div></div>
+    <div id="topCenter">
+      <div id="objList"></div>
+      <div id="alertWrap"><div id="alertFill"></div><span id="alertLabel">CALM</span></div>
+    </div>
+    <div id="mmWrap"><canvas id="minimap"></canvas><div id="mmLabel">TAC-MAP</div></div>
+    <div id="gadgetBar"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="toasts"></div>
+    <div id="spotted" class="hidden">SPOTTED</div>
+    <div id="replayBanner" class="hidden">▶ REPLAY</div>
+  </div>
+
+  <div id="touchUI" class="hidden">
+    <div id="joy"><div id="joyKnob"></div></div>
+    <button id="tbUse" class="tbtn">USE</button>
+    <button id="tbGadget" class="tbtn">TOOL</button>
+    <button id="tbRun" class="tbtn">RUN</button>
+    <button id="tbSlot" class="tbtn">SWAP</button>
+  </div>
+
+  <div id="diagPanel" class="panel hidden">
+    <span class="lbl">DIAGNOSTICS — [O]</span>
+    <label class="chk"><input type="checkbox" id="d_nav"> nav paths / nodes</label>
+    <label class="chk"><input type="checkbox" id="d_state"> guard state</label>
+    <label class="chk"><input type="checkbox" id="d_rays"> vision ray hits</label>
+    <label class="chk"><input type="checkbox" id="d_sound"> sound events</label>
+    <label class="chk"><input type="checkbox" id="d_lkp"> last-known pos</label>
+    <label class="chk"><input type="checkbox" id="d_coll"> collision geometry</label>
+    <label class="chk"><input type="checkbox" id="d_frame"> frame timing</label>
+    <label class="chk"><input type="checkbox" id="d_light"> lights</label>
+  </div>
+
+  <div id="screenMenu" class="screen hidden">
+    <div class="panel wide">
+      <h1>SHADOW PROTOCOL</h1>
+      <div class="sub">PROCEDURAL STEALTH HEIST SANDBOX</div>
+      <div class="menuCols">
+        <div class="col">
+          <span class="lbl">MISSION</span>
+          <div id="presetList" class="seg"></div>
+          <span class="lbl">SEED</span>
+          <div class="row">
+            <input id="seedInput" class="tin" inputmode="numeric" autocomplete="off" spellcheck="false">
+            <button id="btnDice" class="btn ghost sq" title="random seed">⟳</button>
+          </div>
+          <span class="lbl">DIFFICULTY</span>
+          <div id="diffList" class="seg"></div>
+          <div class="row btns"><button id="btnStart" class="btn primary">▶ START MISSION</button></div>
+          <div class="row btns">
+            <button id="btnHelp" class="btn ghost">CONTROLS</button>
+            <button id="btnSettings" class="btn ghost">SETTINGS</button>
+            <button id="btnImport" class="btn ghost">IMPORT</button>
+          </div>
+        </div>
+        <div class="col">
+          <span class="lbl" id="briefName">—</span>
+          <div class="desc" id="briefDesc"></div>
+          <canvas id="menuMap" width="320" height="220"></canvas>
+          <div class="stats" id="briefStats"></div>
+          <div class="objPreview" id="briefObj"></div>
+        </div>
+      </div>
+      <div id="histWrap" class="hidden"><span class="lbl">RECENT OPERATIONS</span><table class="hist" id="histTable"></table></div>
+    </div>
+  </div>
+
+  <div id="screenPause" class="screen hidden">
+    <div class="panel narrow">
+      <h2>PAUSED</h2>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button id="btnResume" class="btn primary">RESUME</button>
+        <button id="btnRestart" class="btn">RESTART MISSION</button>
+        <button id="btnNewSeed" class="btn">NEW MISSION · NEW SEED</button>
+        <button id="btnPauseSettings" class="btn ghost">SETTINGS</button>
+        <button id="btnPauseHelp" class="btn ghost">CONTROLS</button>
+        <button id="btnQuit" class="btn ghost">ABANDON → MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screenEnd" class="screen hidden">
+    <div class="panel narrow">
+      <h2 id="endTitle">MISSION COMPLETE</h2>
+      <div id="rankBadge">S</div>
+      <table id="endStats"></table>
+      <div class="row btns">
+        <button id="btnReplay" class="btn">▶ WATCH REPLAY</button>
+        <button id="btnExportRun" class="btn">EXPORT RUN</button>
+      </div>
+      <div class="row btns">
+        <button id="btnRetry" class="btn primary">RETRY SEED</button>
+        <button id="btnNext" class="btn">NEW MISSION</button>
+        <button id="btnMenu2" class="btn ghost">MENU</button>
+      </div>
+      <div class="hint" id="endHint"></div>
+    </div>
+  </div>
+
+  <div id="screenHelp" class="screen hidden">
+    <div class="panel">
+      <h2>CONTROLS &amp; FIELD MANUAL</h2>
+      <table class="helpTable" id="helpTable"></table>
+      <span class="lbl">TIPS</span>
+      <ul class="tips">
+        <li>Guards react to <b>sound</b> and <b>vision</b>. Running is fast but loud; walking is quiet.</li>
+        <li>Their cones are occluded by walls and closed doors — break line of sight, then move.</li>
+        <li>Dark corners hide you; lit rooms and <span style="color:#ff8080">restricted zones</span> get you spotted faster.</li>
+        <li>Hack a <b>terminal</b> to take the security grid offline and unlock electronic doors.</li>
+        <li>Locked doors can be picked (hold interact) — it makes noise.</li>
+        <li>Tools: <b>1</b> noisemaker pulls guards, <b>2</b> smoke blocks vision, <b>3</b> EMP disables cameras &amp; electronic locks.</li>
+        <li>Alarms fade. If caught, the mission fails — but every run can be replayed deterministically.</li>
+      </ul>
+      <div class="row btns"><button id="btnHelpClose" class="btn primary">CLOSE</button></div>
+    </div>
+  </div>
+
+  <div id="screenSettings" class="screen hidden">
+    <div class="panel">
+      <h2>SETTINGS</h2>
+      <div class="slider"><label>MASTER VOLUME</label><input type="range" id="volMaster" min="0" max="100"><output id="volMasterOut"></output></div>
+      <div class="slider"><label>EFFECTS VOLUME</label><input type="range" id="volFx" min="0" max="100"><output id="volFxOut"></output></div>
+      <label class="chk"><input type="checkbox" id="setReduced"> Reduced motion / flash (also respects system preference)</label>
+      <label class="chk"><input type="checkbox" id="setStatusHud"> Hide live status overlay</label>
+      <span class="lbl">TOUCH CONTROLS</span>
+      <div class="seg" id="touchSeg"></div>
+      <span class="lbl">KEY BINDINGS (click, then press a key)</span>
+      <div id="bindList"></div>
+      <div class="row btns">
+        <button id="btnBindReset" class="btn ghost">RESET BINDINGS</button>
+        <button id="btnSettingsClose" class="btn primary">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screenImport" class="screen hidden">
+    <div class="panel">
+      <h2>IMPORT</h2>
+      <div class="desc">Paste a mission or run (replay) JSON, or load a file. Run JSONs replay the recorded operation deterministically.</div>
+      <textarea id="impText" spellcheck="false" placeholder='{"kind":"heist-run" … }'></textarea>
+      <div class="row btns" style="align-items:center">
+        <button id="btnImpLoadRun" class="btn">LOAD AS RUN</button>
+        <button id="btnImpLoadMission" class="btn">LOAD AS MISSION</button>
+        <input type="file" id="impFile" accept=".json,application/json" style="font-size:10px;color:var(--dim)">
+        <button id="btnImpCancel" class="btn ghost">CANCEL</button>
+      </div>
+      <div class="hint" id="impMsg"></div>
+    </div>
+  </div>
+</div>
+<noscript>This game requires JavaScript.</noscript>
+<script>

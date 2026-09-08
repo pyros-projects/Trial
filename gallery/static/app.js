@@ -6,7 +6,7 @@
   const bytes = value => value == null ? 'Unknown' : value < 1024 ? `${value} B` : value < 1048576 ? `${(value/1024).toFixed(1)} KiB` : `${(value/1048576).toFixed(1)} MiB`;
   const label = track => track === 'real-apps' ? 'REAL APPLICATION' : 'HTML EXPERIENCE';
   const state = {data:null, modelSettings:new Map(), buildNotices:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, tab:'preview', promptText:'', promptToken:0, loading:false};
-  const noticeLabels={'runtime-error':'Runtime error','slow-start':'May take minutes to load'};
+  const noticeLabels={'runtime-error':'Runtime error','slow-start':'May take minutes to load','run-cancelled':'Agent run cancelled'};
   const headings = {
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
     catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and real applications. The brief, the checks and the delivery requirements are all here.'],

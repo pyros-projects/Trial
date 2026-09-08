@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance on the thirty challenges.
 
+## GLM stealth and cancelled-run context: 2026-09-08
+
+GLM's stealth submission brings the collection to **74 HTML builds across twenty prompts and six models**, including eight GLM builds. All **27 original files totaling 5,572,878 bytes** remain unchanged. Its thumbnail is an exact copy of the visually inspected supplied `evidence/16-run.png`, showing active gameplay at **1280 × 800**.
+
+The new `run-cancelled` notice type labels an interrupted agent run separately from runtime errors and slow startup. GLM's entry records my reported observation: the agent kept unsuccessfully trying to finish its own game during playtesting, got stuck repeating those attempts, and I cancelled the run after about an hour. This account is curator context, not an independent determination that the game cannot be completed. The submitted game remains available.
+
+All **three focused notice browser tests passed**, including public and local display, invalid settings, text escaping, source/privacy boundaries, shared links, model switching, and preserving app state while collapsing or reopening a cancellation notice. JavaScript syntax and package whitespace checks passed. Actual Netlify Dev and production checks verified Start Mission, brief movement input, the cancellation message, its narrow layout, and removal of the notice when switching to an unflagged model. The iframe occupied **1440 × 1057** on desktop and **390 × 765** on mobile and was removed on close. No uncaught JavaScript errors or external requests appeared during these brief checks; a complete playthrough was not attempted.
+
+The bounded publication review scanned all **11 original text files** and metadata of all **16 PNGs**. No confirmed credentials, private-identity linkage, private endpoints, or identifying image metadata were found. Four supplied images were visually inspected. Raw evidence, development files, and build fragments remain excluded from the website.
+
+Production deployment **`6aa044027037af0092c3c856`** publishes **334 files totaling 13,595,683 bytes (12.97 MiB)**. The exact public file inventory passed. Live HTTPS checks verified all **74** original source hashes, implementation share pages, thumbnails and attachment/sandbox headers, plus **20** comparison pages and preview images. The public code, settings, four notices, and six model profiles match the reviewed export. **Fifty-three** representative private routes returned 404.
+
 ## Grok completes the HTML track: 2026-09-08
 
 The collection contains **73 HTML builds across all twenty HTML prompts and six models**: Astra 17, Opus 9, Grok 20, GLM 7, Gemini 14, and Qwen 6. New submissions are Grok's weather laboratory, node graphics studio, and city traffic simulator; Astra's echo-loop puzzler; and Opus's sand sandbox. Grok now has one submission for every HTML prompt. All **265 original files totaling 42,256,107 bytes** remain unchanged. Four thumbnails are exact copies of visually inspected supplied images. Grok's node studio has a fresh capture of the final HTML in the public sandbox at **1440 × 1057**, because its supplied desktop images predate visible source changes. No screenshot pixels or submitted HTML were edited.

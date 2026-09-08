@@ -1270,6 +1270,7 @@ window.probe=async origin=>{
         config['buildNotices'] = {
             ids[0]: {'type': 'runtime-error', 'message': 'Public sandbox blocks this submitted persistence path.', 'scope': 'public'},
             ids[1]: {'type': 'slow-start', 'message': 'Shader initialization may take several minutes.'},
+            ids[3]: {'type': 'run-cancelled', 'message': 'I cancelled the agent run after repeated unsuccessful playtesting attempts.'},
         }
         self.model_settings(json.dumps(config))
         private = 'PRIVATE_RUN_METADATA_MUST_NOT_BECOME_A_BUILD_NOTICE'
@@ -1280,7 +1281,7 @@ window.probe=async origin=>{
         (run / 'evidence/private.txt').write_text(private, encoding='utf-8')
         self.navigate_direct()
         expect(self.page.locator(f'#cards .model-column[data-model="{keys[0]}"] .card-build-notice')).to_have_count(0)
-        expect(self.page.locator('#cards .card-build-notice')).to_have_count(1)
+        expect(self.page.locator('#cards .card-build-notice')).to_have_count(2)
         self.page.goto(self.base + '/#play/' + ids[0])
         expect(self.page.frame_locator('#artifact-frame').locator('#increment')).to_have_text('Count: 0')
         expect(self.page.locator('#live-build-notice')).to_have_count(0)
@@ -1300,7 +1301,7 @@ window.probe=async origin=>{
         expect(self.page.frame_locator('#artifact-frame').locator('#increment')).to_have_text('Count: 0')
         self.assertNotIn('allow-same-origin', self.page.locator('#artifact-frame').get_attribute('sandbox'))
         self.page.locator('#close-live').click()
-        expect(self.page.locator('#cards .card-build-notice')).to_have_count(2)
+        expect(self.page.locator('#cards .card-build-notice')).to_have_count(3)
         expect(self.page.locator('#cards')).not_to_contain_text(private)
         self.assertEqual(self.page.locator('#cards .model-column').evaluate_all('nodes=>nodes.map(node=>node.dataset.model)'), keys)
         row = next(row for row in data['results'] if row['id'] == ids[1])
@@ -1308,6 +1309,18 @@ window.probe=async origin=>{
         expect(notice).to_have_js_property('open', True)
         expect(notice.locator('summary').get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
         expect(notice.locator('.build-notice-message')).to_have_text('Shader initialization may take several minutes.')
+        row = next(row for row in data['results'] if row['id'] == ids[3])
+        self.page.goto(origin + row['share_url'])
+        expect(notice).to_have_attribute('data-notice-type', 'run-cancelled')
+        expect(notice.locator('summary').get_by_text('Attention: Agent run cancelled', exact=True)).to_be_visible()
+        expect(notice.locator('.build-notice-message')).to_have_text('I cancelled the agent run after repeated unsuccessful playtesting attempts.')
+        counter = self.page.frame_locator('#artifact-frame').locator('#increment')
+        notice.locator('summary').click()
+        counter.click()
+        expect(counter).to_have_text('Count: 1')
+        notice.locator('summary').click()
+        expect(notice).to_have_js_property('open', True)
+        expect(counter).to_have_text('Count: 1')
         self.page.locator('#live-model').select_option(ids[2])
         expect(notice).to_have_count(0)
         expect(self.page.frame_locator('#artifact-frame').locator('#build-model')).to_have_text(keys[2])
