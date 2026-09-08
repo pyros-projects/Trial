@@ -1,5 +1,10 @@
 # Changelog
 
+## GLM factory automation and rhythm bullet hell: 2026-09-08
+
+- Added GLM's factory simulator and rhythm bullet hell, bringing its collection to twelve builds covering prompts 01–12 and the showcase to 96 builds overall.
+- Added supplied screenshot previews and updated the model collection and prompt comparison links. Original submissions remain unchanged; raw evidence is excluded from the website.
+
 ## The first Capstones and a complete Grok collection: 2026-09-08
 
 - Added Grok's spreadsheet, vector editor, project planner, and Capstone. Grok now has a submission for every prompt in the 24-task collection.
