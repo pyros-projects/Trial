@@ -1,0 +1,7 @@
+// Read live diagnostics from the opaque iframe execution context. No app mutation.
+const fs=require('fs'),{execFileSync}=require('child_process');
+const expression=fs.readFileSync(0,'utf8'),url=execFileSync('agent-browser',['--session','planner','get','cdp-url'],{encoding:'utf8'}).trim();
+const ws=new WebSocket(url);let seq=0;const pending=new Map();
+function send(method,params={},session){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params,...(session?{sessionId:session}:{})}));});}
+ws.addEventListener('message',e=>{const m=JSON.parse(e.data),p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result);}});
+ws.addEventListener('open',async()=>{try{const {targetInfos}=await send('Target.getTargets'),target=targetInfos.find(t=>t.type==='iframe'&&t.url.endsWith('/index.html'));if(!target)throw Error('Opaque app iframe target not found');const {sessionId}=await send('Target.attachToTarget',{targetId:target.targetId,flatten:true});const response=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},sessionId);if(response.exceptionDetails)throw Error(JSON.stringify(response.exceptionDetails));process.stdout.write(JSON.stringify(response.result.value??null));await send('Target.detachFromTarget',{sessionId});ws.close();}catch(error){console.error(error);process.exit(1);}});

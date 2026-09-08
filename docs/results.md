@@ -6,18 +6,20 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-08 checkout contains 96 submitted HTML builds for all 24 tasks across six model folders:
+The 2026-09-09 checkout contains 101 submitted HTML builds for all 24 tasks across six model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
-| `gpt-6_astra` | 23 | 01-22, 24 |
-| `anthropic_opus5` | 11 | 01-11 |
+| `gpt-6_astra` | 24 | 01-24 |
+| `anthropic_opus5` | 14 | 01-14 |
 | `xai_grok4.6` | 24 | 01-24 |
 | `zai_glm5.3_flash` | 12 | 01-12 |
-| `google_gemini3.8_flash` | 20 | 01-20 |
+| `google_gemini3.8_flash` | 21 | 01-20, 22 |
 | `alibaba_qwen3.8_flash` | 6 | 01-05, 09 |
 
 These are submitted artifacts, not verified passes. This snapshot includes no evaluator reports or scores. The gallery reads the files that are present, so its totals change as results are added.
+
+Prompt identities reuse the `icon` in [catalog.json](../prompts/catalog.json) throughout the showcase, model cards, filters, dialogs, live viewer, and share previews. Numbers and descriptive titles remain available; icons are decorative and keep the current model tint where a model owns the card or viewer.
 
 ## Build notices
 

@@ -18,6 +18,8 @@
   const storageKey='trial-by-pyro-ui-v1';
   const isPublic=()=>state.data?.mode==='public';
   const modelName=row=>state.modelSettings.get(row.model_key)?.label||row.model||row.model_key;
+  const promptIcon=task=>`<span class="prompt-icon task-icon" aria-hidden="true">${escape(task?.icon||'◇')}</span>`;
+  const promptMark=task=>`<span class="prompt-mark">${promptIcon(task)}<span class="prompt-number">${task?escape(task.id.slice(0,2)):'??'}</span></span>`;
   function modelColor(row) {
     const configured=state.modelSettings.get(row.model_key)?.color;if(configured)return configured;
     let hash=0;for(const char of row.model_key)hash=(Math.imul(hash,31)+char.codePointAt(0))>>>0;
@@ -208,7 +210,7 @@
   }
   function fillSelect(id, entries, firstLabel, desired) {
     const el=$(id);const prior=desired??el.value;
-    el.innerHTML=`<option value="all">${escape(firstLabel)}</option>`+entries.map(([value,text])=>`<option value="${escape(value)}">${escape(text)}</option>`).join('');
+    el.innerHTML=`<option value="all">${escape(firstLabel)}</option>`+entries.map(([value,text,name])=>`<option value="${escape(value)}"${name?` aria-label="${escape(name)}"`:''}>${escape(text)}</option>`).join('');
     el.value=[...el.options].some(option=>option.value===prior)?prior:'all';
   }
   function matchingRuns() {
@@ -243,7 +245,7 @@
     const image=a.screenshot_url?`<img src="${escape(a.screenshot_url)}" alt="${escape(modelName(row))}: ${escape(row.task_title)}" loading="lazy" decoding="async" width="1280" height="800">`:`<div class="card-placeholder"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><span class="visual-label">${a.kind==='html'?'READY TO EXPLORE':a.exists?'SOURCE AVAILABLE':'NO ARTIFACT'}</span></div>`;
     const footer=repeated?escape(row.run_id):!isPublic()&&row.report_binding!=='none'?checksSummary(row):`${bytes(a.bytes)} · ${a.demo?'Session demo':a.kind==='html'?'HTML build':'Source project'}`;
     const task=modelView?state.data.catalog.find(task=>task.id===row.task_id):null;
-    const identity=modelView?`<div class="model-card-identity"><span class="prompt-number">${task?escape(task.id.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(row.category)}</div><h4>${escape(row.task_title)}</h4></div></div>`:modelIdentity(row);
+    const identity=modelView?`<div class="model-card-identity">${promptMark(task)}<div><div class="prompt-category">${escape(row.category)}</div><h4>${escape(row.task_title)}</h4></div></div>`:modelIdentity(row);
     const hint=task?.look_for;
     const context=modelView&&task?`<div class="model-card-context">${typeof hint==='string'&&hint.trim()?`<details class="model-card-guide"><summary>Look for</summary><p>${escape(hint)}</p></details>`:''}<button class="button quiet" data-open-prompt="${escape(task.id)}">Read prompt ↗</button></div>`:'';
     return `<article class="run-card${modelView?' model-run-card':''}"><div class="card-model">${identity}${isPublic()?'':`<span class="card-status ${row.score==null?'':'scored'}">${status}</span>`}</div><div class="card-visual"><button class="screenshot-button" data-open-run="${escape(row.id)}" aria-label="Inspect ${escape(modelName(row))}: ${escape(row.task_title)}">${image}<span class="screenshot-hint">Take a closer look ↗</span></button></div>${cardBuildNotice(row)}${context}<div class="card-bottom"><span class="check-summary">${footer}</span><div class="card-actions">${copyLinkButton(row,'copy-link')}<button class="card-open" data-open-run="${escape(row.id)}">Inspect build ↗</button></div></div></article>`;
@@ -302,7 +304,7 @@
       return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}"><div class="missing-build"><div class="card-model">${modelIdentity(model)}</div><div class="missing-visual"><span aria-hidden="true">/ /</span>${exists?'No matching build':'No build recorded'}</div><div class="missing-foot">${exists?'Hidden by the current filters.':'This model has not submitted this prompt.'}</div></div></div>`;
     }).join('');
     const title=escape(first.task_title);
-    return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header${guidance?' has-guidance':''}"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'SOURCE PROJECT':'HTML EXPERIENCE'}</div><h3${expanded?' id="category-title"':''}>${title}</h3></div></div>${guidance}<div class="prompt-header-actions">${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}${expanded?'':`<button class="button expand-comparison" data-expand-task="${escape(key)}" aria-label="Expand ${title}">Expand <span aria-hidden="true">↗</span></button>`}</div></header><div class="comparison-toolbar"><span class="comparison-range" aria-live="polite" aria-atomic="true"></span><div class="comparison-actions">${copyCategoryButton(key)}<div class="model-navigation" role="group" aria-label="Browse models for ${title}"><button class="button model-arrow" data-shift-models="-1" aria-label="Previous models for ${title}">←</button><button class="button model-arrow" data-shift-models="1" aria-label="Next models for ${title}">→</button></div></div></div><div class="group-builds" style="--columns:${Math.max(1,comparisonModels.length)}" tabindex="0" role="group" aria-label="${title} model builds">${columns}</div></section>`;
+    return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header${guidance?' has-guidance':''}"><div class="prompt-heading">${promptMark(known)}<div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'SOURCE PROJECT':'HTML EXPERIENCE'}</div><h3${expanded?' id="category-title"':''}>${title}</h3></div></div>${guidance}<div class="prompt-header-actions">${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}${expanded?'':`<button class="button expand-comparison" data-expand-task="${escape(key)}" aria-label="Expand ${title}">Expand <span aria-hidden="true">↗</span></button>`}</div></header><div class="comparison-toolbar"><span class="comparison-range" aria-live="polite" aria-atomic="true"></span><div class="comparison-actions">${copyCategoryButton(key)}<div class="model-navigation" role="group" aria-label="Browse models for ${title}"><button class="button model-arrow" data-shift-models="-1" aria-label="Previous models for ${title}">←</button><button class="button model-arrow" data-shift-models="1" aria-label="Next models for ${title}">→</button></div></div></div><div class="group-builds" style="--columns:${Math.max(1,comparisonModels.length)}" tabindex="0" role="group" aria-label="${title} model builds">${columns}</div></section>`;
   }
   function comparisonPosition(group) {
     const viewport=group.querySelector('.group-builds');const columns=[...viewport.children];
@@ -388,7 +390,7 @@
     $('#catalog-count').textContent=tasks.length;
     $('#catalog-grid').innerHTML=tasks.map(t=>{
       const count=state.data.results.filter(r=>r.task_id===t.id).length;
-      return `<article class="task-card ${escape(t.track)}"><div class="task-top"><span class="task-icon" aria-hidden="true">${escape(t.icon)}</span><span class="pill ${escape(t.track)}">${label(t.track)}</span></div><h3>${escape(t.id.slice(0,2))} · ${escape(t.title)}</h3><p>${escape(t.description)}</p><button class="button" data-open-prompt="${escape(t.id)}">Read &amp; copy prompt <span>↗</span></button><div class="task-foot"><span>${escape(t.category)}</span><span>${count} ${count===1?'run':'runs'}</span></div></article>`;
+      return `<article class="task-card ${escape(t.track)}"><div class="task-top">${promptIcon(t)}<span class="pill ${escape(t.track)}">${label(t.track)}</span></div><h3>${escape(t.id.slice(0,2))} · ${escape(t.title)}</h3><p>${escape(t.description)}</p><button class="button" data-open-prompt="${escape(t.id)}">Read &amp; copy prompt <span>↗</span></button><div class="task-foot"><span>${escape(t.category)}</span><span>${count} ${count===1?'run':'runs'}</span></div></article>`;
     }).join('')||'<div class="notice">No tasks match this search.</div>';
   }
   function renderLeaderboard() {
@@ -436,7 +438,7 @@
       document.querySelector('.stats').classList.toggle('public-stats',isPublic());
       const models=[...new Map(data.results.map(r=>[r.model_key,r])).values()].sort(compareModels).map(row=>[row.model_key,modelName(row)]);
       fillSelect('#model-filter',models,'All models',first?saved['model-filter']:undefined);
-      fillSelect('#task-filter',data.catalog.map(t=>[t.id,`${t.id.slice(0,2)} · ${t.title}`]),'All prompts',first?saved['task-filter']:undefined);
+      fillSelect('#task-filter',data.catalog.map(t=>[t.id,`${t.icon||'◇'} ${t.id.slice(0,2)} · ${t.title}`,`${t.id.slice(0,2)} · ${t.title}`]),'All prompts',first?saved['task-filter']:undefined);
       const tracks=[...new Set([...data.catalog,...data.results].map(row=>row.track).filter(track=>typeof track==='string'&&track))].sort();
       fillSelect('#track-filter',tracks.map(track=>[track,track==='html'?'HTML experiences':track==='real-apps'?'Source projects':track]),'All tracks',first?saved['track-filter']:undefined);
       $('#track-filter-wrap').hidden=tracks.length<=1;
@@ -463,6 +465,7 @@
   }
   async function openPrompt(taskId) {
     const task=state.data?.catalog.find(t=>t.id===taskId);if(!task)return;
+    $('#prompt-mark').innerHTML=promptMark(task);
     const token=++state.promptToken;state.promptText='';$('#prompt-title').textContent=task.title;$('#prompt-content').textContent='Loading prompt…';$('#copy-status').textContent='';$('#copy-prompt').disabled=true;
     const url=`/prompts/${encodeURIComponent(taskId)}/prompt.md`;$('#download-prompt').href=url;$('#download-prompt').target='_blank';$('#download-prompt').rel='noopener';
     if(!$('#prompt-dialog').open)$('#prompt-dialog').showModal();
@@ -518,6 +521,7 @@
     const row=state.selected;if(!row)return;
     $('#viewer').classList.remove('is-live');
     $('#viewer').style.setProperty('--model-color',modelColor(row));
+    $('#viewer-prompt-mark').innerHTML=promptMark(state.data.catalog.find(task=>task.id===row.task_id));
     $('#viewer-title').textContent=row.task_title;$('#viewer-kicker').textContent=`${modelName(row)} / ${row.run_id}`;
     document.querySelectorAll('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===state.tab)));
     const a=row.artifact;
@@ -541,12 +545,12 @@
       const repeated=builds.filter(other=>other.model_key===run.model_key).length>1;
       return `<option value="${escape(run.id)}"${run.id===row.id?' selected':''}>${escape(modelName(run))}${repeated?' · '+escape(run.run_id):''}</option>`;
     }).join('');
-    return `<label class="live-model"><span class="sr-only">Model for this prompt</span><select id="live-model"${builds.length<2?' disabled':''}>${options}</select></label>`;
+    return `<label class="live-model">${promptIcon(row)}<span class="sr-only">Model for this prompt</span><select id="live-model"${builds.length<2?' disabled':''}>${options}</select></label>`;
   }
   function liveGuidance(row) {
     const hint=state.data.catalog.find(task=>task.id===row.task_id)?.look_for;
     if(typeof hint!=='string'||!hint.trim())return '';
-    return `<details class="live-info live-guide"><summary class="button">Look for</summary><div class="live-info-panel live-guide-panel"><div class="live-info-heading"><strong>${escape(row.task_title)}</strong><button id="close-live-guide" class="icon-button" aria-label="Close Look for">×</button></div><p>${escape(hint)}</p></div></details>`;
+    return `<details class="live-info live-guide"><summary class="button">Look for</summary><div class="live-info-panel live-guide-panel"><div class="live-info-heading"><strong class="prompt-title-with-icon">${promptIcon(row)}<span>${escape(row.task_title)}</span></strong><button id="close-live-guide" class="icon-button" aria-label="Close Look for">×</button></div><p>${escape(hint)}</p></div></details>`;
   }
   function liveSetup(row) {
     const setup=modelSetupContent(row);if(!setup)return '';

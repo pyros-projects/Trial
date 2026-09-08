@@ -132,7 +132,7 @@ def share_settings(root: Path) -> tuple[str, dict[str, str]]:
 
 
 def social_page(title: str, description: str, canonical: str, viewer: str, *,
-                image: str | None, image_alt: str, link_text: str) -> str:
+                image: str | None, image_alt: str, link_text: str, title_icon: str = "") -> str:
     """Keep initial crawler metadata and an escaped browser handoff in one page."""
     metadata = [
         ("name", "description", description),
@@ -153,6 +153,7 @@ def social_page(title: str, description: str, canonical: str, viewer: str, *,
     tags = "\n".join(f'<meta {attribute}="{key}" content="{escape(value, quote=True)}">' for attribute, key, value in metadata)
     # JSON quotes the script string; escaping '<' also protects the script boundary.
     redirect = json.dumps(viewer, ensure_ascii=True).replace("<", "\\u003c")
+    decoration = f'<span class="prompt-icon" aria-hidden="true">{escape(title_icon)}</span> ' if title_icon else ""
     return f'''<!doctype html>
 <html lang="en" prefix="og: https://ogp.me/ns#">
 <head>
@@ -163,7 +164,7 @@ def social_page(title: str, description: str, canonical: str, viewer: str, *,
 {tags}
 </head>
 <body>
-<h1>{escape(title)}</h1>
+<h1>{decoration}{escape(title)}</h1>
 <p>{escape(description)}</p>
 <p><a href="{escape(viewer, quote=True)}">{escape(link_text)}</a></p>
 <script>location.replace({redirect});</script>
@@ -183,7 +184,7 @@ def share_page(row: dict[str, Any], origin: str, model_label: str) -> str:
         f"{model_label}: {row['task_title']} | Trial", description, origin + row["share_url"], viewer,
         image=origin + screenshot if screenshot else None,
         image_alt=f"{model_label}: {row['task_title']} implementation screenshot",
-        link_text="Open the interactive implementation",
+        link_text="Open the interactive implementation", title_icon=row.get("icon", ""),
     )
 
 
@@ -260,14 +261,14 @@ def thumbnail(source: Path, destination: Path, modules) -> None:
         clean.save(destination, "WEBP", quality=78, method=4)
 
 
-def collection_image(stage: Path, title: str, candidates: list[tuple[str, str, str | None]],
+def collection_image(stage: Path, title: str, candidates: list[tuple[str, str, str | None, str]],
                      counts: str, modules, *, image_url: str, banner: str,
-                     footer: str) -> tuple[str | None, str]:
+                     footer: str, title_icon: str = "") -> tuple[str | None, str]:
     """Compose up to three distinct published thumbnails, or reuse an image URL."""
     candidates = [candidate for candidate in candidates if candidate[2]]
     if not candidates:
         return None, ""
-    _, first_label, first_url = candidates[0]
+    _, first_label, first_url, _ = candidates[0]
     fallback = (first_url, f"{first_label}: {title} screenshot")
     if modules is None:
         return fallback
@@ -276,7 +277,7 @@ def collection_image(stage: Path, title: str, candidates: list[tuple[str, str, s
     image_module, image_ops = modules
     panels = []
     seen = set()
-    for key, label, screenshot_url in candidates:
+    for key, label, screenshot_url, icon in candidates:
         if key in seen:
             continue
         source = regular_file(stage, unquote(screenshot_url).lstrip("/"))
@@ -284,7 +285,7 @@ def collection_image(stage: Path, title: str, candidates: list[tuple[str, str, s
             continue
         try:
             with image_module.open(source) as original:
-                panels.append((label, original.convert("RGB")))
+                panels.append((label, original.convert("RGB"), icon))
         except (OSError, ValueError):
             continue
         seen.add(key)
@@ -308,6 +309,35 @@ def collection_image(stage: Path, title: str, candidates: list[tuple[str, str, s
         return fallback
     canvas = image_module.new("RGB", (1200, 630), "#151713")
     draw = ImageDraw.Draw(canvas)
+    symbol_path = {
+        "win32": Path(os.environ.get("WINDIR") or "C:/Windows") / "Fonts/seguisym.ttf",
+        "darwin": Path("/System/Library/Fonts/Apple Symbols.ttf"),
+    }.get(sys.platform, Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+    symbol_fonts = {}
+
+    def prompt_icon(position: tuple[int, int], icon: str, face) -> int:
+        # Browser fonts remain authoritative; never replace a missing icon with a box.
+        if not icon.strip() or len(icon) > 8:
+            return 0
+        size = face.size
+        if size not in symbol_fonts:
+            try:
+                symbol_fonts[size] = ImageFont.truetype(str(symbol_path), size)
+            except OSError:
+                symbol_fonts[size] = None
+        for candidate in (face, symbol_fonts[size]):
+            if candidate is None:
+                continue
+            missing = candidate.getmask("\U0010ffff")
+            if any((mask.size, bytes(mask)) == (missing.size, bytes(missing))
+                   for mask in (candidate.getmask(char) for char in icon if char not in "\ufe0e\ufe0f")):
+                continue
+            left, top, right, bottom = candidate.getbbox(icon)
+            cap = face.getbbox("M")
+            y = position[1] + cap[1] + ((cap[3] - cap[1]) - (bottom - top)) / 2
+            draw.text((position[0], y), icon, font=candidate, fill="#e48b69", anchor="lt")
+            return right - left + 12
+        return 0
 
     def fit(text: str, face, width: int) -> str:
         value = " ".join(text.split())[:400]
@@ -319,32 +349,35 @@ def collection_image(stage: Path, title: str, candidates: list[tuple[str, str, s
 
     draw.rectangle((48, 42, 79, 47), fill="#e48b69")
     draw.text((93, 29), banner, font=small_font, fill="#d6b5a2")
-    draw.text((48, 89), fit(title, title_font, 1104), font=title_font, fill="#f4eee3")
+    inset = prompt_icon((48, 89), title_icon, title_font)
+    draw.text((48 + inset, 89), fit(title, title_font, 1104 - inset), font=title_font, fill="#f4eee3")
     draw.text((48, 168), counts, font=label_font, fill="#b9bdaf")
     width = min(560, (1104 - 18 * (len(panels) - 1)) // len(panels))
     start = (1200 - width * len(panels) - 18 * (len(panels) - 1)) // 2
-    for index, (label, screenshot) in enumerate(panels):
+    for index, (label, screenshot, icon) in enumerate(panels):
         left = start + index * (width + 18)
         draw.rounded_rectangle((left, 237, left + width, 557), radius=12, fill="#242720", outline="#3c4135")
         preview = image_ops.contain(screenshot, (width - 2, 234), image_module.Resampling.LANCZOS)
         canvas.paste(preview, (left + (width - preview.width) // 2, 246 + (234 - preview.height) // 2))
-        draw.text((left + 16, 507), fit(label, label_font, width - 32), font=label_font, fill="#f4eee3")
+        inset = prompt_icon((left + 16, 507), icon, label_font)
+        draw.text((left + 16 + inset, 507), fit(label, label_font, width - 32 - inset), font=label_font, fill="#f4eee3")
     draw.text((48, 586), footer, font=small_font, fill="#a7ad9c")
     destination = stage / unquote(image_url).lstrip("/")
     destination.parent.mkdir(parents=True, exist_ok=True)
     # New RGB canvas: source metadata and submitted image bytes stay untouched.
     canvas.save(destination, "JPEG", quality=82, optimize=True, progressive=True)
-    return image_url, f"{title}: {', '.join(label for label, _ in panels)}. {counts}."
+    return image_url, f"{title}: {', '.join(label for label, _, _ in panels)}. {counts}."
 
 
 def comparison_image(stage: Path, task: dict[str, str], rows: list[dict[str, Any]],
                      labels: dict[str, str], counts: str, modules) -> tuple[str | None, str]:
     candidates = [(row["model_key"], labels.get(row["model_key"], row["model"]),
-                   row["artifact"]["screenshot_url"]) for row in rows]
+                   row["artifact"]["screenshot_url"], "") for row in rows]
     return collection_image(
         stage, task.get("title", task["id"]), candidates, counts, modules,
         image_url=f"/comparisons/{quote(task['id'], safe='')}.jpg",
         banner="TRIAL / COMPARE", footer="One prompt. Explore every implementation.",
+        title_icon=task.get("icon", ""),
     )
 
 
@@ -368,7 +401,7 @@ def comparison_pages(stage: Path, catalog: list[dict[str, str]], rows: list[dict
         page.write_text(social_page(
             f"{task.get('title', task['id'])} | Trial", description, origin + urls[task["id"]],
             f"/#compare/{encoded}", image=origin + image_url if image_url else None,
-            image_alt=image_alt, link_text="Open the interactive comparison",
+            image_alt=image_alt, link_text="Open the interactive comparison", title_icon=task.get("icon", ""),
         ), encoding="utf-8")
     return urls
 
@@ -396,7 +429,7 @@ def model_pages(stage: Path, catalog: list[dict[str, str]], rows: list[dict[str,
         candidates = [(
             "task:" + row["task_id"] if row["task_id"] in prompt_order else "run:" + row["run_key"],
             row["task_title"] if row["task_id"] in prompt_order else f"Unassigned: {row['run_id']}",
-            row["artifact"]["screenshot_url"],
+            row["artifact"]["screenshot_url"], row.get("icon", ""),
         ) for row in builds]
         image_url, image_alt = collection_image(
             stage, f"{label} builds", candidates, counts, modules,

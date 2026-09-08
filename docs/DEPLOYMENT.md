@@ -12,6 +12,8 @@ The published showcase is [trial-by-pyro.netlify.app](https://trial-by-pyro.netl
 
 No Node packages or Python packages are required by the exporter itself. Without Pillow, it copies only the selected top-level screenshot for each run unchanged, retaining its original extension. Previews remain available, and the build prints the size plus the Pillow installation command. Install Pillow when a smaller upload is preferred.
 
+Generated comparison and model preview images also reuse the catalog's prompt icons. The renderer uses an available symbol font and omits only the decorative glyph if it cannot render it. No font download is required; titles, screenshots, and share metadata remain available. The gallery itself renders icons using browser fonts.
+
 ## Name runs for public grouping
 
 **Include the full task ID in the run-folder name.** The public exporter intentionally ignores `metadata.json`, so it can associate a result with its prompt only from a catalog ID such as `01-fluid-simulation` in that name.

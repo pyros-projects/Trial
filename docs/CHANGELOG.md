@@ -1,5 +1,12 @@
 # Changelog
 
+## Prompt icons throughout the showcase: 2026-09-09
+
+- Reused the catalog's prompt icons in showcase and expanded comparison headings, model cards, prompt filters, prompt and build dialogs, the live viewer, and Look for guidance. Prompt numbers remain readable and accessible; model colors and compact viewer dimensions are preserved.
+- Added decorative icons to implementation/comparison share headings and comparison/model preview images. Existing titles, link metadata, prompt clipboard contents, and original screenshots remain unchanged.
+- Kept model and prompt filters readable at intermediate window widths by giving search its own row.
+- Added Astra's project planner, completing its 24-prompt collection; Opus's rhythm game, drone racer, and ecosystem; and Gemini's vector editor. The showcase now contains 101 builds across six models, with supplied previews for the five new submissions.
+
 ## GLM factory automation and rhythm bullet hell: 2026-09-08
 
 - Added GLM's factory simulator and rhythm bullet hell, bringing its collection to twelve builds covering prompts 01–12 and the showcase to 96 builds overall.
