@@ -1,5 +1,12 @@
 # Changelog
 
+## The first Capstones and a complete Grok collection: 2026-09-08
+
+- Added Grok's spreadsheet, vector editor, project planner, and Capstone. Grok now has a submission for every prompt in the 24-task collection.
+- Added Astra's spreadsheet, vector editor, and Capstone, bringing the showcase to 94 builds. All 24 prompts now have at least one submitted implementation.
+- Included the first two Capstones: Grok's *Ut Pendet*, a hanging-chain and vault form-finding workshop, and Astra's *Selvedge*, an interactive pocket loom. Existing prompt comparisons and model collections include the new entries automatically.
+- Added representative thumbnails and share previews while preserving original submissions and excluding raw evidence from the website.
+
 ## Gemini completes the first twenty prompts: 2026-09-08
 
 - Added Gemini's logic lab, roguelike, echo-loop puzzler, weather lab, node graphics studio, and traffic simulator. Astra, Grok, and Gemini now each cover prompts 01–20.

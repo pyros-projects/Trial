@@ -1,0 +1,81 @@
+# Forma — agent-authored validation
+
+Delivered artifact: [index.html](../index.html). This is a single self-contained HTML file with inline CSS, JavaScript, editable example scenes, native SVG rendering, system fonts, and no runtime dependencies. This report records the agent's work; it is not an evaluator score or an evaluator-owned report.
+
+**Outcome:** The exercised workflows passed. No unresolved application failure was observed in the final tested flows. Direct-file and opaque-origin operation were both exercised. Browser coverage is Chromium; other browser engines were not run.
+
+## Environment and method
+
+- Read the installed `agent-browser/SKILL.md`, then the installed version's `agent-browser skills get core`, `core --full`, and `dogfood` workflows before browser use.
+- Used the installed `agent-browser` CLI for navigation, accessibility snapshots, labeled controls, file inputs, keyboard input, mouse drags, screenshots, and actual downloads.
+- Used native CDP input as a supplement for additive clicks and touch/touch-cancel events. `cdp-input.cjs` identifies the active test page by its read-only `performance.timeOrigin`. These events go through the browser's input system; no internal application mutation function is invoked.
+- Read-only `formaDiagnostics` and actual downloaded JSON corroborate geometry and state. Diagnostics are read as `JSON.stringify(formaDiagnostics)` to avoid the CLI reformatting the last digits of floating-point numbers.
+- Tested `1280 × 800`, `390 × 844`, and a device-pixel ratio of 2. SVG handles and geometry remained attached after viewport changes.
+- Opened `file:///home/pyro/projects/naked/astra/bench/22-vector-layout-studio/index.html` directly. Used `agent-browser --session forma set offline on` while exercising the file. No HTTP server was needed. The final request log contains only local document URLs. The iframe run also recorded a local `blob:null/...` image used to encode PNG, with no external request.
+- Source dependency inspection found no external scripts, stylesheets, fonts, images, fetch/XHR, storage, service workers, modules, or backend assumptions. The HTTP-looking SVG namespace is a namespace, not a fetched asset.
+
+Exact browser commands, read-only observations, and outcomes are in [browser-commands.log](browser-commands.log). The Python scripts alongside this report orchestrate those commands and contain the actual assertions. Open a fresh delivered file before rerunning an individual scenario so dialog defaults and test fixtures start in their recorded state.
+
+## Public workflow results
+
+| Check | Status | Actions and observed result | Evidence |
+|---|---|---|---|
+| 1. Editable opening and offline file | **Pass** | Selected Persimmon sun through Layers; changed width from 151 to 175 and changed fill. Edited the multiline title. Loaded After hours and changed its title to AFTER / DARK. Both compositions contain normal editable scene objects. Direct-file launch worked offline. | `ui_initial.py`, `02-edited-opening.*`, `03-second-composition.png`, `30-final-desktop.png` |
+| 2. Creation and coordinate continuity | **Pass** | Drew rectangles, ellipse, line, and text using tools and pointer input; refined numeric fields; duplicated, nudged, and deleted. Native field typing/Backspace did not delete scene items. Marquee enclosed A/B while excluding C. A corner handle doubled an 80×60 rectangle about its center. After pan, zoom, and resizing mobile→desktop, another drag moved the selected item exactly 25,15 units without drift. Native touch created and moved a mobile object. | `ui_initial.py`, `ui_history.py`, `ui_mobile_reset.py`, `ui_limits_regression.py`, `05-creation.*`, `21-mobile-inspector.png`, `22-mobile-selection-2x.png` |
+| 3. Snapping | **Pass** | Grid off, objects on: at 100%, a proposed left edge 5 CSS px from target180 snapped to x180, with guide; 8px yielded x188 and no guide. At 200%, 5px yielded x180; 8px yielded x184. The final coordinates matched the during-drag diagnostics. Grid-only tie case resolved to x260,y170. Hidden targets did not attract. A nested child ignored its ancestor and still snapped to a sibling. A hidden child's edge480 was not exposed by its visible group. | `ui_snapping.py`, `08-snap-guide-200.png`, `09-snapping.json`, `26-regression.json` |
+| 4. Alignment and equal gaps | **Pass** | Created the exact requested 1200×800 fixture A=(40,60,80,40), B=(180,100,60,40), C=(320,160,80,40) using tools plus numeric refinement. Align top produced y60 for all. Horizontal gaps left A/C fixed and placed B at190; both gaps70, same sizes/order. Impossible distribution refused atomically with an explanation. Also exercised all six alignment buttons and both distribution axes on a separate fixture. | `ui_initial.py`, `04-equal-gaps.*`, `ui_limits_regression.py` |
+| 5. Groups and transforms | **Pass** | Grouped contiguous A/B without moving them; translated, rotated35°, and scaled145%, with a child already rotated22°. Created a second group, rotated/scaled it, then ungrouped both levels. Every recorded child bound remained within 0.000001 unit; paint order remained A/B/C. Undo/redo restored hierarchy and selection. Ancestor+descendant selection translated once. Noncontiguous and mixed-parent grouping refused without scene/selection/history changes. | `ui_groups.py`, `06-nested-group.*`, `07-ungrouped.json` |
+| 6. Cubic editing and bounds | **Pass** | Pen-dragged real anchors and handles. Numeric endpoints100,100 and200,100 with controls100,0 and200,0 produced bounds exactly100,25,100,75. Moved a control numerically and by pointer; bounds changed. Edited another control after path rotation and group rotation/scaling using full parent inverse coordinates. Created, reopened, and reclosed a filled cubic. Exported JSON retained nodes/controls; SVG retained cubic commands. Added and exercised visible Finish path/Cancel controls, including mobile. | `ui_paths_text_files.py`, `10-curve-extrema.*`, `roundtrip.json`, `artwork.svg`, `31-mobile-pen-finish.png` |
+| 7. Text and typography | **Pass** | Edited explicit multiline text, sans/serif/mono choices, size, bold, center alignment, line height, fill, and rotation. Literal `<img src=x onerror=alert(1)> & "layout"` stayed text: no injected image/script/foreignObject or request. One committed text edit undid in one step; Escape cancelled another. Exported text lengths, baselines, line count and transform reproduce the inspector box within0.001 unit. | `ui_paths_text_files.py`, `check_exports.py`, `11-export-source.*`, `artwork.svg`, `27-exported-svg-browser.png` |
+| 8. Layers, visibility and locks | **Pass** | Overlapping olive/coral objects changed occlusion when reordered through Layers. The actual exported overlap pixel changed from RGBA(88,103,64,255) to(223,133,93,255). Hidden Coral remained stored and was not hit-tested. Locked Olive stayed exported and refused drag/Delete. A locked child also refused parent transform/delete. Unlocking allowed the intended move. | `ui_layers_exports.py`, `ui_groups.py`, `15-order-before.png`, `16-order-after.png`, `17-hidden-locked.png`, `19-layers-transparency.*` |
+| 9. History and cancellation | **Pass** | A20-move drag, continuous opacity scrub, committed text edit, and reorder each formed one undo step. Undo/redo restored data and selection. Pan, zoom and selection did not consume history. A new edit after undo cleared redo. Escape, real browser tab focus loss, and native touchCancel restored geometry without extra history. Redo during an active drag cancels that uncommitted drag safely. | `ui_history.py`, `14-history.*`, `browser-commands.log` |
+| 10. Project round trip and hostile inputs | **Pass** | Downloaded a real project with transformed groups, curves, styled literal text, hidden/locked objects. Modified the scene, uploaded the downloaded JSON, and compared the full document exactly. Import cleared history/selection. Rejected malformed JSON, duplicate IDs, cycle, bad type/version, empty parent, resource URLs, unknown assets, excessive coordinate, singular/reflected matrix, text/anchor/item/depth/byte excess, non-finite1e309, unsupported group opacity, SVG and HTML. Every rejection preserved document, selection and history. A valid numeric-looking ID beyond JS's safe-integer range no longer poisoned creation. | `ui_hostile.py`, `hostile/`, `roundtrip.json`, `13-hostile-result.json` |
+| 11. Preview and exports | **Pass** | Changed shape, control point, text, order and visibility before preview/export. Downloaded actual JSON, vector SVG, PNG1200×800 and PNG2400×1600. Opened SVG and PNG in the browser and inspected rendering. Parsed SVG shows vector paths and text, no editor UI/script/event attributes/foreignObject/external resources. PNG dimensions/background verified from actual bytes. Transparent400×300 export had RGBA(0,0,0,0) at its corner. Width2049 was refused; PNG offers only1×/2×, so permitted artboards cannot exceed4096 per side or16,777,216 pixels. | `check_exports.py`, `png_utils.py`, `12-preview.png`, `artwork*`, `18-transparent.png`, `27-exported-svg-browser.png`, `28-exported-png-browser.png` |
+| 12. Reset and fresh sessions | **Pass** | Imported a project, left a text edit uncommitted, then clicked visible Reset. Initial document, IDs, tool, selection, history and pending URL state were restored/cleared. Waited to check for delayed reapplication; none occurred. Reopening the delivered file produced the identical initial composition. Download/reimport also worked inside the storage-denied sandbox. Download URLs were separately observed returning to zero after their cleanup delay, without resetting. | `ui_mobile_reset.py`, `23-reset-diagnostics.json`, `opaque-verified.json`, `final-opening.json` |
+
+## Opaque-origin iframe
+
+Host: [opaque-frame.html](opaque-frame.html), with exactly `sandbox="allow-scripts allow-downloads"`, no `allow-same-origin`.
+
+1. Opened the local host with browser networking offline. The embedded application rendered and accessibility snapshots exposed the editor controls.
+2. Selected Orbit ring, changed Selection X to80, and committed with Enter.
+3. Opened Export through its labeled button and clicked project/PNG downloads.
+4. Changed X to90, then reimported the actual downloaded JSON using the file input. The resulting document exactly equals the downloaded document; selection and both history stacks are empty.
+5. Read-only child-context diagnostics confirm `localStorage` throws `SecurityError`. Native download events use `blob:null/...`, corroborating the opaque origin.
+6. No console error, failed request, or external request was observed. The iframe network log consisted of its two local HTML documents and the internally generated PNG source blob.
+
+The `agent-browser download` convenience command timed out on both CSS and snapshot-ref attempts inside this iframe even though the application reported preparing the download. Supplemental CDP `Browser.downloadWillBegin`/`downloadProgress` observation, scoped to the test browser context, captured the real downloads after ordinary `agent-browser click` actions. Both reached `state:"completed"`. Files: `opaque-downloads/Form  field.json` (10,806 bytes) and `Form  field.png` (87,700 bytes). This resolved the capture limitation; iframe downloads are not marked blocked.
+
+Evidence: `24-opaque-iframe.png`, `opaque-diagnostics.json`, `opaque-roundtrip-diagnostics.json`, `opaque-verified.json`, `opaque-download-json.log`, `opaque-download-png.log`, `cdp-observe.cjs`, `cdp-download.cjs`.
+
+## Failures found, fixes and retests
+
+- **Inspector focus loss — fixed.** Filling Selection X and clicking Selection Y left no active field because a synchronous blur commit replaced the inspector. The first fix exposed the equivalent problem when clicking a Layers row. Reproduced both; commit now updates existing controls and layer labels. The original next-field and next-layer flows both passed after the fix. Screenshots: `issue-focus-switch.png`, `issue-layer-focus-switch.png`. A later recording attempt restarted the page and therefore lost the RAM fixture; its short `issue-layer-focus.webm` is retained as an unsuccessful recording attempt, not evidence of a successful reproduction.
+- **Schema/ID defects — fixed.** Review/core tests showed that empty-string parents could become invisible orphans, and enormous numeric-looking IDs could poison an imported-ID-seeded counter. Empty parents now fail; generated IDs use a safe collision-checked counter. Actual hostile import and subsequent creation tests passed.
+- **Group compositing — fixed by defining supported group appearance.** Group opacity now remains1; mixed-selection appearance edits apply to descendant leaves. This preserves reversible ungrouping. Import rejects unsupported non-unit group opacity. Both the rejection and leaf-style behavior were exercised.
+- **Drag redo, hidden-child snapping, relative input baselines, export URL retention — fixed.** Redo/fit cancel active gestures, visible group snap bounds exclude hidden leaves, relative multiselection inputs reset to0°/100%, and export URLs have tracked cleanup. The corresponding pointer, numeric, snapping and URL cleanup regressions passed.
+- **Harness corrections, not application fixes:** the CLI requires integer mouse coordinates; fractional screen rounding means pointer deltas should be compared with the actual starting geometry. A group test initially assumed its pre-rotation left edge remained unchanged. A native checkbox required its accessible label instead of an absent `aria-label` attribute. Diagnostic numeric reformatting was addressed using JSON strings. An overlapping test fixture selected the top object correctly; the cancellation fixture was separated. A mobile movement test initially left object snapping on. Multiple browser tabs required CDP target identification by the active page's time origin. These failed attempts remain in command logs; corrected flows were rerun.
+- **Optional development package unavailable:** Pillow was not installed. PNG validation uses the standalone stdlib PNG parser in `png_utils.py`, plus real-browser rendering and screenshot inspection. No runtime dependency was added.
+
+## Final checks and supported limits
+
+Final commands include:
+
+```text
+node evidence/core.test.cjs
+python3 evidence/check_exports.py
+node --check /tmp/forma-final-script.js
+agent-browser --session forma set offline on
+agent-browser --session forma open file:///home/pyro/projects/naked/astra/bench/22-vector-layout-studio/index.html
+agent-browser --session forma set viewport 390 844
+agent-browser --session forma set viewport 1280 800
+agent-browser --session forma errors
+agent-browser --session forma console
+agent-browser --session forma network requests
+```
+
+The syntax check uses the script extracted from the delivered HTML. Core tests first failed before the implementation existed, then passed after implementation; the empty-parent regression likewise failed before its fix. Actual browser scenarios are in `ui_initial.py`, `ui_groups.py`, `ui_snapping.py`, `ui_paths_text_files.py`, `ui_history.py`, `ui_hostile.py`, `ui_layers_exports.py`, `ui_mobile_reset.py`, and `ui_limits_regression.py`.
+
+**Supported and exercised together:** 200 scene items,32 anchors per path,4 nested group levels,2,000 characters per text item. The valid200-item project was imported and edited, then over-limit creation and duplication were refused atomically (`limits-200.json`, `25-maximum-scene.png`). History retains100 edits. Artboards are64–2048 whole units per side. Project input is capped at2MiB. Local numeric coordinates are bounded to±100,000 and world geometry to±1,000,000. Transform scale is positive0.001–1000. Exports are1× or2×.
+
+**Remaining scope / not run:** Chromium only; Firefox and Safari were not tested. The maximum4096×4096 PNG allocation was not stress-tested; dimension prevention and actual1×/2× exports at smaller sizes were tested. No optional raster import, arbitrary SVG import, Boolean operations, rich text, collaboration, or storage-based persistence is implemented. Projects are saved through explicit download/reimport. There are no unresolved environmental blockers for the delivered main workflow.
