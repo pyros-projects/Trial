@@ -4,12 +4,12 @@
   const escape = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const score = value => value == null ? '—' : Number(value).toFixed(1);
   const bytes = value => value == null ? 'Unknown' : value < 1024 ? `${value} B` : value < 1048576 ? `${(value/1024).toFixed(1)} KiB` : `${(value/1048576).toFixed(1)} MiB`;
-  const label = track => track === 'real-apps' ? 'REAL APPLICATION' : 'HTML EXPERIENCE';
+  const label = track => track === 'real-apps' ? 'SOURCE PROJECT' : 'HTML EXPERIENCE';
   const state = {data:null, modelSettings:new Map(), buildNotices:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, tab:'preview', promptText:'', promptToken:0, loading:false};
   const noticeLabels={'runtime-error':'Runtime error','slow-start':'May take minutes to load','run-cancelled':'Agent run cancelled'};
   const headings = {
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
-    catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and real applications. The brief, the checks and the delivery requirements are all here.'],
+    catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and a research-led capstone. Each challenge becomes a single HTML file you can open and try.'],
     leaderboard:['THE EVALUATIONS','Bring the<br><em>receipts.</em>','Independent checks on the finished artifact. Keep the tasks, tools and budgets comparable.'],
     guide:['THE FIELD GUIDE','From prompt<br>to <em>proof.</em>','Choose a challenge. Let the agent build and test. Keep the result. Take a closer look.'],
     why:['WHY THIS PROJECT?','You can’t play<br>a <em>percentage.</em>','Scores help. I still want to try what the model built.']
@@ -235,7 +235,7 @@
       return `<div class="model-column" data-model="${escape(model.model_key)}" style="--model-color:${modelColor(model)}"><div class="missing-build"><div class="card-model">${modelIdentity(model)}</div><div class="missing-visual"><span aria-hidden="true">/ /</span>${exists?'No matching build':'No build recorded'}</div><div class="missing-foot">${exists?'Hidden by the current filters.':'This model has not submitted this prompt.'}</div></div></div>`;
     }).join('');
     const title=escape(first.task_title);
-    return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header${guidance?' has-guidance':''}"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'REAL APPLICATION':'HTML EXPERIENCE'}</div><h3${expanded?' id="category-title"':''}>${title}</h3></div></div>${guidance}<div class="prompt-header-actions">${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}${expanded?'':`<button class="button expand-comparison" data-expand-task="${escape(key)}" aria-label="Expand ${title}">Expand <span aria-hidden="true">↗</span></button>`}</div></header><div class="comparison-toolbar"><span class="comparison-range" aria-live="polite" aria-atomic="true"></span><div class="comparison-actions">${copyCategoryButton(key)}<div class="model-navigation" role="group" aria-label="Browse models for ${title}"><button class="button model-arrow" data-shift-models="-1" aria-label="Previous models for ${title}">←</button><button class="button model-arrow" data-shift-models="1" aria-label="Next models for ${title}">→</button></div></div></div><div class="group-builds" style="--columns:${Math.max(1,comparisonModels.length)}" tabindex="0" role="group" aria-label="${title} model builds">${columns}</div></section>`;
+    return `<section class="prompt-group" data-task="${escape(key)}"><header class="prompt-header${guidance?' has-guidance':''}"><div class="prompt-heading"><span class="prompt-number">${known?escape(key.slice(0,2)):'??'}</span><div><div class="prompt-category">${escape(first.category)} <span aria-hidden="true">/</span> ${first.track==='real-apps'?'SOURCE PROJECT':'HTML EXPERIENCE'}</div><h3${expanded?' id="category-title"':''}>${title}</h3></div></div>${guidance}<div class="prompt-header-actions">${known?`<button class="button" data-open-prompt="${escape(key)}">Read the prompt ↗</button>`:''}${expanded?'':`<button class="button expand-comparison" data-expand-task="${escape(key)}" aria-label="Expand ${title}">Expand <span aria-hidden="true">↗</span></button>`}</div></header><div class="comparison-toolbar"><span class="comparison-range" aria-live="polite" aria-atomic="true"></span><div class="comparison-actions">${copyCategoryButton(key)}<div class="model-navigation" role="group" aria-label="Browse models for ${title}"><button class="button model-arrow" data-shift-models="-1" aria-label="Previous models for ${title}">←</button><button class="button model-arrow" data-shift-models="1" aria-label="Next models for ${title}">→</button></div></div></div><div class="group-builds" style="--columns:${Math.max(1,comparisonModels.length)}" tabindex="0" role="group" aria-label="${title} model builds">${columns}</div></section>`;
   }
   function comparisonPosition(group) {
     const viewport=group.querySelector('.group-builds');const columns=[...viewport.children];
@@ -338,7 +338,7 @@
         const means=[...g.scoredTasks.values()].map(values=>values.reduce((a,b)=>a+b,0)/values.length);
         return {...g,mean:means.length?means.reduce((a,b)=>a+b,0)/means.length:null};
       }).sort((a,b)=>(b.mean??-1)-(a.mean??-1)||compareModels(a.model,b.model));
-      content+=`<h3 class="leader-title">${track==='html'?'HTML experiences':'Real applications'}</h3><div class="table-wrap"><table><thead><tr><th>Model</th><th>Task-weighted score</th><th>Scored tasks</th><th>Scored runs</th><th>Total runs</th><th>Coverage</th></tr></thead><tbody>${entries.map(g=>`<tr><td class="score-model" style="--model-color:${modelColor(g.model)}">${escape(modelName(g.model))}${g.stale?`<div class="tiny stale">${g.stale} stale report(s) excluded</div>`:''}</td><td class="table-score">${score(g.mean)}</td><td>${g.scoredTasks.size}</td><td>${g.scored}</td><td>${g.runs}</td><td class="tiny">${[...g.tasks.keys()].sort().map(id=>escape(id.slice(0,2))).join(', ')||'Unassigned'}</td></tr>`).join('')}</tbody></table></div>`;
+      content+=`<h3 class="leader-title">${track==='html'?'HTML experiences':'Source projects'}</h3><div class="table-wrap"><table><thead><tr><th>Model</th><th>Task-weighted score</th><th>Scored tasks</th><th>Scored runs</th><th>Total runs</th><th>Coverage</th></tr></thead><tbody>${entries.map(g=>`<tr><td class="score-model" style="--model-color:${modelColor(g.model)}">${escape(modelName(g.model))}${g.stale?`<div class="tiny stale">${g.stale} stale report(s) excluded</div>`:''}</td><td class="table-score">${score(g.mean)}</td><td>${g.scoredTasks.size}</td><td>${g.scored}</td><td>${g.runs}</td><td class="tiny">${[...g.tasks.keys()].sort().map(id=>escape(id.slice(0,2))).join(', ')||'Unassigned'}</td></tr>`).join('')}</tbody></table></div>`;
     }
     $('#leaderboard-content').innerHTML=content||'<div class="empty"><h2>No matching runs yet.</h2><p>Import results and attach independent evaluator scores to see model summaries.</p></div>';
   }
@@ -367,12 +367,17 @@
       const models=[...new Map(data.results.map(r=>[r.model_key,r])).values()].sort(compareModels).map(row=>[row.model_key,modelName(row)]);
       fillSelect('#model-filter',models,'All models',first?saved['model-filter']:undefined);
       fillSelect('#task-filter',data.catalog.map(t=>[t.id,`${t.id.slice(0,2)} · ${t.title}`]),'All prompts',first?saved['task-filter']:undefined);
-      if(first)for(const id of ['search','track-filter','status-filter','sort'])if(saved[id]!==undefined){const el=$('#'+id);el.value=saved[id];if(el.tagName==='SELECT'&&el.selectedIndex<0)el.selectedIndex=0;}
+      const tracks=[...new Set([...data.catalog,...data.results].map(row=>row.track).filter(track=>typeof track==='string'&&track))].sort();
+      fillSelect('#track-filter',tracks.map(track=>[track,track==='html'?'HTML experiences':track==='real-apps'?'Source projects':track]),'All tracks',first?saved['track-filter']:undefined);
+      $('#track-filter-wrap').hidden=tracks.length<=1;
+      if(tracks.length<=1)$('#track-filter').value='all';
+      if(first)for(const id of ['search','status-filter','sort'])if(saved[id]!==undefined){const el=$('#'+id);el.value=saved[id];if(el.tagName==='SELECT'&&el.selectedIndex<0)el.selectedIndex=0;}
       document.querySelector('#sort option[value="score"]').hidden=isPublic();
       if(isPublic()&&$('#sort').value==='score')$('#sort').value='task';
       $('#stat-models').textContent=data.summary.models;$('#stat-runs').textContent=data.summary.runs;
       $('#stat-tasks').innerHTML=`${data.summary.tasks} <small>/ ${data.catalog.length}</small>`;
       $('#stat-scored').textContent=data.summary.scored_runs;$('#nav-count').textContent=data.summary.runs;
+      $('#nav-prompt-count').textContent=data.catalog.length;$('#hero-prompt-count').textContent=data.catalog.length;
       $('#error-banner').hidden=settings.status==='fulfilled';
       if(settings.status==='rejected')$('#error-banner').textContent=`Model settings could not be loaded: ${settings.reason.message}. Using default names, alphabetical order, and fallback colors. Check appsettings.json and refresh.`;
       $('#connection-status').textContent=isPublic()?'● Public snapshot · ready':'● Local · ready';

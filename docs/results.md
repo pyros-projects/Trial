@@ -6,11 +6,11 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-08 checkout contains 74 submitted HTML builds for twenty tasks across six model folders:
+The 2026-09-08 checkout contains 76 submitted HTML builds for twenty tasks across six model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
-| `gpt-6_astra` | 17 | 01-17 |
+| `gpt-6_astra` | 19 | 01-19 |
 | `anthropic_opus5` | 9 | 01-09 |
 | `xai_grok4.6` | 20 | 01-20 |
 | `zai_glm5.3_flash` | 8 | 01-07, 10 |
@@ -49,25 +49,23 @@ Example directory structure:
 results/
   model_name/
     model.toml
-    fluid-001/
+    01-fluid-simulation-001/
       index.html
       metadata.json
       screenshot.png
       report.json
       evidence/
         validation.md
-    import-001/
-      project/
-        benchmark.json
-        README.md
+    24-capstone-001/
+      index.html
       metadata.json
       screenshot.png
-      report.json
       evidence/
+        research.md
         validation.md
 ```
 
-Keep exactly one `index.html`, `project/`, or `project.zip` per run. `result.html` and `app.html` are accepted aliases for standalone HTML results. ZIP archives are retained and downloaded without extraction.
+Current tasks deliver exactly one `index.html` per run. The local importer also retains `project/` and `project.zip` support for legacy or custom project submissions. `result.html` and `app.html` are accepted aliases for standalone HTML results. ZIP archives are retained and downloaded without extraction.
 
 `metadata.json`, screenshots, `report.json`, `notes.md`, and `evidence/` are optional. Screenshots may be named `screenshot` or `preview`, with `.png`, `.webp`, `.jpg`, or `.jpeg` extensions. A metadata-only entry can document a failed or blocked run.
 
@@ -78,11 +76,11 @@ A task is identified by `metadata.json.task_id`, a project's `benchmark.json.tas
 Run the importer from the project root. These examples assume agent output in a sibling `work/` directory:
 
 ```sh
-python tools/new_run.py --model "Model Name" --run fluid-001 --task 01-fluid-simulation --html ../work/index.html
-python tools/new_run.py --model "Model Name" --run import-001 --task 21-import-studio --project ../work/project
+python tools/new_run.py --model "Model Name" --run 01-fluid-simulation-001 --task 01-fluid-simulation --html ../work/index.html
+python tools/new_run.py --model "Model Name" --run 24-capstone-001 --task 24-capstone --html ../work/index.html
 ```
 
-`--project` accepts a directory or ZIP. Directory imports exclude known dependency, runtime, and secret-file patterns, plus symlinks. ZIP inputs are copied unchanged; inspect them before sharing or extracting.
+For compatibility, `--project` accepts a directory or ZIP; it is not the delivery format of a current task. Directory imports exclude known dependency, runtime, and secret-file patterns, plus symlinks. ZIP inputs are copied unchanged; inspect them before sharing or extracting.
 
 Optional flags include `--score 85`, `--report ../work/report.json`, `--screenshot ../work/screenshot.png`, `--url http://127.0.0.1:8811/`, `--tag`, `--notes`, `--provider`, `--model-version`, `--results-dir`, `--model-folder`, and `--run-folder`. Supply scores only after evaluation.
 
@@ -120,14 +118,13 @@ These profiles are collection-level context, not exact historical provenance for
 
 ## Run metadata
 
-Example metadata for a manually started Real Apps submission:
+Example metadata for a Capstone submission:
 
 ```json
 {
-  "task_id": "21-import-studio",
+  "task_id": "24-capstone",
   "model": "Model Name",
-  "run_id": "import-001",
-  "preview_url": "http://127.0.0.1:8811/"
+  "run_id": "24-capstone-001"
 }
 ```
 
@@ -148,15 +145,15 @@ An evaluator-owned `report.json` may contain `total`, `rubric`, `evaluator`, `ar
 
 Freeze the source, evaluate it, and copy the gallery's exact artifact digest into `artifact_sha256`. A changed source marks a bound report stale and removes its score from summaries. A report without a digest is explicitly unbound. Agent-authored logs in `evidence/` remain separate from evaluator reports.
 
-HTML and submitted ZIP hashes are ordinary SHA-256 hashes of file bytes. Directory projects use a deterministic authored-source digest, with dependency and runtime exclusions. The [Real Apps guide](REAL_APPS.md#source-hashing-and-download) defines that digest and its limits. The report structure is defined in [report.schema.json](../schema/report.schema.json).
+HTML and submitted ZIP hashes are ordinary SHA-256 hashes of file bytes. Directory projects use a deterministic authored-source digest, with dependency and runtime exclusions. The [archived project guide](https://github.com/pyros-projects/Trial/tree/experimental/real-apps/docs/REAL_APPS.md#source-hashing-and-download) defines that digest and its limits. The report structure is defined in [report.schema.json](../schema/report.schema.json).
 
 ## Use the local viewer
 
-Browse builds grouped by prompt and filter by model, task, track, status, or text. Open a result to inspect its screenshot, live preview, source download, prompt, project manifest, evaluator checks, notes, metadata, and source hash. The prompt library supports reading and copying the full brief. CSV export and model-score summaries are available locally.
+Browse builds grouped by prompt and filter by model, task, status, or text. The track filter is only shown when the loaded catalog or results contain multiple tracks; stale selections from the retired Real Apps track reset to All tracks. Open a result to inspect its screenshot, live preview, source download, prompt, project manifest, evaluator checks, notes, metadata, and source hash. The prompt library supports reading and copying the full brief. CSV export and model-score summaries are available locally.
 
 Live artifacts load after an explicit action. Switching viewer tabs unloads an active iframe. The viewer offers desktop, tablet, and mobile viewport sizes.
 
-For a Real Apps submission, review the source and declared commands, start it manually, then set an explicit HTTP(S) loopback `preview_url` with a port. The gallery never installs or starts applications. Use a dedicated top-level browser context for authentication, offline state, concurrent-user tests, or an app whose embedding policy prevents iframe previews.
+For a legacy source-project submission, review the source and declared commands, start it manually, then set an explicit HTTP(S) loopback `preview_url` with a port. The gallery never installs or starts applications. Use a dedicated top-level browser context for authentication, offline state, concurrent-user tests, or an app whose embedding policy prevents iframe previews.
 
 The local gallery, a separate port, and an iframe do not provide security isolation. HTML previews share the artifact server's origin, and cookies are not isolated by port. Run unfamiliar submissions in a disposable environment with dedicated browser profiles or contexts. Keep secrets and mutable application data outside the results tree. The source exclusion list is not a comprehensive secret scanner. Use the static export for public hosting rather than exposing the local gallery server.
 
@@ -172,16 +169,22 @@ Choose **Expand** to see every entry for one prompt in a full-screen grid. Model
 
 The local score view groups by track, averages repeated runs within each task, then averages those task means per model. Repeated attempts therefore do not silently give one task more weight. Different task coverage or budgets still prevent a controlled ranking.
 
-Use a matched task subset, comparable tools and budgets, and the same rubric. Publish sample counts and per-task results when sharing evaluated comparisons. Keep the HTML and Real Apps rubrics separate. See [Evaluation](../EVALUATION.md) for the complete scoring and independent-check guidance.
+Use a matched task subset, comparable tools and budgets, and the same rubric. Publish sample counts and per-task results when sharing evaluated comparisons. Keep any legacy Real Apps rubric separate, and discuss Capstone runs separately because the agents choose different product briefs. See [Evaluation](../EVALUATION.md) for the complete scoring and independent-check guidance.
 
 ## Run contract
 
-For Real Apps, retain the generated `project/gallery/index.html` inside the submitted project. The public exporter publishes only this self-contained demo, with no backend or persistent store. Name the run folder with its full task ID, for example `21-import-studio-001`. A project without that demo stays available for local source inspection but is omitted from the public gallery. The local viewer uses the demo when no explicit `preview_url` is set; a declared loopback URL still opens the full app. See [Gallery demos](GALLERY_DEMOS.md) for the lifetime and validation rules.
+Give the tested agent only the selected `prompt.md` in a separate workspace. `acceptance.md` duplicates public checks for convenience; it is not a second task. Keep evaluator-owned material outside that workspace. The current 24 tasks require no external fixture package.
 
-Give the tested agent only the selected `prompt.md` and its public fixtures in a separate workspace. `acceptance.md` duplicates public checks for convenience; it is not a second task. Keep `evaluator/` outside that workspace.
+Every prompt permits planning, file creation, execution, inspection, testing, and improvement from the start, within the assigned tools and budget. The preferred browser workflow is the installed `agent-browser` skill; a documented real-browser fallback is allowed if it is unavailable. Record missing checks as blocked rather than passed.
 
-Every prompt permits planning, file creation, dependencies, execution, inspection, testing, and improvements from the start, within the assigned tools and budget. The preferred browser workflow is the installed `agent-browser` skill; a documented real-browser fallback is allowed if it is unavailable. Record missing checks as blocked rather than passed.
+Every current task delivers one self-contained `index.html` with no runtime network dependencies. Development tools and temporary local servers are allowed. Tasks 21–24 explicitly use in-memory session state and user-initiated downloads instead of required persistent browser storage. Their main workflows must work in the public opaque-origin iframe. The original 01–20 prompts retain their existing requirements.
 
-Tasks 01-20 deliver one self-contained runtime HTML file. Development tools and temporary local servers are allowed. Tasks 21-30 deliver complete multi-file applications with declared dependencies, a local backend where needed, and durable storage. After setup, applications must work without external internet services while their local backend remains reachable, except when a task explicitly calls for disconnected editing.
+Prompt 24 additionally requires actual live research with the harness's web tools, a distinct concept beyond the other 23 briefs, and a concise research record in `evidence/research.md`. Preserve that record for evaluation. The public website excludes the raw evidence; the app's embedded concept note and references remain part of its delivered HTML.
 
-Both tracks keep agent-authored validation evidence beside the artifact. The final agent response summarizes the delivery, tests, and limitations; the implementation lives in actual files. See the [execution protocol](AGENTIC_PROTOCOL.md) and [runtime contract](RUNTIME_CONTRACT.md) for the full requirements.
+Keep agent-authored validation evidence beside the artifact. The final agent response summarizes the delivery, tests, and limitations; the implementation lives in the actual file. See the [execution protocol](AGENTIC_PROTOCOL.md).
+
+## Archived project compatibility
+
+The old Real Apps prompts, fixtures, and contracts are preserved on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps). Their full task IDs differ from the new 21–24 IDs. Use that branch to run the old experiment; do not relabel its outputs as results of the new prompts.
+
+Generic local project inspection and static demo isolation remain supported for custom catalogs. A public demo is recognized only for a catalog task explicitly marked `real-apps`, at `project/gallery/index.html`; a project without it is omitted from public export. The current catalog contains no such tasks. See [legacy gallery demos](GALLERY_DEMOS.md) for that compatibility contract.

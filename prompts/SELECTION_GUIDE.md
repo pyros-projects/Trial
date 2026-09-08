@@ -1,6 +1,6 @@
 # Task selection guide
 
-Running all 30 tasks gives the broadest capability profile, but the set is intentionally modular. Use the matrix below to choose subsets without accidentally benchmarking the same implementation pattern repeatedly.
+Running all 24 tasks gives the broadest capability profile, but the set is intentionally modular. Use the matrix below to choose subsets without accidentally benchmarking the same implementation pattern repeatedly.
 
 ## Capability matrix
 
@@ -26,6 +26,10 @@ Running all 30 tasks gives the broadest capability profile, but the set is inten
 | `18-weather-storm-lab` | Numerical/3D | Coupled fields, clouds, intervention, probes | Noise clouds unrelated to atmosphere state |
 | `19-node-graphics-studio` | Creative/editor | Typed node graph, evaluation, timeline, export | Static preset renderer beside a fake graph |
 | `20-city-traffic-transit` | Agents/editor | Road graph, routing, signals, transit, metrics | Cars following hard-coded decorative paths |
+| `21-spreadsheet-chart-studio` | Data/editor | Formula grammar, mixed references, dependency recalculation, linked charts | Displayed answers that bypass cell semantics |
+| `22-vector-layout-studio` | Creative/editor | Affine geometry, layers, selection, path editing, export fidelity | Shapes shift when grouped or exports differ from the artboard |
+| `23-project-planning-studio` | Planning/editor | Calendars, dependencies, deterministic capacity scheduling, synchronized views | Gantt bars move without rescheduling dependent work |
+| `24-capstone` | Research/creation | Live research, concept choice, distinct purpose, coherent implementation | A reskin, invented research, or a beautiful first frame without a working loop |
 
 ## Suggested bundles
 
@@ -55,7 +59,7 @@ This combines real-time AI, audio synchronization, 3D controls, turn-based deter
 
 ### Editor and authoring suite
 
-Use `08`, `15`, `17`, `19`, and `20`.
+Use `08`, `15`, `19`, `21`, and `22`.
 
 This focuses on selection, manipulation, typed or linked state, undo and redo, import and export, validation, responsive layouts, and the difficult transition between authoring and live simulation.
 
@@ -63,37 +67,16 @@ This focuses on selection, manipulation, typed or linked state, undo and redo, i
 
 Keep task sets, environments, tool access and budgets comparable. Let the agent test from the start. Freeze and hash the final artifact before independent evaluation. Record tool versions, actual usage and blocked checks.
 
-## Real Apps track (21–30)
+## Everyday applications, single-file delivery
 
-These are multi-file projects, not single-HTML demonstrations. Keep track-specific budgets and rubrics separate.
+Use `21`, `22`, and `23` for familiar workflows with substantial state and algorithms beneath them. Formulas must recalculate, grouped objects must keep their geometry, and resource changes must alter an actual schedule. These are complete browser applications with embedded examples, explicit exports, and disposable session state. They require no backend or separately installed app stack.
 
-| Task | Core pressure | False-success pattern |
-|---|---|---|
-| 21 Import Studio | Parsing, transactional upsert, stable identities | A plausible preview that commits different changes |
-| 22 Resource Booker | Local-time recurrence, overlap checks, concurrency | Two tabs both confirm the same slot |
-| 23 Stockroom | Ledger, reservations, fulfillment, idempotency | Independently adjusted counters that diverge |
-| 24 Workflow Desk | Durable execution, retry-safe real effects | Nodes animate while no persisted engine exists |
-| 25 API Workbench | Async request identity, cancellation, streams | Late responses overwrite the wrong request |
-| 26 Config Workbench | Typed structure, versioning, three-way merge | Missing and null collapse or one side silently wins |
-| 27 Field Notebook | Offline outbox, blob persistence, conflicts | Offline UI works until reload or reconnect |
-| 28 Approval Desk | Server authority, exact revision identity | Hidden buttons mistaken for access control |
-| 29 Sheetcraft | Formula grammar, active dependencies, undo | Values update only for the demonstration formulas |
-| 30 Project Planner | Deterministic constraints and resource capacity | Gantt bars move independently of the schedule |
+## The Capstone
 
-### All ten: application engineering sweep
+Use `24` when you want to see what an agent chooses to build as well as how it builds it. Supply the full prompt, permit the harness's live web tools, and retain the actual research trail. The agent compares candidate ideas against concise summaries of all 23 regular tasks, chooses one, and commits to observable behavior before implementing it.
 
-Use 21–30 for the full new track. Each task has six public scenarios and portable data.
+Keep the same research access and overall budget across runs. Record unavailable tools separately from poor implementation. Assess research honesty, distinctness within Trial, scope choices, and how well the chosen experience works. Different agents may choose different products; comparing them does not provide the same evidence as giving everyone an identical product brief. Report Capstone observations separately from matched-task comparisons and do not use a short search as proof of worldwide novelty.
 
-### Transactional reliability
+## Archived experimental track
 
-Use 21, 22, 23, 24, and 28 for imports, concurrent reservations, inventory accounting, durable execution, and authorization.
-
-### Developer-tool correctness
-
-Use 21, 25, 26, 29, and 30 for data tools, HTTP tooling, structural merge, expression evaluation, and constraint-based planning.
-
-### Failure recovery
-
-Use 22, 24, 25, 27, and 28. Exercise competing sessions, restart boundaries, response loss, delayed results, offline conflicts, and denied direct API calls.
-
-Real Apps produce one project/ per run. A source-only gallery entry is expected until its reviewed app is manually started and its explicit local preview URL is supplied.
+The previous Real Apps prompts 21–30 live on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps), together with their fixtures, setup contracts, and backend evaluation guidance. Use that branch if you want to explore transactions, durability, concurrency, offline sync, or authorization. Those checks belong to that experiment; the current 24-prompt collection does not claim to test backend reliability.

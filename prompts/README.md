@@ -1,48 +1,42 @@
 # Prompt library
 
-Real Apps prompts 21–30 also require a generated `project/gallery/index.html`: a disposable static demo for the public showcase, alongside the complete local application. Each prompt includes the full [gallery contract](../docs/GALLERY_DEMOS.md) and task-specific guidance. Original backend acceptance checks remain separate from simulated demo checks.
+24 tasks, 24 complete agentic prompts. Open one task's `prompt.md` and give its entire contents to your coding agent. Every prompt contains the product requirements, tool-enabled development workflow, browser validation, public checks, and delivery contract. No additional protocol prompt or external fixture package is needed.
 
-30 tasks, 30 complete agentic prompts. Open one task's `prompt.md` and give its entire contents to your coding agent. Every prompt contains the product requirements, tool-enabled development workflow, browser validation, domain checks, and delivery contract. No additional protocol prompt is needed.
+Every task delivers one self-contained `index.html`. Tasks 01–20 cover simulations, games, instruments, and studios; 21–23 add a spreadsheet, a vector editor, and a project planner. **24 is the Capstone:** the agent researches the web, chooses its own distinct concept, and builds it. The prompt includes a short map of the other 23 briefs so the idea adds a new experience to Trial.
 
-Tasks 01–20 deliver `index.html`. Tasks 21–30 deliver `project/`. Each run may plan, execute, test and improve from the start. Keep screenshots and agent-authored validation notes in `evidence/` alongside the artifact. Supply `fixtures/` for a Real Apps task read-only when available; expected behavior is stated in the prompt itself.
+Each run may plan, execute, test, and improve from the start. Keep screenshots and agent-authored validation notes in `evidence/` beside the artifact. The Capstone also records its actual research and concept choice in `evidence/research.md`. Its live web access is for development; the delivered HTML still runs offline. Tasks 21–24 keep session changes in memory, with explicit reset and appropriate file downloads instead of required persistent storage.
 
-`acceptance.md` is a convenient standalone copy of the public checks, not an alternative prompt. Evaluator-only variations live under `evaluator/`; do not expose those to the tested agent. Copy only the selected prompt and its public fixtures into an isolated agent workspace, not the entire package.
+`acceptance.md` is a convenient standalone copy of the public checks, not an alternative prompt. Give the agent only the selected prompt in an isolated workspace. Keep evaluator-owned reports and independent variation checks outside it.
 
-See `SELECTION_GUIDE.md` for task combinations. `catalog.json` is read by the gallery and importer.
+See [SELECTION_GUIDE.md](SELECTION_GUIDE.md) for task combinations and the Capstone's comparison limits. `catalog.json` is read by the gallery and importer. Its optional `look_for` field supplies the practical hints beside each prompt title and in the viewer. These hints help visitors explore; the complete prompt and acceptance checks define the requirements.
 
-The catalog's optional `look_for` field provides the showcase's practical guidance. Edit that string to change the hints beside a prompt title, then restart the local gallery or rebuild the public site. These hints help visitors explore a build; the complete prompt and acceptance checks define the requirements.
+The previous multi-file Real Apps prompts 21–30, fixtures, runtime contract, and evaluator guidance are preserved on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps). That experimental track is outside the current collection. Task IDs include their full slug: the old `21-import-studio` and new `21-spreadsheet-chart-studio` are different tasks.
 
 ## Choose a prompt
 
-| ID | Prompt | Track |
+| ID | Prompt | Focus |
 |---|---|---|
-| 01 | [Real-Time 2D Fluid Simulation](01-fluid-simulation/prompt.md) | HTML |
-| 02 | [3D Hydraulic Erosion Laboratory](02-hydraulic-erosion/prompt.md) | HTML |
-| 03 | [Modular Synthesizer and Sequencer](03-modular-synth/prompt.md) | HTML |
-| 04 | [Soft-Body, Cloth, and Constraint Playground](04-deformable-physics/prompt.md) | HTML |
-| 05 | [Black Hole and Gravitational Lensing Explorer](05-black-hole-lensing/prompt.md) | HTML |
-| 06 | [Wave Interference and Diffraction Laboratory](06-wave-laboratory/prompt.md) | HTML |
-| 07 | [Orbital Mechanics and Mission-Planning Sandbox](07-orbital-mission-planner/prompt.md) | HTML |
-| 08 | [SDF and Constructive Solid Geometry Studio](08-sdf-csg-studio/prompt.md) | HTML |
-| 09 | [Falling-Sand Alchemy Sandbox](09-falling-sand-alchemy/prompt.md) | HTML |
-| 10 | [Procedural Stealth Heist Sandbox](10-stealth-heist/prompt.md) | HTML |
-| 11 | [Factory Automation and Logistics Game](11-factory-automation/prompt.md) | HTML |
-| 12 | [Rhythm-Synchronized Bullet-Hell Game](12-rhythm-bullet-hell/prompt.md) | HTML |
-| 13 | [3D FPV Drone-Racing Simulator](13-drone-racing/prompt.md) | HTML |
-| 14 | [Evolutionary Ecosystem Laboratory](14-evolution-ecosystem/prompt.md) | HTML |
-| 15 | [Digital Logic and Tiny-CPU Laboratory](15-digital-logic-lab/prompt.md) | HTML |
-| 16 | [Procedural Tactical Roguelike](16-procedural-roguelike/prompt.md) | HTML |
-| 17 | [Time-Loop Physics Puzzle Game and Editor](17-echo-loop-puzzler/prompt.md) | HTML |
-| 18 | [3D Weather and Storm Laboratory](18-weather-storm-lab/prompt.md) | HTML |
-| 19 | [Node-Based Generative Graphics Studio](19-node-graphics-studio/prompt.md) | HTML |
-| 20 | [City Traffic and Transit Simulator](20-city-traffic-transit/prompt.md) | HTML |
-| 21 | [Import Studio: Reliable Data Onboarding](21-import-studio/prompt.md) | Real Apps |
-| 22 | [Resource Booker: Conflict-Free Reservations](22-resource-booker/prompt.md) | Real Apps |
-| 23 | [Stockroom: Inventory and Order Fulfillment](23-stockroom/prompt.md) | Real Apps |
-| 24 | [Workflow Desk: Durable Visual Automation](24-workflow-desk/prompt.md) | Real Apps |
-| 25 | [API Workbench: Stateful Request Laboratory](25-api-workbench/prompt.md) | Real Apps |
-| 26 | [Config Workbench: Structural Diff and Merge](26-config-workbench/prompt.md) | Real Apps |
-| 27 | [Field Notebook: Offline Inspections and Sync](27-field-notebook/prompt.md) | Real Apps |
-| 28 | [Approval Desk: Versioned Change Requests](28-approval-desk/prompt.md) | Real Apps |
-| 29 | [Sheetcraft: Spreadsheet with a Formula Engine](29-sheetcraft/prompt.md) | Real Apps |
-| 30 | [Project Planner: Dependencies and Capacity](30-project-planner/prompt.md) | Real Apps |
+| 01 | [Real-Time 2D Fluid Simulation](01-fluid-simulation/prompt.md) | GPU simulation |
+| 02 | [3D Hydraulic Erosion Laboratory](02-hydraulic-erosion/prompt.md) | GPU simulation |
+| 03 | [Modular Synthesizer and Sequencer](03-modular-synth/prompt.md) | Audio application |
+| 04 | [Soft-Body, Cloth, and Constraint Playground](04-deformable-physics/prompt.md) | Physics simulation |
+| 05 | [Black Hole and Gravitational Lensing Explorer](05-black-hole-lensing/prompt.md) | Shader rendering |
+| 06 | [Wave Interference and Diffraction Laboratory](06-wave-laboratory/prompt.md) | Numerical simulation |
+| 07 | [Orbital Mechanics and Mission-Planning Sandbox](07-orbital-mission-planner/prompt.md) | Scientific application |
+| 08 | [SDF and Constructive Solid Geometry Studio](08-sdf-csg-studio/prompt.md) | 3D editor |
+| 09 | [Falling-Sand Alchemy Sandbox](09-falling-sand-alchemy/prompt.md) | Cellular simulation |
+| 10 | [Procedural Stealth Heist Sandbox](10-stealth-heist/prompt.md) | AI game |
+| 11 | [Factory Automation and Logistics Game](11-factory-automation/prompt.md) | Systems game |
+| 12 | [Rhythm-Synchronized Bullet-Hell Game](12-rhythm-bullet-hell/prompt.md) | Audio game |
+| 13 | [3D FPV Drone-Racing Simulator](13-drone-racing/prompt.md) | 3D game |
+| 14 | [Evolutionary Ecosystem Laboratory](14-evolution-ecosystem/prompt.md) | Agent simulation |
+| 15 | [Digital Logic and Tiny-CPU Laboratory](15-digital-logic-lab/prompt.md) | Engineering editor |
+| 16 | [Procedural Tactical Roguelike](16-procedural-roguelike/prompt.md) | Turn-based game |
+| 17 | [Time-Loop Physics Puzzle Game and Editor](17-echo-loop-puzzler/prompt.md) | Puzzle game |
+| 18 | [3D Weather and Storm Laboratory](18-weather-storm-lab/prompt.md) | Atmospheric simulation |
+| 19 | [Node-Based Generative Graphics Studio](19-node-graphics-studio/prompt.md) | Creative editor |
+| 20 | [City Traffic and Transit Simulator](20-city-traffic-transit/prompt.md) | Urban simulation |
+| 21 | [Spreadsheet & Chart Studio](21-spreadsheet-chart-studio/prompt.md) | Data application |
+| 22 | [Vector & Layout Studio](22-vector-layout-studio/prompt.md) | Creative application |
+| 23 | [Project Planning Studio](23-project-planning-studio/prompt.md) | Planning application |
+| 24 | [The Capstone: Build the Unexpected](24-capstone/prompt.md) | Open-ended creation |

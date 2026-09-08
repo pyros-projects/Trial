@@ -1,5 +1,14 @@
 # Changelog
 
+## A single-file collection and the Capstone: 2026-09-08
+
+- Preserved the previous Real Apps prompts 21–30, fixtures, runtime contracts, and domain evaluation material on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps). The original 01–20 prompts and submitted results remain unchanged.
+- Added Spreadsheet & Chart Studio (21), Vector & Layout Studio (22), and Project Planning Studio (23), with bounded algorithms, concrete public checks, embedded examples, offline HTML delivery, and disposable session state.
+- Added The Capstone (24): live harness web research, a self-chosen distinct concept, a compact map of the other 23 briefs, an honest research trail, and a complete offline experience.
+- Included Astra’s weather laboratory and node graphics studio with their supplied final screenshots, bringing the collection to 76 builds. Original artifacts remain unchanged.
+- Updated the active catalog, README, selection and execution guidance, and metadata schema to 24 single-HTML tasks. Retained generic local project handling and public demo isolation for compatibility.
+- Made prompt counts and track choices follow the loaded data. A single-track collection hides the track control, and stale retired track selections reset instead of hiding the new library.
+
 ## Trial: 2026-09-07
 
 - Renamed the project to Trial - a Vibe Benchmark, with a small (by Pyro) byline. Renamed the existing GitHub repository to pyros-projects/Trial and updated website links and share metadata.

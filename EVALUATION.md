@@ -43,6 +43,10 @@ Judge whether the central domain system is real and coherent:
 - Weather visuals derive from evolving atmospheric fields and interventions.
 - Node-graph connections and parameters determine the generated output.
 - Traffic, signals, route choice, incidents, and transit affect actual agent movement.
+- Spreadsheet values and charts follow parsed formulas, dependencies, and actual edits.
+- Vector selection, grouping, transformations, and exports agree about geometry and order.
+- Project dates follow calendars, dependencies, priorities, and resource capacity.
+- The Capstone's chosen core system fulfills its declared behavior on inputs beyond its opening example.
 
 ### 4. Interaction quality: 10 points
 
@@ -95,30 +99,26 @@ Useful hidden tests across applications include:
 - Long accelerated simulation runs for population, traffic, factory, and weather drift
 - Controller disconnect, focus loss, and simultaneous-input cleanup in games
 
-## Real Apps quality rubric (real-apps-v1, tasks 21–30)
+## Capstone research and concept judgment
 
-| Dimension | Points | What matters |
-|---|---:|---|
-| Launch | 10 | Reproducible declared setup/start, ready health, useful startup failures |
-| Completeness | 10 | Every bounded core workflow is implemented, not a decorative menu |
-| Behavior | 25 | Domain invariants, exact fixture semantics, meaningful business outcomes |
-| Interaction | 10 | Usable primary flow, labels, error recovery, responsive editing |
-| Technical depth | 15 | Coherent model, transactional persistence, identity/version design, real algorithms |
-| Visual quality | 5 | Legibility and intentional product design, not spectacle |
-| Robustness | 20 | Replays, stale writes, concurrency, crashes, offline conflicts where specified |
-| Constraint compliance | 5 | Source delivery, manifest, local operation, seed/reset/test isolation |
+Prompt 24 uses `html-v1` for implementation quality. Also record qualitative observations about actual live research, distinctness from the other 23 briefs, the use of prior art, scope choices, and the three declared behavioral commitments. Verify the research evidence against tool history where available; a list of plausible links alone is insufficient. Unavailable web tools block the research requirement, while the artifact can still be assessed on its own merits.
 
-Weights are also in evaluator/rubrics.json. Evaluate each run using the same track-specific rubric and the same scenarios. Do not compare a 90-point simulation score directly with a 90-point transactional-app score as though the measurements were interchangeable.
+Challenge new inputs and paths through the chosen system. The agent chooses a concept, not its own passing score: trivial functionality, invented evidence, decorative interactions, or unmet commitments remain shortcomings. Keep the original commitments and any scope revisions visible. Do not claim that a brief search establishes worldwide originality.
 
+Different concepts are different briefs. Publish Capstone observations separately from comparisons where every model received the same product requirements, even though the gallery can display them together and uses the same HTML rubric. Numerical summaries do not turn this Vibe Benchmark into a controlled scientific ranking.
+
+## Archived Real Apps evaluation
+
+The previous `real-apps-v1` rubric, public scenarios, fixtures, and backend variation guidance remain on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps). The local gallery retains legacy report and project support. No current task claims to establish transactional durability, server authorization, or independent-device synchronization.
 
 ## Reports and comparison
 
 Use `metadata.json` with a singular `score` (number or dimension object), or `report.json` with `total`, `rubric`, optional `artifact_sha256`, and `checks`. Metadata score takes display precedence, so do not leave conflicting scores in both files. Preserve a model's exact display name/version. The gallery is a viewer, not an automatic domain evaluator. Example scorecards in `schema/` are illustrative and never loaded into results automatically.
 
-Each public Real Apps scenario has observable exercises and expected outcomes. Test true concurrent requests, repeat operation keys, restart against the same data, direct unauthorized API calls and offline conflicts where required. Variation tests may change data and execution order, not introduce undisclosed product rules. The files under `evaluator/` are suggestions for the operator, not a fully implemented hidden test harness.
+Public checks define observable exercises and expected outcomes. Independent variations may change data and execution order, not introduce undisclosed product rules. Tasks 21–23 include concrete small examples, but passing those examples alone does not establish general correctness. The package is not a fully implemented domain test harness.
 
 `report.json` check statuses: pass, fail, blocked, not-run. Record evidence for each check. A hash mismatch marks a report stale in the gallery; an absent hash means the report has not been bound to these exact source bytes. The gallery excludes stale scores from summaries and labels unbound reports. The digest in `artifact_sha256` must match the displayed HTML/ZIP byte hash or the displayed authored-project source digest.
 
-Compare the HTML and Real Apps rubrics separately. On the leaderboard, repeated runs are averaged within each task, then task means are averaged per model and track. Different task coverage or budgets still make rankings incomparable; publish the coverage and per-task scores. Never replace missing scores with zero.
+Keep any legacy Real Apps scores separate from HTML scores. On the leaderboard, repeated runs are averaged within each task, then task means are averaged per model and track. Different task coverage or budgets still make rankings incomparable; publish the coverage and per-task scores. Never replace missing scores with zero.
 
-Source projects must be run manually inside an appropriate disposable environment, with dedicated data directories and isolated browser contexts. A local gallery, an iframe or a second port is not a security sandbox. Offline validation for Real Apps blocks external internet while retaining explicitly permitted local services, except in the task that requires true disconnected editing.
+If inspecting legacy source projects, run them manually in an appropriate disposable environment; the local gallery never starts submitted commands. See the archived protocol for that separate experiment.

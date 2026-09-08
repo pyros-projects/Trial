@@ -98,18 +98,20 @@ The deployment scripts also accept the Python and screenshot options described a
 | --- | --- |
 | Gallery HTML, CSS, JavaScript, model presentation settings, favicon, logo and supplied Deep-SWE reference snapshot | Source code for the gallery server and build scripts |
 | Public prompt catalog, prompt and acceptance Markdown | Prompt fixtures, private evaluator material and extra documents |
-| One top-level HTML result or the fixed Real Apps `project/gallery/index.html` per run | The rest of each project, project archives, dependencies and extra HTML variants |
+| One top-level HTML result per run; legacy custom catalog demos only at `project/gallery/index.html` | The rest of each project, project archives, dependencies and extra HTML variants |
 | A small share page per implementation, reusing its existing screenshot | Duplicate HTML builds or screenshot copies for link previews |
 | A share page per submitted prompt, plus one compact JPEG comparison preview when Pillow and thumbnails are available | Raw evidence images or additional copies of submitted applications |
 | One screenshot per run: metadata-free WebP up to 1280 pixels with Pillow, or the original selected screenshot otherwise | Extra screenshots, recordings, logs, audio and `evidence/` |
 | Minimal public JSON and CSV | Run `metadata.json`, `report.json`, notes, environments, metrics, manifests and check details |
 | Selected provider, harness, setting, runtime, quantization, and homepage fields from model-level `model.toml`, in public JSON | Raw TOML files and unrecognized profile fields |
 
-Model keys and run labels come from folder names. Public model display labels, order and colors are supplied by `/appsettings.json`, which is copied byte-for-byte from `gallery/static/appsettings.json`, including with `--screenshots none`. Unlisted configuration files remain excluded. Tasks are inferred from catalog IDs in run-folder names. HTML-track runs use `index.html`, `result.html`, or `app.html`, in that precedence. Real Apps runs use only `project/gallery/index.html`; they have no top-level HTML fallback. HTML bytes are copied unchanged; the public SHA-256 identifies the exact published bytes.
+Model keys and run labels come from folder names. Public model display labels, order and colors are supplied by `/appsettings.json`, which is copied byte-for-byte from `gallery/static/appsettings.json`, including with `--screenshots none`. Unlisted configuration files remain excluded. Tasks are inferred from catalog IDs in run-folder names. All current catalog tasks use `index.html`, `result.html`, or `app.html`, in that precedence. Compatibility support for an explicitly declared `real-apps` task in a custom catalog uses only `project/gallery/index.html`, with no top-level HTML fallback. The current catalog has no such entries. HTML bytes are copied unchanged; the public SHA-256 identifies the exact published bytes.
 
 The supplied reference image is explicitly included as `/deep-swe-snapshot.png` with its original bytes. It is independent of run screenshots and remains included when `--screenshots none` is selected.
 
 Optional `results/<model>/model.toml` profiles are an explicit public input. Only `provider`, `provider_url`, `harness`, `harness_url`, `setting`, `runtime`, `runtime_url`, `quantization`, and `quantization_url` are read into the `model_profiles` mapping, once per model present in the export. They supply the setup shown on cards and in the viewer; they do not pull data from run `metadata.json`. See [shared model setup](results.md#shared-model-setup) for the format and scope.
+
+The current export includes all 24 prompt/acceptance pairs. The old Real Apps prompts and fixtures are retained on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps) and are not published by a main-branch build. Prompt 24 requires live research during development; its finished artifact remains offline, and `evidence/research.md` stays excluded like other raw evidence.
 
 Public catalog entries include `look_for` when present. These short hints power the guidance beside each showcase prompt and the expandable overlay in the maximized viewer; private catalog fields are still excluded.
 
@@ -123,7 +125,7 @@ The public data declares `mode: "public"` and a generation timestamp. Scores are
 
 ## Public routes and previews
 
-Real Apps demos use `/demos/<model>/<run>/index.html`, with attachment downloads under `/demo-sources/`. Their response CSP applies both inside the viewer and to direct visits: opaque-origin sandbox, no scripted network connections, external resources, nested frames, or form submissions. Scripts/styles must be inline and assets embedded. The viewer adds **Reset demo**, which replaces the entire frame; in-memory work is discarded. See [Gallery demos](GALLERY_DEMOS.md) for the complete contract. A static demonstration does not establish full-app backend acceptance results.
+Legacy custom-catalog demos use `/demos/<model>/<run>/index.html`, with attachment downloads under `/demo-sources/`. Their response CSP applies both inside the viewer and to direct visits: opaque-origin sandbox, no scripted network connections, external resources, nested frames, or form submissions. Scripts/styles must be inline and assets embedded. The viewer adds **Reset demo**, which replaces the entire frame; in-memory work is discarded. See [Gallery demos](GALLERY_DEMOS.md) for the complete contract. A static demonstration does not establish full-app backend acceptance results.
 
 The exporter rejects `netlify` and `data-netlify` attributes in **all** submitted HTML, because those could provision a Forms endpoint at deploy time. It never uploads application servers, functions, database files, or submitted deployment configuration. Keep Netlify form detection disabled as well; the current showcase has `processing_settings.ignore_html_forms: true` and no registered forms. This is a static publication boundary, not a general-purpose malware or secret scanner.
 

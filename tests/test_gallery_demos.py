@@ -23,29 +23,10 @@ sys.path.insert(0, str(ROOT))
 from gallery import demos, projects, server
 from tools import build_site
 
-REAL_TASKS = [task for task in json.loads((ROOT / "prompts/catalog.json").read_text(encoding="utf-8"))
-              if task["track"] == "real-apps"]
-
-
-class GalleryDemoPromptTests(unittest.TestCase):
-    def test_common_overlay_and_original_acceptance_are_embedded(self):
-        guidance = (ROOT / "docs/GALLERY_DEMOS.md").read_text(encoding="utf-8")
-        common = guidance.split("## Public gallery delivery\n", 1)[1].split("\n## Publication boundary", 1)[0].strip()
-        self.assertEqual(len(REAL_TASKS), 10)
-        for task in REAL_TASKS:
-            with self.subTest(task=task["id"]):
-                folder = ROOT / "prompts" / task["id"]
-                prompt = (folder / "prompt.md").read_text(encoding="utf-8")
-                self.assertEqual(prompt.count("## Public gallery delivery\n"), 1)
-                overlay = prompt.split("## Public gallery delivery\n", 1)[1].split("\n### ", 1)[0].strip()
-                self.assertEqual(overlay, common)
-                self.assertLess(prompt.index("## Public gallery delivery"), prompt.index("## Application requirements"))
-                self.assertIn("### Full local application delivery and runtime checks", prompt)
-                acceptance = (folder / "acceptance.md").read_text(encoding="utf-8").strip()
-                self.assertIn(acceptance, prompt)
-                completion = prompt.split("## Completion\n", 1)[1]
-                self.assertIn("project/gallery/index.html", completion)
-                self.assertIn("demo build commands", completion)
+DEMO_TASKS = [
+    {"id": "fixture-source-project", "title": "Source project fixture", "track": "real-apps"},
+    {"id": "fixture-second-project", "title": "Second project fixture", "track": "real-apps"},
+]
 
 
 class GalleryDemoTests(unittest.TestCase):
@@ -56,7 +37,7 @@ class GalleryDemoTests(unittest.TestCase):
         self.output = self.root / "dist/site"
         self.results = self.root / "results"
         self.model = "Model One & #"
-        self.run = self.results / self.model / "21-import-studio"
+        self.run = self.results / self.model / "fixture-source-project"
         self.run.mkdir(parents=True)
         self.html = b'<!doctype html>\r\n<title>Demo</title>\n<script>const state = {count: 0};</script>\n'
         static = self.root / "gallery/static"
@@ -64,7 +45,7 @@ class GalleryDemoTests(unittest.TestCase):
         for name in build_site.STATIC_FILES:
             (static / name).write_bytes(b"Public gallery asset")
         (static / "appsettings.json").write_text('{"models":[]}', encoding="utf-8")
-        catalog = [{"id": "01-fluid-simulation", "title": "Fluid", "track": "html"}, *REAL_TASKS]
+        catalog = [{"id": "01-fluid-simulation", "title": "Fluid", "track": "html"}, *DEMO_TASKS]
         for task in catalog:
             folder = self.root / "prompts" / task["id"]
             folder.mkdir(parents=True)
@@ -138,7 +119,7 @@ class GalleryDemoTests(unittest.TestCase):
             report, data = self.export()
         self.assertEqual(len(data["results"]), 1)
         artifact = data["results"][0]["artifact"]
-        encoded = f"{quote(self.model, safe='')}/21-import-studio/index.html"
+        encoded = f"{quote(self.model, safe='')}/fixture-source-project/index.html"
         self.assertEqual(artifact["url"], f"/demos/{encoded}")
         self.assertEqual(artifact["source_url"], f"/demo-sources/{encoded}")
         self.assertIs(artifact["demo"], True)
@@ -160,7 +141,7 @@ class GalleryDemoTests(unittest.TestCase):
         self.assertEqual(artifact["checks"], [])
 
     def test_only_known_real_apps_use_the_fixed_demo_path_without_html_bypass(self):
-        for task in REAL_TASKS:
+        for task in DEMO_TASKS:
             run = self.results / self.model / task["id"]
             self.demo(run)
             (run / "index.html").write_text("PRIVATE top-level bypass", encoding="utf-8")
@@ -171,8 +152,8 @@ class GalleryDemoTests(unittest.TestCase):
         for name in ("unknown-task", "01-fluid-simulation"):
             self.demo(self.results / self.model / name)
         _, data = self.export()
-        self.assertEqual({row["task_id"] for row in data["results"]}, {task["id"] for task in REAL_TASKS})
-        self.assertEqual(len(data["results"]), 10)
+        self.assertEqual({row["task_id"] for row in data["results"]}, {task["id"] for task in DEMO_TASKS})
+        self.assertEqual(len(data["results"]), 2)
         self.assertTrue(all(row["artifact"].get("demo") and row["artifact"]["url"].startswith("/demos/")
                             for row in data["results"]))
 
@@ -183,7 +164,7 @@ class GalleryDemoTests(unittest.TestCase):
             with self.subTest(path=target, kind="symlink"):
                 with mock.patch.object(Path, "is_symlink", lambda path: path == target or actual_symlink(path)):
                     self.assertIsNone(demos.demo_file(self.run))
-                    self.assertEqual(build_site.PublicGalleryState(self.root, REAL_TASKS).scan(), [])
+                    self.assertEqual(build_site.PublicGalleryState(self.root, DEMO_TASKS).scan(), [])
             with self.subTest(path=target, kind="Windows reparse point"):
                 def lstat(path, *args, **kwargs):
                     if path == target:

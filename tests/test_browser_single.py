@@ -37,14 +37,25 @@ class BrowserEnvironment(unittest.TestCase):
         self.page.on('pageerror',lambda error:self.errors.append(str(error)))
 
     def fixture(self):
+        self.project_catalog_fixture()
         run=self.results/'UI fixture - not a model evaluation'/'01-fluid-simulation-001';run.mkdir(parents=True)
         (run/'index.html').write_text('''<!doctype html><html><head><meta charset="utf-8"><title>Functional browser-test counter</title></head><body><h1>Gallery integration fixture</h1><p>This is not a model benchmark result.</p><button id="increment">Count: 0</button><script>let n=0;document.querySelector('button').onclick=e=>{e.target.textContent='Count: '+(++n)};</script></body></html>''')
         (run/'metadata.json').write_text(json.dumps({'task_id':'01-fluid-simulation','score':80,'notes':'Illustrative browser integration fixture only.'}))
         (run/'report.json').write_text(json.dumps({'checks':[{'id':'UI-01','status':'pass','label':'Actual counter interaction','evidence':'Browser integration fixture, not a task evaluation.'}]}))
-        project_run=self.results/'UI fixture - not a model evaluation'/'21-import-studio-001';(project_run/'project').mkdir(parents=True)
+        project_run=self.results/'UI fixture - not a model evaluation'/'fixture-source-project-001';(project_run/'project').mkdir(parents=True)
         (project_run/'project/README.md').write_text('Source download fixture, not a completed benchmark application.')
-        (project_run/'project/benchmark.json').write_text(json.dumps({'task_id':'21-import-studio','name':'Source-view fixture','commands':{'start':['python','main.py']}}))
-        (project_run/'metadata.json').write_text(json.dumps({'task_id':'21-import-studio','notes':'Illustrative source-view fixture. No application started.'}))
+        (project_run/'project/benchmark.json').write_text(json.dumps({'task_id':'fixture-source-project','name':'Source-view fixture','commands':{'start':['python','main.py']}}))
+        (project_run/'metadata.json').write_text(json.dumps({'task_id':'fixture-source-project','notes':'Illustrative source-view fixture. No application started.'}))
+
+    def project_catalog_fixture(self):
+        task = {
+            'id': 'fixture-source-project', 'title': 'Source project fixture', 'track': 'real-apps',
+            'category': 'Integration fixture', 'icon': '◇', 'description': 'Not a benchmark challenge.',
+            'artifact_type': 'project', 'rubric': 'real-apps-v1',
+        }
+        if task['id'] not in self.state.catalog_by_id:
+            self.state.catalog.append(task)
+            self.state.catalog_by_id[task['id']] = task
 
     def screenshot(self,name):
         directory=os.environ.get('GALLERY_SCREENSHOT_DIR')
@@ -92,6 +103,13 @@ class BrowserTests(BrowserEnvironment):
         root = Path(self.temp.name)
         shutil.copytree(server.STATIC_ROOT, root / 'gallery/static')
         shutil.copytree(ROOT / 'prompts', root / 'prompts')
+        (root / 'prompts/catalog.json').write_text(json.dumps(self.state.catalog), encoding='utf-8')
+        for task in self.state.catalog:
+            folder = root / 'prompts' / task['id']
+            if not folder.exists():
+                folder.mkdir()
+                for filename in ('prompt.md', 'acceptance.md'):
+                    (folder / filename).write_text('Synthetic project integration fixture.', encoding='utf-8')
         output = root / 'dist/site'
         build_site.build_site(root, screenshots='none')
         data = json.loads((output / 'api/data.json').read_text(encoding='utf-8'))
@@ -134,10 +152,11 @@ class BrowserTests(BrowserEnvironment):
         return f'http://127.0.0.1:{http.server_address[1]}', data
 
     def demo_fixture(self):
-        run = self.results / 'Demo isolation fixture' / '21-import-studio'
+        self.project_catalog_fixture()
+        run = self.results / 'Demo isolation fixture' / 'fixture-source-project'
         demo = run / 'project/gallery/index.html'
         demo.parent.mkdir(parents=True)
-        (run / 'project/benchmark.json').write_text(json.dumps({'task_id': '21-import-studio'}))
+        (run / 'project/benchmark.json').write_text(json.dumps({'task_id': 'fixture-source-project'}))
         (run.parent / 'model.toml').write_text('harness = "Test harness"\nsetting = "Test setting"\n')
         demo.write_text('''<!doctype html><html><meta charset="utf-8"><title>Demo isolation fixture</title>
 <h1>Integration fixture, not a model result</h1><p>Demo changes disappear on reset or reload.</p>
@@ -341,7 +360,7 @@ window.probe=async origin=>{
         (other / 'index.html').write_text('<!doctype html><title>Other prompt fixture</title>', encoding='utf-8')
         self.navigate_direct()
         self.page.locator('#search').fill('fixture')
-        self.page.locator('#track-filter').select_option('html')
+        expect(self.page.locator('#track-filter-wrap')).not_to_be_visible()
         expect(self.page.locator('#cards .prompt-group')).to_have_count(2)
         group = self.page.locator('#cards .prompt-group[data-task="01-fluid-simulation"]')
         self.assert_comparison_range(group, 1, 3, 5)
@@ -769,11 +788,14 @@ window.probe=async origin=>{
         self.assertEqual(self.page.evaluate('navigator.clipboard.readText()'), share)
         self.page.locator('#model-filter').select_option(keys[-1])
         self.page.locator('#task-filter').select_option(other_task)
-        self.page.locator('#track-filter').select_option('real-apps')
         self.page.locator('#search').fill('no matching fixture')
         expect(self.page.locator('#cards .run-card')).to_have_count(0)
         self.page.locator('.nav-button[data-view="why"]').click()
         expect(self.page.locator('#view-why')).to_be_visible()
+        self.page.evaluate("""() => {
+            const key='trial-by-pyro-ui-v1';const saved=JSON.parse(localStorage.getItem(key));
+            saved['track-filter']='real-apps';localStorage.setItem(key,JSON.stringify(saved));
+        }""")
         self.page.goto(share)
         category = self.page.locator('#category-viewer')
         expect(category).to_be_visible()
@@ -789,7 +811,7 @@ window.probe=async origin=>{
             self.assertAlmostEqual(actual, expected, delta=2)
         expect(self.page.locator('#model-filter')).to_have_value(keys[-1])
         expect(self.page.locator('#task-filter')).to_have_value(other_task)
-        expect(self.page.locator('#track-filter')).to_have_value('real-apps')
+        expect(self.page.locator('#track-filter')).to_have_value('all')
         expect(self.page.locator('#search')).to_have_value('no matching fixture')
         category.locator(f'[data-copy-task="{task}"]').click()
         expect(category.locator('#toast')).to_contain_text('Link copied')
@@ -1487,7 +1509,7 @@ quantization_url = 'https://models.example/quant'
         fluid=self.page.locator('.prompt-group[data-task="01-fluid-simulation"]')
         expect(fluid.locator('.run-card')).to_have_count(2)
         expect(fluid.locator('.model-column')).to_have_count(2)
-        project=self.page.locator('.prompt-group[data-task="21-import-studio"]')
+        project=self.page.locator('.prompt-group[data-task="fixture-source-project"]')
         expect(project.locator('.run-card')).to_have_count(1)
         expect(project.locator('.missing-build')).to_have_count(1)
         fluid.locator('[data-open-prompt]').click()
@@ -1499,12 +1521,53 @@ quantization_url = 'https://models.example/quant'
         expect(self.page.locator('#cards .model-column')).to_have_count(1)
         self.assertEqual(self.errors,[])
 
+    def test_active_catalog_counts_clear_retired_filters_and_hide_single_track(self):
+        from playwright.sync_api import expect
+        self.comparison_fixture()
+        self.navigate_direct()
+        self.page.evaluate("""localStorage.setItem('trial-by-pyro-ui-v1', JSON.stringify({
+            view:'catalog','track-filter':'real-apps','task-filter':'30-project-planner'
+        }))""")
+        self.page.reload()
+        expect(self.page.locator('#view-catalog')).to_be_visible()
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(24)
+        expect(self.page.locator('#nav-prompt-count,#hero-prompt-count,#catalog-count')).to_have_text(['24','24','24'])
+        expect(self.page.locator('#stat-tasks small')).to_have_text('/ 24')
+        expect(self.page.locator('#track-filter-wrap')).not_to_be_visible()
+        expect(self.page.locator('#track-filter')).to_have_value('all')
+        expect(self.page.locator('#task-filter')).to_have_value('all')
+        self.assertEqual(self.page.evaluate("JSON.parse(localStorage.getItem('trial-by-pyro-ui-v1'))['track-filter']"), 'all')
+        self.page.locator('#search').fill('spreadsheet')
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(1)
+        expect(self.page.locator('#nav-prompt-count')).to_have_text('24')
+        self.page.locator('#clear-filters').click()
+        self.project_catalog_fixture()
+        self.page.locator('#refresh').click()
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(25)
+        expect(self.page.locator('#nav-prompt-count,#hero-prompt-count')).to_have_text(['25','25'])
+        expect(self.page.locator('#track-filter-wrap')).to_be_visible()
+        self.assertEqual(self.page.locator('#track-filter option').evaluate_all('nodes=>nodes.map(node=>node.value)'), ['all','html','real-apps'])
+        self.page.locator('#track-filter').select_option('real-apps')
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(1)
+        self.state.catalog = [task for task in self.state.catalog if task['id'] != 'fixture-source-project']
+        self.state.catalog_by_id.pop('fixture-source-project')
+        self.page.locator('#refresh').click()
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(24)
+        expect(self.page.locator('#track-filter-wrap')).not_to_be_visible()
+        expect(self.page.locator('#track-filter')).to_have_value('all')
+        expect(self.page.locator('#nav-prompt-count,#hero-prompt-count')).to_have_text(['24','24'])
+        self.page.locator('.nav-button[data-view="gallery"]').click()
+        expect(self.page.locator('#cards .run-card')).to_have_count(5)
+        self.page.set_viewport_size({'width':390,'height':844})
+        self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
+        self.assertEqual(self.errors, [])
+
     def test_catalog_filters_prompt_and_live_artifact(self):
         from playwright.sync_api import expect
         self.navigate_direct()
         expect(self.page.locator('#empty-results')).to_be_visible()
         self.page.locator('[data-view="catalog"]').first.click()
-        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(30)
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(24)
         self.page.locator('#catalog-grid .task-card button').first.click()
         expect(self.page.locator('#prompt-content')).to_contain_text('from the beginning')
         self.page.locator('#close-prompt').click()
@@ -1550,7 +1613,7 @@ quantization_url = 'https://models.example/quant'
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.screenshot('gallery-mobile-preview.png')
         self.page.locator('[data-view="catalog"]').first.click()
-        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(30)
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(25)
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.assertEqual(self.errors,[])
 
@@ -1588,7 +1651,7 @@ class BrowserPresentationTests(BrowserEnvironment):
         self.render_with_bridge()
         expect(self.page.locator('#empty-results')).to_be_visible()
         self.page.locator('[data-view="catalog"]').first.click()
-        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(30)
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(24)
         self.screenshot('prompt-library-preview.png')
         self.page.locator('#catalog-grid .task-card button').first.click()
         expect(self.page.locator('#prompt-content')).to_contain_text('from the beginning')
@@ -1630,10 +1693,10 @@ class BrowserPresentationTests(BrowserEnvironment):
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.screenshot('gallery-mobile-preview.png')
         self.page.locator('[data-view="catalog"]').first.click()
-        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(30)
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(25)
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'),390)
         self.page.locator('#track-filter').select_option('real-apps')
-        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(10)
+        expect(self.page.locator('#catalog-grid .task-card')).to_have_count(1)
         self.assertEqual(self.errors,[])
 
 if __name__=='__main__':unittest.main()

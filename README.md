@@ -11,8 +11,8 @@
 
 <div align="center">
 
-[![30 complete prompts][prompts-shield]][prompts-url]
-[![2 tracks][tracks-shield]][tracks-url]
+[![24 complete prompts][prompts-shield]][prompts-url]
+[![Single HTML][format-shield]][format-url]
 [![Python 3.11+][python-shield]][python-url]
 
 </div>
@@ -53,24 +53,27 @@ Keep the benchmarks. Get your hands on the work.
 
 ## What you can do
 
-- **Compare the same brief.** Browse three models side by side on desktop, two on smaller screens, or one on mobile. Use the arrows or swipe through the model lineup. **Expand** shows every entry in a grid with as many rows as needed: three columns on desktop, two on smaller screens, and one on mobile, with Look for hints above. Filter by model, task, track, status, or text.
+- **Compare the same brief.** Browse three models side by side on desktop, two on smaller screens, or one on mobile. Use the arrows or swipe through the model lineup. **Expand** shows every entry in a grid with as many rows as needed: three columns on desktop, two on smaller screens, and one on mobile, with Look for hints above. Filter by model, task, status, or text.
 - **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Switch models without leaving the prompt, and open **Look for** when you want a few useful things to try. Download the source to inspect it yourself.
 - **Share a build or a whole comparison.** Choose **Copy link** on a card to share its maximized app, or beside a prompt to share the expanded comparison. Category links open all models for that prompt and carry their own title and screenshot preview; individual build links keep their model-specific previews.
-- **Run any of the 30 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
-- **Inspect complete applications locally.** Review project source downloads, declared setup commands, notes, and manually started app previews.
-- **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, per-track score summaries, and CSV export. Missing scores stay missing.
+- **Run any of the 24 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
+- **Give the agent the last word.** The Capstone asks it to research, choose a concept the other 23 tasks do not cover, and build a complete experience. Then you get to try its judgment, too.
+- **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, score summaries, and CSV export. Missing scores stay missing.
 - **Share a focused showcase.** Export the gallery, public prompts, HTML builds, thumbnails, and small share pages for static hosting. Evaluation records and project archives are excluded from that export.
 
 ## When to use it
 
 Use Trial when you want to inspect what a coding model can build, choose challenges for a comparison, or try the same prompt with your own agent. The gallery displays submitted work; an independent evaluator determines whether it meets the brief.
 
-| Track | Tasks | What the agent delivers |
+| Tasks | What you can try | Delivery |
 |---|---|---|
-| Standalone HTML | 01-20 | One self-contained `index.html`: simulations, games, audio tools, and editors |
-| Real Apps | 21-30 | A runnable `project/` plus a generated, disposable `project/gallery/index.html` |
+| 01–20 | Simulations, games, instruments, logic and graphics studios | One self-contained `index.html` |
+| 21–23 | A spreadsheet, vector editor, and project planner | The same single-file format, with disposable session state |
+| 24 | A researched, self-chosen idea beyond the other 23 briefs | An original offline experience plus a research trail |
 
-Real Apps have a full local version for backend checks and a static gallery demo for trying the workflow. Demo changes live in memory and disappear on reset or reload. The public deployment includes no application database or write service. Transport, actor, and device simulations are labeled; they do not prove backend durability or security. See the [gallery contract](docs/GALLERY_DEMOS.md).
+The three new apps keep the interesting part in reach: edit a formula, move a shape, delay a task, and see whether the system holds together. The Capstone hands the choice of subject to the agent. It must use live web research, explain what its idea adds, and deliver something you can actually explore.
+
+The previous multi-file Real Apps track is preserved on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps), including its fixtures and backend checks. The current collection needs no application database or write service. Tasks 21–24 explicitly keep changes in memory; saving means choosing to download a file.
 
 ## Quick Start
 
@@ -86,17 +89,17 @@ The gallery opens at [127.0.0.1:8765](http://127.0.0.1:8765/). Choose a prompt, 
 
 The local gallery requires **Python 3.11+** and a modern browser. It uses the Python standard library; there is no package-install or frontend-build step.
 
-On Windows, you can also double-click [`run-gallery.bat`](run-gallery.bat) or run `./run-gallery.ps1`. On macOS or Linux, run `sh run-gallery.sh`. Each Real Apps submission declares its own additional dependencies.
+On Windows, you can also double-click [`run-gallery.bat`](run-gallery.bat) or run `./run-gallery.ps1`. On macOS or Linux, run `sh run-gallery.sh`. All current challenge artifacts run from one HTML file without a runtime installation.
 
 ## Usage
 
 ### Run a challenge
 
 1. Choose a task from the [prompt library](prompts/README.md) or [task selection guide](prompts/SELECTION_GUIDE.md).
-2. Give your agent the entire `prompt.md` and that task's public `fixtures/`, if present, in a separate workspace. Keep `evaluator/` outside it.
+2. Give your agent the entire `prompt.md` in a separate workspace. Keep `evaluator/` outside it. No external fixtures are needed for the current prompts.
 3. Let the agent build, run, inspect, and test within your chosen budget. Keep the delivered artifact and its sibling `evidence/` directory for independent evaluation.
 
-Each prompt contains the full workflow. Use comparable tool access and budgets across models; record checks that could not run. The [execution protocol](docs/AGENTIC_PROTOCOL.md) explains the common contract, and the [Real Apps guide](docs/REAL_APPS.md) covers runtime setup and persistent data.
+Each prompt contains the full workflow. Use comparable tool access and budgets across models; record checks that could not run. The [execution protocol](docs/AGENTIC_PROTOCOL.md) explains the common contract. For the Capstone, enable live web research and retain `evidence/research.md`; runtime delivery stays offline.
 
 ### Add a result
 
@@ -106,7 +109,7 @@ For example, to import an HTML build saved in a sibling `work/` directory:
 python tools/new_run.py --model "Model Name" --run 01-fluid-simulation-001 --task 01-fluid-simulation --html ../work/index.html
 ```
 
-Then choose **Refresh** in the gallery. Use `--project ../work/project` for a complete application. The [results guide](docs/results.md) covers folder layout, screenshots, model metadata, reports, source hashes, and replacement behavior.
+Then choose **Refresh** in the gallery. The [results guide](docs/results.md) covers folder layout, screenshots, model metadata, reports, source hashes, and replacement behavior.
 
 ### Customize the gallery
 
@@ -161,13 +164,13 @@ The export is written to `dist/site/`. The [hosting guide](docs/DEPLOYMENT.md) e
 
 ## Read the evidence
 
-The two tracks use different rubrics. Compare matching tasks and budgets before drawing conclusions from scores; a screenshot alone does not establish correctness. [Evaluation](EVALUATION.md) defines the checks and scoring, while the [verification record](docs/VERIFICATION.md) separates tests of this gallery from tests of submitted applications.
+The current tasks use the HTML quality rubric. Compare matching tasks and budgets before drawing conclusions from scores; a screenshot alone does not establish correctness. Treat the Capstone separately: different agents choose different products, so it reveals research, taste, and execution without providing a controlled comparison of the same app brief. [Evaluation](EVALUATION.md) defines the checks and scoring, while the [verification record](docs/VERIFICATION.md) separates tests of this gallery from tests of submitted applications.
 
 The Netlify export omits raw evidence, but GitHub visibility is separate. Files committed to a public repository are public. Review logs, absolute paths, screenshots, and generated source before publishing a submission.
 
 ## Contributing
 
-Keep task requirements and public fixtures stable. For gallery or importer changes, include a reproducible example and run the checks in the [verification guide](docs/VERIFICATION.md). For new results, retain the original source and record the model, tools, budget, and observed limitations.
+Keep published task requirements stable; give materially different tasks their own full IDs. For gallery or importer changes, include a reproducible example and run the checks in the [verification guide](docs/VERIFICATION.md). For new results, retain the original source and record the model, tools, budget, and observed limitations.
 
 ## License
 
@@ -177,9 +180,9 @@ A project license has not been specified.
 
 Crafted with [Readme Craft](https://github.com/motiful/readme-craft)
 
-[prompts-shield]: https://img.shields.io/badge/prompts-30-F26B38?style=flat-square
+[prompts-shield]: https://img.shields.io/badge/prompts-24-F26B38?style=flat-square
 [prompts-url]: prompts/README.md
-[tracks-shield]: https://img.shields.io/badge/tracks-2-30343B?style=flat-square
-[tracks-url]: #when-to-use-it
+[format-shield]: https://img.shields.io/badge/format-single_HTML-30343B?style=flat-square
+[format-url]: #when-to-use-it
 [python-shield]: https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white
 [python-url]: #install

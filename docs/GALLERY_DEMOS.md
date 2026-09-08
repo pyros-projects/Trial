@@ -1,8 +1,10 @@
-# Real Apps in the public gallery
+# Legacy project demos in the public gallery
 
-Prompts 21–30 have two delivery targets: the complete local application and a disposable public demo. The demo makes the workflow inspectable on static Netlify hosting. It does not establish backend durability, authentication security, real HTTP delivery, or independent-device synchronization.
+The current Trial catalog contains 24 single-HTML prompts. The previous multi-file Real Apps track, including its original prompts 21–30, is preserved on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps). New prompts with the same numeric prefixes are different tasks, identified by their complete slugs.
 
-The following contract is embedded in each Real Apps prompt so it remains self-contained.
+The gallery retains generic project/demo support for compatibility and custom catalogs. It does not infer a legacy task from a number. Public project demos require an explicit `real-apps` catalog entry and the fixed `project/gallery/index.html` path; the current catalog has no such entries. The original legacy demo contract below remains relevant when using that support. It is not an additional delivery requirement for current prompts 21–24.
+
+A disposable static demo does not establish backend durability, authentication security, real HTTP delivery, or independent-device synchronization. The current four new prompts instead target one offline HTML document and session-only state directly.
 
 ## Public gallery delivery
 
