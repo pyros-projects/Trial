@@ -6,16 +6,16 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-09 checkout contains 101 submitted HTML builds for all 24 tasks across six model folders:
+The 2026-09-09 checkout contains 104 submitted HTML builds for all 24 tasks across six model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
 | `gpt-6_astra` | 24 | 01-24 |
 | `anthropic_opus5` | 14 | 01-14 |
 | `xai_grok4.6` | 24 | 01-24 |
-| `zai_glm5.3_flash` | 12 | 01-12 |
+| `zai_glm5.3_flash` | 14 | 01-14 |
 | `google_gemini3.8_flash` | 21 | 01-20, 22 |
-| `alibaba_qwen3.8_flash` | 6 | 01-05, 09 |
+| `alibaba_qwen3.8_flash` | 7 | 01-06, 09 |
 
 These are submitted artifacts, not verified passes. This snapshot includes no evaluator reports or scores. The gallery reads the files that are present, so its totals change as results are added.
 
@@ -28,6 +28,8 @@ Maintain short observations in the `buildNotices` object in [appsettings.json](.
 Use `run-cancelled` for context about an interrupted generation or testing run. It does not classify the submitted app as broken or disable its preview. GLM's stealth entry records my observation: I cancelled the run after about an hour because the agent kept unsuccessfully attempting to finish its own game during playtesting. This is not a verdict that the game cannot be completed.
 
 Cards show a short attention label. Build details show the explanation, and direct implementation links open it as a collapsible overlay. Collapsing the notice keeps the app's dimensions and running state intact. Switching models displays that build's own notice. Refresh reloads the settings.
+
+GLM's drone racer has a runtime-error notice for particle effects during flight: `ps is not defined` interrupts rendering and HUD updates while physics continues. The fault is in the submitted particle renderer and occurs after startup.
 
 These are manually maintained observations: update or remove an entry when its build or observed behavior changes. Invalid entries are ignored individually. The entire settings file is published with the site, so these messages contain public descriptions. Submitted HTML, raw metadata, and evidence remain separate.
 

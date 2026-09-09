@@ -1,0 +1,12 @@
+const SIM=require('../src/sim.js');
+const {World}=SIM;
+const w=new World({seed:11,preset:'radiation'});
+for(let t=0;t<9000;t++) w.step();
+const orgs=w.organisms;
+const spIds=new Set(orgs.map(o=>o.spId));
+console.log('living spIds:',[...spIds].slice(0,10));
+console.log('registry ids:',w.species.map(s=>s.id).slice(0,20));
+const missing=[...spIds].filter(id=>!w.spById.has(id));
+console.log('missing from registry:',missing);
+const o=orgs[0];
+console.log('org0 spId=',o.spId,'gen=',o.gen,'pa=',o.pa,'species len=',w.species.length);

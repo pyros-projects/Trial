@@ -1,5 +1,11 @@
 # Changelog
 
+## GLM drone racing, ecosystem, and Qwen waves: 2026-09-09
+
+- Added GLM's drone racer and evolutionary ecosystem, extending its collection through prompt 14, and Qwen's wave laboratory, bringing its collection to seven builds.
+- The showcase now contains 104 builds, with supplied screenshot previews and updated model collection and prompt comparison links. Original submissions remain unchanged; raw evidence is excluded from the website.
+- Added a runtime-error notice for GLM's drone racer: particle effects during flight reference an undefined variable and interrupt rendering and HUD updates.
+
 ## Prompt icons throughout the showcase: 2026-09-09
 
 - Reused the catalog's prompt icons in showcase and expanded comparison headings, model cards, prompt filters, prompt and build dialogs, the live viewer, and Look for guidance. Prompt numbers remain readable and accessible; model colors and compact viewer dimensions are preserved.
