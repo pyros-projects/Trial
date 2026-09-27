@@ -1,0 +1,1 @@
+window.__peak = (ms = 1500) => new Promise(res => { let mx = -140; const t0 = performance.now(); const f = () => { mx = Math.max(mx, PG.app.outDb); if (performance.now() - t0 < ms) setTimeout(f, 20); else res(mx.toFixed(1)); }; f(); }); 'ok'

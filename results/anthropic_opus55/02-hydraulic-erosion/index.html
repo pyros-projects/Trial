@@ -1,0 +1,2635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hydraulic Erosion Lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1319'/%3E%3Cpath d='M3 25 L11 12 L16 18 L21 9 L29 25 Z' fill='%23f2a649'/%3E%3Cpath d='M3 25 Q12 21 16 23 T29 25' stroke='%2343c3d6' stroke-width='2.5' fill='none'/%3E%3C/svg%3E">
+<meta name="description" content="Real-time 3D hydraulic erosion laboratory: shallow-water pipe model, sediment transport, thermal erosion and terrain editing in one self-contained file.">
+<style>
+:root {
+  --bg: #0a0d11;
+  --panel: rgba(14, 18, 24, 0.9);
+  --panel-solid: #0f1319;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #d9dfe6;
+  --muted: #8793a0;
+  --faint: #5d6874;
+  --accent: #f2a649;
+  --accent-dim: rgba(242, 166, 73, 0.16);
+  --water: #43c3d6;
+  --good: #6fd08c;
+  --warn: #f2c14e;
+  --bad: #ff6b5b;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --panel-w: 318px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.35 var(--sans); overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+#app { position: fixed; inset: 0; display: grid; grid-template-columns: 1fr var(--panel-w); }
+#stage { position: relative; min-width: 0; overflow: hidden; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; cursor: crosshair; }
+#view.nav { cursor: grab; }
+#view.dragging { cursor: grabbing; }
+
+/* ---------- overlays ---------- */
+.glass { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#topbar { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; padding: 4px; z-index: 3; max-width: calc(100% - 20px); }
+#modes { display: flex; gap: 2px; }
+#modes button { background: transparent; border: 0; border-radius: 7px; padding: 5px 9px; color: var(--muted); cursor: pointer; white-space: nowrap; font-size: 12px; }
+#modes button:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+#modes button[aria-pressed="true"] { background: var(--accent-dim); color: var(--accent); }
+#modeSelect { display: none; background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 7px; padding: 5px 8px; }
+.kbd { font: 10px var(--mono); color: var(--faint); margin-left: 3px; }
+
+#hud { position: absolute; top: 10px; left: 64px; z-index: 2; padding: 8px 10px; font: 11.5px/1.5 var(--mono); min-width: 232px; pointer-events: auto; }
+#hud .hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 3px; }
+#hud .title { font: 600 11px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+#hud .grid { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; }
+#hud .k { color: var(--muted); }
+#hud .v { text-align: right; font-variant-numeric: tabular-nums; }
+#hud .chip { font: 600 10px var(--mono); padding: 1px 6px; border-radius: 99px; background: rgba(111,208,140,0.15); color: var(--good); }
+#hud .chip.paused { background: rgba(242,193,78,0.15); color: var(--warn); }
+#hud .chip.bad { background: rgba(255,107,91,0.18); color: var(--bad); }
+#hud .stab.ok { color: var(--good); } #hud .stab.warn { color: var(--warn); } #hud .stab.bad { color: var(--bad); }
+#hudToggle { display: none; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; }
+#hud.collapsed .grid .x { display: none; }
+
+#toolbar { position: absolute; left: 10px; top: 10px; z-index: 2; display: flex; flex-direction: column; gap: 2px; padding: 4px; }
+#toolbar button { width: 38px; height: 38px; display: grid; place-items: center; background: transparent; border: 0; border-radius: 8px; color: var(--muted); cursor: pointer; position: relative; }
+#toolbar button:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+#toolbar button[aria-pressed="true"] { background: var(--accent-dim); color: var(--accent); }
+#toolbar svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#toolbar .sep { height: 1px; background: var(--line); margin: 3px 4px; }
+
+#legend { position: absolute; left: 10px; bottom: 10px; z-index: 2; padding: 8px 10px; width: 240px; }
+#legend .lt { font-weight: 600; font-size: 12px; margin-bottom: 5px; display: flex; justify-content: space-between; gap: 8px; }
+#legend .lt span:last-child { color: var(--muted); font-weight: 400; font-size: 11px; }
+#legendBar { height: 10px; border-radius: 3px; border: 1px solid var(--line); }
+#legendWheel { display: none; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); flex: none; }
+#legend .lr { display: flex; justify-content: space-between; font: 10.5px var(--mono); color: var(--muted); margin-top: 3px; }
+#legend .note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+#legend .flow { display: none; gap: 10px; align-items: center; }
+
+#probe { position: absolute; right: 10px; bottom: 10px; z-index: 2; padding: 8px 10px; width: 250px; font: 11.5px/1.5 var(--mono); }
+#probe .pt { font: 600 12px var(--sans); display: flex; justify-content: space-between; margin-bottom: 2px; }
+#probe .pt span:last-child { font: 400 11px var(--sans); color: var(--muted); }
+#probe .grid { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; }
+#probe .k { color: var(--muted); }
+#probe .v { text-align: right; font-variant-numeric: tabular-nums; }
+#probe .empty { color: var(--muted); font-family: var(--sans); }
+
+#hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 1; font-size: 11px; color: var(--muted); padding: 4px 10px; white-space: nowrap; pointer-events: none; }
+#toast { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); z-index: 5; padding: 7px 12px; font-size: 12.5px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: min(520px, calc(100% - 24px)); text-align: center; }
+#toast.show { opacity: 1; }
+#toast.err { border-color: rgba(255,107,91,0.5); color: #ffd2cc; }
+#fatal { position: absolute; inset: 0; display: none; place-items: center; z-index: 10; padding: 24px; text-align: center; }
+#fatal .box { max-width: 460px; padding: 18px; }
+
+/* ---------- control panel ---------- */
+#panel { background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; overscroll-behavior: contain; z-index: 4; }
+#panel header { padding: 14px 14px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel-solid); z-index: 1; }
+#panel h1 { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; margin: 0 0 8px; font-weight: 700; }
+#panel h1 small { color: var(--muted); font-weight: 400; letter-spacing: 0.02em; text-transform: none; margin-left: 6px; }
+.transport { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 5px; }
+.btn { background: rgba(255,255,255,0.05); border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 8px; cursor: pointer; white-space: nowrap; font-size: 12px; }
+.btn:hover { background: rgba(255,255,255,0.1); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); color: #1b1206; border-color: var(--accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:focus-visible, #modes button:focus-visible, #toolbar button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+details.sec { border-bottom: 1px solid var(--line); }
+details.sec > summary { list-style: none; cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary::after { content: "+"; color: var(--faint); }
+details.sec[open] > summary::after { content: "–"; }
+details.sec > summary:hover { color: var(--text); }
+.body { padding: 0 14px 12px; }
+.row { display: grid; grid-template-columns: 104px 1fr 64px; align-items: center; gap: 8px; min-height: 26px; }
+.row label { color: var(--muted); font-size: 12px; cursor: default; user-select: none; }
+.row output { font: 11.5px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.row select, .row input[type="number"] { width: 100%; background: #151b23; border: 1px solid var(--line-strong); border-radius: 6px; padding: 4px 6px; }
+.row .span2 { grid-column: 2 / span 2; display: flex; gap: 6px; }
+.row .span2 input { flex: 1; min-width: 0; }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; margin: 0; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: #29313b; border-radius: 3px; }
+input[type="range"]::-moz-range-track { height: 3px; background: #29313b; border-radius: 3px; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--text); margin-top: -5px; border: 2px solid var(--panel-solid); box-shadow: 0 0 0 1px var(--line-strong); }
+input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: var(--text); border: 2px solid var(--panel-solid); }
+input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent); }
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 6px; }
+.checks label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.checks input { accent-color: var(--accent); }
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.preset { text-align: left; background: rgba(255,255,255,0.035); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; cursor: pointer; }
+.preset:hover { border-color: var(--line-strong); background: rgba(255,255,255,0.06); }
+.preset[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-dim); }
+.preset b { display: block; font-size: 12px; font-weight: 600; }
+.preset span { font-size: 11px; color: var(--muted); }
+.preset.wide { grid-column: span 2; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.btnrow .btn { flex: 1; }
+.help { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.help kbd { font: 10.5px var(--mono); background: #1a212a; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--text); }
+.help p { margin: 6px 0; }
+#sheetToggle { display: none; }
+
+/* ---------- narrow screens: bottom sheet ---------- */
+@media (max-width: 1100px) { #hint { display: none; } }
+@media (max-width: 820px) {
+  #app { grid-template-columns: 1fr; }
+  #panel { position: fixed; left: 0; right: 0; bottom: 0; height: min(62vh, 560px); border-left: 0; border-top: 1px solid var(--line-strong); border-radius: 14px 14px 0 0; transform: translateY(100%); transition: transform .25s ease; box-shadow: 0 -12px 40px rgba(0,0,0,0.5); }
+  #panel.open { transform: translateY(0); }
+  #sheetToggle { display: block; position: fixed; right: 8px; bottom: 8px; z-index: 6; transition: bottom .25s ease; }
+  #sheetToggle.open { bottom: calc(min(62vh, 560px) + 8px); }
+  #topbar { top: 8px; left: auto; right: 8px; transform: none; }
+  #modes { display: none; }
+  #modeSelect { display: block; }
+  #hud { top: 8px; left: 8px; min-width: 0; width: 212px; font-size: 10px; padding: 6px 8px; }
+  #hud .grid { column-gap: 6px; }
+  #hudToggle { display: inline; }
+  #toolbar { top: auto; bottom: 92px; left: 8px; right: 8px; transform: none; flex-direction: row; justify-content: space-between; overflow-x: auto; }
+  #toolbar button { width: 36px; height: 36px; flex: none; }
+  #toolbar .sep { width: 1px; height: auto; margin: 4px 2px; }
+  #legend { left: 8px; bottom: 8px; width: 210px; padding: 6px 8px; }
+  #legend .lt span:last-child { display: none; }
+  #legend .note { display: none; }
+  #probe { right: 8px; top: 52px; bottom: auto; width: 152px; font-size: 10px; padding: 6px 8px; }
+  #probe .pt span:last-child { display: none; }
+  #probe .x { display: none; }
+  #hint { display: none; }
+}
+@media (max-width: 820px) and (max-height: 500px) {
+  #toolbar { bottom: 8px; left: 190px; right: 120px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="view" tabindex="0" aria-label="3D terrain view. Left drag uses the active tool, right drag orbits, middle drag pans, wheel zooms."></canvas>
+
+    <div id="topbar" class="glass" role="group" aria-label="Visualization mode">
+      <div id="modes"></div>
+      <select id="modeSelect" aria-label="Visualization mode"></select>
+    </div>
+
+    <div id="hud" class="glass" aria-live="off">
+      <div class="hd"><span class="title">Status</span><span id="hudState" class="chip">RUNNING</span><button id="hudToggle" aria-label="Toggle status details" aria-expanded="false">▾</button></div>
+      <div class="grid" id="hudGrid"></div>
+    </div>
+
+    <div id="toolbar" class="glass" role="toolbar" aria-label="Terrain tools"></div>
+
+    <div id="legend" class="glass" aria-label="Colour legend">
+      <div class="lt"><span id="legendTitle">Shaded terrain</span><span id="legendUnit"></span></div>
+      <div class="flow" id="legendFlow"><div id="legendWheel"></div><div class="note" id="legendFlowNote"></div></div>
+      <div id="legendBar"></div>
+      <div class="lr"><span id="legendMin"></span><span id="legendMid"></span><span id="legendMax"></span></div>
+      <div class="note" id="legendNote"></div>
+    </div>
+
+    <div id="probe" class="glass" aria-live="off">
+      <div class="pt"><span id="probeTitle">Probe</span><span id="probeSrc">hover terrain</span></div>
+      <div class="grid" id="probeGrid"><span class="empty" style="grid-column: span 2">Hover the terrain or use the Inspect tool to pin a probe.</span></div>
+    </div>
+
+    <div id="hint" class="glass">LMB tool · RMB orbit · MMB pan · wheel zoom</div>
+    <div id="toast" class="glass" role="status" aria-live="polite"></div>
+    <button id="sheetToggle" class="btn primary" aria-controls="panel" aria-expanded="false">Controls</button>
+    <div id="fatal"><div class="box glass"><h2>WebGL2 unavailable</h2><p id="fatalMsg"></p></div></div>
+  </div>
+
+  <aside id="panel" aria-label="Simulation controls">
+    <header>
+      <h1>Erosion Lab<small>hydraulic · thermal · 3D</small></h1>
+      <div class="transport">
+        <button class="btn primary" id="btnPause" title="Pause / resume (Space)">Pause</button>
+        <button class="btn" id="btnStep" title="Advance one simulation step (N)">Step</button>
+        <button class="btn" id="btnReset" title="Restore the initial terrain of this run (R)">Reset</button>
+        <button class="btn" id="btnRegen" title="Generate terrain from seed + terrain parameters (G)">Regen</button>
+      </div>
+    </header>
+    <div id="sections"></div>
+  </aside>
+</div>
+<input type="file" id="importFile" accept=".json,application/json" hidden aria-label="Import simulation state JSON">
+<script id="sim-core">
+// ===== SIM CORE (pure JS, no DOM) =====
+const LabCore = (() => {
+  'use strict';
+  const WORLD = 512;            // domain width in metres
+  const G = 9.81;
+  const BASE_DT = 0.05;         // seconds per step at speed 1
+  const RAIN_UNIT = 2e-4;       // m/s of rain per slider unit
+  const EVAP_UNIT = 2e-3;       // 1/s evaporation per slider unit
+  const DCAP = 0.4;             // depth where carrying capacity saturates (m)
+  const DMIN_V = 0.02;          // min depth used when converting flux to velocity (m)
+  const DDRY = 1e-6;            // below this a cell counts as dry (m)
+  const VMAX = 25;              // velocity clamp (m/s)
+  const MIN_TILT = 0.05;        // min sin(slope) in capacity formula
+  const CMAX = 0.4;             // max volumetric sediment concentration carried by the flow
+  const FLUX_DAMP = 0.998;      // pipe-flux memory damping per step
+  const FRICTION = 0.04;        // Chezy bed-friction coefficient
+  const DMIN_F = 0.005;         // min depth in the friction term (m)
+  const WET_DEPTH = 0.01, WET_GAIN = 0.5, WET_LOSS = 0.01;
+  const RECENT_TAU = 8;
+  const BED_DIFF = 0.4;         // 1/s, submerged bed diffusion         // s, decay time of the recent-change field
+  const H_MIN = -300, H_MAX = 800, D_MAX = 200;
+  const STRATA_N = 1024, STRATA_Z0 = -200, STRATA_DZ = 1.0, STRATA_INV = 1 / STRATA_DZ;
+  const DEG = Math.PI / 180;
+
+  // ---------- parameter tables (bounds are enforced everywhere, incl. JSON import) ----------
+  const SIM_PARAMS = {
+    speed:       { def: 1,    min: 0.1,  max: 4,    step: 0.05 },
+    substeps:    { def: 3,    min: 1,    max: 24,   step: 1, int: true },
+    rain:        { def: 2.5,  min: 0,    max: 10,   step: 0.05 },
+    springs:     { def: 1,    min: 0,    max: 5,    step: 0.05 },
+    evaporation: { def: 1,    min: 0,    max: 10,   step: 0.05 },
+    erosion:     { def: 1.2,  min: 0,    max: 3,    step: 0.01 },
+    deposition:  { def: 0.5,  min: 0,    max: 3,    step: 0.01 },
+    capacity:    { def: 2.5,  min: 0,    max: 5,    step: 0.01 },
+    flow:        { def: 1,    min: 0.1,  max: 4,    step: 0.05 },
+    thermal:     { def: 0.2,  min: 0,    max: 3,    step: 0.01 },
+    talus:       { def: 40,   min: 10,   max: 70,   step: 1 },
+    hardness:    { def: 0.5,  min: 0,    max: 0.95, step: 0.01 },
+    seaLevel:    { def: 10,   min: -50,  max: 200,  step: 0.5 },
+  };
+  const BOUNDARIES = ['drain', 'closed', 'sea'];
+  const GEN_TYPES = ['mountains', 'canyon', 'island', 'valley', 'hills'];
+  const GEN_PARAMS = {
+    seed:      { def: 1337, min: 0,   max: 2147483647, step: 1, int: true },
+    relief:    { def: 100,  min: 10,  max: 260,  step: 1 },
+    scale:     { def: 2.0,  min: 0.5, max: 10,   step: 0.1 },
+    octaves:   { def: 7,    min: 1,   max: 9,    step: 1, int: true },
+    roughness: { def: 0.5,  min: 0.2, max: 0.8,  step: 0.01 },
+    ridge:     { def: 0.6,  min: 0,   max: 1,    step: 0.01 },
+    warp:      { def: 0.3,  min: 0,   max: 2,    step: 0.01 },
+    falloff:   { def: 0.6,  min: 0,   max: 1,    step: 0.01 },
+  };
+  const RESOLUTIONS = [96, 128, 192, 256, 320, 384, 512];
+
+  function clampParam(def, v) {
+    v = Number(v);
+    if (!Number.isFinite(v)) v = def.def;
+    if (def.int) v = Math.round(v);
+    return Math.min(def.max, Math.max(def.min, v));
+  }
+  function defaults(table) { const o = {}; for (const k in table) o[k] = table[k].def; return o; }
+  function sanitizeSim(p) {
+    const o = {};
+    for (const k in SIM_PARAMS) o[k] = clampParam(SIM_PARAMS[k], p && p[k] !== undefined ? p[k] : SIM_PARAMS[k].def);
+    o.boundary = p && BOUNDARIES.includes(p.boundary) ? p.boundary : 'drain';
+    return o;
+  }
+  function sanitizeGen(g) {
+    const o = {};
+    for (const k in GEN_PARAMS) o[k] = clampParam(GEN_PARAMS[k], g && g[k] !== undefined ? g[k] : GEN_PARAMS[k].def);
+    o.type = g && GEN_TYPES.includes(g.type) ? g.type : 'mountains';
+    return o;
+  }
+
+  // ---------- seeded RNG + simplex noise ----------
+  function mulberry32(a) {
+    a = a >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const GX = [1, -1, 1, -1, 1, -1, 0, 0], GY = [1, 1, -1, -1, 0, 0, 1, -1];
+  const F2 = 0.5 * (Math.sqrt(3) - 1), G2 = (3 - Math.sqrt(3)) / 6;
+  function makeNoise(seed) {
+    const rnd = mulberry32(seed ^ 0x9E3779B9);
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = p[i]; p[i] = p[j]; p[j] = t; }
+    const perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+    return function (x, y) {
+      const s = (x + y) * F2;
+      const i = Math.floor(x + s), j = Math.floor(y + s);
+      const t = (i + j) * G2;
+      const x0 = x - (i - t), y0 = y - (j - t);
+      const i1 = x0 > y0 ? 1 : 0, j1 = 1 - i1;
+      const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2, x2 = x0 - 1 + 2 * G2, y2 = y0 - 1 + 2 * G2;
+      const ii = i & 255, jj = j & 255;
+      let n = 0, tt, g;
+      tt = 0.5 - x0 * x0 - y0 * y0;
+      if (tt > 0) { g = perm[ii + perm[jj]] & 7; tt *= tt; n += tt * tt * (GX[g] * x0 + GY[g] * y0); }
+      tt = 0.5 - x1 * x1 - y1 * y1;
+      if (tt > 0) { g = perm[ii + i1 + perm[jj + j1]] & 7; tt *= tt; n += tt * tt * (GX[g] * x1 + GY[g] * y1); }
+      tt = 0.5 - x2 * x2 - y2 * y2;
+      if (tt > 0) { g = perm[ii + 1 + perm[jj + 1]] & 7; tt *= tt; n += tt * tt * (GX[g] * x2 + GY[g] * y2); }
+      return 70 * n;
+    };
+  }
+  const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+  // ---------- state ----------
+  function createState(N) {
+    const n = N * N;
+    const f64 = () => new Float64Array(n), f32 = () => new Float32Array(n);
+    return {
+      N, dx: WORLD / N, time: 0, steps: 0, thermalAcc: 0,
+      h: f64(), d: f64(), s: f64(), soil: f64(),
+      h0: f64(), soil0: f64(), d0: f64(),
+      fL: f64(), fR: f64(), fT: f64(), fB: f64(),
+      u: f64(), v: f64(), wet: f32(), recent: f32(), strataOff: f32(),
+      d2: f64(), s2: f64(), sc: f64(), tmp: f64(),
+      strata: new Float32Array(STRATA_N),
+      sources: [],
+      bal: newBalance(),
+      ref: { mat: 0, water: 0 },
+    };
+  }
+  function newBalance() {
+    return { rain: 0, springs: 0, evap: 0, drainW: 0, seaW: 0, brushW: 0, adjW: 0,
+             eroded: 0, deposited: 0, drainS: 0, seaS: 0, brushM: 0, adjM: 0, thermal: 0 };
+  }
+  function totals(S) {
+    const { h, d, s } = S, n = h.length, area = S.dx * S.dx;
+    let th = 0, ts = 0, tw = 0;
+    for (let i = 0; i < n; i++) { th += h[i]; ts += s[i]; tw += d[i]; }
+    return { mat: (th + ts) * area, water: tw * area };
+  }
+  function rebaseline(S) {
+    S.bal = newBalance();
+    S.ref = totals(S);
+  }
+
+  // ---------- terrain generation ----------
+  function scenarioFor(type, relief) {
+    switch (type) {
+      case 'canyon': return { boundary: 'drain', seaLevel: 0, sources: null /* placed on the plateau groove */ };
+      case 'island': return { boundary: 'sea', seaLevel: Math.round(relief * 0.08), sources: [] };
+      case 'valley': return { boundary: 'drain', seaLevel: 0, sources: null /* computed from valley path */ };
+      default: return { boundary: 'drain', seaLevel: 0, sources: [] };
+    }
+  }
+
+  function generate(genIn, N) {
+    const gen = sanitizeGen(genIn);
+    const S = createState(N);
+    const seed = gen.seed >>> 0;
+    const noise = makeNoise(seed), nWarp = makeNoise(seed + 7919), nLow = makeNoise(seed + 104729);
+    const rnd = mulberry32(seed * 31 + 17);
+    const ox = rnd() * 200 - 100, oy = rnd() * 200 - 100;
+    const oct = gen.octaves, rough = gen.roughness, sc = gen.scale, ridge = gen.ridge, warp = gen.warp;
+    const raw = new Float64Array(N * N);
+    const fmax = 16; // finest feature frequency kept, fixed so every resolution sees the same landscape
+    let mn = Infinity, mx = -Infinity;
+    for (let j = 0; j < N; j++) {
+      const v = j / (N - 1);
+      for (let i = 0; i < N; i++) {
+        const u = i / (N - 1);
+        let x = u * sc + ox, y = v * sc + oy;
+        if (warp > 0) {
+          let wx = 0, wy = 0, a = 0.5, f = 1;
+          for (let o = 0; o < 3; o++) { wx += a * nWarp(x * f + 5.2, y * f + 1.3); wy += a * nWarp(x * f + 1.7, y * f + 9.2); a *= 0.5; f *= 2.1; }
+          x += warp * wx; y += warp * wy;
+        }
+        // fBm; ridges come from folding a second large-scale fBm (sharp crests, smooth valleys)
+        let fb = 0, fr = 0, frn = 0, a = 1, f = 1, norm = 0;
+        for (let o = 0; o < oct; o++) {
+          // fade out octaves finer than ~8 cells per feature (keeps terrain resolution independent)
+          const fade = 1 - smoothstep(0.35, 1, sc * f / fmax);
+          const nx = x * f + o * 17.13, ny = y * f - o * 9.71;
+          fb += a * fade * noise(nx, ny);
+          if (o < 3) { fr += a * noise(nx * 0.7 + 31.7, ny * 0.7 + 3.3); frn += a; }
+          norm += a; a *= rough; f *= 2.03;
+        }
+        fb = fb / norm * 0.5 + 0.5;
+        const rf = 1 - Math.min(1, Math.abs(fr / frn) * 1.8);
+        const val = fb * (1 - ridge) + ridge * (0.55 * rf * rf + 0.45 * fb);
+        raw[j * N + i] = val;
+        if (val < mn) mn = val; if (val > mx) mx = val;
+      }
+    }
+    const R = gen.relief, fo = gen.falloff;
+    const inv = 1 / Math.max(1e-9, mx - mn);
+    const phase = rnd() * Math.PI * 2;
+    const valleyX = (v) => 0.5 + 0.17 * Math.sin(v * Math.PI * 2.2 + phase) + 0.08 * nLow(v * 2.5 + 3.1, 7.7);
+    const canyonY = (u) => 0.5 + 0.12 * Math.sin(u * Math.PI * 2.4 + phase) + 0.05 * nLow(u * 3.1 + 1.3, 5.3);
+    const h = S.h;
+    for (let j = 0; j < N; j++) {
+      const v = j / (N - 1);
+      for (let i = 0; i < N; i++) {
+        const u = i / (N - 1);
+        const k = j * N + i;
+        const n = (raw[k] - mn) * inv;
+        const cx = u - 0.5, cy = v - 0.5;
+        const r = Math.sqrt(cx * cx + cy * cy) / 0.5;
+        let z;
+        switch (gen.type) {
+          case 'canyon': {
+            // tilted plateau with a shallow meandering groove leading to an escarpment
+            const e = u + 0.10 * (nLow(u * 2.2, v * 2.2));
+            const dist = Math.abs(v - canyonY(u));
+            const groove = (1 - smoothstep(0.0, 0.06, dist)) * R * 0.05 * (1 - smoothstep(0.7, 0.8, u));
+            z = R * (0.72 - 0.16 * u + 0.05 * (n - 0.5)) - groove - R * 0.46 * smoothstep(0.64, 0.86, e) * (0.6 + 0.4 * fo);
+            break;
+          }
+          case 'island': {
+            const coast = 1 - smoothstep(0.3, 0.95, r + 0.45 * nLow(u * 2.4, v * 2.4) * (0.4 + 0.6 * fo));
+            z = R * coast * (0.12 + 0.88 * Math.pow(n, 1.25)) - R * 0.1 * (1 - coast);
+            break;
+          }
+          case 'valley': {
+            const dist = Math.abs(u - valleyX(v));
+            const wall = smoothstep(0.025, 0.34, dist);
+            z = R * (0.30 * (1 - v) + 0.52 * Math.pow(wall, 0.85) * (0.45 + 0.55 * n) + 0.10 * n * (0.2 + 0.8 * wall));
+            break;
+          }
+          case 'hills': {
+            const bowl = 1 - fo * 0.6 * smoothstep(0.3, 1.3, r);
+            z = R * 0.55 * n * bowl;
+            break;
+          }
+          default: { // mountains
+            const bowl = 1 - fo * smoothstep(0.15, 1.3, r);
+            z = R * (0.03 + 0.97 * Math.pow(n, 1.3) * bowl);
+          }
+        }
+        h[k] = z;
+        // folded/dipping strata offset (m)
+        S.strataOff[k] = 7 * nLow(u * 1.7 + 11.1, v * 1.7 - 4.2) + R * 0.06 * (u - 0.5) + R * 0.03 * (v - 0.5);
+      }
+    }
+    // strata hardness table: alternating hard/soft beds of random thickness
+    const sr = mulberry32(seed * 7 + 3);
+    let hard = sr() < 0.5;
+    for (let k = 0; k < STRATA_N;) {
+      const thick = Math.max(1, Math.round((hard ? 2 + sr() * 7 : 3 + sr() * 10) / STRATA_DZ));
+      const val = hard ? 0.65 + 0.35 * sr() : 0.3 * sr();
+      for (let t = 0; t < thick && k < STRATA_N; t++, k++) S.strata[k] = val;
+      hard = !hard;
+    }
+    // relax slopes steeper than ~42 deg so the first seconds are not dominated by slope collapse
+    const settleP = { talus: 42, thermal: 1 };
+    for (let k = 0; k < 40; k++) thermal(S, settleP, 0.5);
+    S.soil.fill(0); S.recent.fill(0);
+    const scen = scenarioFor(gen.type, R);
+    S.sources = scen.sources ? scen.sources.map(s => ({ ...s }))
+      : gen.type === 'canyon' ? [{ x: 0.1, y: canyonY(0.1), r: 0.035, rate: 50 }]
+      : [{ x: valleyX(0.04), y: 0.04, r: 0.035, rate: 45 }];
+    S.scenario = { boundary: scen.boundary, seaLevel: scen.seaLevel };
+    S.gen = gen;
+    return S;
+  }
+
+  // Flood cells connected to the domain edge that lie below sea level.
+  function fillSea(S, sea) {
+    const { N, h, d } = S;
+    const seen = new Uint8Array(N * N), q = new Int32Array(N * N);
+    let qh = 0, qt = 0;
+    const push = (k) => { if (!seen[k] && h[k] < sea) { seen[k] = 1; q[qt++] = k; } };
+    for (let i = 0; i < N; i++) { push(i); push((N - 1) * N + i); push(i * N); push(i * N + N - 1); }
+    while (qh < qt) {
+      const k = q[qh++], x = k % N, y = (k / N) | 0;
+      d[k] = Math.max(d[k], sea - h[k]);
+      if (x > 0) push(k - 1); if (x < N - 1) push(k + 1); if (y > 0) push(k - N); if (y < N - 1) push(k + N);
+    }
+  }
+
+  // Store current terrain/water as the reset point and rebaseline mass accounting.
+  function captureInitial(S) {
+    S.h0.set(S.h); S.soil0.set(S.soil); S.d0.set(S.d);
+    S.time = 0; S.steps = 0;
+    S.recent.fill(0); S.wet.fill(0);
+    for (const k of ['fL', 'fR', 'fT', 'fB', 'u', 'v']) S[k].fill(0);
+    S.s.fill(0);
+    rebaseline(S);
+  }
+  function resetToInitial(S) {
+    S.h.set(S.h0); S.soil.set(S.soil0); S.d.set(S.d0); S.s.fill(0);
+    for (const k of ['fL', 'fR', 'fT', 'fB', 'u', 'v', 'wet', 'recent']) S[k].fill(0);
+    S.time = 0; S.steps = 0; S.thermalAcc = 0;
+    rebaseline(S);
+  }
+
+  // ---------- simulation step ----------
+  function addDisc(S, arr, gx, gy, rc, volume) {
+    const N = S.N, area = S.dx * S.dx;
+    const x0 = Math.max(0, Math.floor(gx - rc)), x1 = Math.min(N - 1, Math.ceil(gx + rc));
+    const y0 = Math.max(0, Math.floor(gy - rc)), y1 = Math.min(N - 1, Math.ceil(gy + rc));
+    let wsum = 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const q = ((x - gx) ** 2 + (y - gy) ** 2) / (rc * rc);
+      if (q < 1) wsum += (1 - q) * (1 - q);
+    }
+    if (wsum <= 0) return 0;
+    const k = volume / (wsum * area);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const q = ((x - gx) ** 2 + (y - gy) ** 2) / (rc * rc);
+      if (q < 1) arr[y * N + x] += k * (1 - q) * (1 - q);
+    }
+    return volume;
+  }
+
+  function step(S, P, dt) {
+    const N = S.N, n = N * N, last = N - 1, dx = S.dx, area = dx * dx, invArea = 1 / area;
+    const bal = S.bal;
+    const { h, soil, fL, fR, fT, fB, u, v, wet, recent, sc } = S;
+    let d = S.d, s = S.s;
+
+    // 1. water input: rain + springs
+    const rd = P.rain * RAIN_UNIT * dt;
+    if (rd > 0) { for (let i = 0; i < n; i++) d[i] += rd; bal.rain += rd * n * area; }
+    if (P.springs > 0) for (const src of S.sources) {
+      bal.springs += addDisc(S, d, src.x * last, src.y * last, Math.max(1.5, src.r * last), src.rate * P.springs * dt);
+    }
+
+    // 2. outflow flux (virtual pipes)
+    // pipe cross-section = dx * depth (shallow-water form), plus Chezy bed friction
+    const kg = dt * P.flow * G;
+    const drain = P.boundary === 'drain';
+    for (let y = 0; y < N; y++) {
+      const row = y * N;
+      for (let x = 0; x < N; x++) {
+        const i = row + x;
+        const di = d[i];
+        if (di <= 0) { fL[i] = 0; fR[i] = 0; fT[i] = 0; fB[i] = 0; sc[i] = 0; continue; }
+        const Hi = h[i] + di;
+        const sp = Math.sqrt(u[i] * u[i] + v[i] * v[i]);
+        const keep = FLUX_DAMP / (1 + dt * FRICTION * sp / (di > DMIN_F ? di : DMIN_F));
+        const kf = kg * di;
+        let l, r, t, b;
+        if (x > 0) { l = fL[i] * keep + kf * (Hi - h[i - 1] - d[i - 1]); if (l < 0) l = 0; }
+        else l = drain ? Math.max(0, fL[i] * keep + kf * (di + Math.max(0, h[i + 1] - h[i]))) : 0;
+        if (x < last) { r = fR[i] * keep + kf * (Hi - h[i + 1] - d[i + 1]); if (r < 0) r = 0; }
+        else r = drain ? Math.max(0, fR[i] * keep + kf * (di + Math.max(0, h[i - 1] - h[i]))) : 0;
+        if (y > 0) { t = fT[i] * keep + kf * (Hi - h[i - N] - d[i - N]); if (t < 0) t = 0; }
+        else t = drain ? Math.max(0, fT[i] * keep + kf * (di + Math.max(0, h[i + N] - h[i]))) : 0;
+        if (y < last) { b = fB[i] * keep + kf * (Hi - h[i + N] - d[i + N]); if (b < 0) b = 0; }
+        else b = drain ? Math.max(0, fB[i] * keep + kf * (di + Math.max(0, h[i - N] - h[i]))) : 0;
+        const sum = l + r + t + b;
+        if (sum > 0) {
+          const k = di * area / (sum * dt);
+          if (k < 1) { l *= k; r *= k; t *= k; b *= k; }
+        }
+        fL[i] = l; fR[i] = r; fT[i] = t; fB[i] = b;
+        sc[i] = s[i] / (di * area);
+      }
+    }
+
+    // 3. water depth, conservative (upwind) sediment transport, velocity field
+    const d2 = S.d2, s2 = S.s2;
+    let outW = 0, outS = 0;
+    for (let y = 0; y < N; y++) {
+      const row = y * N;
+      for (let x = 0; x < N; x++) {
+        const i = row + x;
+        const fl = fL[i], fr = fR[i], ft = fT[i], fb = fB[i];
+        const fout = fl + fr + ft + fb;
+        let fin = 0, sin = 0, inL = 0, inR = 0, inT = 0, inB = 0;
+        if (x > 0) { inL = fR[i - 1]; fin += inL; sin += inL * sc[i - 1]; } else if (fl > 0) { outW += fl; outS += fl * sc[i]; }
+        if (x < last) { inR = fL[i + 1]; fin += inR; sin += inR * sc[i + 1]; } else if (fr > 0) { outW += fr; outS += fr * sc[i]; }
+        if (y > 0) { inT = fB[i - N]; fin += inT; sin += inT * sc[i - N]; } else if (ft > 0) { outW += ft; outS += ft * sc[i]; }
+        if (y < last) { inB = fT[i + N]; fin += inB; sin += inB * sc[i + N]; } else if (fb > 0) { outW += fb; outS += fb * sc[i]; }
+        const d0 = d[i];
+        let d1 = d0 + dt * (fin - fout) * invArea;
+        if (d1 < 0) d1 = 0; else if (d1 > D_MAX) d1 = D_MAX;
+        d2[i] = d1;
+        let s1 = s[i] + dt * (sin - fout * sc[i]);
+        if (s1 < 0) s1 = 0;
+        s2[i] = s1;
+        const dm = 0.5 * (d0 + d1);
+        if (dm > DDRY) {
+          const den = dx * (dm > DMIN_V ? dm : DMIN_V);
+          let uu = 0.5 * (inL - fl + fr - inR) / den;
+          let vv = 0.5 * (inT - ft + fb - inB) / den;
+          const sp2 = uu * uu + vv * vv;
+          if (sp2 > VMAX * VMAX) { const k = VMAX / Math.sqrt(sp2); uu *= k; vv *= k; }
+          u[i] = uu; v[i] = vv;
+        } else { u[i] = 0; v[i] = 0; }
+      }
+    }
+    bal.drainW += outW * dt;
+    bal.drainS += outS * dt * area;
+    S.d = d2; S.d2 = d; S.s = s2; S.s2 = s;
+    d = S.d; s = S.s;
+
+    // 4. erosion / deposition / evaporation / wetness
+    const ks = Math.min(1, P.erosion * dt), kd = Math.min(1, P.deposition * dt), kc = P.capacity;
+    const evapF = Math.max(0, 1 - P.evaporation * EVAP_UNIT * dt);
+    const hard = P.hardness, strata = S.strata, soff = S.strataOff;
+    const recDecay = Math.exp(-dt / RECENT_TAU);
+    const inv2dx = 0.5 / dx, invdx = 1 / dx;
+    const wetGain = dt * WET_GAIN, wetKeep = 1 - dt * WET_LOSS;
+    let eroded = 0, deposited = 0, evap = 0, outletS = 0;
+    const fixedRing = P.boundary !== 'closed'; // open/sea edges act as a fixed-bed outlet: sediment passes through
+    for (let y = 0; y < N; y++) {
+      const row = y * N;
+      const edgeRow = y === 0 || y === last;
+      for (let x = 0; x < N; x++) {
+        const i = row + x;
+        const di = d[i];
+        let dh = 0;
+        if (fixedRing && (edgeRow || x === 0 || x === last)) {
+          const dn = di * evapF;
+          if (dn < DDRY) { evap += di; d[i] = 0; outletS += s[i]; s[i] = 0; } else { evap += di - dn; d[i] = dn; }
+          wet[i] = di > WET_DEPTH ? Math.min(1, wet[i] + wetGain) : wet[i] * wetKeep;
+          recent[i] *= recDecay;
+          continue;
+        }
+        if (di > DDRY) {
+          const hc = h[i];
+          const gx = x > 0 && x < last ? (h[i + 1] - h[i - 1]) * inv2dx : (x > 0 ? hc - h[i - 1] : h[i + 1] - hc) * invdx;
+          const gy = y > 0 && y < last ? (h[i + N] - h[i - N]) * inv2dx : (y > 0 ? hc - h[i - N] : h[i + N] - hc) * invdx;
+          const g2 = gx * gx + gy * gy;
+          const sinA = Math.sqrt(g2 / (1 + g2));
+          const sp = Math.sqrt(u[i] * u[i] + v[i] * v[i]);
+          let cap = kc * (sinA > MIN_TILT ? sinA : MIN_TILT) * sp * (di < DCAP ? di / DCAP : 1);
+          if (cap > CMAX * di) cap = CMAX * di; // at most CMAX sediment per unit water volume
+          const si = s[i];
+          if (cap > si) {
+            const want = ks * (cap - si);
+            const so = soil[i];
+            let take;
+            if (want <= so) take = want;
+            else {
+              let k = ((hc - so + soff[i]) - STRATA_Z0) * STRATA_INV;
+              k = k < 0 ? 0 : k >= STRATA_N ? STRATA_N - 1 : k | 0;
+              take = so + (want - so) * (1 - hard * strata[k]);
+            }
+            // never dig below the lowest neighbour (+ a little): suppresses grid-scale pit/step ringing
+            let mn = x > 0 ? h[i - 1] : hc;
+            if (x < last && h[i + 1] < mn) mn = h[i + 1];
+            if (y > 0 && h[i - N] < mn) mn = h[i - N];
+            if (y < last && h[i + N] < mn) mn = h[i + N];
+            const lim = hc - mn + 0.02 * di;
+            if (take > lim) { take = lim > 0 ? lim : 0; }
+            if (take > so) { soil[i] = 0; } else soil[i] = so - take;
+            h[i] = hc - take; s[i] = si + take; eroded += take; dh = -take;
+          } else {
+            const put = kd * (si - cap);
+            h[i] = hc + put; soil[i] += put; s[i] = si - put; deposited += put; dh = put;
+          }
+          const dn = di * evapF;
+          if (dn < DDRY) {
+            const sr = s[i];
+            if (sr > 0) { h[i] += sr; soil[i] += sr; deposited += sr; dh += sr; s[i] = 0; }
+            evap += di; d[i] = 0;
+          } else { evap += di - dn; d[i] = dn; }
+          const w = wet[i];
+          wet[i] = di > WET_DEPTH ? (w + wetGain > 1 ? 1 : w + wetGain) : w * wetKeep;
+        } else {
+          if (di > 0) { evap += di; d[i] = 0; }
+          const sr = s[i];
+          if (sr > 0) { h[i] += sr; soil[i] += sr; deposited += sr; dh = sr; s[i] = 0; }
+          wet[i] *= wetKeep;
+        }
+        recent[i] = recent[i] * recDecay + dh;
+      }
+    }
+    bal.eroded += eroded * area; bal.deposited += deposited * area; bal.evap += evap * area;
+    bal.drainS += outletS * area;
+
+    // 5. thermal (talus) erosion, every second step with doubled dt
+    S.thermalAcc += dt;
+    if ((S.steps & 1) === 1) { thermal(S, P, S.thermalAcc); S.thermalAcc = 0; }
+
+    // 6. sea-level boundary (fixed water surface on the outer ring)
+    if (P.boundary === 'sea') {
+      const sea = P.seaLevel;
+      let dw = 0, ds = 0;
+      const fix = (i) => { const tgt = h[i] < sea ? sea - h[i] : 0; dw += tgt - d[i]; ds += s[i]; d[i] = tgt; s[i] = 0; };
+      for (let x = 0; x < N; x++) { fix(x); fix(last * N + x); }
+      for (let y = 1; y < last; y++) { fix(y * N); fix(y * N + last); }
+      bal.seaW += dw * area; bal.seaS += ds * area;
+    }
+    S.time += dt; S.steps++;
+  }
+
+  function thermal(S, P, dt) {
+    const N = S.N, last = N - 1, dx = S.dx, h = S.h, soil = S.soil, tmp = S.tmp;
+    const tanT = Math.tan(P.talus * DEG), dA = tanT * dx, dD = tanT * dx * Math.SQRT2;
+    const kt = Math.min(0.5, P.thermal * dt);
+    tmp.fill(0);
+    if (kt > 0) for (let y = 1; y < last; y++) {
+      for (let x = 1; x < last; x++) {
+        const i = y * N + x, hi = h[i];
+        let e0 = hi - h[i - 1] - dA, e1 = hi - h[i + 1] - dA, e2 = hi - h[i - N] - dA, e3 = hi - h[i + N] - dA;
+        let e4 = hi - h[i - N - 1] - dD, e5 = hi - h[i - N + 1] - dD, e6 = hi - h[i + N - 1] - dD, e7 = hi - h[i + N + 1] - dD;
+        let mx = 0, tot = 0;
+        if (e0 > 0) { tot += e0; if (e0 > mx) mx = e0; } else e0 = 0;
+        if (e1 > 0) { tot += e1; if (e1 > mx) mx = e1; } else e1 = 0;
+        if (e2 > 0) { tot += e2; if (e2 > mx) mx = e2; } else e2 = 0;
+        if (e3 > 0) { tot += e3; if (e3 > mx) mx = e3; } else e3 = 0;
+        if (e4 > 0) { tot += e4; if (e4 > mx) mx = e4; } else e4 = 0;
+        if (e5 > 0) { tot += e5; if (e5 > mx) mx = e5; } else e5 = 0;
+        if (e6 > 0) { tot += e6; if (e6 > mx) mx = e6; } else e6 = 0;
+        if (e7 > 0) { tot += e7; if (e7 > mx) mx = e7; } else e7 = 0;
+        if (tot <= 0) continue;
+        const amt = kt * mx * 0.5, f = amt / tot;
+        tmp[i] -= amt;
+        if (e0) tmp[i - 1] += e0 * f; if (e1) tmp[i + 1] += e1 * f;
+        if (e2) tmp[i - N] += e2 * f; if (e3) tmp[i + N] += e3 * f;
+        if (e4) tmp[i - N - 1] += e4 * f; if (e5) tmp[i - N + 1] += e5 * f;
+        if (e6) tmp[i + N - 1] += e6 * f; if (e7) tmp[i + N + 1] += e7 * f;
+      }
+    }
+    // border cells shed too (bounds-checked), otherwise talus piles up along the domain edge
+    if (kt > 0) {
+      const ex = new Float64Array(8), nb = new Int32Array(8);
+      const border = (x, y) => {
+        const i = y * N + x, hi = h[i];
+        let mx = 0, tot = 0, c = 0;
+        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+          if (!ox && !oy) continue;
+          const xx = x + ox, yy = y + oy;
+          if (xx < 0 || yy < 0 || xx > last || yy > last) continue;
+          const j = yy * N + xx, e = hi - h[j] - (ox && oy ? dD : dA);
+          if (e > 0) { ex[c] = e; nb[c++] = j; tot += e; if (e > mx) mx = e; }
+        }
+        if (tot <= 0) return;
+        const amt = kt * mx * 0.5, f = amt / tot;
+        tmp[i] -= amt;
+        for (let q = 0; q < c; q++) tmp[nb[q]] += ex[q] * f;
+      };
+      for (let x = 0; x < N; x++) { border(x, 0); border(x, last); }
+      for (let y = 1; y < last; y++) { border(0, y); border(last, y); }
+    }
+    // submerged bed diffusion (bank collapse / bed-load creep): conservative, damps grid-scale bedforms
+    const kb = Math.min(0.1, BED_DIFF * dt), d = S.d;
+    if (kb > 0) for (let y = 1; y < last; y++) {
+      for (let x = 1; x < last; x++) {
+        const i = y * N + x;
+        if (d[i] < 0.02) continue;
+        const hi = h[i];
+        let q = hi - h[i + 1]; if (q > 0 && d[i + 1] > 0.005) { q *= kb; tmp[i] -= q; tmp[i + 1] += q; }
+        q = hi - h[i - 1]; if (q > 0 && d[i - 1] > 0.005) { q *= kb; tmp[i] -= q; tmp[i - 1] += q; }
+        q = hi - h[i + N]; if (q > 0 && d[i + N] > 0.005) { q *= kb; tmp[i] -= q; tmp[i + N] += q; }
+        q = hi - h[i - N]; if (q > 0 && d[i - N] > 0.005) { q *= kb; tmp[i] -= q; tmp[i - N] += q; }
+      }
+    }
+    let moved = 0;
+    for (let i = 0, n = N * N; i < n; i++) {
+      const t = tmp[i];
+      if (t === 0) continue;
+      h[i] += t;
+      if (t < 0) { moved -= t; const so = soil[i] + t; soil[i] = so > 0 ? so : 0; } else soil[i] += t;
+    }
+    S.bal.thermal += moved * dx * dx;
+  }
+
+  // ---------- diagnostics ----------
+  function computeStats(S, P) {
+    const { h, d, s, soil, u, v, h0, N } = S, n = N * N, area = S.dx * S.dx;
+    let th = 0, ts = 0, tw = 0, tsoil = 0, maxD = 0, maxV = 0, minH = Infinity, maxH = -Infinity;
+    let maxDelta = 0, wetCells = 0, maxConc = 0, sumV = 0;
+    for (let i = 0; i < n; i++) {
+      const hi = h[i], di = d[i], si = s[i];
+      th += hi; ts += si; tw += di; tsoil += soil[i];
+      if (hi < minH) minH = hi; if (hi > maxH) maxH = hi;
+      if (di > maxD) maxD = di;
+      const ad = Math.abs(hi - h0[i]); if (ad > maxDelta) maxDelta = ad;
+      if (di > 0.01) {
+        wetCells++;
+        const sp = Math.sqrt(u[i] * u[i] + v[i] * v[i]);
+        sumV += sp; if (sp > maxV) maxV = sp;
+        const c = si / di; if (c > maxConc) maxConc = c;
+      }
+    }
+    const b = S.bal;
+    const mat = (th + ts) * area, water = tw * area;
+    const matExpected = S.ref.mat + b.brushM - b.drainS - b.seaS + b.adjM;
+    const waterExpected = S.ref.water + b.rain + b.springs + b.brushW + b.seaW + b.adjW - b.evap - b.drainW;
+    const dt = BASE_DT * (P ? P.speed : 1);
+    const cMax = maxV + Math.sqrt((P ? P.flow : 1) * G * maxD);
+    return {
+      finite: Number.isFinite(th + ts + tw + maxV),
+      water, sediment: ts * area, soil: tsoil * area, terrain: th * area,
+      maxDepth: maxD, maxSpeed: maxV, meanSpeed: wetCells ? sumV / wetCells : 0,
+      minH, maxH, maxDelta, wetFrac: wetCells / n, maxConc,
+      matErr: mat - matExpected, matRel: (mat - matExpected) / Math.max(1, Math.abs(S.ref.mat)),
+      waterErr: water - waterExpected, waterRel: (water - waterExpected) / Math.max(1, waterExpected, S.ref.water),
+      cfl: dt * cMax / S.dx,
+    };
+  }
+  function stableDt(S, P, st) {
+    const cMax = st.maxSpeed + Math.sqrt(P.flow * G * Math.max(st.maxDepth, 0.05)) + 1e-6;
+    return 0.45 * S.dx / cMax;
+  }
+
+  // ---------- brush ----------
+  // gx, gy: grid coords; rc: radius in cells; amt: strength * seconds
+  const BRUSH = { raise: 30, lower: 30, smooth: 10, flatten: 6, water: 6, sediment: 4, dry: 8 };
+  function applyBrush(S, tool, gx, gy, rc, amt, target) {
+    const N = S.N, area = S.dx * S.dx;
+    const { h, d, s, soil, wet } = S;
+    const x0 = Math.max(0, Math.floor(gx - rc)), x1 = Math.min(N - 1, Math.ceil(gx + rc));
+    const y0 = Math.max(0, Math.floor(gy - rc)), y1 = Math.min(N - 1, Math.ceil(gy + rc));
+    if (x0 > x1 || y0 > y1) return;
+    const r2 = rc * rc;
+    let dMat = 0, dWat = 0;
+    let blur = null;
+    if (tool === 'smooth') {
+      // 5x5 box blur from a copy of the (padded) region
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      blur = new Float64Array(bw * bh);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        let acc = 0, cnt = 0;
+        for (let oy = -2; oy <= 2; oy++) { const yy = y + oy; if (yy < 0 || yy >= N) continue;
+          for (let ox = -2; ox <= 2; ox++) { const xx = x + ox; if (xx < 0 || xx >= N) continue; acc += h[yy * N + xx]; cnt++; } }
+        blur[(y - y0) * bw + (x - x0)] = acc / cnt;
+      }
+    }
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const q = ((x - gx) ** 2 + (y - gy) ** 2) / r2;
+      if (q >= 1) continue;
+      const w = (1 - q) * (1 - q);
+      const i = y * N + x;
+      const hOld = h[i];
+      switch (tool) {
+        case 'raise': h[i] = Math.min(H_MAX, hOld + BRUSH.raise * amt * w); break;
+        case 'lower': h[i] = Math.max(H_MIN, hOld - BRUSH.lower * amt * w); break;
+        case 'smooth': h[i] = hOld + (blur[(y - y0) * (x1 - x0 + 1) + (x - x0)] - hOld) * Math.min(1, BRUSH.smooth * amt * w); break;
+        case 'flatten': h[i] = hOld + (target - hOld) * Math.min(1, BRUSH.flatten * amt * w); break;
+        case 'water': { const add = BRUSH.water * amt * w; d[i] = Math.min(D_MAX, d[i] + add); dWat += add; break; }
+        case 'sediment': {
+          const add = BRUSH.sediment * amt * w;
+          if (d[i] > 0.05) s[i] += add; else { h[i] = Math.min(H_MAX, hOld + add); soil[i] += add; }
+          dMat += add; break;
+        }
+        case 'dry': {
+          const f = Math.min(1, BRUSH.dry * amt * w);
+          const rem = d[i] * f, sd = s[i] * f;
+          d[i] -= rem; dWat -= rem;
+          s[i] -= sd; h[i] += sd; soil[i] += sd;
+          wet[i] *= 1 - f;
+          break;
+        }
+      }
+      const dh = h[i] - hOld;
+      if (tool !== 'sediment' && tool !== 'dry' && dh !== 0) {
+        dMat += dh;
+        if (dh < 0) { const so = soil[i] + dh; soil[i] = so > 0 ? so : 0; }
+        else if (tool === 'smooth' || tool === 'flatten') soil[i] += dh; // redistributed material is loose
+      }
+    }
+    S.bal.brushM += dMat * area;
+    S.bal.brushW += dWat * area;
+  }
+
+  // ---------- resampling (resolution change while running) ----------
+  function resample(S, N2) {
+    if (N2 === S.N) return S;
+    const T = createState(N2);
+    const N = S.N;
+    const before = totals(S);
+    const sampler = (src, dst) => {
+      for (let j = 0; j < N2; j++) {
+        const fy = j / (N2 - 1) * (N - 1), y0 = Math.min(N - 2, Math.floor(fy)), ty = fy - y0;
+        for (let i = 0; i < N2; i++) {
+          const fx = i / (N2 - 1) * (N - 1), x0 = Math.min(N - 2, Math.floor(fx)), tx = fx - x0;
+          const k = y0 * N + x0;
+          dst[j * N2 + i] = (src[k] * (1 - tx) + src[k + 1] * tx) * (1 - ty) + (src[k + N] * (1 - tx) + src[k + N + 1] * tx) * ty;
+        }
+      }
+    };
+    for (const k of ['h', 'd', 's', 'soil', 'h0', 'soil0', 'd0', 'wet', 'recent', 'strataOff']) sampler(S[k], T[k]);
+    // conserve suspended sediment with the water that carries it
+    T.strata.set(S.strata);
+    T.sources = S.sources.map(s => ({ ...s }));
+    T.scenario = S.scenario; T.gen = S.gen;
+    T.time = S.time; T.steps = S.steps;
+    T.bal = { ...S.bal }; T.ref = { ...S.ref };
+    const after = totals(T);
+    T.bal.adjM += after.mat - before.mat;
+    T.bal.adjW += after.water - before.water;
+    return T;
+  }
+
+  // ---------- (de)serialization ----------
+  function b64FromTyped(arr) {
+    const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  function typedFromB64(str, Type, expectLen) {
+    const bin = atob(str);
+    if (bin.length !== expectLen * Type.BYTES_PER_ELEMENT) throw new Error('array length mismatch');
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Type(bytes.buffer);
+  }
+  const ARRAYS64 = ['h', 'd', 's', 'soil', 'h0', 'soil0', 'd0', 'fL', 'fR', 'fT', 'fB', 'u', 'v'];
+  const ARRAYS32 = ['wet', 'recent', 'strataOff'];
+  function serialize(S, extra) {
+    const arrays = {};
+    for (const k of ARRAYS64) arrays[k] = { type: 'f64', data: b64FromTyped(S[k]) };
+    for (const k of ARRAYS32) arrays[k] = { type: 'f32', data: b64FromTyped(S[k]) };
+    arrays.strata = { type: 'f32', data: b64FromTyped(S.strata) };
+    return Object.assign({
+      format: 'hydraulic-erosion-lab-state', version: 1,
+      N: S.N, world: WORLD, time: S.time, steps: S.steps, thermalAcc: S.thermalAcc,
+      sources: S.sources, scenario: S.scenario, gen: S.gen, bal: S.bal, ref: S.ref,
+      arrays,
+    }, extra || {});
+  }
+  function deserialize(obj) {
+    if (!obj || typeof obj !== 'object') throw new Error('not a JSON object');
+    if (obj.format !== 'hydraulic-erosion-lab-state') throw new Error('unrecognised file format');
+    if (obj.version !== 1) throw new Error('unsupported version ' + obj.version);
+    const N = Number(obj.N);
+    if (!Number.isInteger(N) || N < 16 || N > 1024) throw new Error('invalid grid size');
+    const S = createState(N);
+    const A = obj.arrays || {};
+    for (const k of ARRAYS64) {
+      if (!A[k] || A[k].type !== 'f64') throw new Error('missing array ' + k);
+      S[k] = typedFromB64(A[k].data, Float64Array, N * N);
+    }
+    for (const k of ARRAYS32) {
+      if (!A[k] || A[k].type !== 'f32') throw new Error('missing array ' + k);
+      S[k] = typedFromB64(A[k].data, Float32Array, N * N);
+    }
+    if (!A.strata) throw new Error('missing strata');
+    S.strata = typedFromB64(A.strata.data, Float32Array, STRATA_N);
+    // sanitize: replace non-finite values, clamp ranges
+    let fixed = 0;
+    const clean = (arr, lo, hi) => { for (let i = 0; i < arr.length; i++) { const x = arr[i]; if (!Number.isFinite(x)) { arr[i] = 0; fixed++; } else if (x < lo) { arr[i] = lo; fixed++; } else if (x > hi) { arr[i] = hi; fixed++; } } };
+    clean(S.h, H_MIN, H_MAX); clean(S.h0, H_MIN, H_MAX);
+    clean(S.d, 0, D_MAX); clean(S.d0, 0, D_MAX); clean(S.s, 0, D_MAX);
+    clean(S.soil, 0, H_MAX - H_MIN); clean(S.soil0, 0, H_MAX - H_MIN);
+    for (const k of ['fL', 'fR', 'fT', 'fB']) clean(S[k], 0, 1e7);
+    clean(S.u, -VMAX, VMAX); clean(S.v, -VMAX, VMAX); clean(S.wet, 0, 1); clean(S.recent, -1e3, 1e3); clean(S.strataOff, -1e3, 1e3);
+    clean(S.strata, 0, 1);
+    S.time = Number.isFinite(obj.time) ? Math.max(0, obj.time) : 0;
+    S.steps = Number.isInteger(obj.steps) ? Math.max(0, obj.steps) : 0;
+    S.thermalAcc = Number.isFinite(obj.thermalAcc) ? Math.max(0, obj.thermalAcc) : 0;
+    S.sources = Array.isArray(obj.sources) ? obj.sources.slice(0, 8).filter(s => s && [s.x, s.y, s.r, s.rate].every(Number.isFinite))
+      .map(s => ({ x: Math.min(1, Math.max(0, s.x)), y: Math.min(1, Math.max(0, s.y)), r: Math.min(0.3, Math.max(0.001, s.r)), rate: Math.min(1000, Math.max(0, s.rate)) })) : [];
+    S.gen = sanitizeGen(obj.gen);
+    S.scenario = obj.scenario && typeof obj.scenario === 'object' ? { boundary: BOUNDARIES.includes(obj.scenario.boundary) ? obj.scenario.boundary : 'drain', seaLevel: clampParam(SIM_PARAMS.seaLevel, obj.scenario.seaLevel) } : { boundary: 'drain', seaLevel: 0 };
+    const nb = newBalance();
+    if (obj.bal) for (const k in nb) if (Number.isFinite(obj.bal[k])) nb[k] = obj.bal[k];
+    S.bal = nb;
+    if (obj.ref && Number.isFinite(obj.ref.mat) && Number.isFinite(obj.ref.water) && !fixed) S.ref = { mat: obj.ref.mat, water: obj.ref.water };
+    else rebaseline(S);
+    S.importFixes = fixed;
+    return S;
+  }
+
+  // ---------- 16-bit grayscale PNG encoder ----------
+  const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function adler32(bytes) { let a = 1, b = 0; for (let i = 0; i < bytes.length; i++) { a = (a + bytes[i]) % 65521; b = (b + a) % 65521; } return ((b << 16) | a) >>> 0; }
+  function zlibStored(raw) {
+    const blocks = Math.ceil(raw.length / 65535) || 1;
+    const out = new Uint8Array(2 + raw.length + blocks * 5 + 4);
+    out[0] = 0x78; out[1] = 0x01;
+    let o = 2;
+    for (let b = 0; b < blocks; b++) {
+      const start = b * 65535, len = Math.min(65535, raw.length - start);
+      out[o++] = b === blocks - 1 ? 1 : 0;
+      out[o++] = len & 255; out[o++] = len >>> 8; out[o++] = ~len & 255; out[o++] = (~len >>> 8) & 255;
+      out.set(raw.subarray(start, start + len), o); o += len;
+    }
+    const ad = adler32(raw);
+    out[o++] = ad >>> 24; out[o++] = (ad >>> 16) & 255; out[o++] = (ad >>> 8) & 255; out[o++] = ad & 255;
+    return out;
+  }
+  function heightPNGRaw(S) {
+    const { N, h } = S;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < h.length; i++) { if (h[i] < mn) mn = h[i]; if (h[i] > mx) mx = h[i]; }
+    const span = Math.max(1e-9, mx - mn);
+    const raw = new Uint8Array(N * (1 + N * 2));
+    for (let y = 0; y < N; y++) {
+      const o = y * (1 + N * 2);
+      raw[o] = 0; // filter: none
+      for (let x = 0; x < N; x++) {
+        const val = Math.round((h[y * N + x] - mn) / span * 65535);
+        raw[o + 1 + x * 2] = val >>> 8; raw[o + 2 + x * 2] = val & 255;
+      }
+    }
+    return { raw, min: mn, max: mx };
+  }
+  function pngChunk(type, data) {
+    const out = new Uint8Array(12 + data.length);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, data.length);
+    for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+    out.set(data, 8);
+    dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)));
+    return out;
+  }
+  function assemblePNG(N, zdata, texts) {
+    const sig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const ihdr = new Uint8Array(13); const dv = new DataView(ihdr.buffer);
+    dv.setUint32(0, N); dv.setUint32(4, N); ihdr[8] = 16; ihdr[9] = 0; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+    const parts = [sig, pngChunk('IHDR', ihdr)];
+    for (const [k, v] of Object.entries(texts || {})) parts.push(pngChunk('tEXt', new TextEncoder().encode(k + '\0' + v)));
+    parts.push(pngChunk('IDAT', zdata), pngChunk('IEND', new Uint8Array(0)));
+    const len = parts.reduce((a, p) => a + p.length, 0);
+    const out = new Uint8Array(len); let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+  }
+
+  return {
+    WORLD, G, BASE_DT, CMAX, RAIN_UNIT, EVAP_UNIT, STRATA_N, STRATA_Z0, STRATA_DZ, H_MIN, H_MAX,
+    SIM_PARAMS, GEN_PARAMS, GEN_TYPES, BOUNDARIES, RESOLUTIONS,
+    clampParam, defaults, sanitizeSim, sanitizeGen,
+    mulberry32, makeNoise, createState, generate, fillSea, captureInitial, resetToInitial, rebaseline, totals,
+    step, computeStats, stableDt, applyBrush, resample, serialize, deserialize,
+    heightPNGRaw, zlibStored, assemblePNG, crc32,
+  };
+})();
+if (typeof module !== 'undefined') module.exports = LabCore;
+</script>
+<script id="app-main">
+// ===== APP: rendering, UI, input, IO =====
+(() => {
+  'use strict';
+  const C = LabCore;
+  const DEG = Math.PI / 180;
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const fmtBig = (x) => {
+    if (!Number.isFinite(x)) return '—';
+    const a = Math.abs(x);
+    if (a >= 1e6) return (x / 1e6).toFixed(2) + 'M';
+    if (a >= 1e4) return (x / 1e3).toFixed(1) + 'k';
+    if (a >= 100) return x.toFixed(0);
+    return x.toFixed(a >= 10 ? 1 : 2);
+  };
+
+  // ---------------------------------------------------------------- definitions
+  const MODES = [
+    { id: 'shaded', name: 'Shaded', key: '1' },
+    { id: 'elevation', name: 'Elevation', key: '2' },
+    { id: 'depth', name: 'Water', key: '3' },
+    { id: 'sediment', name: 'Sediment', key: '4' },
+    { id: 'delta', name: 'Erosion Δ', key: '5' },
+    { id: 'slope', name: 'Slope', key: '6' },
+    { id: 'flow', name: 'Flow', key: '7' },
+  ];
+  const TOOLS = [
+    { id: 'navigate', name: 'Orbit camera', key: 'V', icon: '<path d="M12 3v18M3 12h18"/><path d="M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>' },
+    { id: 'inspect', name: 'Inspect (pin probe)', key: 'I', icon: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/>' },
+    'sep',
+    { id: 'raise', name: 'Raise terrain', key: 'B', icon: '<path d="M3 19h18"/><path d="M5 19c2-6 4-9 7-9s5 3 7 9"/><path d="M12 7V2M9.5 4.5L12 2l2.5 2.5"/>' },
+    { id: 'lower', name: 'Lower terrain', key: 'L', icon: '<path d="M3 8h18"/><path d="M5 8c2 6 4 9 7 9s5-3 7-9"/><path d="M12 2v5M9.5 4.5L12 7l2.5-2.5"/>' },
+    { id: 'smooth', name: 'Smooth', key: 'S', icon: '<path d="M3 15c3-5 6-5 9 0s6 5 9 0"/><path d="M3 20h18"/>' },
+    { id: 'flatten', name: 'Flatten (to stroke start height)', key: 'F', icon: '<path d="M3 14h18"/><path d="M3 19h18"/><path d="M7 10l5-5 5 5"/>' },
+    'sep',
+    { id: 'water', name: 'Add water', key: 'W', icon: '<path d="M12 3c3.5 4.5 6 7.7 6 11a6 6 0 0 1-12 0c0-3.3 2.5-6.5 6-11z"/>' },
+    { id: 'sediment', name: 'Add sediment', key: 'E', icon: '<circle cx="7" cy="16" r="2"/><circle cx="13" cy="17" r="1.6"/><circle cx="17" cy="13" r="2.2"/><circle cx="10" cy="11" r="1.4"/><path d="M3 21h18"/>' },
+    { id: 'dry', name: 'Dry area (remove water)', key: 'D', icon: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>' },
+  ];
+  const TOOL_COLORS = {
+    navigate: [1, 1, 1], inspect: [0.95, 0.4, 0.9], raise: [1.0, 0.62, 0.25], lower: [0.45, 0.7, 1.0],
+    smooth: [0.75, 0.95, 0.6], flatten: [0.95, 0.9, 0.5], water: [0.3, 0.85, 1.0], sediment: [0.85, 0.65, 0.35], dry: [1.0, 0.45, 0.35],
+  };
+  const SIM_UI = [
+    ['speed', 'Sim speed', '×', 2, 'Time-step multiplier: dt = 0.05 s × speed. Steps are subdivided automatically when the CFL limit would be exceeded.'],
+    ['substeps', 'Substeps', '/frame', 0, 'Simulation steps per rendered frame (reduced automatically if the frame time budget is exceeded).'],
+  ];
+  const WATER_UI = [
+    ['rain', 'Rainfall', '×', 2, 'Uniform rain rate, 1 unit = 0.2 mm/s.'],
+    ['springs', 'Spring inflow', '×', 2, 'Multiplier on the preset springs (river valley, canyon).'],
+    ['evaporation', 'Evaporation', '×', 2, 'Evaporation, 1 unit = 0.2 %/s of water depth.'],
+    ['erosion', 'Erosion rate', '/s', 2, 'Rate at which under-saturated flow picks up material.'],
+    ['deposition', 'Deposition rate', '/s', 2, 'Rate at which over-saturated flow drops sediment.'],
+    ['capacity', 'Sediment capacity', '', 2, 'Carrying capacity C = K · sin(slope) · |v| · depth factor.'],
+    ['flow', 'Flow strength', '×g', 2, 'Gravity multiplier in the pipe (shallow-water) flow model.'],
+    ['thermal', 'Thermal erosion', '/s', 2, 'Talus creep: material slides when the slope exceeds the talus angle.'],
+    ['talus', 'Talus angle', '°', 0, 'Maximum stable slope angle for thermal erosion.'],
+    ['hardness', 'Rock hardness', '', 2, 'How much the hard strata resist erosion (loose sediment is always soft).'],
+  ];
+  const GEN_UI = [
+    ['relief', 'Relief', 'm', 0, 'Vertical relief of the generated terrain.'],
+    ['scale', 'Feature scale', '', 1, 'Number of large landforms across the domain.'],
+    ['octaves', 'Octaves', '', 0, 'Noise octaves (detail layers).'],
+    ['roughness', 'Roughness', '', 2, 'Amplitude falloff per octave (persistence).'],
+    ['ridge', 'Ridges', '', 2, 'Blend towards sharp ridge lines.'],
+    ['warp', 'Domain warp', '', 2, 'Bends the landforms into more organic shapes.'],
+    ['falloff', 'Edge falloff', '', 2, 'Lowers terrain towards the domain edge / shapes island and canyon.'],
+  ];
+  const VIEW_DEFS = {
+    exag: { def: 1.4, min: 0.25, max: 4, step: 0.05, label: 'Vertical exag.', unit: '×', d: 2, title: 'Vertical exaggeration (display and picking only).' },
+    waterVis: { def: 0.85, min: 0, max: 1, step: 0.01, label: 'Water visibility', unit: '', d: 2, title: 'Opacity of the water surface in shaded mode.' },
+    sunAz: { def: 215, min: 0, max: 360, step: 1, label: 'Sun azimuth', unit: '°', d: 0, title: 'Light direction (compass angle).' },
+    sunEl: { def: 32, min: 3, max: 89, step: 1, label: 'Sun elevation', unit: '°', d: 0, title: 'Light elevation above the horizon.' },
+  };
+  const BRUSH_DEFS = {
+    radius: { def: 28, min: 4, max: 140, step: 1, label: 'Brush radius', unit: 'm', d: 0, title: 'Brush radius in metres ( [ / ] or Shift+wheel ).' },
+    strength: { def: 0.5, min: 0.02, max: 1, step: 0.01, label: 'Brush strength', unit: '', d: 2, title: 'Brush strength ( - / = or Alt+wheel ).' },
+  };
+  const PRESETS = [
+    { id: 'mountain', name: 'Mountain Drainage', desc: 'rain on a ridged massif', res: 256,
+      gen: { type: 'mountains', seed: 1337, relief: 100, scale: 2.0, octaves: 7, roughness: 0.5, ridge: 0.6, warp: 0.3, falloff: 0.6 },
+      sim: { speed: 1, substeps: 3, rain: 2.5, springs: 1, evaporation: 1, erosion: 1.2, deposition: 0.5, capacity: 2.5, flow: 1, thermal: 0.2, talus: 40, hardness: 0.5 },
+      view: { exag: 1.4, sunAz: 215, sunEl: 32 }, cam: { yaw: -0.75, pitch: 0.62, dist: 760 } },
+    { id: 'canyon', name: 'Canyon Formation', desc: 'spring cuts layered plateau', res: 192,
+      gen: { type: 'canyon', seed: 4242, relief: 120, scale: 2.5, octaves: 6, roughness: 0.5, ridge: 0.3, warp: 0.3, falloff: 0.6 },
+      sim: { speed: 2, substeps: 3, rain: 0.3, springs: 2, evaporation: 0.5, erosion: 1.2, deposition: 0.4, capacity: 2.5, flow: 1.2, thermal: 0.3, talus: 55, hardness: 0.85 },
+      view: { exag: 1.3, sunAz: 250, sunEl: 26 }, cam: { yaw: -1.1, pitch: 0.55, dist: 760 } },
+    { id: 'island', name: 'Island Rainfall', desc: 'rivers, beaches & deltas', res: 256,
+      gen: { type: 'island', seed: 777, relief: 85, scale: 2.5, octaves: 7, roughness: 0.5, ridge: 0.5, warp: 0.3, falloff: 0.6 },
+      sim: { speed: 1, substeps: 3, rain: 2.5, springs: 1, evaporation: 1, erosion: 1.2, deposition: 0.6, capacity: 2.5, flow: 1, thermal: 0.2, talus: 40, hardness: 0.4, boundary: 'sea', seaLevel: 7 },
+      view: { exag: 1.4, sunAz: 200, sunEl: 35 }, cam: { yaw: -0.6, pitch: 0.7, dist: 780 } },
+    { id: 'valley', name: 'River Valley', desc: 'spring-fed meandering river', res: 256,
+      gen: { type: 'valley', seed: 2024, relief: 110, scale: 2.2, octaves: 7, roughness: 0.5, ridge: 0.4, warp: 0.3, falloff: 0.6 },
+      sim: { speed: 1.5, substeps: 3, rain: 0.5, springs: 1.5, evaporation: 0.5, erosion: 1.2, deposition: 0.5, capacity: 2.5, flow: 1, thermal: 0.2, talus: 40, hardness: 0.5 },
+      view: { exag: 1.4, sunAz: 150, sunEl: 30 }, cam: { yaw: 0.25, pitch: 0.62, dist: 760 } },
+    { id: 'stress', name: 'Aggressive Stress Test', desc: 'extreme rates, 384², CFL guard', res: 384, wide: true,
+      gen: { type: 'mountains', seed: 9001, relief: 220, scale: 4, octaves: 9, roughness: 0.62, ridge: 1, warp: 1.2, falloff: 0.2 },
+      sim: { speed: 4, substeps: 16, rain: 10, springs: 5, evaporation: 0.2, erosion: 3, deposition: 3, capacity: 5, flow: 4, thermal: 3, talus: 25, hardness: 0 },
+      view: { exag: 1.2, sunAz: 215, sunEl: 32 }, cam: { yaw: -0.75, pitch: 0.62, dist: 760 } },
+  ];
+
+  // ---------------------------------------------------------------- app state
+  const app = {
+    S: null,
+    P: C.sanitizeSim({}),
+    gen: C.sanitizeGen({}),
+    res: 256,
+    view: { mode: 0, exag: 1.4, waterVis: 0.85, sunAz: 215, sunEl: 32, contours: false, grid: false, highlight: true, arrows: true },
+    brush: { tool: 'raise', radius: 28, strength: 0.5 },
+    paused: false, stepRequest: 0,
+    stabilityScale: 1, stableSince: 0, recoveries: 0, lastRecovery: '',
+    stats: null, lastDt: C.BASE_DT, split: 1, stepsLastFrame: 0, stepsWanted: 0, budgetLimited: false, cfl: 0,
+    simMs: 0, frameMs: 16, fps: 60, renderScale: 1,
+    presetId: 'mountain',
+    hover: null, probe: null,
+    texDirty: true, lightDirty: true, lightAge: 0,
+    ranges: { depth: 1, conc: 0.1, delta: 1, speed: 2 },
+    snapshot: null, snapshotTime: 0, genMs: 0, lastDownload: null,
+  };
+  window.lab = app; // live diagnostics handle for devtools
+
+  // ---------------------------------------------------------------- WebGL setup
+  const canvas = $('#view');
+  const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+  if (!gl) {
+    $('#fatal').style.display = 'grid';
+    $('#fatalMsg').textContent = 'This laboratory needs WebGL2 (float textures, vertex texture fetch). Please use a current Chrome, Edge, Firefox or Safari.';
+    return;
+  }
+
+  const GLSL_COMMON = `#version 300 es
+precision highp float; precision highp int; precision highp sampler2D;
+uniform sampler2D uA;   // h, d, s, soil
+uniform sampler2D uB;   // u, v, recent, wet
+uniform sampler2D uC;   // h0, strataOffset
+uniform int uN;
+uniform float uDx, uExag;
+float Hraw(ivec2 p) { p = clamp(p, ivec2(0), ivec2(uN - 1)); return texelFetch(uA, p, 0).r; }
+float Hbil(vec2 q) {
+  vec2 f = floor(q); vec2 t = q - f; ivec2 p = ivec2(f);
+  return mix(mix(Hraw(p), Hraw(p + ivec2(1, 0)), t.x), mix(Hraw(p + ivec2(0, 1)), Hraw(p + ivec2(1, 1)), t.x), t.y);
+}
+`;
+  const GLSL_LIGHT = `
+uniform vec3 uSun, uCam;
+vec3 sunColor() { return mix(vec3(1.0, 0.55, 0.32), vec3(1.0, 0.94, 0.86), smoothstep(0.02, 0.5, uSun.y)); }
+vec3 skyColor(vec3 d) {
+  float y = d.y;
+  vec3 zen = vec3(0.12, 0.24, 0.50), hor = vec3(0.66, 0.73, 0.82), gnd = vec3(0.018, 0.022, 0.03);
+  vec3 c = y > 0.0 ? mix(hor, zen, pow(clamp(y, 0.0, 1.0), 0.45)) : mix(hor * 0.55, gnd, pow(clamp(-y * 4.0, 0.0, 1.0), 0.5));
+  float s = max(dot(d, uSun), 0.0);
+  c += sunColor() * (pow(s, 10.0) * 0.30 + pow(s, 120.0) * 0.6);
+  return c;
+}
+vec3 skyAmb(vec3 n) { return mix(vec3(0.22, 0.20, 0.17), vec3(0.40, 0.50, 0.66), n.y * 0.5 + 0.5); }
+vec3 fogIt(vec3 col, vec3 world) {
+  vec3 v = world - uCam; float dist = length(v);
+  float f = 1.0 - exp(-dist * 0.00026);
+  float s = max(dot(v / dist, uSun), 0.0);
+  vec3 fc = mix(vec3(0.42, 0.50, 0.62), sunColor() * 0.8, pow(s, 6.0) * 0.5);
+  return mix(col, fc, f * 0.8);
+}
+vec3 toneGamma(vec3 x) {
+  x = clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+  return pow(x, vec3(1.0 / 2.2));
+}
+`;
+  const GLSL_CMAPS = `
+vec3 turbo(float x) {
+  x = clamp(x, 0.0, 1.0);
+  const vec4 kr = vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234);
+  const vec4 kg = vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333);
+  const vec4 kb = vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771);
+  const vec2 kr2 = vec2(-152.94239396, 59.28637943);
+  const vec2 kg2 = vec2(4.27729857, 2.82956604);
+  const vec2 kb2 = vec2(-89.90310912, 27.34824973);
+  vec4 v4 = vec4(1.0, x, x * x, x * x * x); vec2 v2 = v4.zw * v4.z;
+  return clamp(vec3(dot(v4, kr) + dot(v2, kr2), dot(v4, kg) + dot(v2, kg2), dot(v4, kb) + dot(v2, kb2)), 0.0, 1.0);
+}
+vec3 viridis(float t) {
+  t = clamp(t, 0.0, 1.0);
+  const vec3 c0 = vec3(0.2777273272234177, 0.005407344544966578, 0.3340998053353061);
+  const vec3 c1 = vec3(0.1050930431085774, 1.404613529898575, 1.384590162594685);
+  const vec3 c2 = vec3(-0.3308618287255563, 0.214847559468213, 0.09509516302823659);
+  const vec3 c3 = vec3(-4.634230498983486, -5.799100973351585, -19.33244095627987);
+  const vec3 c4 = vec3(6.228269936347081, 14.17993336680509, 56.69055260068105);
+  const vec3 c5 = vec3(4.776384997670288, -13.74514537774601, -65.35303263337234);
+  const vec3 c6 = vec3(-5.435455855934631, 4.645852612178535, 26.3124352495832);
+  return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), 0.0, 1.0);
+}
+vec3 magma(float t) {
+  t = clamp(t, 0.0, 1.0);
+  const vec3 c0 = vec3(-0.002136485053939582, -0.000749655052795221, -0.005386127855323933);
+  const vec3 c1 = vec3(0.2516605407371642, 0.6775232436837668, 2.494026599312351);
+  const vec3 c2 = vec3(8.353717279216625, -3.577719514958484, 0.3144679030132573);
+  const vec3 c3 = vec3(-27.66873308576866, 14.26473078096533, -13.64921318813922);
+  const vec3 c4 = vec3(52.17613981234068, -27.94360607168351, 12.94416944238394);
+  const vec3 c5 = vec3(-50.76852536473588, 29.04658282127291, 4.23415299384598);
+  const vec3 c6 = vec3(18.65570506591883, -11.48977351997711, -5.601961508734096);
+  return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), 0.0, 1.0);
+}
+vec3 deepmap(float t) {
+  t = clamp(t, 0.0, 1.0);
+  vec3 a = vec3(0.90, 0.95, 0.98), b = vec3(0.50, 0.78, 0.92), c = vec3(0.13, 0.46, 0.78), d = vec3(0.04, 0.10, 0.36);
+  return t < 0.33 ? mix(a, b, t / 0.33) : t < 0.66 ? mix(b, c, (t - 0.33) / 0.33) : mix(c, d, (t - 0.66) / 0.34);
+}
+vec3 diverge(float t) { // -1 erosion (red) .. +1 deposition (blue)
+  t = clamp(t, -1.0, 1.0);
+  vec3 e2 = vec3(0.62, 0.08, 0.05), e1 = vec3(0.95, 0.52, 0.26), z = vec3(0.93, 0.93, 0.90), p1 = vec3(0.45, 0.70, 0.90), p2 = vec3(0.06, 0.22, 0.58);
+  return t < 0.0 ? (t < -0.5 ? mix(e1, e2, (-t - 0.5) * 2.0) : mix(z, e1, -t * 2.0)) : (t > 0.5 ? mix(p1, p2, (t - 0.5) * 2.0) : mix(z, p1, t * 2.0));
+}
+vec3 hsv2rgb(vec3 c) { vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0); return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y); }
+`;
+
+  const VS_FULL = `#version 300 es
+out vec2 vNdc;
+void main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0; vNdc = p; gl_Position = vec4(p, 0.0, 1.0); }`;
+
+  const FS_LIGHT = GLSL_COMMON + `
+uniform vec3 uSun; uniform float uTopH;
+out vec4 o;
+void main() {
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  float N1 = float(uN - 1);
+  float h0 = Hraw(p) * uExag;
+  vec2 dir = uSun.xz / max(length(uSun.xz), 1e-4);
+  float tanE = uSun.y / max(length(uSun.xz), 1e-4);
+  float sh = 1.0, t = 1.0;
+  for (int k = 0; k < 80; k++) {
+    vec2 q = vec2(p) + dir * t;
+    if (q.x < 0.0 || q.y < 0.0 || q.x > N1 || q.y > N1) break;
+    float ray = h0 + t * uDx * tanE;
+    if (ray > uTopH) break;
+    float hs = Hbil(q) * uExag;
+    sh = min(sh, clamp(0.5 + (ray - hs) / (0.03 * t * uDx + 0.6), 0.0, 1.0));
+    if (sh <= 0.0) break;
+    t += max(1.0, t * 0.07);
+  }
+  float occ = 0.0;
+  for (int a = 0; a < 8; a++) {
+    float ang = float(a) * 0.7853982 + 0.3;
+    vec2 dd = vec2(cos(ang), sin(ang));
+    for (int r = 0; r < 3; r++) {
+      float rad = r == 0 ? 2.0 : (r == 1 ? 6.0 : 16.0);
+      vec2 q = clamp(vec2(p) + dd * rad, vec2(0.0), vec2(N1));
+      float dz = Hbil(q) * uExag - h0, dist = rad * uDx;
+      occ += max(0.0, dz / sqrt(dz * dz + dist * dist));
+    }
+  }
+  float ao = clamp(1.0 - occ / 24.0 * 1.5, 0.0, 1.0);
+  o = vec4(sh, ao, 0.0, 1.0);
+}`;
+
+  const FS_SKY = `#version 300 es
+precision highp float;
+in vec2 vNdc;
+uniform mat4 uInvVP;
+` + GLSL_LIGHT + `
+out vec4 o;
+void main() {
+  vec4 p = uInvVP * vec4(vNdc, 1.0, 1.0);
+  vec3 d = normalize(p.xyz / p.w - uCam);
+  vec3 c = skyColor(d);
+  float s = max(dot(d, uSun), 0.0);
+  c += sunColor() * smoothstep(0.99955, 0.9998, s) * 6.0;
+  o = vec4(toneGamma(c), 1.0);
+}`;
+
+  const VS_TERRAIN = GLSL_COMMON + `
+layout(location = 0) in vec3 aPos;   // i, j, kind (0 surface, 1 skirt top, 2 skirt bottom)
+layout(location = 1) in vec2 aSide;  // outward skirt normal (xz)
+uniform mat4 uVP; uniform float uBaseY;
+out vec3 vWorld; out vec3 vNormal; out vec2 vUV; out vec4 vA; out vec4 vB; out vec4 vC;
+void main() {
+  ivec2 p = ivec2(aPos.xy);
+  vec4 A = texelFetch(uA, p, 0), B = texelFetch(uB, p, 0), Cc = texelFetch(uC, p, 0);
+  float hl = Hraw(p - ivec2(1, 0)), hr = Hraw(p + ivec2(1, 0)), hd = Hraw(p - ivec2(0, 1)), hu = Hraw(p + ivec2(0, 1));
+  vec2 grad = vec2(hr - hl, hu - hd) / (2.0 * uDx);
+  vec3 n = normalize(vec3(-grad.x * uExag, 1.0, -grad.y * uExag));
+  float c = 0.5 * float(uN - 1);
+  float y = A.r * uExag;
+  if (aPos.z > 1.5) y = uBaseY;
+  if (aPos.z > 0.5) n = vec3(aSide.x, 0.0, aSide.y);
+  vWorld = vec3((aPos.x - c) * uDx, y, (aPos.y - c) * uDx);
+  vNormal = n; vUV = (aPos.xy + 0.5) / float(uN);
+  vA = A; vB = B; vC = vec4(A.r - Cc.r, Cc.g, aPos.z, length(grad));
+  gl_Position = uVP * vec4(vWorld, 1.0);
+}`;
+
+  const FS_OVERLAY = `
+uniform int uFlags; uniform float uContour;
+uniform vec4 uBrush; uniform vec3 uBrushCol; uniform vec4 uProbe;
+uniform vec4 uSrc[4]; uniform int uSrcN;
+vec3 overlays(vec3 col, vec3 world, float h, bool surface) {
+  if (surface && (uFlags & 1) != 0) {
+    float cl = h / uContour, w = max(fwidth(cl), 1e-5);
+    float line = 1.0 - smoothstep(0.5, 1.5, abs(fract(cl + 0.5) - 0.5) / w);
+    float cm = cl / 5.0, wm = max(fwidth(cm), 1e-5);
+    float major = 1.0 - smoothstep(0.6, 1.8, abs(fract(cm + 0.5) - 0.5) / wm);
+    col = mix(col, vec3(0.06, 0.05, 0.04), clamp(line * 0.28 + major * 0.45, 0.0, 0.7));
+  }
+  if ((uFlags & 2) != 0) {
+    vec2 g = world.xz / 32.0, gw = max(fwidth(g), vec2(1e-5));
+    vec2 gl = abs(fract(g - 0.5) - 0.5) / gw;
+    float gline = 1.0 - smoothstep(0.4, 1.4, min(gl.x, gl.y));
+    col = mix(col, vec3(0.95, 0.97, 1.0), gline * 0.35);
+  }
+  if (surface && (uFlags & 8) != 0) {
+    for (int k = 0; k < 4; k++) {
+      if (k >= uSrcN) break;
+      float r = length(world.xz - uSrc[k].xy), pw = max(fwidth(r), 1e-4);
+      float ring = 1.0 - smoothstep(pw, pw * 2.5, abs(r - uSrc[k].z));
+      col = mix(col, vec3(0.35, 0.95, 1.0), ring * 0.8);
+    }
+  }
+  if (surface && uBrush.w > 0.5) {
+    float r = length(world.xz - uBrush.xy), pw = max(fwidth(r), 1e-4);
+    float ring = 1.0 - smoothstep(pw * 0.8, pw * 2.2, abs(r - uBrush.z));
+    float inner = 1.0 - smoothstep(pw * 0.5, pw * 1.5, abs(r - uBrush.z * 0.5));
+    float fill = 1.0 - smoothstep(0.0, uBrush.z, r);
+    col = mix(col, uBrushCol, ring * 0.95 + inner * 0.25);
+    col += uBrushCol * fill * fill * 0.07;
+  }
+  if (surface && uProbe.w > 0.5) {
+    float r = length(world.xz - uProbe.xy), pw = max(fwidth(r), 1e-4);
+    float ring = 1.0 - smoothstep(pw, pw * 2.5, abs(r - uProbe.z));
+    float dot_ = 1.0 - smoothstep(uProbe.z * 0.18, uProbe.z * 0.18 + pw * 1.5, r);
+    col = mix(col, vec3(1.0, 0.35, 0.9), max(ring, dot_));
+  }
+  return col;
+}
+`;
+
+  const FS_TERRAIN = GLSL_COMMON + GLSL_LIGHT + GLSL_CMAPS + FS_OVERLAY + `
+uniform sampler2D uLight; uniform sampler2D uStrata;
+uniform int uMode; uniform vec4 uRange; uniform float uHMin, uHMax, uRecentRef, uSnow, uDesert;
+uniform float uStrataZ0, uStrataDZ; uniform int uStrataN;
+in vec3 vWorld; in vec3 vNormal; in vec2 vUV; in vec4 vA; in vec4 vB; in vec4 vC;
+out vec4 o;
+float strata(float z) { int k = clamp(int((z - uStrataZ0) / uStrataDZ), 0, uStrataN - 1); return texelFetch(uStrata, ivec2(k, 0), 0).r; }
+void main() {
+  vec3 n = normalize(vNormal);
+  vec4 L = texture(uLight, vUV);
+  float sh = L.r, ao = L.g;
+  float h = vA.r, d = vA.g, sed = vA.b, soil = vA.a;
+  float slope = vC.w;
+  bool skirt = vC.z > 0.5;
+  vec3 col;
+  float ndl = max(dot(n, uSun), 0.0);
+  if (skirt) {
+    float z = vWorld.y / uExag;
+    float st = strata(z - soil + vC.y);
+    vec3 rock = mix(vec3(0.36, 0.31, 0.27), vec3(0.60, 0.49, 0.37), st);
+    if (z > h - soil - 0.05) rock = vec3(0.66, 0.56, 0.40);
+    float band = 0.8 + 0.2 * smoothstep(-3.0, 0.0, z - h);
+    col = pow(rock, vec3(2.2)) * band * (sunColor() * 1.6 * (0.25 + 0.75 * ndl) + vec3(0.25, 0.28, 0.33));
+    col = toneGamma(col);
+    o = vec4(col, 1.0);
+    return;
+  }
+  float hill = 0.45 + 0.55 * ndl * mix(1.0, sh, 0.7) * mix(0.6, 1.0, ao);
+  if (uMode == 0) {
+    float hn = clamp((h - uHMin) / max(uHMax - uHMin, 1e-3), 0.0, 1.0);
+    float steep = smoothstep(0.5, 1.25, slope);
+    float st = strata(h - soil + vC.y);
+    vec3 grass = mix(vec3(0.33, 0.44, 0.18), vec3(0.62, 0.47, 0.32), uDesert), dryg = mix(vec3(0.55, 0.51, 0.31), vec3(0.72, 0.56, 0.38), uDesert);
+    vec3 rock = mix(mix(vec3(0.42, 0.40, 0.38), vec3(0.54, 0.45, 0.37), st), mix(vec3(0.60, 0.33, 0.20), vec3(0.80, 0.66, 0.50), st), uDesert);
+    vec3 veg = mix(grass, dryg, smoothstep(0.35, 0.85, hn));
+    vec3 alb = mix(veg, rock, steep);
+    // loose material: sand/silt on flats (hydraulic deposits), darker scree on slopes (talus)
+    float flat_ = 1.0 - smoothstep(0.12, 0.4, slope);
+    vec3 loose = mix(vec3(0.47, 0.42, 0.35), vec3(0.74, 0.65, 0.47), flat_);
+    alb = mix(alb, loose, smoothstep(0.05, 0.9, soil) * mix(0.55, 0.9, flat_));
+    alb = mix(alb, vec3(0.93, 0.95, 0.98), uSnow * smoothstep(0.88, 0.96, hn + (n.y - 0.85) * 0.3) * (1.0 - steep));
+    alb = pow(alb, vec3(2.2));
+    float wet = vB.a;
+    alb *= mix(1.0, 0.45, wet);
+    if ((uFlags & 4) != 0) {
+      float r = vB.b / uRecentRef;
+      alb = mix(alb, vec3(0.62, 0.045, 0.01), clamp(-r, 0.0, 1.0) * 0.7);
+      alb = mix(alb, vec3(0.70, 0.50, 0.04), clamp(r, 0.0, 1.0) * 0.6);
+    }
+    vec3 lit = alb * (sunColor() * 1.9 * ndl * sh + skyAmb(n) * ao * 0.85);
+    lit = fogIt(lit, vWorld);
+    col = toneGamma(lit);
+  } else {
+    vec3 gray = vec3(0.55) * hill;
+    if (uMode == 1) col = turbo((h - uRange.x) / max(uRange.y - uRange.x, 1e-3)) * hill;
+    else if (uMode == 2) col = d > 0.004 ? deepmap(sqrt(d / uRange.y)) * mix(0.8, 1.0, hill) : gray;
+    else if (uMode == 3) { float c = sed / max(d, 1e-4); col = d > 0.004 ? magma(0.12 + 0.88 * sqrt(clamp(c / uRange.y, 0.0, 1.0))) * mix(0.8, 1.0, hill) : gray; }
+    else if (uMode == 4) { float t = vC.x / uRange.y; col = diverge(sign(t) * sqrt(abs(t))) * hill; }
+    else if (uMode == 5) col = viridis(atan(slope) / (60.0 * 0.0174533)) * hill;
+    else {
+      float sp = length(vB.xy);
+      if (d > 0.004 && sp > 0.02) {
+        float ang = atan(vB.y, vB.x) / 6.2831853 + 0.5;
+        col = hsv2rgb(vec3(ang, 0.8, 0.30 + 0.70 * clamp(sp / uRange.y, 0.0, 1.0))) * mix(0.8, 1.0, hill);
+      } else col = gray * 0.8;
+    }
+  }
+  col = overlays(col, vWorld, h, true);
+  o = vec4(col, 1.0);
+}`;
+
+  const VS_WATER = GLSL_COMMON + `
+layout(location = 0) in vec3 aPos;
+uniform mat4 uVP;
+out vec3 vWorld; out vec3 vNormal; out vec2 vUV; out vec4 vA; out vec4 vB;
+float surfAt(ivec2 q, float self_) { q = clamp(q, ivec2(0), ivec2(uN - 1)); vec4 a = texelFetch(uA, q, 0); return a.g > 0.004 ? a.r + a.g : self_; }
+void main() {
+  ivec2 p = ivec2(aPos.xy);
+  vec4 A = texelFetch(uA, p, 0), B = texelFetch(uB, p, 0);
+  float d = A.g, s0 = A.r + d;
+  float sl = surfAt(p - ivec2(1, 0), s0), sr = surfAt(p + ivec2(1, 0), s0), sd = surfAt(p - ivec2(0, 1), s0), su = surfAt(p + ivec2(0, 1), s0);
+  vec2 grad = vec2(sr - sl, su - sd) / (2.0 * uDx);
+  vNormal = normalize(vec3(-grad.x * uExag, 1.0, -grad.y * uExag));
+  float c = 0.5 * float(uN - 1);
+  // dry vertices next to water take the neighbouring water level (alpha fades there), others hide below ground
+  float y = s0 * uExag + 0.04;
+  if (d <= 0.004) {
+    float nb = -1e9;
+    for (int k = 0; k < 8; k++) {
+      ivec2 o = k == 0 ? ivec2(1, 0) : k == 1 ? ivec2(-1, 0) : k == 2 ? ivec2(0, 1) : k == 3 ? ivec2(0, -1) : k == 4 ? ivec2(1, 1) : k == 5 ? ivec2(-1, 1) : k == 6 ? ivec2(1, -1) : ivec2(-1, -1);
+      vec4 a = texelFetch(uA, clamp(p + o, ivec2(0), ivec2(uN - 1)), 0);
+      if (a.g > 0.006) nb = max(nb, a.r + a.g);
+    }
+    y = nb > -1e8 && nb > A.r - 0.5 ? max(nb, A.r) * uExag + 0.04 : A.r * uExag - 0.8;
+  }
+  vWorld = vec3((aPos.x - c) * uDx, y, (aPos.y - c) * uDx);
+  vUV = (aPos.xy + 0.5) / float(uN);
+  vA = A; vB = B;
+  gl_Position = uVP * vec4(vWorld, 1.0);
+}`;
+
+  const FS_WATER = GLSL_COMMON + GLSL_LIGHT + `
+uniform sampler2D uLight; uniform float uWaterVis, uTime;
+in vec3 vWorld; in vec3 vNormal; in vec2 vUV; in vec4 vA; in vec4 vB;
+out vec4 o;
+void main() {
+  float d = vA.g;
+  float a = smoothstep(0.006, 0.05, d);
+  if (a < 0.004) discard;
+  vec2 vel = vB.xy; float sp = length(vel);
+  vec2 q = vWorld.xz * 0.35 - vel * uTime * 0.6;
+  vec3 rip = vec3(sin(q.x * 1.7 + uTime * 1.3) + sin(q.y * 2.3 - uTime * 1.1), 0.0, cos(q.y * 1.9 + uTime * 0.9) + sin(q.x * 2.1 + q.y * 0.7));
+  vec3 n = normalize(vNormal + rip * (0.025 + 0.04 * clamp(sp / 3.0, 0.0, 1.0)));
+  vec3 V = normalize(uCam - vWorld);
+  float conc = clamp(vA.b / max(d, 1e-4), 0.0, 1.0);
+  float depthT = 1.0 - exp(-d * 0.9);
+  vec3 body = mix(vec3(0.03, 0.26, 0.36), vec3(0.008, 0.05, 0.12), depthT);
+  body = mix(body, vec3(0.34, 0.24, 0.12), smoothstep(0.0, 0.2, conc) * 0.85);
+  float sh = texture(uLight, vUV).r;
+  float ndl = max(dot(n, uSun), 0.0);
+  vec3 col = body * (sunColor() * 1.6 * ndl * mix(0.35, 1.0, sh) + skyAmb(n) * 0.9);
+  col = mix(col, vec3(0.80, 0.84, 0.86), smoothstep(7.0, 16.0, sp) * 0.3);
+  float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+  col = mix(col, skyColor(reflect(-V, n)), fres * 0.85);
+  vec3 H = normalize(V + uSun);
+  col += sunColor() * pow(max(dot(n, H), 0.0), 220.0) * 4.0 * sh;
+  col = fogIt(col, vWorld);
+  float alpha = uWaterVis * a * clamp(0.72 + 0.4 * depthT + fres * 0.4 + conc, 0.0, 1.0);
+  o = vec4(toneGamma(col), alpha);
+}`;
+
+  const VS_ARROWS = GLSL_COMMON + `
+layout(location = 0) in vec3 aG;   // glyph i, glyph j, vertex id
+uniform mat4 uVP; uniform int uGlyphN; uniform float uVelRef;
+out float vAlpha;
+void main() {
+  float cells = float(uN) / float(uGlyphN);
+  vec2 gp = (aG.xy + 0.5) * cells;
+  ivec2 p = ivec2(gp);
+  vec2 vel = vec2(0.0); float dep = 0.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    ivec2 q = clamp(p + ivec2(x, y), ivec2(0), ivec2(uN - 1));
+    vel += texelFetch(uB, q, 0).xy; dep += texelFetch(uA, q, 0).g;
+  }
+  vel /= 9.0; dep /= 9.0;
+  float sp = length(vel);
+  vec2 dir = sp > 1e-5 ? vel / sp : vec2(1.0, 0.0);
+  float len = (0.25 + 0.75 * min(1.0, sp / uVelRef)) * cells * 0.85;
+  vec2 perp = vec2(-dir.y, dir.x);
+  int id = int(aG.z + 0.5);
+  vec2 P = gp - dir * len * 0.5;
+  vec2 tip = gp + dir * len * 0.5;
+  if (id == 1 || id == 2 || id == 4) P = tip;
+  else if (id == 3) P = tip - dir * len * 0.38 + perp * len * 0.24;
+  else if (id == 5) P = tip - dir * len * 0.38 - perp * len * 0.24;
+  vec2 Pc = clamp(P, vec2(0.0), vec2(float(uN - 1)));
+  ivec2 pi = ivec2(Pc + 0.5);
+  vec4 A = texelFetch(uA, clamp(pi, ivec2(0), ivec2(uN - 1)), 0);
+  float c = 0.5 * float(uN - 1);
+  vec3 w = vec3((Pc.x - c) * uDx, (Hbil(Pc) + A.g) * uExag + 0.6, (Pc.y - c) * uDx);
+  vAlpha = smoothstep(0.004, 0.03, dep) * smoothstep(0.02, 0.15, sp);
+  gl_Position = uVP * vec4(w, 1.0);
+}`;
+  const FS_ARROWS = `#version 300 es
+precision highp float;
+in float vAlpha; out vec4 o;
+void main() { if (vAlpha < 0.02) discard; o = vec4(0.97, 0.98, 1.0, vAlpha * 0.9); }`;
+
+  function compile(type, src, label) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(sh);
+      console.error(label, log, src.split('\n').map((l, i) => (i + 1) + ': ' + l).join('\n'));
+      throw new Error('Shader compile failed: ' + label + ': ' + log);
+    }
+    return sh;
+  }
+  function program(vs, fs, label) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs, label + '.vs'));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs, label + '.fs'));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('Link failed: ' + label + ': ' + gl.getProgramInfoLog(p));
+    const u = {};
+    const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); const name = info.name.replace(/\[0\]$/, ''); u[name] = gl.getUniformLocation(p, info.name); }
+    return { p, u };
+  }
+  let progs;
+  try {
+    progs = {
+      light: program(VS_FULL, FS_LIGHT, 'light'),
+      sky: program(VS_FULL, FS_SKY, 'sky'),
+      terrain: program(VS_TERRAIN, FS_TERRAIN, 'terrain'),
+      water: program(VS_WATER, FS_WATER, 'water'),
+      arrows: program(VS_ARROWS, FS_ARROWS, 'arrows'),
+    };
+  } catch (e) {
+    $('#fatal').style.display = 'grid';
+    $('#fatalMsg').textContent = e.message;
+    throw e;
+  }
+  const emptyVAO = gl.createVertexArray();
+
+  // GPU resources that depend on grid size
+  const gpu = { N: 0, texA: null, texB: null, texC: null, texStrata: null, texLight: null, fbLight: null,
+    gridVAO: null, gridCount: 0, skirtVAO: null, skirtCount: 0, arrowVAO: null, arrowCount: 0, glyphN: 0, packA: null, packB: null, packC: null, bufs: [] };
+  function makeTex(internal, w, h, filter) {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, internal, w, h);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+  function buildGPU(N) {
+    for (const k of ['texA', 'texB', 'texC', 'texStrata', 'texLight']) if (gpu[k]) gl.deleteTexture(gpu[k]);
+    if (gpu.fbLight) gl.deleteFramebuffer(gpu.fbLight);
+    for (const b of gpu.bufs) gl.deleteBuffer(b);
+    for (const k of ['gridVAO', 'skirtVAO', 'arrowVAO']) if (gpu[k]) gl.deleteVertexArray(gpu[k]);
+    gpu.bufs = [];
+    gpu.N = N;
+    gpu.texA = makeTex(gl.RGBA32F, N, N, gl.NEAREST);
+    gpu.texB = makeTex(gl.RGBA32F, N, N, gl.NEAREST);
+    gpu.texC = makeTex(gl.RG32F, N, N, gl.NEAREST);
+    gpu.texStrata = makeTex(gl.R32F, C.STRATA_N, 1, gl.NEAREST);
+    gpu.texLight = makeTex(gl.RGBA8, N, N, gl.LINEAR);
+    gpu.fbLight = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gpu.fbLight);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, gpu.texLight, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gpu.packA = new Float32Array(N * N * 4);
+    gpu.packB = new Float32Array(N * N * 4);
+    gpu.packC = new Float32Array(N * N * 2);
+
+    // surface grid
+    const pos = new Float32Array(N * N * 3);
+    for (let j = 0, k = 0; j < N; j++) for (let i = 0; i < N; i++, k += 3) { pos[k] = i; pos[k + 1] = j; pos[k + 2] = 0; }
+    const idx = new Uint32Array((N - 1) * (N - 1) * 6);
+    for (let j = 0, k = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
+      const a = j * N + i, b = a + 1, c = a + N, d = c + 1;
+      idx[k++] = a; idx[k++] = c; idx[k++] = b; idx[k++] = b; idx[k++] = c; idx[k++] = d;
+    }
+    gpu.gridVAO = gl.createVertexArray();
+    gl.bindVertexArray(gpu.gridVAO);
+    const vb = gl.createBuffer(); gpu.bufs.push(vb);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.disableVertexAttribArray(1); gl.vertexAttrib2f(1, 0, 0);
+    const ib = gl.createBuffer(); gpu.bufs.push(ib);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    gpu.gridCount = idx.length;
+
+    // skirt: 4 sides, each a strip of (top, bottom) pairs
+    const sv = [], si = [];
+    const sides = [
+      { pts: (t) => [t, 0], n: [0, -1] }, { pts: (t) => [N - 1, t], n: [1, 0] },
+      { pts: (t) => [N - 1 - t, N - 1], n: [0, 1] }, { pts: (t) => [0, N - 1 - t], n: [-1, 0] },
+    ];
+    for (const s of sides) {
+      const base = sv.length / 5;
+      for (let t = 0; t < N; t++) {
+        const [i, j] = s.pts(t);
+        sv.push(i, j, 1, s.n[0], s.n[1], i, j, 2, s.n[0], s.n[1]);
+      }
+      for (let t = 0; t < N - 1; t++) {
+        const a = base + t * 2, b = a + 1, c = a + 2, d = a + 3;
+        si.push(a, b, c, c, b, d);
+      }
+    }
+    gpu.skirtVAO = gl.createVertexArray();
+    gl.bindVertexArray(gpu.skirtVAO);
+    const svb = gl.createBuffer(); gpu.bufs.push(svb);
+    gl.bindBuffer(gl.ARRAY_BUFFER, svb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sv), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12);
+    const sib = gl.createBuffer(); gpu.bufs.push(sib);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(si), gl.STATIC_DRAW);
+    gpu.skirtCount = si.length;
+
+    // flow arrows
+    const G = gpu.glyphN = Math.max(16, Math.min(56, Math.round(N / 5)));
+    const av = new Float32Array(G * G * 6 * 3);
+    for (let j = 0, k = 0; j < G; j++) for (let i = 0; i < G; i++) for (let v = 0; v < 6; v++, k += 3) { av[k] = i; av[k + 1] = j; av[k + 2] = v; }
+    gpu.arrowVAO = gl.createVertexArray();
+    gl.bindVertexArray(gpu.arrowVAO);
+    const avb = gl.createBuffer(); gpu.bufs.push(avb);
+    gl.bindBuffer(gl.ARRAY_BUFFER, avb); gl.bufferData(gl.ARRAY_BUFFER, av, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gpu.arrowCount = G * G * 6;
+    gl.bindVertexArray(null);
+    app.texDirty = true; app.lightDirty = true;
+    uploadStatic();
+  }
+  function uploadStatic() {
+    const S = app.S, N = S.N, pc = gpu.packC;
+    for (let i = 0; i < N * N; i++) { pc[i * 2] = S.h0[i]; pc[i * 2 + 1] = S.strataOff[i]; }
+    gl.bindTexture(gl.TEXTURE_2D, gpu.texC);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RG, gl.FLOAT, pc);
+    gl.bindTexture(gl.TEXTURE_2D, gpu.texStrata);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, C.STRATA_N, 1, gl.RED, gl.FLOAT, S.strata);
+  }
+  function uploadDynamic() {
+    const S = app.S, N = S.N, n = N * N, pa = gpu.packA, pb = gpu.packB;
+    const { h, d, s, soil, u, v, recent, wet } = S;
+    for (let i = 0, k = 0; i < n; i++, k += 4) {
+      pa[k] = h[i]; pa[k + 1] = d[i]; pa[k + 2] = s[i]; pa[k + 3] = soil[i];
+      pb[k] = u[i]; pb[k + 1] = v[i]; pb[k + 2] = recent[i]; pb[k + 3] = wet[i];
+    }
+    gl.bindTexture(gl.TEXTURE_2D, gpu.texA);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RGBA, gl.FLOAT, pa);
+    gl.bindTexture(gl.TEXTURE_2D, gpu.texB);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RGBA, gl.FLOAT, pb);
+    app.texDirty = false;
+  }
+
+  // ---------------------------------------------------------------- camera
+  const cam = { yaw: -0.75, pitch: 0.62, dist: 760, target: [0, 20, 0], fov: 42 * DEG };
+  const M = {
+    persp(fov, asp, n, f) { const t = 1 / Math.tan(fov / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; },
+    lookAt(e, c, up) {
+      let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2]; let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+      let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+      const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+      return [xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0, -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1];
+    },
+    mul(a, b) { const o = new Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; },
+    inv(m) {
+      const a = m, o = new Array(16);
+      const b00 = a[0] * a[5] - a[1] * a[4], b01 = a[0] * a[6] - a[2] * a[4], b02 = a[0] * a[7] - a[3] * a[4], b03 = a[1] * a[6] - a[2] * a[5];
+      const b04 = a[1] * a[7] - a[3] * a[5], b05 = a[2] * a[7] - a[3] * a[6], b06 = a[8] * a[13] - a[9] * a[12], b07 = a[8] * a[14] - a[10] * a[12];
+      const b08 = a[8] * a[15] - a[11] * a[12], b09 = a[9] * a[14] - a[10] * a[13], b10 = a[9] * a[15] - a[11] * a[13], b11 = a[10] * a[15] - a[11] * a[14];
+      let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06; det = 1 / det;
+      o[0] = (a[5] * b11 - a[6] * b10 + a[7] * b09) * det; o[1] = (a[2] * b10 - a[1] * b11 - a[3] * b09) * det;
+      o[2] = (a[13] * b05 - a[14] * b04 + a[15] * b03) * det; o[3] = (a[10] * b04 - a[9] * b05 - a[11] * b03) * det;
+      o[4] = (a[6] * b08 - a[4] * b11 - a[7] * b07) * det; o[5] = (a[0] * b11 - a[2] * b08 + a[3] * b07) * det;
+      o[6] = (a[14] * b02 - a[12] * b05 - a[15] * b01) * det; o[7] = (a[8] * b05 - a[10] * b02 + a[11] * b01) * det;
+      o[8] = (a[4] * b10 - a[5] * b08 + a[7] * b06) * det; o[9] = (a[1] * b08 - a[0] * b10 - a[3] * b06) * det;
+      o[10] = (a[12] * b04 - a[13] * b02 + a[15] * b00) * det; o[11] = (a[9] * b02 - a[8] * b04 - a[11] * b00) * det;
+      o[12] = (a[5] * b07 - a[4] * b09 - a[6] * b06) * det; o[13] = (a[0] * b09 - a[1] * b07 + a[2] * b06) * det;
+      o[14] = (a[13] * b01 - a[12] * b03 - a[14] * b00) * det; o[15] = (a[8] * b03 - a[9] * b01 + a[10] * b00) * det;
+      return o;
+    },
+  };
+  let VP = null, invVP = null;
+  function camEye() {
+    // portrait viewports see less horizontally: back the camera off so the terrain still fits
+    const asp = canvas.width / Math.max(1, canvas.height);
+    const dist = cam.dist * Math.max(1, 0.85 / asp);
+    const cp = Math.cos(cam.pitch);
+    return [cam.target[0] + dist * cp * Math.sin(cam.yaw), cam.target[1] + dist * Math.sin(cam.pitch), cam.target[2] + dist * cp * Math.cos(cam.yaw)];
+  }
+  function updateMatrices() {
+    const asp = canvas.width / Math.max(1, canvas.height);
+    const eye = camEye();
+    const V = M.lookAt(eye, cam.target, [0, 1, 0]);
+    const Pm = M.persp(cam.fov, asp, Math.max(1, cam.dist * 0.02), cam.dist * 12 + 3000);
+    VP = M.mul(Pm, V); invVP = M.inv(VP);
+    return eye;
+  }
+  function resetCamera(c) {
+    const p = c || PRESETS.find(p => p.id === app.presetId)?.cam || PRESETS[0].cam;
+    cam.yaw = p.yaw; cam.pitch = p.pitch; cam.dist = p.dist;
+    const st = app.stats;
+    cam.target = [0, st ? (st.minH + (st.maxH - st.minH) * 0.35) * app.view.exag : 30, 0];
+  }
+  function sunDir() {
+    const az = app.view.sunAz * DEG, el = app.view.sunEl * DEG;
+    return [Math.cos(el) * Math.sin(az), Math.sin(el), -Math.cos(el) * Math.cos(az)];
+  }
+
+  // ---------------------------------------------------------------- picking
+  function heightAtGrid(gx, gy) {
+    const S = app.S, N = S.N;
+    gx = clamp(gx, 0, N - 1.0001); gy = clamp(gy, 0, N - 1.0001);
+    const x0 = Math.floor(gx), y0 = Math.floor(gy), tx = gx - x0, ty = gy - y0, k = y0 * N + x0, h = S.h;
+    return (h[k] * (1 - tx) + h[k + 1] * tx) * (1 - ty) + (h[k + N] * (1 - tx) + h[k + N + 1] * tx) * ty;
+  }
+  function pick(cssX, cssY) {
+    if (!invVP || !app.S) return null;
+    const r = canvas.getBoundingClientRect();
+    const nx = (cssX - r.left) / r.width * 2 - 1, ny = 1 - (cssY - r.top) / r.height * 2;
+    const unproj = (z) => { const m = invVP; const x = m[0] * nx + m[4] * ny + m[8] * z + m[12], y = m[1] * nx + m[5] * ny + m[9] * z + m[13], zz = m[2] * nx + m[6] * ny + m[10] * z + m[14], w = m[3] * nx + m[7] * ny + m[11] * z + m[15]; return [x / w, y / w, zz / w]; };
+    const a = unproj(-1), b = unproj(1);
+    const dir = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const len = Math.hypot(...dir); dir[0] /= len; dir[1] /= len; dir[2] /= len;
+    const S = app.S, N = S.N, dx = S.dx, half = (N - 1) * dx / 2, ex = app.view.exag;
+    const st = app.stats;
+    const yMin = (st ? st.minH : -50) * ex - 1, yMax = (st ? st.maxH : 300) * ex + 1;
+    // slab intersection with bounding box
+    let t0 = 0, t1 = len;
+    const lo = [-half, yMin, -half], hi = [half, yMax, half];
+    for (let k = 0; k < 3; k++) {
+      if (Math.abs(dir[k]) < 1e-9) { if (a[k] < lo[k] || a[k] > hi[k]) return null; continue; }
+      let ta = (lo[k] - a[k]) / dir[k], tb = (hi[k] - a[k]) / dir[k];
+      if (ta > tb) [ta, tb] = [tb, ta];
+      t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+    }
+    if (t0 > t1) return null;
+    const c = (N - 1) / 2;
+    const above = (t) => { const x = a[0] + dir[0] * t, y = a[1] + dir[1] * t, z = a[2] + dir[2] * t; return y - heightAtGrid(x / dx + c, z / dx + c) * ex; };
+    const stepL = dx * 0.5;
+    let prevT = t0, prev = above(t0);
+    if (prev < 0) return null;
+    for (let t = t0 + stepL; t <= t1 + stepL; t += stepL) {
+      const tt = Math.min(t, t1), cur = above(tt);
+      if (cur <= 0) {
+        let lo2 = prevT, hi2 = tt;
+        for (let k = 0; k < 20; k++) { const m = (lo2 + hi2) / 2; if (above(m) > 0) lo2 = m; else hi2 = m; }
+        const x = a[0] + dir[0] * hi2, z = a[2] + dir[2] * hi2;
+        return { gx: x / dx + c, gy: z / dx + c, wx: x, wz: z };
+      }
+      prevT = tt; prev = cur;
+      if (tt >= t1) break;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------- simulation control
+  function newWorld(opts = {}) {
+    const t0 = performance.now();
+    const S = C.generate(app.gen, app.res);
+    if (opts.applyScenario) { app.P.boundary = S.scenario.boundary; app.P.seaLevel = S.scenario.seaLevel; }
+    if (app.P.boundary === 'sea') C.fillSea(S, app.P.seaLevel);
+    C.captureInitial(S);
+    setWorld(S);
+    app.genMs = performance.now() - t0;
+  }
+  function setWorld(S) {
+    app.S = S;
+    app.res = S.N;
+    app.stats = C.computeStats(S, app.P);
+    app.snapshot = null; app.stabilityScale = 1;
+    app.probe = app.probe && app.probe.gx < S.N ? app.probe : null;
+    buildGPU(S.N);
+    syncUI();
+  }
+  function takeSnapshot() {
+    const S = app.S;
+    const keys = ['h', 'd', 's', 'soil', 'fL', 'fR', 'fT', 'fB', 'u', 'v', 'wet', 'recent'];
+    if (!app.snapshot || app.snapshot.N !== S.N) {
+      app.snapshot = { N: S.N };
+      for (const k of keys) app.snapshot[k] = new S[k].constructor(S[k].length);
+    }
+    for (const k of keys) app.snapshot[k].set(S[k]);
+    app.snapshot.time = S.time; app.snapshot.steps = S.steps; app.snapshot.bal = { ...S.bal };
+  }
+  function recover(reason) {
+    const S = app.S, snap = app.snapshot;
+    app.recoveries++;
+    app.stabilityScale = Math.max(0.125, app.stabilityScale * 0.5);
+    if (snap && snap.N === S.N) {
+      for (const k in snap) if (S[k] && S[k].set && snap[k].set) S[k].set(snap[k]);
+      S.time = snap.time; S.steps = snap.steps; S.bal = { ...snap.bal };
+      app.lastRecovery = `${reason}: rolled back to t=${snap.time.toFixed(1)} s, dt ×${app.stabilityScale}`;
+    } else {
+      C.resetToInitial(S);
+      app.lastRecovery = `${reason}: no snapshot, reset to initial state, dt ×${app.stabilityScale}`;
+    }
+    // sanitize anything non-finite that might remain
+    for (const k of ['h', 'd', 's', 'soil', 'fL', 'fR', 'fT', 'fB', 'u', 'v', 'wet', 'recent']) {
+      const arr = S[k];
+      for (let i = 0; i < arr.length; i++) if (!Number.isFinite(arr[i])) arr[i] = k === 'h' ? S.h0[i] : 0;
+    }
+    app.stats = C.computeStats(S, app.P);
+    app.texDirty = true; app.lightDirty = true;
+    toast('⚠ Numerical instability detected — ' + app.lastRecovery, true);
+  }
+  function simulateFrame(now) {
+    const S = app.S, P = app.P;
+    const single = app.stepRequest > 0;
+    const want = single ? 1 : (app.paused ? 0 : P.substeps);
+    app.stepsWanted = want; app.stepsLastFrame = 0;
+    if (!want) { app.simMs = 0; app.budgetLimited = false; app.split = 1; return; }
+    const t0 = performance.now();
+    const dtReq = C.BASE_DT * P.speed * app.stabilityScale;
+    const dtMax = C.stableDt(S, P, app.stats);
+    const split = dtReq > dtMax ? Math.min(8, Math.ceil(dtReq / dtMax)) : 1;
+    const dt = dtReq / split;
+    app.split = split; app.lastDt = dt;
+    app.cflLimited = dt > dtMax * 1.0001;
+    const budget = single ? Infinity : 14;
+    app.budgetLimited = false;
+    for (let k = 0; k < want; k++) {
+      for (let m = 0; m < split; m++) C.step(S, P, dt);
+      app.stepsLastFrame++;
+      if (performance.now() - t0 > budget && k < want - 1) { app.budgetLimited = true; break; }
+    }
+    if (single) app.stepRequest--;
+    app.simMs = performance.now() - t0;
+    const st = app.stats = C.computeStats(S, P);
+    const cMax = st.maxSpeed + Math.sqrt(P.flow * C.G * st.maxDepth);
+    app.cfl = dt * cMax / S.dx;
+    if (!st.finite || st.maxDepth > 190 || app.cfl > 2.5) { recover(!st.finite ? 'NaN/Inf in state' : 'runaway values'); return; }
+    // periodic snapshot for rollback + slow recovery of the stability scale
+    if (now - app.snapshotTime > 2000 && !app.cflLimited) { takeSnapshot(); app.snapshotTime = now; }
+    if (app.stabilityScale < 1 && now - app.stableSince > 6000) { app.stabilityScale = Math.min(1, app.stabilityScale * 2); app.stableSince = now; }
+    if (app.cflLimited) app.stableSince = now;
+    app.texDirty = true;
+    app.lightAge++;
+  }
+
+  // ---------------------------------------------------------------- rendering
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * app.renderScale;
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  }
+  function bindCommon(pr) {
+    const u = pr.u, S = app.S;
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, gpu.texA); gl.uniform1i(u.uA, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, gpu.texB); if (u.uB) gl.uniform1i(u.uB, 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, gpu.texC); if (u.uC) gl.uniform1i(u.uC, 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, gpu.texLight); if (u.uLight) gl.uniform1i(u.uLight, 3);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, gpu.texStrata); if (u.uStrata) gl.uniform1i(u.uStrata, 4);
+    if (u.uN) gl.uniform1i(u.uN, S.N);
+    if (u.uDx) gl.uniform1f(u.uDx, S.dx);
+    if (u.uExag) gl.uniform1f(u.uExag, app.view.exag);
+  }
+  function lightPass(sun) {
+    const pr = progs.light, S = app.S;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gpu.fbLight);
+    gl.viewport(0, 0, S.N, S.N);
+    gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    gl.useProgram(pr.p);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, null); // never sample the target
+    bindCommon(pr);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.uniform3fv(pr.u.uSun, sun);
+    gl.uniform1f(pr.u.uTopH, (app.stats.maxH + 1) * app.view.exag);
+    gl.bindVertexArray(emptyVAO);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    app.lightDirty = false; app.lightAge = 0;
+  }
+  let lastLightKey = '';
+  function render(time) {
+    resize();
+    const S = app.S, v = app.view, st = app.stats;
+    if (app.texDirty) uploadDynamic();
+    const sun = sunDir();
+    const lightKey = `${v.sunAz}|${v.sunEl}|${v.exag}`;
+    if (lightKey !== lastLightKey) { app.lightDirty = true; lastLightKey = lightKey; }
+    if (app.lightDirty || app.lightAge >= 3) lightPass(sun);
+    const eye = updateMatrices();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0.04, 0.05, 0.06, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.bindVertexArray(emptyVAO);
+    gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    gl.useProgram(progs.sky.p);
+    gl.uniformMatrix4fv(progs.sky.u.uInvVP, false, invVP);
+    gl.uniform3fv(progs.sky.u.uCam, eye); gl.uniform3fv(progs.sky.u.uSun, sun);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // terrain + skirt
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true);
+    gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CCW);
+    const tp = progs.terrain, u = tp.u;
+    gl.useProgram(tp.p);
+    bindCommon(tp);
+    gl.uniformMatrix4fv(u.uVP, false, VP);
+    gl.uniform3fv(u.uSun, sun); gl.uniform3fv(u.uCam, eye);
+    gl.uniform1f(u.uBaseY, (st.minH - 12 - (st.maxH - st.minH) * 0.08) * v.exag);
+    gl.uniform1i(u.uMode, v.mode);
+    const R = app.ranges;
+    const range = [0, 1, 0, 0];
+    if (v.mode === 1) { range[0] = st.minH; range[1] = st.maxH; }
+    else if (v.mode === 2) range[1] = R.depth;
+    else if (v.mode === 3) range[1] = R.conc;
+    else if (v.mode === 4) range[1] = R.delta;
+    else if (v.mode === 6) range[1] = R.speed;
+    gl.uniform4fv(u.uRange, range);
+    gl.uniform1f(u.uHMin, st.minH); gl.uniform1f(u.uHMax, st.maxH);
+    gl.uniform1f(u.uSnow, S.gen && (S.gen.type === 'mountains' || S.gen.type === 'hills') ? 1 : 0);
+    gl.uniform1f(u.uDesert, S.gen && S.gen.type === 'canyon' ? 1 : 0);
+    gl.uniform1f(u.uRecentRef, 0.08);
+    gl.uniform1f(u.uStrataZ0, C.STRATA_Z0); gl.uniform1f(u.uStrataDZ, C.STRATA_DZ); gl.uniform1i(u.uStrataN, C.STRATA_N);
+    const relief = Math.max(1, st.maxH - st.minH);
+    gl.uniform1f(u.uContour, relief > 150 ? 10 : relief > 60 ? 5 : 2);
+    let flags = (v.contours ? 1 : 0) | (v.grid ? 2 : 0) | (v.highlight ? 4 : 0) | (S.sources.length && app.P.springs > 0 ? 8 : 0);
+    gl.uniform1i(u.uFlags, flags);
+    // brush / probe / sources in world coords
+    const c = (S.N - 1) / 2;
+    const hv = app.hover;
+    const showBrush = hv && !['navigate', 'inspect'].includes(app.brush.tool) && !input.camDrag;
+    gl.uniform4f(u.uBrush, hv ? (hv.gx - c) * S.dx : 0, hv ? (hv.gy - c) * S.dx : 0, app.brush.radius, showBrush ? 1 : 0);
+    gl.uniform3fv(u.uBrushCol, TOOL_COLORS[app.brush.tool]);
+    const pb = app.probe;
+    gl.uniform4f(u.uProbe, pb ? (pb.gx - c) * S.dx : 0, pb ? (pb.gy - c) * S.dx : 0, 6, pb ? 1 : 0);
+    const src = new Float32Array(16);
+    S.sources.slice(0, 4).forEach((s, k) => { src[k * 4] = (s.x * (S.N - 1) - c) * S.dx; src[k * 4 + 1] = (s.y * (S.N - 1) - c) * S.dx; src[k * 4 + 2] = Math.max(1.5 * S.dx, s.r * (S.N - 1) * S.dx); });
+    gl.uniform4fv(u.uSrc, src); gl.uniform1i(u.uSrcN, Math.min(4, S.sources.length));
+    gl.bindVertexArray(gpu.gridVAO);
+    gl.drawElements(gl.TRIANGLES, gpu.gridCount, gl.UNSIGNED_INT, 0);
+    gl.disable(gl.CULL_FACE);
+    gl.bindVertexArray(gpu.skirtVAO);
+    gl.drawElements(gl.TRIANGLES, gpu.skirtCount, gl.UNSIGNED_INT, 0);
+
+    // water surface (shaded mode only)
+    if (v.mode === 0 && v.waterVis > 0.001) {
+      const wp = progs.water;
+      gl.useProgram(wp.p);
+      bindCommon(wp);
+      gl.uniformMatrix4fv(wp.u.uVP, false, VP);
+      gl.uniform3fv(wp.u.uSun, sun); gl.uniform3fv(wp.u.uCam, eye);
+      gl.uniform1f(wp.u.uWaterVis, v.waterVis); gl.uniform1f(wp.u.uTime, time * 0.001);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.bindVertexArray(gpu.gridVAO);
+      gl.drawElements(gl.TRIANGLES, gpu.gridCount, gl.UNSIGNED_INT, 0);
+      gl.depthMask(true); gl.disable(gl.BLEND);
+    }
+    // flow arrows
+    if (v.mode === 6 && v.arrows) {
+      const ap = progs.arrows;
+      gl.useProgram(ap.p);
+      bindCommon(ap);
+      gl.uniformMatrix4fv(ap.u.uVP, false, VP);
+      gl.uniform1i(ap.u.uGlyphN, gpu.glyphN); gl.uniform1f(ap.u.uVelRef, R.speed);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindVertexArray(gpu.arrowVAO);
+      gl.drawArrays(gl.LINES, 0, gpu.arrowCount);
+      gl.disable(gl.BLEND);
+    }
+    gl.bindVertexArray(null);
+  }
+
+  // ---------------------------------------------------------------- input: camera + tools
+  const input = { pointers: new Map(), camDrag: null, stroke: null, lastX: 0, lastY: 0, hoverDirty: false, overCanvas: false, gesture: null };
+  function setTool(t) {
+    app.brush.tool = t;
+    for (const b of document.querySelectorAll('#toolbar button')) b.setAttribute('aria-pressed', b.dataset.tool === t ? 'true' : 'false');
+    canvas.classList.toggle('nav', t === 'navigate');
+  }
+  function orbit(dx, dy) {
+    cam.yaw -= dx * 0.006; cam.pitch = clamp(cam.pitch + dy * 0.005, 0.06, 1.52);
+  }
+  function pan(dx, dy) {
+    const k = cam.dist * 0.0014;
+    const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+    cam.target[0] += (-dx * cy - dy * sy) * k;
+    cam.target[2] += (dx * sy - dy * cy) * k;
+    const lim = C.WORLD * 0.8;
+    cam.target[0] = clamp(cam.target[0], -lim, lim); cam.target[2] = clamp(cam.target[2], -lim, lim);
+  }
+  function zoom(f) { cam.dist = clamp(cam.dist * f, 80, 2600); }
+  function adjustRadius(f) { setBrushParam('radius', app.brush.radius * f); }
+  function adjustStrength(dv) { setBrushParam('strength', app.brush.strength + dv); }
+  function startStroke(e) {
+    const hit = pick(e.clientX, e.clientY);
+    const tool = app.brush.tool;
+    if (tool === 'inspect') { if (hit) { app.probe = { gx: hit.gx, gy: hit.gy }; } input.stroke = { tool, id: e.pointerId }; return; }
+    input.stroke = { tool, id: e.pointerId, last: hit ? { gx: hit.gx, gy: hit.gy } : null, target: hit ? heightAtGrid(hit.gx, hit.gy) : null, pressure: e.pressure || 0.5, pointerType: e.pointerType };
+  }
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.focus({ preventScroll: true });
+    canvas.setPointerCapture(e.pointerId);
+    input.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    input.lastX = e.clientX; input.lastY = e.clientY;
+    if (input.pointers.size >= 2) { // two-finger gesture: camera only, cancel any stroke
+      input.stroke = null; input.camDrag = null;
+      const [p1, p2] = [...input.pointers.values()];
+      input.gesture = { d: Math.hypot(p2.x - p1.x, p2.y - p1.y), a: Math.atan2(p2.y - p1.y, p2.x - p1.x), mx: (p1.x + p2.x) / 2, my: (p1.y + p2.y) / 2 };
+      return;
+    }
+    const tool = app.brush.tool;
+    if (e.button === 2 || e.button === 1 || (e.button === 0 && (tool === 'navigate' || e.altKey))) {
+      const panMode = e.button === 1 || e.shiftKey;
+      input.camDrag = { mode: panMode ? 'pan' : 'orbit', id: e.pointerId };
+      canvas.classList.add('dragging');
+    } else if (e.button === 0) startStroke(e);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const p = input.pointers.get(e.pointerId);
+    const dx = e.clientX - (p ? p.x : e.clientX), dy = e.clientY - (p ? p.y : e.clientY);
+    if (p) { p.x = e.clientX; p.y = e.clientY; }
+    input.lastX = e.clientX; input.lastY = e.clientY; input.hoverDirty = true; input.overCanvas = true;
+    if (input.gesture && input.pointers.size >= 2) {
+      const [p1, p2] = [...input.pointers.values()];
+      const d = Math.hypot(p2.x - p1.x, p2.y - p1.y), a = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      const g = input.gesture;
+      if (g.d > 10 && d > 10) zoom(g.d / d);
+      let da = a - g.a; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
+      cam.yaw -= da;
+      pan(mx - g.mx, my - g.my);
+      input.gesture = { d, a, mx, my };
+      return;
+    }
+    if (input.camDrag && input.camDrag.id === e.pointerId) {
+      if (input.camDrag.mode === 'pan') pan(dx, dy); else orbit(dx, dy);
+    }
+    if (input.stroke && input.stroke.id === e.pointerId && e.pressure) input.stroke.pressure = e.pressure;
+  });
+  const endPointer = (e) => {
+    input.pointers.delete(e.pointerId);
+    if (input.pointers.size < 2) input.gesture = null;
+    if (input.camDrag && input.camDrag.id === e.pointerId) { input.camDrag = null; canvas.classList.remove('dragging'); }
+    if (input.stroke && input.stroke.id === e.pointerId) input.stroke = null;
+  };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('pointerleave', () => { if (!input.pointers.size) { input.overCanvas = false; app.hover = null; } });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const dRaw = e.deltaY || e.deltaX;
+    const dlt = e.deltaMode === 1 ? dRaw * 33 : dRaw;
+    if (e.shiftKey) adjustRadius(Math.exp(-dlt * 0.0015));
+    else if (e.altKey) adjustStrength(-dlt * 0.0006);
+    else zoom(Math.exp(dlt * 0.0012));
+  }, { passive: false });
+
+  // apply brush stroke once per frame (frame-rate independent, interpolated along the path)
+  function applyStroke(realDt) {
+    const st = input.stroke;
+    if (!st || st.tool === 'navigate') return;
+    const hit = app.hover;
+    if (st.tool === 'inspect') { if (hit) app.probe = { gx: hit.gx, gy: hit.gy }; return; }
+    if (!hit) return;
+    const S = app.S;
+    const rc = app.brush.radius / S.dx;
+    const pressure = st.pointerType === 'pen' ? clamp(st.pressure * 2, 0.1, 2) : 1;
+    const amt = app.brush.strength * pressure * Math.min(realDt, 0.05);
+    const from = st.last || hit;
+    const dist = Math.hypot(hit.gx - from.gx, hit.gy - from.gy);
+    const n = Math.max(1, Math.min(64, Math.ceil(dist / Math.max(0.5, rc * 0.25))));
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      C.applyBrush(S, st.tool, from.gx + (hit.gx - from.gx) * t, from.gy + (hit.gy - from.gy) * t, rc, amt / n, st.target);
+    }
+    st.last = { gx: hit.gx, gy: hit.gy };
+    app.texDirty = true; app.lightDirty = true;
+    if (app.paused) app.stats = C.computeStats(S, app.P);
+  }
+
+  // keyboard
+  window.addEventListener('keydown', (e) => {
+    const t = e.target || {}, tag = t.tagName || '';
+    if (e.ctrlKey || e.metaKey) return;
+    const k = e.key;
+    const typing = tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && t.type !== 'range' && t.type !== 'checkbox');
+    if (k === ' ' && !typing) { e.preventDefault(); if (!e.repeat) togglePause(); return; } // Space is always play/pause
+    if ((tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') && k !== 'Escape') return; // sliders keep their arrow keys
+    if (k === 'Enter') return; // let focused buttons activate normally
+    let handled = true;
+    if (k === 'n' || k === 'N' || k === '.') stepOnce();
+    else if (k === 'r' || k === 'R') doReset();
+    else if (k === 'g' || k === 'G') doRegen();
+    else if (k === '[') adjustRadius(1 / 1.12);
+    else if (k === ']') adjustRadius(1.12);
+    else if (k === '-' || k === '_') adjustStrength(-0.05);
+    else if (k === '=' || k === '+') adjustStrength(0.05);
+    else if (k === 'ArrowLeft') orbit(-25, 0);
+    else if (k === 'ArrowRight') orbit(25, 0);
+    else if (k === 'ArrowUp') orbit(0, 20);
+    else if (k === 'ArrowDown') orbit(0, -20);
+    else if (k === 'PageUp') zoom(1 / 1.15);
+    else if (k === 'PageDown') zoom(1.15);
+    else if (k === 'Home') resetCamera();
+    else if (k === 'Escape') { app.probe = null; if ($('#panel').classList.contains('open')) $('#sheetToggle').click(); }
+    else if (/^[1-7]$/.test(k)) setMode(+k - 1);
+    else {
+      const t = TOOLS.find(t => t !== 'sep' && t.key.toLowerCase() === k.toLowerCase());
+      if (t) setTool(t.id); else handled = false;
+    }
+    if (handled) e.preventDefault();
+  });
+
+  // ---------------------------------------------------------------- UI construction
+  const controls = {};
+  let toastTimer = 0;
+  function toast(msg, err) {
+    const t = $('#toast');
+    t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), err ? 6000 : 2600);
+  }
+  function section(title, open) {
+    const d = el('details', 'sec'); if (open) d.open = true;
+    const s = el('summary', null, title); d.appendChild(s);
+    const b = el('div', 'body'); d.appendChild(b);
+    $('#sections').appendChild(d);
+    return b;
+  }
+  function sliderRow(parent, id, label, def, unit, digits, title, onInput) {
+    const row = el('div', 'row');
+    const lab = el('label', null, label); lab.htmlFor = id; lab.title = (title || '') + ' (double-click to reset)';
+    const inp = el('input'); inp.type = 'range'; inp.id = id; inp.min = def.min; inp.max = def.max; inp.step = def.step || 0.01;
+    inp.setAttribute('aria-label', label);
+    const out = el('output'); out.htmlFor = id;
+    const show = (v) => { out.textContent = (+v).toFixed(digits) + (unit ? ((unit.length > 1 && unit[0] !== '/') || unit === '×' ? ' ' : '') + unit : ''); };
+    inp.addEventListener('input', () => { onInput(+inp.value); show(inp.value); });
+    lab.addEventListener('dblclick', () => { inp.value = def.def; onInput(def.def); show(def.def); });
+    row.append(lab, inp, out);
+    parent.appendChild(row);
+    return { set(v) { inp.value = v; show(v); }, inp };
+  }
+  function selectRow(parent, id, label, options, onChange, title) {
+    const row = el('div', 'row');
+    const lab = el('label', null, label); lab.htmlFor = id; if (title) lab.title = title;
+    const sel = el('select'); sel.id = id;
+    for (const [v, t] of options) { const o = el('option', null, t); o.value = v; sel.appendChild(o); }
+    sel.addEventListener('change', () => onChange(sel.value));
+    const wrap = el('div', 'span2'); wrap.appendChild(sel);
+    row.append(lab, wrap);
+    parent.appendChild(row);
+    return { set(v) { sel.value = String(v); }, sel };
+  }
+  function checkbox(parent, id, label, onChange) {
+    const lab = el('label'); const cb = el('input'); cb.type = 'checkbox'; cb.id = id;
+    cb.addEventListener('change', () => onChange(cb.checked));
+    lab.append(cb, document.createTextNode(label));
+    parent.appendChild(lab);
+    return { set(v) { cb.checked = !!v; }, cb };
+  }
+  function setBrushParam(k, v) {
+    const def = BRUSH_DEFS[k];
+    app.brush[k] = clamp(v, def.min, def.max);
+    controls['brush.' + k].set(app.brush[k]);
+  }
+
+  function buildUI() {
+    // modes
+    const modes = $('#modes'), msel = $('#modeSelect');
+    MODES.forEach((m, i) => {
+      const b = el('button'); b.type = 'button'; b.dataset.mode = i;
+      b.innerHTML = `${m.name}<span class="kbd">${m.key}</span>`;
+      b.title = `${m.long || m.name} (${m.key})`;
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => setMode(i));
+      modes.appendChild(b);
+      const o = el('option', null, m.name); o.value = i; msel.appendChild(o);
+    });
+    msel.addEventListener('change', () => setMode(+msel.value));
+    // tools
+    const tb = $('#toolbar');
+    for (const t of TOOLS) {
+      if (t === 'sep') { tb.appendChild(el('div', 'sep')); continue; }
+      const b = el('button'); b.type = 'button'; b.dataset.tool = t.id;
+      b.title = `${t.name} (${t.key})`; b.setAttribute('aria-label', t.name);
+      b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${t.icon}</svg>`;
+      b.addEventListener('click', () => setTool(t.id));
+      tb.appendChild(b);
+    }
+    // presets
+    const pre = section('Presets', true);
+    const pg = el('div', 'presets'); pre.appendChild(pg);
+    for (const p of PRESETS) {
+      const b = el('button', 'preset' + (p.wide ? ' wide' : '')); b.type = 'button'; b.dataset.preset = p.id;
+      b.innerHTML = `<b>${p.name}</b><span>${p.desc}</span>`;
+      b.addEventListener('click', () => applyPreset(p.id));
+      pg.appendChild(b);
+    }
+    // simulation
+    const sim = section('Simulation', true);
+    controls['res'] = selectRow(sim, 'p-res', 'Resolution', C.RESOLUTIONS.map(r => [r, `${r} × ${r}`]), (v) => changeResolution(+v), 'Grid resolution. Changing it resamples the running state.');
+    for (const [k, label, unit, d, title] of SIM_UI) controls['sim.' + k] = sliderRow(sim, 'p-' + k, label, C.SIM_PARAMS[k], unit, d, title, (v) => { app.P[k] = v; });
+    controls['boundary'] = selectRow(sim, 'p-boundary', 'Boundary', [['drain', 'Open (drain)'], ['closed', 'Closed walls'], ['sea', 'Sea level']], (v) => { app.P.boundary = v; }, 'Edge condition for water and sediment.');
+    controls['sim.seaLevel'] = sliderRow(sim, 'p-seaLevel', 'Sea level', C.SIM_PARAMS.seaLevel, 'm', 1, 'Water level held at the edges in sea-level mode.', (v) => { app.P.seaLevel = v; });
+    // water & erosion
+    const wat = section('Water & erosion', true);
+    for (const [k, label, unit, d, title] of WATER_UI) controls['sim.' + k] = sliderRow(wat, 'p-' + k, label, C.SIM_PARAMS[k], unit, d, title, (v) => { app.P[k] = v; });
+    // brush
+    const br = section('Brush', true);
+    for (const k in BRUSH_DEFS) { const d = BRUSH_DEFS[k]; controls['brush.' + k] = sliderRow(br, 'b-' + k, d.label, d, d.unit, d.d, d.title, (v) => { app.brush[k] = v; }); }
+    const brHelp = el('div', 'help'); brHelp.innerHTML = 'Left-drag paints with the active tool. <kbd>[</kbd> <kbd>]</kbd> radius, <kbd>-</kbd> <kbd>=</kbd> strength, also while dragging.';
+    br.appendChild(brHelp);
+    // view
+    const vw = section('View', true);
+    for (const k in VIEW_DEFS) { const d = VIEW_DEFS[k]; controls['view.' + k] = sliderRow(vw, 'v-' + k, d.label, d, d.unit, d.d, d.title, (v) => { app.view[k] = v; if (k === 'exag') app.lightDirty = true; }); }
+    const ck = el('div', 'checks'); vw.appendChild(ck);
+    controls['view.contours'] = checkbox(ck, 'v-contours', 'Contour lines', (v) => { app.view.contours = v; });
+    controls['view.grid'] = checkbox(ck, 'v-grid', 'Grid overlay', (v) => { app.view.grid = v; });
+    controls['view.highlight'] = checkbox(ck, 'v-highlight', 'Change highlight', (v) => { app.view.highlight = v; });
+    controls['view.arrows'] = checkbox(ck, 'v-arrows', 'Flow arrows', (v) => { app.view.arrows = v; });
+    const vb = el('div', 'btnrow'); vw.appendChild(vb);
+    const rc = el('button', 'btn', 'Reset camera'); rc.type = 'button'; rc.title = 'Home'; rc.addEventListener('click', () => resetCamera()); vb.appendChild(rc);
+    // terrain generation
+    const tg = section('Terrain generation', false);
+    const seedRow = el('div', 'row');
+    const sl = el('label', null, 'Seed'); sl.htmlFor = 'g-seed';
+    const sw = el('div', 'span2');
+    const si = el('input'); si.type = 'number'; si.id = 'g-seed'; si.min = 0; si.max = C.GEN_PARAMS.seed.max; si.step = 1;
+    si.addEventListener('input', () => { if (si.value !== '') app.gen.seed = C.clampParam(C.GEN_PARAMS.seed, si.value); });
+    si.addEventListener('change', () => { app.gen.seed = C.clampParam(C.GEN_PARAMS.seed, si.value); si.value = app.gen.seed; });
+    const dice = el('button', 'btn', '🎲'); dice.type = 'button'; dice.title = 'Random seed + regenerate'; dice.setAttribute('aria-label', 'Random seed and regenerate');
+    dice.addEventListener('click', () => { app.gen.seed = Math.floor(Math.random() * 999999); si.value = app.gen.seed; doRegen(); });
+    sw.append(si, dice); seedRow.append(sl, sw); tg.appendChild(seedRow);
+    controls['gen.seed'] = { set(v) { si.value = v; } };
+    controls['gen.type'] = selectRow(tg, 'g-type', 'Landform', [['mountains', 'Mountains'], ['canyon', 'Plateau / canyon'], ['island', 'Island'], ['valley', 'River valley'], ['hills', 'Rolling hills']], (v) => { app.gen.type = v; }, 'Terrain archetype (applied on Regenerate).');
+    for (const [k, label, unit, d, title] of GEN_UI) controls['gen.' + k] = sliderRow(tg, 'g-' + k, label, C.GEN_PARAMS[k], unit, d, title, (v) => { app.gen[k] = v; });
+    const gb = el('div', 'btnrow'); tg.appendChild(gb);
+    const rg = el('button', 'btn primary', 'Regenerate terrain'); rg.type = 'button'; rg.addEventListener('click', () => doRegen()); gb.appendChild(rg);
+    // data
+    const io = section('Import / export', true);
+    const iob = el('div', 'btnrow'); io.appendChild(iob);
+    const ePng = el('button', 'btn', 'Heightmap PNG'); ePng.type = 'button'; ePng.id = 'btnExportPng'; ePng.title = 'Export the current heightfield as a 16-bit grayscale PNG';
+    const eJson = el('button', 'btn', 'Export state'); eJson.type = 'button'; eJson.id = 'btnExportJson'; eJson.title = 'Export the complete simulation state as JSON';
+    const iJson = el('button', 'btn', 'Import state'); iJson.type = 'button'; iJson.id = 'btnImportJson'; iJson.title = 'Load a previously exported JSON state';
+    ePng.addEventListener('click', exportPNG); eJson.addEventListener('click', exportJSON); iJson.addEventListener('click', () => $('#importFile').click());
+    iob.append(ePng, eJson, iJson);
+    $('#importFile').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) importJSON(f); e.target.value = ''; });
+    // help
+    const hp = section('Controls & shortcuts', false);
+    hp.innerHTML = `<div class="help">
+      <p><b>Mouse</b> — left drag: active tool · right drag: orbit · middle drag or Shift+right: pan · wheel: zoom · Shift+wheel: brush radius · Alt+wheel: brush strength · Alt+left drag: orbit.</p>
+      <p><b>Touch</b> — one finger: active tool (Orbit tool rotates) · two fingers: pan, pinch-zoom, twist to rotate.</p>
+      <p><b>Keys</b> — <kbd>Space</kbd> pause · <kbd>N</kbd> step · <kbd>R</kbd> reset · <kbd>G</kbd> regenerate · <kbd>1</kbd>–<kbd>7</kbd> view modes · <kbd>V</kbd> orbit · <kbd>I</kbd> inspect · <kbd>B</kbd> raise · <kbd>L</kbd> lower · <kbd>S</kbd> smooth · <kbd>F</kbd> flatten · <kbd>W</kbd> water · <kbd>E</kbd> sediment · <kbd>D</kbd> dry · <kbd>[</kbd><kbd>]</kbd> radius · <kbd>-</kbd><kbd>=</kbd> strength · arrows orbit · <kbd>Home</kbd> camera · <kbd>Esc</kbd> clear probe.</p>
+      <p><b>Model</b> — virtual-pipe shallow water with Chezy friction, capacity-driven erosion/deposition with layered rock hardness, conservative upwind sediment transport, evaporation and talus-angle thermal erosion. Material and water budgets are tracked exactly; the status panel shows the residual.</p></div>`;
+
+    $('#btnPause').addEventListener('click', togglePause);
+    $('#btnStep').addEventListener('click', stepOnce);
+    $('#btnReset').addEventListener('click', doReset);
+    $('#btnRegen').addEventListener('click', doRegen);
+    $('#sheetToggle').addEventListener('click', () => {
+      const open = $('#panel').classList.toggle('open');
+      $('#sheetToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+      $('#sheetToggle').classList.toggle('open', open);
+      $('#sheetToggle').textContent = open ? 'Close' : 'Controls';
+    });
+    $('#hudToggle').addEventListener('click', () => {
+      const c = $('#hud').classList.toggle('collapsed');
+      $('#hudToggle').setAttribute('aria-expanded', c ? 'false' : 'true');
+      $('#hudToggle').textContent = c ? '▸' : '▾';
+    });
+    if (window.matchMedia('(max-width: 820px)').matches) { $('#hud').classList.add('collapsed'); $('#hudToggle').textContent = '▸'; }
+    buildHud();
+  }
+  function syncUI() {
+    const P = app.P, S = app.S;
+    for (const k in C.SIM_PARAMS) if (controls['sim.' + k]) controls['sim.' + k].set(P[k]);
+    controls['boundary'].set(P.boundary);
+    controls['res'].set(S ? S.N : app.res);
+    for (const k in C.GEN_PARAMS) if (controls['gen.' + k]) controls['gen.' + k].set(app.gen[k]);
+    controls['gen.type'].set(app.gen.type);
+    for (const k in VIEW_DEFS) controls['view.' + k].set(app.view[k]);
+    for (const k of ['contours', 'grid', 'highlight', 'arrows']) controls['view.' + k].set(app.view[k]);
+    for (const k in BRUSH_DEFS) controls['brush.' + k].set(app.brush[k]);
+    for (const b of document.querySelectorAll('.preset')) b.setAttribute('aria-pressed', b.dataset.preset === app.presetId ? 'true' : 'false');
+    setMode(app.view.mode);
+    setTool(app.brush.tool);
+    updatePauseButton();
+  }
+  function setMode(i) {
+    app.view.mode = clamp(i | 0, 0, MODES.length - 1);
+    for (const b of document.querySelectorAll('#modes button')) b.setAttribute('aria-pressed', +b.dataset.mode === app.view.mode ? 'true' : 'false');
+    $('#modeSelect').value = app.view.mode;
+    updateLegend(true);
+  }
+  function updatePauseButton() {
+    const b = $('#btnPause');
+    b.textContent = app.paused ? 'Resume' : 'Pause';
+    b.setAttribute('aria-pressed', app.paused ? 'true' : 'false');
+  }
+  function togglePause() { app.paused = !app.paused; updatePauseButton(); updateHud(true); }
+  function stepOnce() { if (!app.paused) { app.paused = true; updatePauseButton(); } app.stepRequest++; }
+  function doReset() {
+    C.resetToInitial(app.S);
+    if (app.P.boundary === 'sea') { /* d0 already holds the initial sea fill */ }
+    app.stats = C.computeStats(app.S, app.P); app.snapshot = null; app.stabilityScale = 1;
+    app.texDirty = true; app.lightDirty = true;
+    toast('Reset to the initial terrain of this run (t = 0)');
+  }
+  function doRegen() {
+    const prevType = app.S && app.S.gen ? app.S.gen.type : null;
+    newWorld({ applyScenario: prevType !== app.gen.type });
+    toast(`Generated ${app.gen.type} terrain · seed ${app.gen.seed} · ${app.res}² in ${app.genMs.toFixed(0)} ms`);
+  }
+  function applyPreset(id) {
+    const p = PRESETS.find(p => p.id === id); if (!p) return;
+    app.presetId = id;
+    app.gen = C.sanitizeGen(p.gen);
+    const scen = { boundary: p.sim.boundary, seaLevel: p.sim.seaLevel };
+    app.P = C.sanitizeSim({ ...p.sim });
+    app.res = p.res;
+    Object.assign(app.view, p.view);
+    newWorld({ applyScenario: !scen.boundary });
+    if (scen.boundary) { app.P.boundary = scen.boundary; app.P.seaLevel = scen.seaLevel ?? app.P.seaLevel; }
+    app.paused = false;
+    resetCamera(p.cam);
+    syncUI();
+    toast(`Preset: ${p.name}`);
+  }
+  function changeResolution(N2) {
+    if (!C.RESOLUTIONS.includes(N2) || N2 === app.S.N) return;
+    const t0 = performance.now();
+    const S2 = C.resample(app.S, N2);
+    if (app.probe) { const f = (N2 - 1) / (app.S.N - 1); app.probe = { gx: app.probe.gx * f, gy: app.probe.gy * f }; }
+    setWorld(S2);
+    toast(`Resampled running state to ${N2} × ${N2} in ${(performance.now() - t0).toFixed(0)} ms`);
+  }
+
+  // ---------------------------------------------------------------- HUD, legend, probe
+  const hudRows = {};
+  function buildHud() {
+    const g = $('#hudGrid');
+    const rows = [
+      ['fps', 'FPS'], ['frame', 'Frame / sim', 'x'], ['grid', 'Grid'], ['time', 'Sim time'], ['steps', 'Steps/frame', 'x'], ['dt', 'dt · CFL'],
+      ['water', 'Water'], ['sed', 'Suspended sed.'], ['soil', 'Loose deposits', 'x'], ['moved', 'Eroded / dep.', 'x'], ['relief', 'Relief · max Δh', 'x'],
+      ['vmax', 'Max depth · speed', 'x'], ['mass', 'Mass balance', 'x'], ['wbal', 'Water balance', 'x'], ['stab', 'Stability'], ['mode', 'View'],
+    ];
+    for (const [k, label, cls] of rows) {
+      const a = el('span', 'k' + (cls ? ' ' + cls : ''), label), b = el('span', 'v' + (cls ? ' ' + cls : ''), '—');
+      g.append(a, b); hudRows[k] = b;
+    }
+  }
+  let hudLast = 0;
+  function updateHud(force) {
+    const now = performance.now();
+    if (!force && now - hudLast < 250) return;
+    hudLast = now;
+    const S = app.S, st = app.stats;
+    const chip = $('#hudState');
+    chip.textContent = app.paused ? 'PAUSED' : 'RUNNING';
+    chip.className = 'chip' + (app.paused ? ' paused' : '');
+    hudRows.fps.textContent = `${app.fps.toFixed(0)}  ·  ${(app.renderScale).toFixed(2)}× res`;
+    hudRows.frame.textContent = `${app.frameMs.toFixed(1)} / ${app.simMs.toFixed(1)} ms`;
+    hudRows.grid.textContent = `${S.N}×${S.N} · ${S.dx.toFixed(2)} m`;
+    hudRows.time.textContent = `${S.time.toFixed(1)} s · #${S.steps}`;
+    hudRows.steps.textContent = `${app.stepsLastFrame}/${app.stepsWanted}${app.split > 1 ? ' ×' + app.split + ' split' : ''}${app.budgetLimited ? ' (budget)' : ''}`;
+    hudRows.dt.textContent = `${app.lastDt.toFixed(3)} s · ${app.cfl.toFixed(2)}`;
+    hudRows.water.textContent = `${fmtBig(st.water)} m³ · ${(st.wetFrac * 100).toFixed(0)}% wet`;
+    hudRows.sed.textContent = `${fmtBig(st.sediment)} m³`;
+    hudRows.soil.textContent = `${fmtBig(st.soil)} m³`;
+    hudRows.moved.textContent = `${fmtBig(S.bal.eroded)} / ${fmtBig(S.bal.deposited)} m³`;
+    hudRows.relief.textContent = `${(st.maxH - st.minH).toFixed(1)} m · ${st.maxDelta.toFixed(2)} m`;
+    hudRows.vmax.textContent = `${st.maxDepth.toFixed(2)} m · ${st.maxSpeed.toFixed(2)} m/s`;
+    hudRows.mass.textContent = `${fmtRel(st.matRel)}`;
+    hudRows.wbal.textContent = `${fmtRel(st.waterRel)}`;
+    let stab = 'stable', cls = 'ok';
+    if (app.cflLimited) { stab = 'CFL-limited'; cls = 'warn'; }
+    else if (app.split > 1) { stab = `CFL guard ×${app.split}`; cls = 'warn'; }
+    if (app.stabilityScale < 1) { stab = `recovering (dt ×${app.stabilityScale})`; cls = 'bad'; }
+    if (app.budgetLimited && cls === 'ok') { stab = 'stable · CPU-bound'; cls = 'warn'; }
+    if (app.recoveries) stab += ` · ${app.recoveries} rollback${app.recoveries > 1 ? 's' : ''}`;
+    hudRows.stab.textContent = stab; hudRows.stab.className = 'v stab ' + cls;
+    hudRows.mode.textContent = MODES[app.view.mode].name;
+    updateLegend(false);
+  }
+  function fmtRel(r) { if (!Number.isFinite(r)) return 'NaN'; const a = Math.abs(r); return a < 1e-12 ? '< 1e-12' : (r >= 0 ? '+' : '') + r.toExponential(1); }
+
+  // JS mirrors of the GLSL colour maps (legend)
+  const JSC = {
+    turbo(x) { x = clamp(x, 0, 1); const v = [1, x, x * x, x * x * x], v2 = [x * x * x * x, x * x * x * x * x];
+      const d = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+      return [d(v, [0.13572138, 4.6153926, -42.66032258, 132.13108234]) + v2[0] * -152.94239396 + v2[1] * 59.28637943,
+        d(v, [0.09140261, 2.19418839, 4.84296658, -14.18503333]) + v2[0] * 4.27729857 + v2[1] * 2.82956604,
+        d(v, [0.1066733, 12.64194608, -60.58204836, 110.36276771]) + v2[0] * -89.90310912 + v2[1] * 27.34824973].map(c => clamp(c, 0, 1)); },
+    poly(t, cs) { t = clamp(t, 0, 1); return [0, 1, 2].map(i => clamp(cs.reduceRight((acc, c) => c[i] + t * acc, 0), 0, 1)); },
+    viridis(t) { return JSC.poly(t, [[0.2777, 0.0054, 0.3341], [0.1051, 1.4046, 1.3846], [-0.3309, 0.2148, 0.0951], [-4.6342, -5.7991, -19.3324], [6.2283, 14.1799, 56.6906], [4.7764, -13.7451, -65.3530], [-5.4355, 4.6459, 26.3124]]); },
+    magma(t) { return JSC.poly(t, [[-0.0021, -0.0007, -0.0054], [0.2517, 0.6775, 2.4940], [8.3537, -3.5777, 0.3145], [-27.6687, 14.2647, -13.6492], [52.1761, -27.9436, 12.9442], [-50.7685, 29.0466, 4.2342], [18.6557, -11.4898, -5.6020]]); },
+    lerp(a, b, t) { return a.map((x, i) => x + (b[i] - x) * t); },
+    deep(t) { t = clamp(t, 0, 1); const a = [0.9, 0.95, 0.98], b = [0.5, 0.78, 0.92], c = [0.13, 0.46, 0.78], d = [0.04, 0.1, 0.36];
+      return t < 0.33 ? JSC.lerp(a, b, t / 0.33) : t < 0.66 ? JSC.lerp(b, c, (t - 0.33) / 0.33) : JSC.lerp(c, d, (t - 0.66) / 0.34); },
+    diverge(t) { t = clamp(t, -1, 1); const e2 = [0.62, 0.08, 0.05], e1 = [0.95, 0.52, 0.26], z = [0.93, 0.93, 0.9], p1 = [0.45, 0.7, 0.9], p2 = [0.06, 0.22, 0.58];
+      return t < 0 ? (t < -0.5 ? JSC.lerp(e1, e2, (-t - 0.5) * 2) : JSC.lerp(z, e1, -t * 2)) : (t > 0.5 ? JSC.lerp(p1, p2, (t - 0.5) * 2) : JSC.lerp(z, p1, t * 2)); },
+  };
+  const css = (c) => `rgb(${c.map(x => Math.round(x * 255)).join(',')})`;
+  function gradient(fn, a = 0, b = 1) { const s = []; for (let i = 0; i <= 12; i++) { const t = a + (b - a) * i / 12; s.push(`${css(fn(t))} ${(i / 12 * 100).toFixed(0)}%`); } return `linear-gradient(90deg, ${s.join(',')})`; }
+  let legendMode = -1;
+  function updateLegend(force) {
+    const m = app.view.mode, st = app.stats, R = app.ranges;
+    if (!st) return;
+    const bar = $('#legendBar');
+    const set = (title, unit, lo, mid, hi, note) => { $('#legendTitle').textContent = title; $('#legendUnit').textContent = unit; $('#legendMin').textContent = lo; $('#legendMid').textContent = mid; $('#legendMax').textContent = hi; $('#legendNote').textContent = note; };
+    const isFlow = m === 6;
+    $('#legendFlow').style.display = isFlow ? 'flex' : 'none';
+    $('#legendWheel').style.display = isFlow ? 'block' : 'none';
+    if (force || legendMode !== m) {
+      legendMode = m;
+      const bg = [
+        'linear-gradient(90deg, #6d5a3a, #5d6b36 30%, #7a7466 60%, #e4e7ec)',
+        gradient(JSC.turbo), gradient((t) => JSC.deep(Math.sqrt(t))), gradient((t) => JSC.magma(0.12 + 0.88 * Math.sqrt(t))),
+        gradient((t) => JSC.diverge(Math.sign(t) * Math.sqrt(Math.abs(t))), -1, 1), gradient((t) => JSC.viridis(t)),
+        'linear-gradient(90deg, #333, #eee)',
+      ][m];
+      bar.style.background = bg;
+      $('#legendWheel').style.background = 'conic-gradient(from 90deg, hsl(180,80%,50%), hsl(90,80%,50%), hsl(0,80%,50%), hsl(270,80%,50%), hsl(180,80%,50%))';
+    }
+    switch (m) {
+      case 0: set('Shaded terrain', 'wet darkens · sand = deposits', 'vegetation', 'rock', 'snow', app.view.highlight ? 'Tint: red = recently eroded, yellow = recently deposited. Muddy water = high sediment load.' : 'Muddy water = high sediment load.'); break;
+      case 1: set('Elevation', 'm', st.minH.toFixed(0), ((st.minH + st.maxH) / 2).toFixed(0), st.maxH.toFixed(0), 'Turbo colour map over the current height range.'); break;
+      case 2: set('Water depth', 'm (sqrt scale)', '0', (R.depth / 4).toFixed(2), R.depth.toFixed(2), 'Gray = dry (< 4 mm). Range auto-scales to the current maximum.'); break;
+      case 3: set('Sediment concentration', '% of water volume', '0', (R.conc * 25).toFixed(1), (R.conc * 100).toFixed(1), 'Suspended load ÷ water depth; gray where dry.'); break;
+      case 4: set('Erosion / deposition', 'Δh since t=0 (m)', '−' + R.delta.toFixed(2), '0', '+' + R.delta.toFixed(2), 'Red = eroded, blue = deposited (signed sqrt scale).'); break;
+      case 5: set('Slope', 'degrees', '0°', '30°', '60°', 'Terrain slope angle (true, not exaggerated).'); break;
+      case 6: set('Flow velocity', 'm/s', '0', (R.speed / 2).toFixed(2), R.speed.toFixed(2), ''); $('#legendFlowNote').textContent = 'Hue = direction, brightness = speed. Arrows show direction; length ∝ speed.'; break;
+    }
+  }
+  function updateRanges() {
+    const st = app.stats, R = app.ranges, k = 0.08;
+    R.depth += (Math.max(0.25, st.maxDepth * 0.8) - R.depth) * k;
+    R.conc += (clamp(st.maxConc * 0.8, 0.01, 1) - R.conc) * k;
+    R.delta += (Math.max(0.25, st.maxDelta * 0.7) - R.delta) * k;
+    R.speed += (Math.max(0.5, st.maxSpeed * 0.8) - R.speed) * k;
+  }
+  let probeLast = 0;
+  function updateProbe() {
+    const now = performance.now();
+    if (now - probeLast < 120) return;
+    probeLast = now;
+    const S = app.S, N = S.N;
+    const src = app.hover ? app.hover : app.probe;
+    const title = $('#probeTitle'), srcEl = $('#probeSrc'), g = $('#probeGrid');
+    if (!src) { if (!g.dataset.empty) { g.innerHTML = '<span class="empty" style="grid-column: span 2">Hover the terrain or use the Inspect tool (I) to pin a probe.</span>'; g.dataset.empty = '1'; srcEl.textContent = ''; } return; }
+    delete g.dataset.empty;
+    const i = clamp(Math.round(src.gx), 0, N - 1), j = clamp(Math.round(src.gy), 0, N - 1), k = j * N + i;
+    const h = S.h[k], d = S.d[k], s = S.s[k], soil = S.soil[k], u = S.u[k], v = S.v[k];
+    const sp = Math.hypot(u, v);
+    const hx = (S.h[j * N + Math.min(N - 1, i + 1)] - S.h[j * N + Math.max(0, i - 1)]) / (2 * S.dx);
+    const hy = (S.h[Math.min(N - 1, j + 1) * N + i] - S.h[Math.max(0, j - 1) * N + i]) / (2 * S.dx);
+    const slope = Math.atan(Math.hypot(hx, hy)) / DEG;
+    const sinA = Math.sin(slope * DEG);
+    const cap = Math.min(C.CMAX * d, app.P.capacity * Math.max(sinA, 0.05) * sp * Math.min(1, d / 0.4));
+    let sk = ((h - soil + S.strataOff[k]) - C.STRATA_Z0) / C.STRATA_DZ | 0; sk = clamp(sk, 0, C.STRATA_N - 1);
+    const hard = soil > 1e-3 ? 0 : app.P.hardness * S.strata[sk];
+    const dir = sp > 0.01 ? ((Math.atan2(u, -v) / DEG + 360) % 360).toFixed(0) + '°' : '—';
+    title.textContent = app.hover ? 'Probe · hover' : 'Probe · pinned';
+    srcEl.textContent = `cell ${i}, ${j}`;
+    const rows = [
+      ['Position', `${((i - (N - 1) / 2) * S.dx).toFixed(0)}, ${((j - (N - 1) / 2) * S.dx).toFixed(0)} m`, 1],
+      ['Elevation', `${h.toFixed(2)} m`], ['Water depth', `${d < 1e-4 ? d.toExponential(1) : d.toFixed(3)} m`], ['Surface', `${(h + d).toFixed(2)} m`],
+      ['Flow speed', `${sp.toFixed(2)} m/s ${dir}`], ['Sediment', `${(s * 1000).toFixed(1)} mm · ${d > 1e-3 ? (s / d * 100).toFixed(1) : '0.0'}%`],
+      ['Capacity', `${(cap * 1000).toFixed(1)} mm`, 1], ['Slope', `${slope.toFixed(1)}°`], ['Loose soil', `${soil.toFixed(3)} m`, 1],
+      ['Rock hardness', hard.toFixed(2), 1], ['Δh since t=0', `${(h - S.h0[k] >= 0 ? '+' : '')}${(h - S.h0[k]).toFixed(3)} m`],
+      ['Recent Δh', `${(S.recent[k] >= 0 ? '+' : '')}${(S.recent[k] * 1000).toFixed(1)} mm`, 1], ['Wetness', S.wet[k].toFixed(2), 1],
+    ];
+    g.innerHTML = rows.map(([a, b, x]) => `<span class="k${x ? ' x' : ''}">${a}</span><span class="v${x ? ' x' : ''}">${b}</span>`).join('');
+  }
+
+  // ---------------------------------------------------------------- import / export
+  function download(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = el('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    app.lastDownload = { name, size: blob.size, type: blob.type, blob };
+  }
+  async function zlib(raw) {
+    if (typeof CompressionStream === 'function') {
+      try {
+        const cs = new CompressionStream('deflate');
+        const buf = await new Response(new Blob([raw]).stream().pipeThrough(cs)).arrayBuffer();
+        return new Uint8Array(buf);
+      } catch (e) { /* fall through to stored blocks */ }
+    }
+    return C.zlibStored(raw);
+  }
+  function stamp() { return `seed${app.gen.seed}-${app.S.N}-t${Math.round(app.S.time)}s`; }
+  async function buildHeightPNG() {
+    const { raw, min, max } = C.heightPNGRaw(app.S);
+    const z = await zlib(raw);
+    const png = C.assemblePNG(app.S.N, z, { Software: 'Hydraulic Erosion Lab', Description: `16-bit heightfield, 0 = ${min.toFixed(3)} m, 65535 = ${max.toFixed(3)} m, cell ${app.S.dx.toFixed(4)} m`, 'height-min-m': min.toFixed(4), 'height-max-m': max.toFixed(4) });
+    return { png, min, max };
+  }
+  async function exportPNG() {
+    try {
+      const { png, min, max } = await buildHeightPNG();
+      download(new Blob([png], { type: 'image/png' }), `erosion-heightmap-${stamp()}.png`);
+      toast(`Exported 16-bit grayscale heightmap (${app.S.N}², ${min.toFixed(1)}…${max.toFixed(1)} m)`);
+    } catch (e) { toast('PNG export failed: ' + e.message, true); }
+  }
+  function stateObject() {
+    return C.serialize(app.S, {
+      savedAt: new Date().toISOString(), app: 'Hydraulic Erosion Lab',
+      params: app.P, view: { ...app.view }, brush: { ...app.brush }, preset: app.presetId,
+      camera: { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist, target: cam.target.slice() },
+    });
+  }
+  function exportJSON() {
+    try {
+      const json = JSON.stringify(stateObject());
+      download(new Blob([json], { type: 'application/json' }), `erosion-state-${stamp()}.json`);
+      toast(`Exported full simulation state (${(json.length / 1e6).toFixed(1)} MB)`);
+    } catch (e) { toast('State export failed: ' + e.message, true); }
+  }
+  function loadStateObject(obj) {
+    const S = C.deserialize(obj);
+    app.P = C.sanitizeSim(obj.params || {});
+    app.gen = S.gen;
+    if (obj.view && typeof obj.view === 'object') {
+      for (const k in VIEW_DEFS) if (Number.isFinite(obj.view[k])) app.view[k] = clamp(obj.view[k], VIEW_DEFS[k].min, VIEW_DEFS[k].max);
+      if (Number.isInteger(obj.view.mode)) app.view.mode = clamp(obj.view.mode, 0, MODES.length - 1);
+      for (const k of ['contours', 'grid', 'highlight', 'arrows']) if (typeof obj.view[k] === 'boolean') app.view[k] = obj.view[k];
+    }
+    if (obj.brush && typeof obj.brush === 'object') {
+      for (const k in BRUSH_DEFS) if (Number.isFinite(obj.brush[k])) app.brush[k] = clamp(obj.brush[k], BRUSH_DEFS[k].min, BRUSH_DEFS[k].max);
+    }
+    if (obj.camera && [obj.camera.yaw, obj.camera.pitch, obj.camera.dist].every(Number.isFinite)) {
+      cam.yaw = obj.camera.yaw; cam.pitch = clamp(obj.camera.pitch, 0.06, 1.52); cam.dist = clamp(obj.camera.dist, 80, 2600);
+      if (Array.isArray(obj.camera.target) && obj.camera.target.length === 3 && obj.camera.target.every(Number.isFinite)) cam.target = obj.camera.target.slice();
+    }
+    app.presetId = PRESETS.some(p => p.id === obj.preset) ? obj.preset : '';
+    setWorld(S);
+    return S;
+  }
+  function importJSON(file) {
+    const reader = new FileReader();
+    reader.onerror = () => toast('Could not read file', true);
+    reader.onload = () => {
+      try {
+        const obj = JSON.parse(reader.result);
+        const S = loadStateObject(obj);
+        toast(`Imported state: ${S.N}², t = ${S.time.toFixed(1)} s${S.importFixes ? ` (${S.importFixes} invalid values repaired)` : ''}`);
+      } catch (e) { toast('Import failed: ' + e.message, true); }
+    };
+    reader.readAsText(file);
+  }
+  app.api = { buildHeightPNG, stateObject, loadStateObject, applyPreset, setMode, setTool, pick, cam };
+
+  // ---------------------------------------------------------------- main loop
+  let lastT = performance.now(), fpsAcc = 0, fpsN = 0, fpsT = performance.now(), slowFrames = 0, fastFrames = 0;
+  function frame(t) {
+    requestAnimationFrame(frame);
+    const realDt = Math.min(0.1, (t - lastT) / 1000);
+    const f0 = performance.now();
+    lastT = t;
+    if (input.overCanvas && (input.hoverDirty || input.stroke || !app.paused)) {
+      const hit = pick(input.lastX, input.lastY);
+      app.hover = hit; input.hoverDirty = false;
+    }
+    applyStroke(realDt);
+    try { simulateFrame(t); } catch (e) { console.error(e); recover('exception: ' + e.message); }
+    if (!app.stats) app.stats = C.computeStats(app.S, app.P);
+    updateRanges();
+    render(t);
+    updateHud(false);
+    updateProbe();
+    // frame timing and adaptive render scale
+    const work = performance.now() - f0;
+    fpsAcc += realDt; fpsN++;
+    app.frameMs = app.frameMs * 0.9 + work * 0.1;
+    if (t - fpsT > 500) { app.fps = fpsN / Math.max(1e-3, fpsAcc); fpsAcc = 0; fpsN = 0; fpsT = t;
+      if (app.fps < 28) { slowFrames++; fastFrames = 0; } else if (app.fps > 55) { fastFrames++; slowFrames = 0; } else { slowFrames = 0; fastFrames = 0; }
+      if (slowFrames >= 3 && app.renderScale > 0.5) { app.renderScale = Math.max(0.5, app.renderScale * 0.85); slowFrames = 0; }
+      if (fastFrames >= 4 && app.renderScale < 1) { app.renderScale = Math.min(1, app.renderScale * 1.12); fastFrames = 0; }
+    }
+  }
+
+  buildUI();
+  applyPreset('mountain');
+  window.addEventListener('resize', () => { resize(); });
+  requestAnimationFrame((t) => { lastT = t; frame(t); });
+})();
+</script>
+</body>
+</html>

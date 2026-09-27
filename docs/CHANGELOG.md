@@ -1,5 +1,11 @@
 # Changelog
 
+## Opus 5.5 and SWE-2's ecosystem: 2026-09-27
+
+- Added four Opus 5.5 builds with the reported setup Claude Code at xhigh. It appears first in the showcase with its own violet tint.
+- Added SWE-2's evolutionary ecosystem, extending its collection through prompt 14. The gallery now contains 122 builds from eight models, with updated thumbnails and share previews.
+- Added a public-gallery notice for the ecosystem's Restore autosave storage error; the simulation continues running.
+
 ## SWE-2 joins the showcase: 2026-09-27
 
 - Added Cognition's SWE-2 with thirteen builds, using Devin CLI at High. It appears directly after Grok 4.6 with its own rose tint.

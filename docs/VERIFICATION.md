@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## Opus 5.5 and SWE-2's ecosystem: 2026-09-27
+
+Opus 5.5 adds prompts 01–04 with the reported setup **Claude Code · xhigh** and appears first with tint `#B9A4FF`. SWE-2 adds prompt 14. The collection now contains **122 builds from eight models**.
+
+All **383 original files totaling 172,628,779 bytes** remain unchanged. Five thumbnail aliases exactly copy visually reviewed supplied screenshots; no supplied hash binds those captures to the final HTML. The bounded publication review covered **115 text files, 264 PNGs, three WAVs, and one WebM**. No confirmed credential, private identity linkage, external runtime endpoint, or oversized GitHub file was found. Media structure checks found only benign heightmap and encoder metadata. Remaining image pixels, video frames, and audio content were not exhaustively reviewed. Raw evidence remains public in GitHub and is excluded from the website; supplied scripts were not executed.
+
+The five new apps passed **28 local startup, native-control, viewport, and cleanup checks**, including user-activated synth audio. Representative 390-pixel views fit their frames without horizontal overflow. Four focused checks confirmed that SWE-2's Restore autosave button raises a sandbox-storage error while simulation time and pause controls still work; a public-only notice records that limitation. Seventeen gallery checks verified the model order, setup, tint, sharing, missing-entry filter, collection counts, and three/two/one-column layouts. These are bounded integration checks, not complete evaluations of the submitted apps.
+
+Production deployment **`6ab98deb2cf8dcf93eae9a9f`** publishes **490 files totaling 22,569,948 bytes (21.52 MiB)**, including 122 builds with thumbnails/share pages, 24 prompt comparisons, and eight model collections. The exact inventory and all 122 source HTML hashes passed. Live HTTPS checks matched **31 files** against the export; **13 representative excluded routes returned 404**. All five new apps initialized and responded to native input in production. SWE-2's Restore error reproduced; the existing gallery notice overlaps its top-right Pause button, so the app's Space shortcut was used to pause. All seventeen gallery checks also passed in production, and the README screenshot was refreshed from the live homepage and visually inspected.
+
 ## SWE-2 joins the showcase: 2026-09-27
 
 Cognition's SWE-2 adds thirteen builds for prompts 01–13, with the reported setup **Devin CLI · High**. The collection now contains **117 builds across 24 prompts and seven models**. SWE-2 follows Grok 4.6 in the existing model configuration and uses the rose tint `#E6A4B4`.
