@@ -1,0 +1,1230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Deformables — Soft-Body &amp; Cloth Playground</title>
+<style>
+  :root{
+    --bg:#0c0f14; --panel:#151a23; --panel2:#1b2230; --line:#263040;
+    --txt:#dbe4f0; --dim:#8b99ae; --acc:#4fd1c5; --acc2:#f6ad55; --danger:#fc8181;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  #sim{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+
+  /* ---------- top bar ---------- */
+  #topbar{position:fixed;top:0;left:0;right:0;height:46px;display:flex;align-items:center;
+    gap:8px;padding:0 10px;background:rgba(16,20,28,.88);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);z-index:20}
+  #topbar .brand{font-weight:700;letter-spacing:.4px;color:var(--acc);white-space:nowrap}
+  #topbar select,#topbar button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:7px;padding:5px 9px;font:inherit;cursor:pointer}
+  #topbar button:hover,#topbar select:hover{border-color:var(--acc)}
+  #topbar button.on{background:var(--acc);color:#08110f;border-color:var(--acc);font-weight:600}
+  #topbar .sp{flex:1}
+  .kb{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--line);
+    border-radius:4px;padding:0 4px;margin-left:4px}
+
+  /* ---------- side panel ---------- */
+  #panel{position:fixed;top:46px;right:0;bottom:0;width:288px;overflow-y:auto;z-index:15;
+    background:rgba(17,22,30,.92);backdrop-filter:blur(8px);border-left:1px solid var(--line);
+    padding:10px 12px 40px;transition:transform .22s ease}
+  #panel h3{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+    margin:14px 0 6px;border-bottom:1px solid var(--line);padding-bottom:3px}
+  #panel h3:first-child{margin-top:2px}
+  .tools{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  .tools button,.vw button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:7px;padding:7px 4px;font:inherit;font-size:12px;cursor:pointer;text-align:center}
+  .tools button:hover,.vw button:hover{border-color:var(--acc)}
+  .tools button.on{background:var(--acc);color:#08110f;font-weight:600;border-color:var(--acc)}
+  .tools button .ico{display:block;font-size:15px;margin-bottom:1px}
+  .row{display:flex;align-items:center;gap:8px;margin:5px 0}
+  .row label{flex:0 0 118px;color:var(--dim);font-size:12px;white-space:nowrap}
+  .row output{flex:0 0 46px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--acc)}
+  .row input[type=range]{flex:1;min-width:0;accent-color:var(--acc);height:20px}
+  .row select{flex:1;background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:6px;padding:4px 6px;font:inherit}
+  .vw{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+  .vw button.on{background:var(--acc);color:#08110f;font-weight:600}
+  .chk{display:flex;align-items:center;gap:7px;margin:4px 0;color:var(--dim);font-size:12px;cursor:pointer}
+  .chk input{accent-color:var(--acc)}
+  #hint{margin-top:14px;font-size:11px;color:var(--dim);line-height:1.5}
+  #hint b{color:var(--txt)}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;left:10px;bottom:10px;z-index:10;font-family:var(--mono);font-size:11px;
+    line-height:1.5;color:#a8e6df;background:rgba(10,14,20,.72);border:1px solid var(--line);
+    border-radius:8px;padding:8px 11px;pointer-events:none;white-space:pre}
+  #hud .warn{color:var(--acc2)}
+  #panelToggle{display:none;position:fixed;right:10px;bottom:10px;z-index:25;width:44px;height:44px;
+    border-radius:50%;background:var(--acc);color:#08110f;border:none;font-size:20px;cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.5)}
+
+  #toast{position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:30;
+    background:var(--panel2);border:1px solid var(--acc);color:var(--txt);border-radius:8px;
+    padding:7px 14px;font-size:12px;opacity:0;transition:opacity .25s;pointer-events:none}
+
+  @media (max-width:760px){
+    #panel{transform:translateX(105%);width:min(300px,86vw)}
+    #panel.open{transform:translateX(0)}
+    #panelToggle{display:block}
+    #topbar{flex-wrap:wrap;height:auto;min-height:46px;padding:5px 8px}
+    #topbar .brand{font-size:12px}
+    #hud{bottom:64px;font-size:10px;max-width:70vw}
+  }
+</style>
+</head>
+<body>
+<canvas id="sim"></canvas>
+
+<div id="topbar">
+  <span class="brand">◈ Deformables</span>
+  <select id="selScenario" title="Scenario"></select>
+  <button id="btnPause" title="Pause/Resume [Space]">⏸ Pause</button>
+  <button id="btnStep" title="Single step [N]">⏭ Step</button>
+  <button id="btnReset" title="Reset scenario [R]">↺ Reset</button>
+  <span class="sp"></span>
+  <select id="selRender" title="Render mode">
+    <option value="shaded">Shaded</option>
+    <option value="points">Points</option>
+    <option value="wire">Wireframe</option>
+  </select>
+</div>
+
+<aside id="panel">
+  <h3>Tools</h3>
+  <div class="tools" id="tools">
+    <button data-tool="grab"    class="on"><span class="ico">✋</span>Grab<span class="kb">1</span></button>
+    <button data-tool="pin"><span class="ico">📌</span>Pin<span class="kb">2</span></button>
+    <button data-tool="cut"><span class="ico">✂️</span>Cut<span class="kb">3</span></button>
+    <button data-tool="impulse"><span class="ico">💥</span>Impulse<span class="kb">4</span></button>
+    <button data-tool="wind"><span class="ico">🌬️</span>Gust<span class="kb">5</span></button>
+    <button data-tool="spawn"><span class="ico">➕</span>Spawn<span class="kb">6</span></button>
+  </div>
+  <div class="row" style="margin-top:7px">
+    <label>Spawn type</label>
+    <select id="selSpawn">
+      <option value="rope">Rope / chain</option>
+      <option value="cloth">Cloth sheet</option>
+      <option value="ball">Ball (pressurized)</option>
+      <option value="blob">Soft body blob</option>
+      <option value="balloon">Balloon</option>
+      <option value="scircle">Static circle</option>
+      <option value="sbox">Static box</option>
+      <option value="scapsule">Static bar</option>
+    </select>
+  </div>
+
+  <h3>View layers</h3>
+  <div class="vw" id="viewToggles">
+    <button data-viz="particles">Particles</button>
+    <button data-viz="constraints">Constraints</button>
+    <button data-viz="velocity">Velocity</button>
+    <button data-viz="stress">Stress</button>
+    <button data-viz="contacts">Contacts</button>
+    <button data-viz="grid">Hash grid</button>
+  </div>
+
+  <h3>Simulation</h3>
+  <div id="sliders"></div>
+
+  <div id="hint">
+    <b>Grab</b> drag bodies · <b>Pin</b> click to pin/unpin · <b>Cut</b> swipe through
+    constraints · <b>Impulse</b> click for a shockwave · <b>Gust</b> drag to blow wind ·
+    <b>Spawn</b> click to add objects.<br>
+    Keys: <b>1–6</b> tools · <b>Space</b> pause · <b>N</b> step · <b>R</b> reset ·
+    <b>V</b> cycle render mode.
+  </div>
+</aside>
+
+<div id="hud"></div>
+<button id="panelToggle" title="Controls">⚙</button>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ============================================================
+   Deformables — 2D soft-body / cloth / constraint playground
+   Position-based dynamics (Verlet + constraint projection).
+   ============================================================ */
+
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+
+/* ---------------- parameters ---------------- */
+const P = {
+  gravity: 900,        // px/s^2 magnitude
+  gravAngle: 90,       // degrees, 90 = down, 0 = right
+  wind: 260,           // px/s^2 base wind accel (+x, gusty)
+  timeScale: 1.0,      // timestep multiplier (base dt = 1/60)
+  substeps: 4,
+  iterations: 8,
+  stiff: 0.85,         // structural stiffness 0..1
+  bend: 0.05,          // bending stiffness 0..1
+  pressure: 1.0,       // pressure multiplier for closed shapes
+  damping: 0.015,      // velocity damping per step fraction
+  friction: 0.4,
+  restitution: 0.08,
+  thick: 3,            // extra collision thickness px
+  selfCollide: true,
+  tear: 2.4,           // strain (fraction over rest) at which constraints tear; >=99 disables
+  density: 1.0,
+  interactStr: 1.0,
+  interactR: 64,
+};
+
+/* ---------------- world state ---------------- */
+const parts = [];      // {x,y,px,py,im,im0,r,obj,idx,pin,pnx,pny}
+const cons  = [];      // {a,b,rest,kind,k,dead,obj}
+const press = [];      // {idx:[...],rest,dead,obj}
+const statics = [];    // {type,x,y,r | x,y,hw,hh,ang | x1,y1,x2,y2,r}
+const objects = [];    // {kind,name,parts:[idx],cons:[],quads:[],loop:[idx],color,grav,massMult}
+const bonded = new Set();  // a*1048576+b pairs connected by constraints
+let contacts = [];     // [{x,y,nx,ny}] refreshed each frame
+let collisionPairs = 0, countPairs=false;
+let maxErr = 0;
+let paused = false, stepOnce = false;
+let scenarioName = 'flag';
+let simTime = 0, lastSubDt = 1/240;
+let cutFlash = [];     // recent cut segments for feedback
+let gusts = [];        // active wind gusts {x,y,vx,vy,life}
+
+const bondKey = (a,b)=> a<b ? a*1048576+b : b*1048576+a;
+
+/* ---------------- particle helpers ---------------- */
+function addParticle(x,y,o){
+  const p = {x,y,px:x,py:y,im:1,im0:1,r:3.2,obj:o,idx:0,pin:false,pnx:x,pny:y};
+  p.idx = parts.length; parts.push(p);
+  if(o) o.parts.push(p.idx);
+  return p.idx;
+}
+function addCon(a,b,kind,k,obj,tearable){
+  const p1=parts[a], p2=parts[b];
+  const rest=Math.hypot(p2.x-p1.x,p2.y-p1.y);
+  const c={a,b,rest,kind,k,dead:false,tear:tearable!==false,obj,
+    soft:(kind==='shear'||kind==='bend')};
+  cons.push(c); if(obj) obj.cons.push(c);
+  bonded.add(bondKey(a,b));
+  return c;
+}
+function setDensity(d){
+  for(const p of parts){ p.im = p.pin?0 : p.im0/(d*(p.obj?p.obj.massMult:1)); }
+}
+function pin(i,on){
+  const p=parts[i]; p.pin=on;
+  if(on){p.pnx=p.x;p.pny=p.y;p.im=0;} else {p.im=p.im0/(P.density*(p.obj?p.obj.massMult:1));}
+}
+
+/* ---------------- object builders ---------------- */
+let objSeq=0;
+const PALETTE=['#5cc8ff','#f6ad55','#fc8181','#b794f4','#68d391','#f6e05e','#4fd1c5','#f687b3'];
+
+function makeObj(kind,massMult,grav){
+  const o={kind,name:kind+(++objSeq),parts:[],cons:[],quads:[],loop:null,
+    color:PALETTE[objSeq%PALETTE.length],massMult:massMult||1,grav:grav==null?1:grav};
+  objects.push(o); return o;
+}
+
+function addCloth(x,y,cols,rows,sp,opt){
+  opt=opt||{};
+  const o=makeObj('cloth',opt.massMult||1,1);
+  const g=[];
+  for(let j=0;j<rows;j++){ g[j]=[];
+    for(let i=0;i<cols;i++) g[j][i]=addParticle(x+i*sp,y+j*sp,o); }
+  const HE=[],VE=[]; // horizontal / vertical edge constraints
+  for(let j=0;j<rows;j++){HE[j]=[];VE[j]=[];
+    for(let i=0;i<cols;i++){
+      if(i<cols-1)HE[j][i]=addCon(g[j][i],g[j][i+1],'struct',0,o);
+      if(j<rows-1)VE[j][i]=addCon(g[j][i],g[j+1][i],'struct',0,o);
+    }}
+  for(let j=0;j<rows-1;j++)for(let i=0;i<cols-1;i++){
+    let s1=null,s2=null;
+    if(!opt.noShear){ s1=addCon(g[j][i],g[j+1][i+1],'shear',0,o); s2=addCon(g[j][i+1],g[j+1][i],'shear',0,o);}
+    o.quads.push({p:[g[j][i],g[j][i+1],g[j+1][i+1],g[j+1][i]],
+      edges:[HE[j][i],VE[j][i+1],HE[j+1][i],VE[j][i]],shear:[s1,s2]});
+  }
+  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+    if(i<cols-2) addCon(g[j][i],g[j][i+2],'bend',0,o);
+    if(j<rows-2) addCon(g[j][i],g[j+2][i],'bend',0,o);
+  }
+  o.grid=g; o.cols=cols; o.rows=rows;
+  if(opt.pinTop)   for(let i=0;i<cols;i++) pin(g[0][i],true);
+  if(opt.pinLeft)  for(let j=0;j<rows;j++) pin(g[j][0],true);
+  if(opt.pinEnds){ pin(g[0][0],true); pin(g[0][cols-1],true); }
+  if(opt.pinCols)  for(let j=0;j<rows;j++){ pin(g[j][0],true); pin(g[j][cols-1],true); }
+  o.restCross = sp*sp*2;
+  return o;
+}
+
+function addRope(x1,y1,x2,y2,n,opt){
+  opt=opt||{};
+  const o=makeObj('rope',opt.massMult||1,1);
+  const idx=[];
+  for(let i=0;i<n;i++){
+    const t=i/(n-1);
+    idx.push(addParticle(x1+(x2-x1)*t, y1+(y2-y1)*t, o));
+  }
+  for(let i=0;i<n-1;i++) addCon(idx[i],idx[i+1],'rope',0,o);
+  for(let i=0;i<n-2;i++) addCon(idx[i],idx[i+2],'bend',0,o);
+  o.loop=idx; o.closed=false;
+  if(opt.pinA) pin(idx[0],true);
+  if(opt.pinB) pin(idx[n-1],true);
+  return o;
+}
+
+function addBalloon(cx,cy,r,n,opt){
+  opt=opt||{};
+  const o=makeObj(opt.kind||'balloon',opt.massMult||0.18,opt.grav==null?0.15:opt.grav);
+  const idx=[];
+  for(let i=0;i<n;i++){
+    const a=i/n*Math.PI*2, rr=r*(opt.wob? (1+opt.wob*Math.sin(i*2.7)) : 1);
+    idx.push(addParticle(cx+Math.cos(a)*rr, cy+Math.sin(a)*rr, o));
+  }
+  for(let i=0;i<n;i++) addCon(idx[i],idx[(i+1)%n],'struct',0,o);
+  for(let i=0;i<n;i++) addCon(idx[i],idx[(i+2)%n],'bend',0,o);
+  const rest=Math.abs(polyArea(idx));
+  press.push({idx,rest,dead:false,obj:o}); o.loop=idx; o.closed=true; o.press=press[press.length-1];
+  return o;
+}
+function addBlob(cx,cy,r,n,opt){ opt=opt||{}; opt.kind='blob'; opt.massMult=opt.massMult||1; opt.grav=1;
+  opt.wob=opt.wob==null?0.18:opt.wob; return addBalloon(cx,cy,r,n,opt); }
+function addBall(cx,cy,r){ return addBalloon(cx,cy,r,14,{kind:'ball',massMult:0.9,grav:1}); }
+
+function polyArea(idx){
+  let a=0; for(let i=0;i<idx.length;i++){const p=parts[idx[i]],q=parts[idx[(i+1)%idx.length]];
+    a+=p.x*q.y-q.x*p.y;} return a/2;
+}
+
+/* ---------------- statics ---------------- */
+function addStaticCircle(x,y,r){ statics.push({type:'circle',x,y,r}); }
+function addStaticBox(x,y,hw,hh,ang){ statics.push({type:'box',x,y,hw,hh,ang:ang||0}); }
+function addStaticCapsule(x1,y1,x2,y2,r){ statics.push({type:'capsule',x1,y1,x2,y2,r}); }
+
+/* ---------------- spatial hash ---------------- */
+const CELL=26;
+const hash=new Map();
+function hkey(cx,cy){ return (cx*73856093)^(cy*19349663); }
+function buildHash(){
+  hash.clear();
+  for(let i=0;i<parts.length;i++){
+    const p=parts[i];
+    const cx=Math.floor(p.x/CELL), cy=Math.floor(p.y/CELL);
+    const k=hkey(cx,cy);
+    let arr=hash.get(k); if(!arr){arr=[];hash.set(k,arr);}
+    arr.push(i);
+  }
+}
+function eachPair(fn){
+  for(let i=0;i<parts.length;i++){
+    const p=parts[i];
+    const cx=Math.floor(p.x/CELL), cy=Math.floor(p.y/CELL);
+    for(let gx=cx-1;gx<=cx+1;gx++)for(let gy=cy-1;gy<=cy+1;gy++){
+      const arr=hash.get(hkey(gx,gy)); if(!arr)continue;
+      for(let t=0;t<arr.length;t++){
+        const j=arr[t]; if(j<=i)continue;
+        fn(i,j);
+      }
+    }
+  }
+}
+
+/* ---------------- physics ---------------- */
+function kFor(c){
+  switch(c.kind){
+    case 'struct': return P.stiff;
+    case 'shear':  return P.stiff*0.12;
+    case 'bend':   return P.bend;
+    case 'rope':   return Math.max(P.stiff,0.85);
+  }
+  return 1;
+}
+function solveDist(c,track){
+  if(c.dead)return;
+  const a=parts[c.a],b=parts[c.b];
+  const w=a.im+b.im; if(w===0)return;
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const d=Math.sqrt(dx*dx+dy*dy)||1e-9;
+  const err=(d-c.rest)/c.rest;
+  if(track&&Math.abs(err)>maxErr)maxErr=Math.abs(err);
+  const s=kFor(c)*(d-c.rest)/d/w;
+  a.x+=dx*s*a.im; a.y+=dy*s*a.im;
+  b.x-=dx*s*b.im; b.y-=dy*s*b.im;
+}
+function solvePress(pc){
+  if(pc.dead)return;
+  const idx=pc.idx,n=idx.length;
+  let A=0; for(let i=0;i<n;i++){const p=parts[idx[i]],q=parts[idx[(i+1)%n]];A+=p.x*q.y-q.x*p.y;}
+  A/=2;
+  const target=pc.rest*P.pressure;
+  const C=A-target;
+  let sg=0;
+  const gx=new Array(n),gy=new Array(n);
+  for(let i=0;i<n;i++){
+    const pn=parts[idx[(i+1)%n]],pp=parts[idx[(i-1+n)%n]];
+    gx[i]=0.5*(pn.y-pp.y); gy[i]=0.5*(pp.x-pn.x);
+    sg+=parts[idx[i]].im*(gx[i]*gx[i]+gy[i]*gy[i]);
+  }
+  if(sg<1e-9)return;
+  const lam=C/sg*Math.min(1,P.pressure*0.5+0.35);
+  for(let i=0;i<n;i++){
+    const p=parts[idx[i]];
+    p.x-=lam*gx[i]*p.im;
+    p.y-=lam*gy[i]*p.im;
+  }
+}
+
+function collideStatic(p,s){
+  let nx,ny,depth;
+  const pr=p.r+P.thick;
+  if(s.type==='circle'){
+    const dx=p.x-s.x,dy=p.y-s.y,d=Math.hypot(dx,dy);
+    const rr=s.r+pr; if(d>=rr)return false;
+    nx=dx/(d||1e-9);ny=dy/(d||1e-9);depth=rr-d;
+  }else if(s.type==='box'){
+    const ca=Math.cos(-s.ang),sa=Math.sin(-s.ang);
+    const lx=(p.x-s.x)*ca-(p.y-s.y)*sa, ly=(p.x-s.x)*sa+(p.y-s.y)*ca;
+    const cx=Math.max(-s.hw,Math.min(s.hw,lx)), cy=Math.max(-s.hh,Math.min(s.hh,ly));
+    let dx=lx-cx,dy=ly-cy,d=Math.hypot(dx,dy);
+    if(d>pr)return false;
+    if(d<1e-6){ // inside: push out along min axis
+      const ox=s.hw-Math.abs(lx), oy=s.hh-Math.abs(ly);
+      if(ox<oy){dx=lx>0?1:-1;dy=0;d=ox;}else{dx=0;dy=ly>0?1:-1;d=oy;}
+      const cb=Math.cos(s.ang),sb=Math.sin(s.ang);
+      nx=dx*cb-dy*sb; ny=dx*sb+dy*cb; depth=d+pr;
+    }else{
+      const cb=Math.cos(s.ang),sb=Math.sin(s.ang);
+      nx=(dx/d)*cb-(dy/d)*sb; ny=(dx/d)*sb+(dy/d)*cb; depth=pr-d;
+    }
+  }else{ // capsule
+    const ex=s.x2-s.x1,ey=s.y2-s.y1;
+    const L2=ex*ex+ey*ey||1e-9;
+    let t=((p.x-s.x1)*ex+(p.y-s.y1)*ey)/L2; t=Math.max(0,Math.min(1,t));
+    const qx=s.x1+ex*t,qy=s.y1+ey*t;
+    const dx=p.x-qx,dy=p.y-qy,d=Math.hypot(dx,dy);
+    const rr=s.r+pr; if(d>=rr)return false;
+    nx=dx/(d||1e-9);ny=dy/(d||1e-9);depth=rr-d;
+  }
+  if(p.im===0){return true;}
+  p.x+=nx*depth; p.y+=ny*depth;
+  p._contact=true;
+  applyContactVel(p,nx,ny);
+  if(contacts.length<600)contacts.push({x:p.x-nx*pr,y:p.y-ny*pr,nx,ny});
+  return true;
+}
+
+function collideWalls(p){
+  const m=2,pr=p.r+P.thick;
+  let hit=false,nx=0,ny=0;
+  if(p.x<m+pr){p.x=m+pr;nx=1;hit=true;}
+  else if(p.x>W-m-pr){p.x=W-m-pr;nx=-1;hit=true;}
+  if(p.y<m+pr){p.y=m+pr;ny=1;hit=true;}
+  else if(p.y>H-m-pr){p.y=H-m-pr;ny=-1;hit=true;}
+  if(hit&&p.im!==0){p._contact=true;applyContactVel(p,nx,ny);
+    if(contacts.length<600)contacts.push({x:p.x-nx*pr,y:p.y-ny*pr,nx,ny});}
+  return hit;
+}
+
+function applyContactVel(p,nx,ny){
+  // decompose implied velocity; damp tangent (friction), reflect normal (restitution)
+  let vx=p.x-p.px, vy=p.y-p.py;
+  const vn=vx*nx+vy*ny;
+  const tx=vx-vn*nx, ty=vy-vn*ny;
+  const ft=1-Math.min(0.9,P.friction);
+  const rvn=vn<0? -vn*P.restitution : vn;
+  p.px=p.x-(rvn*nx+tx*ft);
+  p.py=p.y-(rvn*ny+ty*ft);
+}
+
+function collidePair(i,j){
+  const a=parts[i],b=parts[j];
+  const dx=b.x-a.x,dy=b.y-a.y;
+  const rr=a.r+b.r+P.thick*2;
+  const d2=dx*dx+dy*dy;
+  if(d2>=rr*rr||d2<1e-12)return;
+  const sameObj=a.obj&&a.obj===b.obj;
+  if(sameObj&&!P.selfCollide)return;
+  if(bonded.has(bondKey(i,j)))return;
+  if(sameObj&&(a.obj.kind==='rope'||a.obj.kind==='balloon'||a.obj.kind==='ball'||a.obj.kind==='blob')){
+    // skip near-neighbors along chains/rings so self-collision only catches real folds
+    const ia=a.obj.parts.indexOf(i), ib=b.obj.parts.indexOf(j);
+    if(ia>=0&&ib>=0&&Math.abs(ia-ib)<=3)return;
+  }
+  if(countPairs)collisionPairs++;
+  const d=Math.sqrt(d2);
+  const nx=dx/d,ny=dy/d;
+  const w=a.im+b.im; if(w===0)return;
+  const depth=rr-d;
+  a.x-=nx*depth*(a.im/w); a.y-=ny*depth*(a.im/w);
+  b.x+=nx*depth*(b.im/w); b.y+=ny*depth*(b.im/w);
+  a._contact=true;b._contact=true;
+  // relative friction + restitution on normal (implied-velocity edit via prev pos)
+  const rvx=(b.x-b.px)-(a.x-a.px), rvy=(b.y-b.py)-(a.y-a.py);
+  const vn=rvx*nx+rvy*ny;
+  const tx=rvx-vn*nx, ty=rvy-vn*ny;
+  const ft=P.friction*0.5;
+  const cor = vn<0? vn*(1+P.restitution) : 0;
+  const mx=( -cor*nx - tx*ft ), my=( -cor*ny - ty*ft );
+  // desired change in relative velocity is (mx,my); split by inverse mass
+  a.px+= mx*(a.im/w); a.py+= my*(a.im/w);
+  b.px-= mx*(b.im/w); b.py-= my*(b.im/w);
+  if(contacts.length<600)contacts.push({x:a.x+nx*d*0.5,y:a.y+ny*d*0.5,nx,ny});
+}
+
+/* ---------------- integrate + step ---------------- */
+function integrate(h){
+  const ga=P.gravAngle*Math.PI/180;
+  const gx=Math.cos(ga)*P.gravity, gy=Math.sin(ga)*P.gravity;
+  const dampF=1-Math.min(0.5,P.damping);
+  const t=simTime;
+  for(let i=0;i<parts.length;i++){
+    const p=parts[i];
+    if(p.pin){p.x=p.pnx;p.y=p.pny;p.px=p.x;p.py=p.y;continue;}
+    const gs=p.obj?p.obj.grav:1;
+    let ax=gx*gs, ay=gy*gs;
+    // global wind with gust noise
+    if(P.wind!==0){
+      const n=0.6+0.4*Math.sin(t*2.1+p.y*0.013)+0.25*Math.sin(t*4.7+p.x*0.017);
+      ax+=P.wind*n;
+      ay+=P.wind*0.18*Math.sin(t*3.1+p.x*0.011);
+    }
+    // active gusts (pointer wind tool)
+    for(const g of gusts){
+      const dx=p.x-g.x,dy=p.y-g.y,d2=dx*dx+dy*dy;
+      const R=P.interactR*2.2;
+      if(d2<R*R){const f=1-Math.sqrt(d2)/R; ax+=g.vx*f; ay+=g.vy*f;}
+    }
+    let vx=(p.x-p.px)*dampF, vy=(p.y-p.py)*dampF;
+    // speed cap for stability
+    const v2=vx*vx+vy*vy, vmax=40;
+    if(v2>vmax*vmax){const s=vmax/Math.sqrt(v2);vx*=s;vy*=s;}
+    p.px=p.x; p.py=p.y;
+    p.x+=vx+ax*h*h; p.y+=vy+ay*h*h;
+  }
+}
+
+function step(dt){
+  const ss=Math.max(1,P.substeps|0);
+  const h=dt/ss; lastSubDt=h;
+  simTime+=dt;
+  contacts.length=0;
+  for(const p of parts)p._contact=false;
+  for(let s=0;s<ss;s++){
+    integrate(h);
+    buildHash();
+    // grabbed particle follows pointer
+    for(let it=0;it<P.iterations;it++){
+      const track=(it===P.iterations-1&&s===ss-1);
+      if(track){maxErr=0;collisionPairs=0;}
+      countPairs=track;
+      for(let i=0;i<cons.length;i++){
+        const c=cons[i];
+        if(c.soft&&it>0)continue;  // soft springs solve once per substep
+        solveDist(c,track);
+      }
+      for(let i=0;i<press.length;i++)solvePress(press[i]);
+      applyGrab();
+      // collisions
+      for(let i=0;i<parts.length;i++){
+        const p=parts[i];
+        collideWalls(p);
+        for(let k=0;k<statics.length;k++)collideStatic(p,statics[k]);
+      }
+      eachPair(collidePair);
+    }
+    // tearing (once per substep, uses current strain; contact-adjacent
+    // constraints are forgiven — collision pushout causes transient strain)
+    if(P.tear<99){
+      for(let i=0;i<cons.length;i++){
+        const c=cons[i];
+        if(c.dead||!c.tear)continue;
+        const a=parts[c.a],b=parts[c.b];
+        if(a._contact||b._contact)continue;
+        const d=Math.hypot(b.x-a.x,b.y-a.y);
+        if((d-c.rest)/c.rest>P.tear) killCon(c);
+      }
+    }
+  }
+}
+
+function killCon(c){
+  c.dead=true;
+  if(c.obj&&c.obj.closed&&c.obj.press){
+    // puncturing a closed pressure vessel pops it
+    let ringAlive=0;
+    for(const k of c.obj.cons)if(!k.dead&&k.kind==='struct')ringAlive++;
+    if(ringAlive<c.obj.parts.length-1) c.obj.press.dead=true;
+  }
+}
+
+/* ---------------- interaction ---------------- */
+const pointer={x:0,y:0,px:0,py:0,down:false,vx:0,vy:0};
+let tool='grab';
+let grabbed=-1;
+let spawnType='rope';
+const viz={particles:false,constraints:false,velocity:false,stress:false,contacts:false,grid:false};
+let renderMode='shaded';
+
+function nearestPart(x,y,r){
+  let best=-1,bd=r*r;
+  for(let i=0;i<parts.length;i++){
+    const p=parts[i];
+    const dx=p.x-x,dy=p.y-y,d2=dx*dx+dy*dy;
+    if(d2<bd){bd=d2;best=i;}
+  }
+  return best;
+}
+function applyGrab(){
+  if(grabbed<0)return;
+  const p=parts[grabbed];
+  const k=Math.min(1,0.35+P.interactStr*0.3);
+  if(p.pin){ p.pnx+=(pointer.x-p.pnx)*k; p.pny+=(pointer.y-p.pny)*k; }
+  else{
+    p.x+=(pointer.x-p.x)*k; p.y+=(pointer.y-p.y)*k;
+  }
+}
+function releaseGrab(){
+  if(grabbed>=0){
+    const p=parts[grabbed];
+    if(!p.pin){
+      // fling: implied velocity += pointer velocity * strength
+      const f=Math.min(1.6,0.5+P.interactStr*0.5);
+      p.px-=pointer.vx*lastSubDt*f;
+      p.py-=pointer.vy*lastSubDt*f;
+    }
+  }
+  grabbed=-1;
+}
+function impulseAt(x,y){
+  const R=P.interactR*1.8,S=1500*P.interactStr;
+  for(const p of parts){
+    if(p.im===0)continue;
+    const dx=p.x-x,dy=p.y-y,d=Math.hypot(dx,dy);
+    if(d<R){const f=(1-d/R)*S*lastSubDt;
+      p.px-=dx/(d||1)*f; p.py-=dy/(d||1)*f;}
+  }
+  ringFlash.push({x,y,r:8,life:1});
+}
+function cutSegment(x1,y1,x2,y2){
+  let n=0;
+  for(const c of cons){
+    if(c.dead)continue;
+    const a=parts[c.a],b=parts[c.b];
+    if(segInt(x1,y1,x2,y2,a.x,a.y,b.x,b.y)){killCon(c);n++;}
+  }
+  if(n)cutFlash.push({x1,y1,x2,y2,life:1});
+  return n;
+}
+function segInt(ax,ay,bx,by,cx,cy,dx,dy){
+  const d1=(dx-cx)*(ay-cy)-(dy-cy)*(ax-cx);
+  const d2=(dx-cx)*(by-cy)-(dy-cy)*(bx-cx);
+  const d3=(bx-ax)*(cy-ay)-(by-ay)*(cx-ax);
+  const d4=(bx-ax)*(dy-ay)-(by-ay)*(dx-ax);
+  return ((d1>0)!==(d2>0))&&((d3>0)!==(d4>0));
+}
+function spawnAt(type,x,y){
+  const sp=Math.max(9,Math.min(W,H)*0.016);
+  switch(type){
+    case 'rope':   return addRope(x-70,y,x+70,y+30,16,{pinA:true});
+    case 'cloth':  return addCloth(x-5*sp,y-4*sp,11,9,sp);
+    case 'ball':   return addBall(x,y,26);
+    case 'blob':   return addBlob(x,y,40,16);
+    case 'balloon':return addBalloon(x,y,34,18);
+    case 'scircle':return addStaticCircle(x,y,34);
+    case 'sbox':   return addStaticBox(x,y,46,20,(Math.random()-0.5)*0.8);
+    case 'scapsule':return addStaticCapsule(x-55,y-15,x+55,y+15,7);
+  }
+}
+
+/* ---------------- scenarios ---------------- */
+const SCENARIOS=[
+  {id:'flag',   name:'Hanging flag',   build:scnFlag},
+  {id:'drape',  name:'Cloth drape',    build:scnDrape},
+  {id:'bridge', name:'Bridge load',    build:scnBridge},
+  {id:'stack',  name:'Soft stack',     build:scnStack},
+  {id:'net',    name:'Rope net',       build:scnNet},
+  {id:'balloon',name:'Balloon chamber',build:scnBalloon},
+  {id:'stress', name:'Stress test',    build:scnStress},
+];
+function clearWorld(){
+  parts.length=0;cons.length=0;press.length=0;statics.length=0;objects.length=0;
+  bonded.clear();contacts.length=0;gusts.length=0;cutFlash.length=0;ringFlash.length=0;
+  grabbed=-1;objSeq=0;
+}
+function buildScenario(id){
+  clearWorld();
+  scenarioName=id;
+  SCENARIOS.find(s=>s.id===id).build();
+  setDensity(P.density);
+  const el=document.getElementById('selScenario'); if(el.value!==id)el.value=id;
+}
+function scnFlag(){
+  const px=W*0.16;
+  addStaticCapsule(px,H*0.16,px,H*0.80,9);
+  addStaticCircle(px,H*0.15,14);
+  const sp=Math.min(W,H)*0.019;
+  addCloth(px+8,H*0.20,15,11,sp,{pinLeft:true});
+  setParam('wind',420);
+}
+function scnDrape(){
+  // two posts + a sphere between them; a wide sheet drops across all three
+  const m=Math.min(W,H);
+  addStaticBox(W*0.34,H*0.60,m*0.035,H*0.16,0);
+  addStaticCircle(W*0.52,H*0.62,m*0.085);
+  addStaticBox(W*0.68,H*0.56,m*0.035,H*0.20,0);
+  const sp=m*0.015;
+  addCloth(W*0.30,H*0.20,26,12,sp);
+  setParam('wind',0);
+}
+function scnBridge(){
+  const y=H*0.42;
+  addStaticBox(W*0.16,y+H*0.10,W*0.045,H*0.14,0);
+  addStaticBox(W*0.84,y+H*0.10,W*0.045,H*0.14,0);
+  const sp=(W*0.68)/21;
+  const o=addCloth(W*0.16,y,22,5,sp,{});
+  // pin ends to pylon tops
+  for(let j=0;j<5;j++){pin(o.grid[j][0],true);pin(o.grid[j][21],true);}
+  addBlob(W*0.5,H*0.16,34,14,{massMult:3.2});
+  setParam('wind',0);
+}
+function scnStack(){
+  addStaticBox(W*0.5,H*0.90,W*0.34,H*0.04,0);
+  const cx=W*0.5, base=H*0.78;
+  addBlob(cx,base,52,18);
+  addBlob(cx+8,base-92,44,16);
+  addBlob(cx-6,base-172,36,14);
+  addBall(cx+90,base-40,30);
+  setParam('wind',0);
+}
+function scnNet(){
+  const sp=Math.min(W,H)*0.034;
+  const cols=Math.min(15,Math.floor(W*0.5/sp)), rows=9;
+  const o=addCloth(W*0.5-cols*sp/2,H*0.14,cols,rows,sp,{pinTop:true});
+  o.net=true;
+  // extra pins mid-edges for a hammock feel
+  pin(o.grid[0][Math.floor(cols/2)],true);
+  addBall(W*0.5,H*0.55,30);
+  addBall(W*0.38,H*0.35,22);
+  setParam('wind',60);
+}
+function scnBalloon(){
+  addStaticBox(W*0.5,H*0.62,W*0.07,H*0.07,0.4);
+  addStaticBox(W*0.24,H*0.45,W*0.05,H*0.05,-0.5);
+  const cols=[[0.30,0.30,34],[0.46,0.24,26],[0.62,0.32,40],[0.76,0.22,28],[0.55,0.48,30]];
+  for(const c of cols)addBalloon(W*c[0],H*c[1],Math.min(W,H)*c[2]/600,18);
+  setParam('wind',40);
+}
+function scnStress(){
+  const sp=Math.min(W,H)*0.016;
+  addCloth(W*0.08,H*0.08,13,10,sp,{pinTop:true});
+  addCloth(W*0.72,H*0.06,12,9,sp);
+  addRope(W*0.45,H*0.06,W*0.58,H*0.10,18,{pinA:true});
+  addRope(W*0.62,H*0.04,W*0.68,H*0.30,14,{pinA:true});
+  for(let i=0;i<4;i++)addBall(W*(0.25+i*0.16),H*0.34,26);
+  for(let i=0;i<3;i++)addBlob(W*(0.30+i*0.2),H*0.55,34,15);
+  addBalloon(W*0.82,H*0.5,32,18);
+  addStaticCircle(W*0.5,H*0.82,Math.min(W,H)*0.05);
+  setParam('wind',120);
+}
+
+/* ---------------- rendering ---------------- */
+const ringFlash=[];
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // background
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0e1420');bg.addColorStop(1,'#0a0d13');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  // faint dot grid
+  ctx.fillStyle='rgba(255,255,255,0.035)';
+  const gs=48;
+  for(let x=gs;x<W;x+=gs)for(let y=gs;y<H;y+=gs)ctx.fillRect(x,y,1.5,1.5);
+
+  // wall border
+  ctx.strokeStyle='rgba(120,150,190,0.25)';ctx.lineWidth=2;
+  ctx.strokeRect(2,2,W-4,H-4);
+
+  for(const p of parts)p._free=true;
+  for(const c of cons)if(!c.dead){parts[c.a]._free=false;parts[c.b]._free=false;}
+  if(viz.grid)drawGrid();
+  drawStatics();
+  drawObjects();
+  drawOverlays();
+  drawPointerFx();
+}
+
+function drawStatics(){
+  for(const s of statics){
+    ctx.save();
+    ctx.fillStyle='#2b3648';ctx.strokeStyle='#4a5a75';ctx.lineWidth=1.5;
+    if(s.type==='circle'){
+      ctx.beginPath();ctx.arc(s.x+4,s.y+6,s.r,0,7);ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fill();
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,7);ctx.fillStyle='#2b3648';ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r*0.55,0,7);ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.stroke();
+    }else if(s.type==='box'){
+      ctx.translate(s.x,s.y);ctx.rotate(s.ang);
+      ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(-s.hw+4,-s.hh+6,s.hw*2,s.hh*2);
+      ctx.fillStyle='#2b3648';ctx.fillRect(-s.hw,-s.hh,s.hw*2,s.hh*2);ctx.strokeRect(-s.hw,-s.hh,s.hw*2,s.hh*2);
+      ctx.strokeStyle='rgba(255,255,255,0.07)';
+      for(let x=-s.hw+8;x<s.hw;x+=10){ctx.beginPath();ctx.moveTo(x,-s.hh);ctx.lineTo(x-6,s.hh);ctx.stroke();}
+    }else{
+      ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=s.r*2;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(s.x1+4,s.y1+6);ctx.lineTo(s.x2+4,s.y2+6);ctx.stroke();
+      ctx.strokeStyle='#3b4a63';ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();
+      ctx.strokeStyle='#4a5a75';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function shade(hex,f){ // f in [-1,1] brightness factor
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  if(f>=0){r+=(255-r)*f;g+=(255-g)*f;b+=(255-b)*f;}
+  else{r*=1+f;g*=1+f;b*=1+f;}
+  return `rgb(${r|0},${g|0},${b|0})`;
+}
+
+function smoothPath(idx,closed){
+  const n=idx.length;
+  const p0=parts[idx[0]];
+  if(closed){
+    const pm=parts[idx[(n-1)]];
+    ctx.moveTo((pm.x+p0.x)/2,(pm.y+p0.y)/2);
+    for(let i=0;i<n;i++){
+      const p=parts[idx[i]],q=parts[idx[(i+1)%n]];
+      ctx.quadraticCurveTo(p.x,p.y,(p.x+q.x)/2,(p.y+q.y)/2);
+    }
+  }else{
+    ctx.moveTo(p0.x,p0.y);
+    for(let i=1;i<n-1;i++){
+      const p=parts[idx[i]],q=parts[idx[i+1]];
+      ctx.quadraticCurveTo(p.x,p.y,(p.x+q.x)/2,(p.y+q.y)/2);
+    }
+    ctx.lineTo(parts[idx[n-1]].x,parts[idx[n-1]].y);
+  }
+}
+
+function drawObjects(){
+  for(const o of objects){
+    if(renderMode==='points'){
+      // skip surface pass
+    }else if(renderMode==='wire'){
+      ctx.strokeStyle=o.color;ctx.lineWidth=1;ctx.globalAlpha=0.85;
+      ctx.beginPath();
+      for(const c of o.cons){if(c.dead)continue;const a=parts[c.a],b=parts[c.b];
+        ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}
+      ctx.stroke();ctx.globalAlpha=1;
+    }else if(o.kind==='cloth'){
+      if(o.net)drawNet(o);else drawCloth(o);
+    }else if(o.loop&&o.loop.length>2){
+      drawLoopBody(o);
+    }
+  }
+  if(renderMode==='points'){
+    ctx.fillStyle='#cfe8ff';
+    for(const p of parts){ctx.fillRect(p.x-1.4,p.y-1.4,2.8,2.8);}
+  }
+}
+
+// particles of a quad that still hold a live constraint inside it
+function quadLiveParts(q){
+  const live=[];
+  for(const pi of q.p){
+    let n=0;
+    for(const c of q.edges)if(c&&!c.dead&&(c.a===pi||c.b===pi))n++;
+    for(const c of q.shear)if(c&&!c.dead&&(c.a===pi||c.b===pi))n++;
+    if(n>0)live.push(pi);
+  }
+  return live;
+}
+function clothPath(q,live,ox,oy){
+  // draw quad if all 4 attached, else triangle of the still-connected ones
+  if(live.length<3)return false;
+  const a=parts[live[0]],b=parts[live[1]],c=parts[live[2]];
+  ctx.moveTo(a.x+ox,a.y+oy);ctx.lineTo(b.x+ox,b.y+oy);ctx.lineTo(c.x+ox,c.y+oy);
+  if(live.length===4){const d=parts[live[3]];ctx.lineTo(d.x+ox,d.y+oy);}
+  ctx.closePath();
+  return true;
+}
+function drawCloth(o){
+  // shadow pass
+  ctx.fillStyle='rgba(0,0,0,0.16)';
+  ctx.beginPath();
+  for(const q of o.quads)clothPath(q,quadLiveParts(q),5,8);
+  ctx.fill();
+  // shaded quads
+  for(const q of o.quads){
+    const live=quadLiveParts(q);
+    if(live.length<3)continue;
+    const a=parts[q.p[0]],b=parts[q.p[1]],d=parts[q.p[3]];
+    const e1x=b.x-a.x,e1y=b.y-a.y,e2x=d.x-a.x,e2y=d.y-a.y;
+    const cr=(e1x*e2y-e1y*e2x)/(o.restCross||1);
+    const f=Math.max(-1,Math.min(1,cr));
+    ctx.fillStyle=shade(o.color,(f-0.75)*0.55);
+    ctx.beginPath();clothPath(q,live,0,0);ctx.fill();
+  }
+  // fully-detached particles render as small scraps
+  ctx.fillStyle=shade(o.color,-0.1);
+  for(const i of o.parts){
+    const p=parts[i];if(p._free)ctx.fillRect(p.x-2,p.y-2,4,4);
+  }
+  // thread lines
+  ctx.strokeStyle='rgba(255,255,255,0.10)';ctx.lineWidth=0.7;
+  ctx.beginPath();
+  for(const c of o.cons){if(c.dead||c.kind!=='struct')continue;
+    const a=parts[c.a],b=parts[c.b];ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}
+  ctx.stroke();
+}
+
+function drawNet(o){
+  ctx.lineCap='round';
+  // shadow
+  ctx.strokeStyle='rgba(0,0,0,0.18)';ctx.lineWidth=3.5;
+  ctx.beginPath();
+  for(const c of o.cons){if(c.dead||c.kind==='bend')continue;
+    const a=parts[c.a],b=parts[c.b];ctx.moveTo(a.x+4,a.y+6);ctx.lineTo(b.x+4,b.y+6);}
+  ctx.stroke();
+  ctx.strokeStyle=o.color;ctx.lineWidth=2.6;
+  ctx.beginPath();
+  for(const c of o.cons){if(c.dead||c.kind==='bend')continue;
+    const a=parts[c.a],b=parts[c.b];ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}
+  ctx.stroke();
+  // knots
+  ctx.fillStyle=shade(o.color,-0.2);
+  for(const i of o.parts){ctx.beginPath();ctx.arc(parts[i].x,parts[i].y,2.2,0,7);ctx.fill();}
+}
+
+function drawLoopBody(o){
+  const idx=o.loop;
+  const popped=o.kind==='balloon'&&o.press&&o.press.dead;
+  ctx.beginPath();smoothPath(idx,o.closed&&!popped);if(o.closed&&!popped)ctx.closePath();
+  ctx.save();
+  ctx.translate(5,8);
+  if(popped||o.kind==='rope'){ctx.strokeStyle='rgba(0,0,0,0.18)';ctx.lineWidth=4;ctx.stroke();}
+  else{ctx.fillStyle='rgba(0,0,0,0.18)';ctx.fill();}
+  ctx.restore();
+  ctx.beginPath();smoothPath(idx,o.closed&&!popped);if(o.closed&&!popped)ctx.closePath();
+  if(o.kind==='rope'||popped){
+    ctx.strokeStyle=o.color;ctx.lineWidth=4;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1.2;ctx.stroke();
+    return;
+  }
+  // filled soft bodies / balloons
+  let cx=0,cy=0;for(const i of idx){cx+=parts[i].x;cy+=parts[i].y;}cx/=idx.length;cy/=idx.length;
+  const g=ctx.createRadialGradient(cx-10,cy-12,4,cx,cy,90);
+  g.addColorStop(0,shade(o.color,0.45));
+  g.addColorStop(0.7,o.color);
+  g.addColorStop(1,shade(o.color,-0.25));
+  ctx.fillStyle=g;ctx.fill();
+  ctx.strokeStyle=shade(o.color,-0.4);ctx.lineWidth=1.6;ctx.stroke();
+  if(o.kind==='balloon'){
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.beginPath();ctx.ellipse(cx-12,cy-16,7,4,-0.6,0,7);ctx.fill();
+  }
+}
+
+function drawOverlays(){
+  if(viz.constraints&&!viz.stress){
+    ctx.strokeStyle='rgba(140,180,255,0.35)';ctx.lineWidth=0.8;
+    ctx.beginPath();
+    for(const c of cons){if(c.dead)continue;const a=parts[c.a],b=parts[c.b];
+      ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}
+    ctx.stroke();
+  }
+  if(viz.stress){
+    ctx.lineWidth=1.6;
+    for(const c of cons){
+      if(c.dead)continue;
+      const a=parts[c.a],b=parts[c.b];
+      const d=Math.hypot(b.x-a.x,b.y-a.y);
+      const strain=Math.max(0,(d-c.rest)/c.rest);
+      const t=Math.min(1,strain/Math.max(0.05,P.tear));
+      ctx.strokeStyle=`hsl(${120-t*120},90%,${45+t*15}%)`;
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    }
+  }
+  if(viz.particles){
+    for(const p of parts){
+      ctx.fillStyle=p.pin?'#f6ad55':(p.im===0?'#666':'#9ecbff');
+      ctx.beginPath();ctx.arc(p.x,p.y,p.pin?4:2.2,0,7);ctx.fill();
+    }
+  }
+  if(viz.velocity){
+    ctx.lineWidth=1;
+    for(const p of parts){
+      const vx=p.x-p.px,vy=p.y-p.py;
+      const s=Math.hypot(vx,vy);
+      if(s<0.5)continue;
+      ctx.strokeStyle=`hsl(${200-Math.min(200,s*4)},80%,60%)`;
+      ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+vx*4,p.y+vy*4);ctx.stroke();
+    }
+  }
+  if(viz.contacts){
+    ctx.fillStyle='#ffb454';
+    for(const c of contacts){ctx.beginPath();ctx.arc(c.x,c.y,2.4,0,7);ctx.fill();
+      ctx.strokeStyle='rgba(255,180,84,0.6)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(c.x,c.y);ctx.lineTo(c.x+c.nx*8,c.y+c.ny*8);ctx.stroke();}
+  }
+  // pins always marked (editing feedback)
+  for(const p of parts){
+    if(!p.pin)continue;
+    ctx.fillStyle='#f6ad55';
+    ctx.beginPath();ctx.moveTo(p.x,p.y-7);ctx.lineTo(p.x+5,p.y+3);ctx.lineTo(p.x-5,p.y+3);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#7a4d12';ctx.lineWidth=1;ctx.stroke();
+  }
+}
+
+function drawGrid(){
+  ctx.fillStyle='rgba(79,209,197,0.10)';
+  ctx.strokeStyle='rgba(79,209,197,0.25)';ctx.lineWidth=0.6;
+  for(const [k] of hash){
+    const arr=hash.get(k);
+    const p=parts[arr[0]];
+    const cx=Math.floor(p.x/CELL)*CELL, cy=Math.floor(p.y/CELL)*CELL;
+    ctx.fillRect(cx,cy,CELL,CELL);ctx.strokeRect(cx,cy,CELL,CELL);
+  }
+}
+
+function drawPointerFx(){
+  // grab tether
+  if(grabbed>=0){
+    const p=parts[grabbed];
+    ctx.strokeStyle='#4fd1c5';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(pointer.x,pointer.y);ctx.lineTo(p.x,p.y);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle='#4fd1c5';ctx.beginPath();ctx.arc(p.x,p.y,7,0,7);ctx.stroke();
+  }
+  // cut flashes
+  for(let i=cutFlash.length-1;i>=0;i--){
+    const c=cutFlash[i];c.life-=0.05;
+    if(c.life<=0){cutFlash.splice(i,1);continue;}
+    ctx.strokeStyle=`rgba(252,129,129,${c.life})`;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(c.x1,c.y1);ctx.lineTo(c.x2,c.y2);ctx.stroke();
+  }
+  for(let i=ringFlash.length-1;i>=0;i--){
+    const r=ringFlash[i];r.life-=0.06;r.r+=6;
+    if(r.life<=0){ringFlash.splice(i,1);continue;}
+    ctx.strokeStyle=`rgba(246,173,85,${r.life})`;ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,7);ctx.stroke();
+  }
+  // gusts
+  for(let i=gusts.length-1;i>=0;i--){
+    const g=gusts[i];g.life-=0.02;
+    if(g.life<=0){gusts.splice(i,1);continue;}
+    ctx.strokeStyle=`rgba(126,200,255,${g.life*0.8})`;ctx.lineWidth=2;
+    const m=Math.hypot(g.vx,g.vy)||1;
+    ctx.beginPath();ctx.moveTo(g.x,g.y);
+    ctx.lineTo(g.x+g.vx/m*40,g.y+g.vy/m*40);ctx.stroke();
+  }
+  // tool radius hint
+  if(pointer.down&&(tool==='impulse'||tool==='wind'||tool==='grab')){
+    ctx.strokeStyle='rgba(79,209,197,0.25)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(pointer.x,pointer.y,P.interactR,0,7);ctx.stroke();
+  }
+}
+
+/* ---------------- HUD ---------------- */
+const hud=document.getElementById('hud');
+let fps=60,fpsT=0;
+function updateHud(dtReal){
+  fps+= (1/Math.max(1e-3,dtReal)-fps)*0.06;
+  let alive=0;for(const c of cons)if(!c.dead)alive++;
+  hud.textContent=
+    `FPS ${fps.toFixed(0).padStart(3)}  |  particles ${parts.length}  constraints ${alive}`+
+    `/${cons.length}  pairs ${collisionPairs}\n`+
+    `iter ${P.iterations} × sub ${P.substeps}  maxErr ${(maxErr*100).toFixed(1)}%  `+
+    `tool ${tool}  scenario ${scenarioName}${paused?'  [PAUSED]':''}`;
+}
+
+/* ---------------- main loop ---------------- */
+let lastT=performance.now(),acc=0;
+function frame(now){
+  const dtReal=Math.min(0.1,(now-lastT)/1000);lastT=now;
+  const dt=(1/60)*P.timeScale;
+  if(!paused){
+    acc+=dtReal;
+    let n=0;
+    while(acc>=dt&&n<3){step(dt);acc-=dt;n++;}
+    if(acc>dt*3)acc=0;
+  }else if(stepOnce){stepOnce=false;step(dt);}
+  render();
+  updateHud(dtReal);
+  requestAnimationFrame(frame);
+}
+
+
+/* ---------------- input ---------------- */
+function toWorld(e){
+  const r=canvas.getBoundingClientRect();
+  return {x:e.clientX-r.left,y:e.clientY-r.top};
+}
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId);
+  const w=toWorld(e);
+  pointer.x=pointer.px=w.x;pointer.y=pointer.py=w.y;pointer.down=true;
+  pointer.vx=pointer.vy=0;pointer.t=e.timeStamp;
+  if(tool==='grab'){grabbed=nearestPart(w.x,w.y,P.interactR);}
+  else if(tool==='pin'){
+    const i=nearestPart(w.x,w.y,Math.min(P.interactR,30));
+    if(i>=0)pin(i,!parts[i].pin);
+  }
+  else if(tool==='impulse'){impulseAt(w.x,w.y);}
+  else if(tool==='wind'){gusts.push({x:w.x,y:w.y,vx:0,vy:0,life:1});}
+  else if(tool==='spawn'){spawnAt(spawnType,w.x,w.y);setDensity(P.density);}
+  else if(tool==='cut'){cutSegment(w.x-1,w.y-1,w.x+1,w.y+1);}
+});
+canvas.addEventListener('pointermove',e=>{
+  const w=toWorld(e);
+  const dx=w.x-pointer.x,dy=w.y-pointer.y;
+  const dte=Math.max(4,e.timeStamp-(pointer.t||e.timeStamp)); // ms since last event
+  const inst=1000/dte;
+  // smoothed pointer velocity px/s
+  pointer.vx=pointer.vx*0.6+dx*inst*0.4;
+  pointer.vy=pointer.vy*0.6+dy*inst*0.4;
+  pointer.t=e.timeStamp;
+  if(pointer.down&&tool==='cut'){cutSegment(pointer.x,pointer.y,w.x,w.y);}
+  if(pointer.down&&tool==='wind'&&gusts.length){
+    const g=gusts[gusts.length-1];
+    g.x=w.x;g.y=w.y;
+    g.vx=pointer.vx*1.4*P.interactStr;g.vy=pointer.vy*1.4*P.interactStr;
+    g.life=1;
+  }
+  pointer.px=pointer.x;pointer.py=pointer.y;
+  pointer.x=w.x;pointer.y=w.y;
+});
+function endPointer(e){
+  pointer.down=false;
+  if(tool==='grab')releaseGrab();
+}
+canvas.addEventListener('pointerup',endPointer);
+canvas.addEventListener('pointercancel',endPointer);
+
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  const k=e.key.toLowerCase();
+  if(k===' '){e.preventDefault();togglePause();}
+  else if(k==='n'){stepOnce=true;paused=true;syncPauseBtn();}
+  else if(k==='r'){buildScenario(scenarioName);}
+  else if(k==='v'){cycleRender();}
+  else if(k>='1'&&k<='6'){setTool(['grab','pin','cut','impulse','wind','spawn'][+k-1]);}
+});
+
+/* ---------------- UI wiring ---------------- */
+const toolBtns=document.querySelectorAll('#tools button');
+function setTool(t){
+  tool=t;releaseGrab();
+  toolBtns.forEach(b=>b.classList.toggle('on',b.dataset.tool===t));
+}
+toolBtns.forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+
+document.querySelectorAll('#viewToggles button').forEach(b=>
+  b.addEventListener('click',()=>{viz[b.dataset.viz]=!viz[b.dataset.viz];b.classList.toggle('on');}));
+
+const selScenario=document.getElementById('selScenario');
+for(const s of SCENARIOS){const o=document.createElement('option');o.value=s.id;o.textContent=s.name;selScenario.appendChild(o);}
+selScenario.addEventListener('change',()=>buildScenario(selScenario.value));
+
+const btnPause=document.getElementById('btnPause');
+function togglePause(){paused=!paused;syncPauseBtn();}
+function syncPauseBtn(){btnPause.textContent=paused?'▶ Resume':'⏸ Pause';btnPause.classList.toggle('on',paused);}
+btnPause.addEventListener('click',togglePause);
+document.getElementById('btnStep').addEventListener('click',()=>{paused=true;syncPauseBtn();stepOnce=true;});
+document.getElementById('btnReset').addEventListener('click',()=>buildScenario(scenarioName));
+
+const selRender=document.getElementById('selRender');
+selRender.addEventListener('change',()=>renderMode=selRender.value);
+const RMODES=['shaded','points','wire'];
+function cycleRender(){renderMode=RMODES[(RMODES.indexOf(renderMode)+1)%3];selRender.value=renderMode;}
+
+document.getElementById('selSpawn').addEventListener('change',e=>spawnType=e.target.value);
+document.getElementById('panelToggle').addEventListener('click',()=>
+  document.getElementById('panel').classList.toggle('open'));
+
+/* sliders */
+const SLIDERS=[
+  ['gravity','Gravity',0,2000,10,v=>v.toFixed(0)],
+  ['gravAngle','Grav. angle',-180,180,1,v=>v.toFixed(0)+'°'],
+  ['wind','Wind',0,1200,10,v=>v.toFixed(0)],
+  ['timeScale','Timestep',0.2,2,0.05,v=>'×'+v.toFixed(2)],
+  ['substeps','Substeps',1,10,1,v=>v.toFixed(0)],
+  ['iterations','Iterations',1,20,1,v=>v.toFixed(0)],
+  ['stiff','Struct stiff',0.1,1,0.01,v=>v.toFixed(2)],
+  ['bend','Bend stiff',0,1,0.01,v=>v.toFixed(2)],
+  ['pressure','Pressure',0.4,2.5,0.05,v=>v.toFixed(2)],
+  ['damping','Damping',0,0.2,0.005,v=>v.toFixed(3)],
+  ['density','Density',0.2,4,0.1,v=>v.toFixed(1)],
+  ['tear','Tear thresh',0.5,4,0.05,v=>v>=4?'off':v.toFixed(2)],
+  ['friction','Friction',0,1,0.01,v=>v.toFixed(2)],
+  ['restitution','Restitution',0,1,0.01,v=>v.toFixed(2)],
+  ['thick','Coll. thick',0,10,0.5,v=>v.toFixed(1)],
+  ['interactStr','Interact str',0.2,3,0.1,v=>v.toFixed(1)],
+  ['interactR','Interact rad',16,160,4,v=>v.toFixed(0)],
+];
+const slidersEl=document.getElementById('sliders');
+const sliderOuts={};
+for(const [key,label,min,max,st,fmt] of SLIDERS){
+  const row=document.createElement('div');row.className='row';
+  row.innerHTML=`<label>${label}</label><input type="range" min="${min}" max="${max}" step="${st}" value="${P[key]}"><output></output>`;
+  const inp=row.querySelector('input'),out=row.querySelector('output');
+  out.textContent=fmt(P[key]);sliderOuts[key]={inp,out,fmt};
+  inp.addEventListener('input',()=>{
+    let v=+inp.value;
+    if(key==='tear'&&v>=4)v=99;
+    P[key]=v;out.textContent=fmt(v===99?4:v);
+    if(key==='tear')out.textContent=v>=99?'off':fmt(v);
+    if(key==='density')setDensity(v);
+  });
+  slidersEl.appendChild(row);
+}
+// self-collision checkbox
+const scRow=document.createElement('label');scRow.className='chk';
+scRow.innerHTML=`<input type="checkbox" ${P.selfCollide?'checked':''}> Self-collision`;
+scRow.querySelector('input').addEventListener('change',e=>P.selfCollide=e.target.checked);
+slidersEl.appendChild(scRow);
+
+function setParam(key,v){
+  P[key]=v;
+  const s=sliderOuts[key];
+  if(!s)return;
+  if(key==='tear'){s.inp.value=v>=99?4:v;s.out.textContent=v>=99?'off':s.fmt(v);}
+  else{s.inp.value=v;s.out.textContent=s.fmt(v);}
+}
+
+/* ---------------- resize ---------------- */
+function resize(){
+  DPR=Math.min(2.5,window.devicePixelRatio||1);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  // keep world coherent: clamp particles into new bounds
+  for(const p of parts){
+    p.x=Math.min(Math.max(p.x,4),W-4);p.y=Math.min(Math.max(p.y,4),H-4);
+    if(p.pin){p.pnx=p.x;p.pny=p.y;}
+  }
+}
+window.addEventListener('resize',resize);
+resize();
+
+/* ---------------- debug / test hook ---------------- */
+window.SIM={
+  P,parts,cons,press,statics,objects,viz,pointer,
+  get tool(){return tool},setTool,
+  get paused(){return paused},togglePause,
+  buildScenario,spawnAt,pin,killCon,
+  stats(){let alive=0;for(const c of cons)if(!c.dead)alive++;
+    return{fps,parts:parts.length,cons:alive,consTotal:cons.length,pairs:collisionPairs,
+      maxErr,tool,paused,scenario:scenarioName,objects:objects.length,statics:statics.length};},
+  nearestPart,impulseAt,cutSegment,
+};
+
+/* ---------------- go ---------------- */
+buildScenario('flag');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

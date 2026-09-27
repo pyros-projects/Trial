@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Hydraulic Erosion Laboratory</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#11161fd9; --line:#232b38; --txt:#cfd8e3; --dim:#7d8a9c;
+    --acc:#4db3ff; --acc2:#ffb454; --bad:#ff5d5d; --ok:#54d68a;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font:12px/1.45 var(--sans);-webkit-user-select:none;user-select:none}
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  #vig{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(0,0,0,.38) 100%)}
+
+  /* ---- status HUD ---- */
+  #hud{position:fixed;top:10px;left:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font:11px/1.6 var(--mono);backdrop-filter:blur(6px);
+    min-width:190px;pointer-events:none;white-space:pre}
+  #hud .warn{color:var(--bad)}
+  #hud .ok{color:var(--ok)}
+
+  /* ---- probe readout ---- */
+  #probe{position:fixed;left:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font:11px/1.55 var(--mono);backdrop-filter:blur(6px);
+    pointer-events:none;white-space:pre;display:none}
+
+  /* ---- tool bar ---- */
+  #tools{position:fixed;left:10px;top:50%;transform:translateY(-50%);display:flex;
+    flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:6px;backdrop-filter:blur(6px)}
+  #tools button{width:74px;padding:6px 4px;font:11px var(--sans);text-align:center}
+  #tools button.on{outline:1px solid var(--acc);color:var(--acc);background:#1a2735}
+
+  button{background:#1a2230;color:var(--txt);border:1px solid var(--line);border-radius:5px;
+    padding:5px 8px;cursor:pointer;font:11px var(--sans)}
+  button:hover{border-color:var(--acc);color:#fff}
+  button:active{background:#223046}
+  button.warn{border-color:var(--acc2);color:var(--acc2)}
+
+  /* ---- control panel ---- */
+  #panel{position:fixed;top:10px;right:10px;bottom:10px;width:308px;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(8px);
+    display:flex;flex-direction:column;overflow:hidden}
+  #panel .head{padding:10px 12px 8px;border-bottom:1px solid var(--line);flex:none}
+  #panel .head h1{font:600 13px var(--sans);margin:0;color:#fff;letter-spacing:.4px}
+  #panel .head .sub{color:var(--dim);font-size:10px;margin-top:2px}
+  #panel .body{overflow-y:auto;padding:8px 12px 16px;flex:1;scrollbar-width:thin}
+  #panel details{border-bottom:1px solid var(--line);padding:4px 0}
+  #panel summary{cursor:pointer;font-weight:600;color:#e8eef5;font-size:11.5px;
+    padding:6px 0;list-style:none}
+  #panel summary::before{content:"▸ ";color:var(--acc)}
+  #panel details[open] summary::before{content:"▾ "}
+  .row{display:flex;align-items:center;gap:8px;margin:7px 0}
+  .row label{flex:0 0 108px;color:var(--dim);font-size:11px;white-space:nowrap}
+  .row input[type=range]{flex:1;min-width:0;accent-color:var(--acc);height:18px}
+  .row .val{flex:0 0 44px;text-align:right;font:10.5px var(--mono);color:var(--txt)}
+  .row input[type=number],.row select{flex:1;min-width:0;background:#0d1219;color:var(--txt);
+    border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:11px var(--mono)}
+  .row input[type=checkbox]{accent-color:var(--acc)}
+  .btnrow{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+  .btnrow button{flex:1;white-space:nowrap}
+  .hint{color:var(--dim);font-size:10px;margin:4px 0 8px}
+  #errbar{position:fixed;left:50%;top:8px;transform:translateX(-50%);background:#5c1a1a;
+    border:1px solid var(--bad);color:#ffd9d9;padding:6px 12px;border-radius:6px;
+    font:11px var(--mono);display:none;z-index:50;max-width:80vw}
+
+  #panelToggle{display:none;position:fixed;right:10px;top:10px;z-index:30;
+    width:40px;height:36px;font-size:16px}
+
+  @media (max-width:760px){
+    #panel{top:auto;left:8px;right:8px;bottom:8px;width:auto;max-height:46vh}
+    #panel.min{max-height:0;border:none;padding:0}
+    #panelToggle{display:block}
+    #tools{top:auto;bottom:calc(46vh + 18px);left:8px;flex-direction:row;flex-wrap:wrap;
+      max-width:calc(100vw - 60px);transform:none}
+    #tools.up{bottom:14px}
+    #tools button{width:auto;padding:6px 8px}
+    #hud{transform:scale(.92);transform-origin:top left}
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vig"></div>
+<div id="hud" aria-label="status overlay">booting…</div>
+<div id="probe" aria-label="probe readout"></div>
+<nav id="tools" aria-label="terrain tools"></nav>
+<button id="panelToggle" title="toggle control panel" aria-label="toggle control panel">☰</button>
+<aside id="panel" aria-label="control panel">
+  <div class="head">
+    <h1>Hydraulic Erosion Lab</h1>
+    <div class="sub">shallow-water pipe model · drag terrain to sculpt</div>
+  </div>
+  <div class="body" id="panelBody"></div>
+</aside>
+<div id="errbar" role="alert"></div>
+<input id="fileIn" type="file" accept=".json,application/json" style="display:none" aria-label="import state file">
+
+<script>
+"use strict";
+/* ============================================================================
+   3D Hydraulic Erosion Laboratory — single-file app
+   Model: shallow-water / virtual-pipe hydraulic erosion on a heightfield.
+   ========================================================================== */
+const $ = s => document.querySelector(s);
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const errbar = m => { const e=$('#errbar'); e.textContent=m; e.style.display='block';
+  clearTimeout(e._t); e._t=setTimeout(()=>e.style.display='none',6000); };
+window.addEventListener('error',e=>errbar('JS error: '+e.message));
+
+/* ------------------------------ parameters ------------------------------- */
+const P = {
+  // sim
+  res:128, seed:1337, speed:1.0, substeps:2,
+  rain:0.01, evap:0.4, erode:0.45, deposit:0.7, capacity:1.2, flow:1.0, thermal:0.35,
+  paused:false,
+  // brush
+  tool:'water', brushR:0.14, brushS:0.6,
+  // display
+  mode:0, exag:1.2, waterVis:0.85, lightAz:135, lightEl:42, contours:true, wire:false,
+  fog:0.55, shadows:true,
+  // terrain gen
+  preset:'mountain', octaves:5, freq:2.1, amp:0.38, ridge:0.35, falloff:0.25, base:'massif',
+};
+const MODE_NAMES=['Shaded','Elevation','Water depth','Sediment','Erosion/Deposition','Slope','Flow'];
+const TOOLS=[['orbit','Orbit'],['raise','Raise'],['lower','Lower'],['smooth','Smooth'],
+  ['flatten','Flatten'],['water','+ Water'],['sediment','+ Sediment'],['dry','Dry'],['inspect','Inspect']];
+
+const PRESETS = {
+  mountain:{label:'Mountain drainage',
+    p:{base:'massif',octaves:5,freq:2.1,amp:0.38,ridge:0.35,falloff:0.25,
+       rain:0.01,evap:0.4,erode:0.6,deposit:0.7,capacity:1.2,flow:1.0,thermal:0.35,speed:1.0}},
+  canyon:{label:'Canyon formation',
+    p:{base:'plateau',octaves:4,freq:1.7,amp:0.34,ridge:0.2,falloff:0.0,
+       rain:0.006,evap:0.35,erode:1.7,deposit:0.7,capacity:1.3,flow:1.2,thermal:0.15,speed:1.0}},
+  island:{label:'Island rainfall',
+    p:{base:'island',octaves:5,freq:2.6,amp:0.38,ridge:0.3,falloff:1.0,
+       rain:0.02,evap:0.4,erode:1.1,deposit:1.2,capacity:1.0,flow:1.0,thermal:0.45,speed:1.0}},
+  valley:{label:'River valley',
+    p:{base:'valley',octaves:4,freq:1.9,amp:0.3,ridge:0.3,falloff:0.1,
+       rain:0.014,evap:0.35,erode:1.2,deposit:1.0,capacity:1.4,flow:1.3,thermal:0.3,speed:1.0}},
+  stress:{label:'Aggressive stress test',
+    p:{base:'massif',octaves:5,freq:2.4,amp:0.45,ridge:0.6,falloff:0.2,res:192,
+       rain:0.05,evap:0.2,erode:2.4,deposit:1.6,capacity:2.0,flow:1.6,thermal:0.8,speed:1.6,substeps:3}},
+};
+
+/* ------------------------------ deterministic rng ------------------------ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hash2(x,z,s){let h=(x*374761393+z*668265263+s*2246822519)|0;
+  h=Math.imul(h^h>>>13,1274126177);return((h^h>>>16)>>>0)/4294967296}
+function vnoise(x,z,s){
+  const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
+  const u=xf*xf*(3-2*xf),v=zf*zf*(3-2*zf);
+  const a=hash2(xi,zi,s),b=hash2(xi+1,zi,s),c=hash2(xi,zi+1,s),d=hash2(xi+1,zi+1,s);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;
+}
+function fbm(x,z,s,oct,freq,ridge){
+  let sum=0,amp=0.5,f=freq,norm=0;
+  for(let o=0;o<oct;o++){
+    let n=vnoise(x*f,z*f,s+o*97);
+    if(ridge>0){const r=1-Math.abs(2*n-1);n=n+(r-n)*ridge;}
+    sum+=n*amp;norm+=amp;amp*=0.5;f*=2.02;
+  }
+  return sum/norm;
+}
+
+/* ------------------------------ sim state -------------------------------- */
+const WORLD=2.0;                       // world span [-1,1] in x,z
+let N=0, cell=0, b,d,w,s_,eD,wet,vx,vz,F,tmpF,dB,initB;
+let simTime=0, steps=0, recoveries=0, erodeAcc=0;
+let hMin=0,hMax=1;
+
+function idx(x,z){return z*N+x}
+
+function generate(){
+  N=P.res; cell=WORLD/(N-1);
+  const n2=N*N;
+  b=new Float32Array(n2); d=new Float32Array(n2); w=new Float32Array(n2);
+  s_=new Float32Array(n2); eD=new Float32Array(n2); wet=new Float32Array(n2);
+  vx=new Float32Array(n2); vz=new Float32Array(n2);
+  F=new Float32Array(n2*4); tmpF=new Float32Array(n2); dB=new Float32Array(n2);
+  const s=P.seed, base=P.base;
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z),u=x/(N-1)*2-1,v=z/(N-1)*2-1;
+    let n=fbm(u,v,s,P.octaves,P.freq,P.ridge);          // 0..1
+    let h;
+    if(base==='massif'){
+      const r=Math.sqrt(u*u+v*v);
+      h=P.amp*(n*0.85-0.32)+P.amp*1.15*Math.max(0,1-r*1.1);
+    }else if(base==='island'){
+      const r=Math.sqrt(u*u+v*v);
+      h=P.amp*1.6*(n*0.75+0.25)-0.12-r*r*1.15;
+    }else if(base==='plateau'){
+      const t=clamp(n*1.35-0.15,0,1);
+      h=P.amp*(Math.floor(t*3)/3*0.8+ (t*0.4)) + P.amp*0.3*(n-0.5);
+    }else{ // valley: ridges along left/right, channel down the middle sloping to -z
+      const ridgeLine=Math.abs(u);
+      h=P.amp*(n*0.9-0.2)+P.amp*1.5*Math.pow(ridgeLine,1.7)*0.9 + v*0.12;
+      h-=P.amp*0.35*Math.exp(-u*u*14);                  // carve central channel
+    }
+    const fall=P.falloff>0?clamp(1-(u*u+v*v)*P.falloff*1.1,0.0,1):1;
+    b[i]=h*fall;
+  }
+  /* light smoothing so erosion carves channels instead of noise spikes */
+  for(let pass=0;pass<2;pass++){
+    dB.fill(0);
+    for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+      const i=idx(x,z);
+      const xm=x>0?i-1:i,xp=x<N-1?i+1:i,zm=z>0?i-N:i,zp=z<N-1?i+N:i;
+      dB[i]=b[i]*0.6+(b[xm]+b[xp]+b[zm]+b[zp])*0.1;
+    }
+    b.set(dB);
+  }
+  initB=b.slice(); simTime=0; steps=0; erodeAcc=0;
+  recomputeRange(); markDirty();
+}
+function resetSim(){
+  b.set(initB); d.fill(0); w.fill(0); s_.fill(0); eD.fill(0); wet.fill(0);
+  vx.fill(0); vz.fill(0); F.fill(0);
+  simTime=0; steps=0; erodeAcc=0; recomputeRange(); markDirty();
+}
+function recomputeRange(){
+  hMin=1e9;hMax=-1e9;
+  for(let i=0;i<b.length;i++){const v=b[i];if(v<hMin)hMin=v;if(v>hMax)hMax=v;}
+  const pad=(hMax-hMin)*0.05+1e-4; hMin-=pad; hMax+=pad;
+}
+
+/* one simulation substep. dt in sim units. */
+function simStep(dt){
+  const n2=N*N, c2=cell*cell;
+  /* rain */
+  const r=P.rain*dt;
+  if(r>0)for(let i=0;i<n2;i++)d[i]+=r;
+  /* flux update (dirs: 0=L 1=R 2=T 3=B) */
+  const Kf=dt*9.8*cell*P.flow;                 // flux increment scale
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z),ws=b[i]+d[i];
+    // neighbor surfaces; out-of-bounds ghost holds terrain-level surface (open drain)
+    const wsL=x>0?b[i-1]+d[i-1]:b[i];
+    const wsR=x<N-1?b[i+1]+d[i+1]:b[i];
+    const wsT=z>0?b[i-N]+d[i-N]:b[i];
+    const wsB=z<N-1?b[i+N]+d[i+N]:b[i];
+    const o=i*4;
+    F[o  ]=Math.max(0,F[o  ]*0.995+Kf*(ws-wsL));
+    F[o+1]=Math.max(0,F[o+1]*0.995+Kf*(ws-wsR));
+    F[o+2]=Math.max(0,F[o+2]*0.995+Kf*(ws-wsT));
+    F[o+3]=Math.max(0,F[o+3]*0.995+Kf*(ws-wsB));
+    let sum=F[o]+F[o+1]+F[o+2]+F[o+3];
+    if(sum>0){
+      const K=Math.min(1,d[i]*c2/(sum*dt));
+      if(K<1){F[o]*=K;F[o+1]*=K;F[o+2]*=K;F[o+3]*=K;sum*=K;}
+    }
+  }
+  /* water + velocity */
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z),o=i*4;
+    const fLin=x>0?F[(i-1)*4+1]:0, fRin=x<N-1?F[(i+1)*4]:0;
+    const fTin=z>0?F[(i-N)*4+3]:0, fBin=z<N-1?F[(i+N)*4+2]:0;
+    const fOut=F[o]+F[o+1]+F[o+2]+F[o+3], fIn=fLin+fRin+fTin+fBin;
+    const nd=d[i]+dt*(fIn-fOut)/c2;
+    w[i]=nd>0?nd:0;
+    const dbar=(d[i]+w[i])*0.5;
+    if(dbar>1e-6){
+      vx[i]=clamp((fLin-F[o]+F[o+1]-fRin)/(2*cell*dbar)*0.5,-6,6);
+      vz[i]=clamp((fTin-F[o+2]+F[o+3]-fBin)/(2*cell*dbar)*0.5,-6,6);
+    }else{vx[i]=0;vz[i]=0;}
+  }
+  const sw=d;d=w;w=sw;                              // d=w updated water
+  /* erosion / deposition */
+  const Ke=P.erode, Kd=P.deposit, Kc=P.capacity*4.0;
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z);
+    const xm=x>0?i-1:i, xp=x<N-1?i+1:i, zm=z>0?i-N:i, zp=z<N-1?i+N:i;
+    if(d[i]<8e-4){
+      if(s_[i]>0){
+        /* cell dried: hand suspended load to the LOWEST wet neighbour;
+           if none, settle only what fits below the local mean — no mounds */
+        let j=-1,bj=1e9;
+        if(d[xm]>8e-4&&b[xm]+d[xm]<bj){bj=b[xm]+d[xm];j=xm}
+        if(d[xp]>8e-4&&b[xp]+d[xp]<bj){bj=b[xp]+d[xp];j=xp}
+        if(d[zm]>8e-4&&b[zm]+d[zm]<bj){bj=b[zm]+d[zm];j=zm}
+        if(d[zp]>8e-4&&b[zp]+d[zp]<bj){bj=b[zp]+d[zp];j=zp}
+        if(j>=0){s_[j]+=s_[i];s_[i]=0;}
+        else{
+          const avg=(b[xm]+b[xp]+b[zm]+b[zp])*0.25;
+          const put=Math.min(s_[i],Math.max(0,avg-b[i]+cell*0.15));
+          b[i]+=put;eD[i]+=put;s_[i]-=put;
+        }
+      }
+      wet[i]*=0.98;continue;
+    }
+    /* sediment leaves with water at open boundaries */
+    const o=i*4;let gOut=0;
+    if(x===0)gOut+=F[o];if(x===N-1)gOut+=F[o+1];
+    if(z===0)gOut+=F[o+2];if(z===N-1)gOut+=F[o+3];
+    if(gOut>0&&s_[i]>0){
+      const fr=Math.min(1,gOut*dt/(Math.max(d[i],1e-6)*c2));
+      s_[i]*=1-fr;
+    }
+    const gx=(b[xp]-b[xm])/(2*cell), gz=(b[zp]-b[zm])/(2*cell);
+    const slope=Math.sqrt(gx*gx+gz*gz);
+    const sp=Math.sqrt(vx[i]*vx[i]+vz[i]*vz[i]);
+    let C=Kc*sp*(slope+0.02)*cell*Math.min(1,d[i]*15)*Math.min(1,sp);
+    if(C>0.1)C=0.1;
+    let amt;
+    if(C>s_[i]&&d[i]>0.003){                         // erode — needs flowing water
+      amt=Math.min(Ke*(C-s_[i])*dt, 0.25*d[i]);
+      const floor_=Math.min(b[xm],b[xp],b[zm],b[zp])-cell*1.9;
+      amt=Math.min(amt,Math.max(0,b[i]-floor_));
+      if(b[i]-amt<-1.5)amt=Math.max(0,b[i]+1.5);
+      b[i]-=amt;s_[i]+=amt;eD[i]-=amt;erodeAcc+=amt;
+    }else{                                           // deposit — fills toward local mean, can't mound
+      const avg=(b[xm]+b[xp]+b[zm]+b[zp])*0.25;
+      amt=Math.min(Kd*(s_[i]-C)*dt, s_[i])*Math.min(1,d[i]*10);
+      amt=Math.min(amt,Math.max(0,avg-b[i]+cell*0.15));
+      b[i]+=amt;s_[i]-=amt;eD[i]+=amt;
+    }
+    /* anti-spike: shave material piling past repose into suspended load */
+    const rep=cell*1.9;
+    const bmax=Math.max(b[xm],b[xp],b[zm],b[zp]);
+    if(b[i]>bmax+rep){const df=b[i]-bmax-rep;b[i]-=df;s_[i]+=df;}
+    if(s_[i]>0.6)s_[i]=0.6;
+    wet[i]=Math.min(1,wet[i]+dt*8);
+  }
+  /* semi-Lagrangian sediment transport */
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z);
+    let px=x-vx[i]*dt/cell, pz=z-vz[i]*dt/cell;
+    px=clamp(px,0,N-1.001);pz=clamp(pz,0,N-1.001);
+    const x0=px|0,z0=pz|0,fx=px-x0,fz=pz-z0,a=idx(x0,z0);
+    tmpF[i]=s_[a]*(1-fx)*(1-fz)+s_[a+1]*fx*(1-fz)+s_[a+N]*(1-fx)*fz+s_[a+N+1]*fx*fz;
+  }
+  const ss=s_;s_=tmpF;tmpF=ss;
+  /* evaporation */
+  const ev=1-Math.min(0.9,P.evap*dt);
+  for(let i=0;i<n2;i++){d[i]*=ev;if(d[i]<1e-5)d[i]=0;}
+  /* thermal / talus erosion — each R and B pair once */
+  const Kt=P.thermal*dt*0.5, repose=Math.tan(0.66)*cell;   // ~38°
+  if(Kt>0)for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z);
+    if(x<N-1){const j=i+1,dif=b[i]-b[j],ex=Math.abs(dif)-repose;
+      if(ex>0){const t=Math.min(ex*0.5,Kt*ex)*Math.sign(dif);dB[i]-=t;dB[j]+=t;}}
+    if(z<N-1){const j=i+N,dif=b[i]-b[j],ex=Math.abs(dif)-repose;
+      if(ex>0){const t=Math.min(ex*0.5,Kt*ex)*Math.sign(dif);dB[i]-=t;dB[j]+=t;}}
+  }
+  if(Kt>0)for(let i=0;i<n2;i++)if(dB[i]!==0){b[i]+=dB[i];eD[i]+=dB[i];dB[i]=0;}
+  simTime+=dt;steps++;
+}
+/* NaN sweep + sanitize — graceful recovery */
+function sanitize(){
+  let bad=0;
+  for(let i=0;i<b.length;i++){
+    if(!isFinite(b[i])){b[i]=initB[i]||0;bad++;}
+    if(!isFinite(d[i])||d[i]<0){d[i]=0;bad++;}
+    if(!isFinite(s_[i])||s_[i]<0){s_[i]=0;bad++;}
+  }
+  if(bad){F.fill(0);vx.fill(0);vz.fill(0);recoveries++;return true}
+  return false;
+}
+
+/* ------------------------------ WebGL setup ------------------------------ */
+const canvas=$('#gl');
+let gl=canvas.getContext('webgl2',{antialias:true,alpha:false})
+    ||canvas.getContext('webgl',{antialias:true,alpha:false});
+if(!gl)errbar('WebGL unavailable');
+let uintIdx=gl&&(gl instanceof WebGL2RenderingContext||gl.getExtension('OES_element_index_uint'));
+
+const VS=`precision highp float;
+attribute vec3 aPos;attribute vec3 aNrm;attribute vec4 aDat;attribute vec2 aVel;
+uniform mat4 uVP;
+varying vec3 vPos;varying vec3 vNrm;varying vec4 vDat;varying vec2 vVel;
+void main(){vPos=aPos;vNrm=aNrm;vDat=aDat;vVel=aVel;gl_Position=uVP*vec4(aPos,1.);}`;
+const FS=`precision highp float;
+varying vec3 vPos;varying vec3 vNrm;varying vec4 vDat;varying vec2 vVel;
+uniform vec3 uLight,uCam;uniform int uMode;uniform float uCont,uFog,uTime,uSh;
+uniform float uHMin,uHInv;uniform sampler2D uHgt;
+float hsample(vec2 xz){vec2 uv=xz*0.5+0.5;
+  if(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.)return -2.;
+  vec2 t=texture2D(uHgt,uv).rg;return uHMin+(t.r*256.+t.g)*uHInv;}
+vec3 hsv(float h,float s,float v){vec3 p=abs(fract(vec3(h)+vec3(0.,.6667,.3333))*6.-3.);
+  return v*mix(vec3(1.),clamp(p-1.,0.,1.),s);}
+float shadow(vec3 p){
+  vec2 ld=normalize(uLight.xz);float rise=uLight.y/length(uLight.xz);
+  float t=0.012,sh=1.0;
+  for(int k=0;k<26;k++){
+    vec2 xz=p.xz+ld*t;float th=hsample(xz);
+    float ray=p.y+t*rise;
+    if(th>ray){sh=min(sh,0.15+0.85*clamp((ray-th+t*0.10)*6.,0.,1.));if(sh<=0.15)break;}
+    t+=0.014+t*0.06;
+  }return sh;}
+void main(){
+  vec3 n=normalize(vNrm);
+  vec3 alb;
+  float e=vPos.y,dw=vDat.x,sd=vDat.y,ed=vDat.z,wt=vDat.w;
+  if(uMode==0){ /* shaded */
+    float sl=1.-n.y;
+    vec3 sand=vec3(.76,.66,.45),grass=vec3(.36,.52,.30),rock=vec3(.45,.42,.40),snow=vec3(.88,.9,.94);
+    alb=mix(sand,grass,smoothstep(.02,.16,e));
+    alb=mix(alb,rock,smoothstep(.18,.45,sl));
+    alb=mix(alb,snow,smoothstep(.55,.8,e)*(1.-smoothstep(.2,.5,sl)));
+    alb=mix(alb,vec3(.62,.55,.42),clamp(ed*5.,0.,.4));             /* fresh deposits */
+    alb=mix(alb,vec3(.42,.28,.2),clamp(-ed*8.,0.,.55));            /* fresh erosion */
+    alb*=(1.-wt*.22);
+  }else if(uMode==1){alb=hsv(.62-.62*clamp(e*.9+.25,0.,1.),.72,.9);}
+  else if(uMode==2){alb=mix(vec3(.05,.08,.12),vec3(.1,.5,.9),clamp(dw*18.,0.,1.));
+    alb=mix(alb,vec3(.55,.85,1.),clamp(dw*70.,0.,1.)*.6);}
+  else if(uMode==3){alb=mix(vec3(.05,.05,.08),vec3(.95,.62,.15),clamp(sd*160.,0.,1.));}
+  else if(uMode==4){float t=clamp(ed*60.,-1.,1.);
+    alb=t>0.?mix(vec3(.08,.08,.1),vec3(.2,.55,1.),t):mix(vec3(.08,.08,.1),vec3(1.,.25,.15),-t);}
+  else if(uMode==5){float sl=1.-n.y;alb=hsv(.66-clamp(sl*1.6,0.,.66),.85,.9);}
+  else {float sp=length(vVel);float hue=atan(vVel.y,vVel.x)/6.28318+.5;
+    alb=hsv(hue,clamp(sp*.6,0.,1.),clamp(.15+sp*.5,0.,1.));}
+  /* lighting */
+  float dif=max(dot(n,uLight),0.);
+  float sh=(uMode==0&&uSh>.5)?shadow(vPos+vec3(0.,.004,0.)):1.;
+  vec3 sky=vec3(.32,.42,.55),gnd=vec3(.22,.18,.14);
+  vec3 amb=mix(gnd,sky,n.y*.5+.5)*.55;
+  vec3 col=alb*(amb+dif*vec3(1.,.93,.8)*1.15*sh);
+  if(uMode==0){ /* spec on wet rock */
+    vec3 hv=normalize(uLight+normalize(uCam-vPos));
+    col+=pow(max(dot(n,hv),0.),60.)*wt*.35*sh;
+  }
+  /* contours */
+  if(uCont>.5&&(uMode==0||uMode==1)){
+    float f=abs(fract(e*22.)-.5);
+    col*=1.-.28*(1.-smoothstep(.04,.09,f));
+  }
+  /* fog */
+  float dist=length(uCam-vPos);
+  col=mix(col,vec3(.52,.6,.72),1.-exp(-dist*dist*uFog*uFog*.12));
+  gl_FragColor=vec4(col,1.);}`;
+
+const WVS=`precision highp float;
+attribute vec3 aPos;attribute vec3 aNrm;attribute vec2 aDat;
+uniform mat4 uVP;varying vec3 vPos;varying vec3 vNrm;varying vec2 vDat;
+void main(){vPos=aPos;vNrm=aNrm;vDat=aDat;gl_Position=uVP*vec4(aPos,1.);}`;
+const WFS=`precision highp float;
+varying vec3 vPos;varying vec3 vNrm;varying vec2 vDat;
+uniform vec3 uLight,uCam;uniform float uTime,uVis,uFog;
+void main(){
+  float dep=vDat.x;if(dep<0.005)discard;
+  vec3 n=normalize(vNrm);
+  vec3 V=normalize(uCam-vPos);
+  float fr=pow(1.-max(dot(n,V),0.),3.);
+  vec3 shal=vec3(.16,.5,.55),deep=vec3(.02,.14,.3),muddy=vec3(.5,.4,.2);
+  vec3 col=mix(shal,deep,clamp(dep*30.,0.,1.));
+  col=mix(col,muddy,clamp(vDat.y*90.,0.,.7));
+  float dif=max(dot(n,uLight),0.);
+  vec3 hv=normalize(uLight+V);
+  float sp=pow(max(dot(n,hv),0.),120.);
+  col=col*(.45+.6*dif)+sp*vec3(1.,.95,.85)*.9;
+  col=mix(col,vec3(.6,.66,.75),fr*.5);
+  float dist=length(uCam-vPos);
+  col=mix(col,vec3(.52,.6,.72),1.-exp(-dist*dist*uFog*uFog*.12));
+  gl_FragColor=vec4(col,clamp((dep-0.005)*30.,0.,.9)*uVis);}`;
+
+const SKYVS=`precision highp float;attribute vec2 aP;varying vec2 vP;
+void main(){vP=aP;gl_Position=vec4(aP,0.999,1.);}`;
+const SKYFS=`precision highp float;varying vec2 vP;uniform float uT;
+void main(){float t=vP.y*.5+.5;
+  vec3 c=mix(vec3(.68,.74,.84),vec3(.24,.36,.55),pow(t,.7));
+  c=mix(c,vec3(.86,.8,.72),(1.-abs(t-.18)*5.)*.25);
+  gl_FragColor=vec4(c,1.);}`;
+
+const PT_VS=`precision highp float;attribute vec3 aPos;uniform mat4 uVP;uniform float uSz;
+void main(){gl_Position=uVP*vec4(aPos,1.);gl_PointSize=uSz;}`;
+const PT_FS=`precision highp float;uniform vec3 uCol;
+void main(){vec2 c=gl_PointCoord-.5;float r=length(c);
+  if(r>.5)discard;float a=smoothstep(.5,.42,r);
+  float ring=smoothstep(.28,.34,r);gl_FragColor=vec4(uCol,a*(.35+.65*ring));}`;
+
+let glErr='';
+function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);
+  gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+    glErr=gl.getShaderInfoLog(s);errbar('shader: '+glErr);}return s}
+function program(vs,fs){const p=gl.createProgram();
+  gl.attachShader(p,shader(gl.VERTEX_SHADER,vs));
+  gl.attachShader(p,shader(gl.FRAGMENT_SHADER,fs));
+  gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS)){
+    glErr=gl.getProgramInfoLog(p);errbar('link: '+glErr);}
+  const u={};const nu=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<nu;i++){const inf=gl.getActiveUniform(p,i);u[inf.name]=gl.getUniformLocation(p,inf.name);}
+  const a={};const na=gl.getProgramParameter(p,gl.ACTIVE_ATTRIBUTES);
+  for(let i=0;i<na;i++){const inf=gl.getActiveAttrib(p,i);a[inf.name]=gl.getAttribLocation(p,inf.name);}
+  return{p,u,a};}
+let progT,progW,progS,progP;
+let vboT,vboW,ibo,iboWire,vboSky,vboPt,hgtTex;
+let vertsT,vertsW,idxT,idxW,pxBuf;
+
+function initGL(){
+  progT=program(VS,FS);progW=program(WVS,WFS);progS=program(SKYVS,SKYFS);progP=program(PT_VS,PT_FS);
+  vboT=gl.createBuffer();vboW=gl.createBuffer();ibo=gl.createBuffer();iboWire=gl.createBuffer();
+  vboSky=gl.createBuffer();vboPt=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboSky);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  hgtTex=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,hgtTex);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
+}
+function buildMesh(){
+  const n2=N*N;
+  vertsT=new Float32Array(n2*12);
+  vertsW=new Float32Array(n2*8);
+  pxBuf=new Uint8Array(n2*4);
+  idxT=new Uint32Array((N-1)*(N-1)*6);
+  idxW=new Uint32Array((N-1)*(N-1)*4+ (N-1)*8);
+  let k=0;
+  for(let z=0;z<N-1;z++)for(let x=0;x<N-1;x++){
+    const i=idx(x,z);
+    idxT[k++]=i;idxT[k++]=i+1;idxT[k++]=i+N;
+    idxT[k++]=i+1;idxT[k++]=i+N+1;idxT[k++]=i+N;
+  }
+  k=0;
+  for(let z=0;z<N;z++)for(let x=0;x<N-1;x++){idxW[k++]=idx(x,z);idxW[k++]=idx(x+1,z);}
+  for(let x=0;x<N;x++)for(let z=0;z<N-1;z++){idxW[k++]=idx(x,z);idxW[k++]=idx(x+1,z);}
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z),wx=x/(N-1)*2-1,wz=z/(N-1)*2-1;
+    vertsT[i*12]=wx;vertsT[i*12+2]=wz;
+    vertsW[i*8]=wx;vertsW[i*8+2]=wz;
+  }
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,idxT,gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,iboWire);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,idxW,gl.STATIC_DRAW);
+}
+let dirty=true;
+function markDirty(){dirty=true}
+function updateMesh(){
+  recomputeRange();
+  const ex=P.exag,n2=N*N;
+  /* normals via central differences on b (terrain) and b+d (water surface) */
+  for(let z=0;z<N;z++)for(let x=0;x<N;x++){
+    const i=idx(x,z);
+    const xm=x>0?i-1:i,xp=x<N-1?i+1:i,zm=z>0?i-N:i,zp=z<N-1?i+N:i;
+    let gx=(b[xp]-b[xm])/(2*cell)*ex,gz=(b[zp]-b[zm])/(2*cell)*ex;
+    let il=1/Math.sqrt(gx*gx+1+gz*gz);
+    const o=i*12;
+    vertsT[o+1]=b[i]*ex;
+    vertsT[o+3]=-gx*il;vertsT[o+4]=il;vertsT[o+5]=-gz*il;
+    vertsT[o+6]=d[i];vertsT[o+7]=s_[i];vertsT[o+8]=eD[i];vertsT[o+9]=wet[i];
+    vertsT[o+10]=vx[i];vertsT[o+11]=vz[i];
+    /* water surface */
+    gx=((b[xp]+d[xp])-(b[xm]+d[xm]))/(2*cell)*ex;
+    gz=((b[zp]+d[zp])-(b[zm]+d[zm]))/(2*cell)*ex;
+    il=1/Math.sqrt(gx*gx+1+gz*gz);
+    const o2=i*8;
+    vertsW[o2+1]=(b[i]+d[i])*ex;
+    vertsW[o2+3]=-gx*il;vertsW[o2+4]=il;vertsW[o2+5]=-gz*il;
+    vertsW[o2+6]=d[i];vertsW[o2+7]=s_[i];
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboT);
+  gl.bufferData(gl.ARRAY_BUFFER,vertsT,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboW);
+  gl.bufferData(gl.ARRAY_BUFFER,vertsW,gl.DYNAMIC_DRAW);
+  /* packed height texture for shadow marching */
+  const px=pxBuf,inv=1/(hMax-hMin);
+  for(let i=0;i<n2;i++){
+    const v=clamp((b[i]-hMin)*inv,0,1)*65535;
+    px[i*4]=v/256;px[i*4+1]=v%256;
+  }
+  gl.bindTexture(gl.TEXTURE_2D,hgtTex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,N,N,0,gl.RGBA,gl.UNSIGNED_BYTE,px);
+  dirty=false;
+}
+
+/* ------------------------------ camera ----------------------------------- */
+const cam={yaw:0.7,pitch:0.95,dist:3.0,tx:0,ty:0.05,tz:0,fov:0.85};
+function camEye(){
+  const cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+  return[cam.tx+cam.dist*cp*Math.cos(cam.yaw),cam.ty+cam.dist*sp,
+         cam.tz+cam.dist*cp*Math.sin(cam.yaw)];
+}
+function matMul(a,b){const o=new Float32Array(16);
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++)
+    o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
+function perspective(f,asp,nr,fr){const t=1/Math.tan(f/2),o=new Float32Array(16);
+  o[0]=t/asp;o[5]=t;o[10]=(fr+nr)/(nr-fr);o[11]=-1;o[14]=2*fr*nr/(nr-fr);return o}
+function lookAt(e,c,up){
+  let fx=c[0]-e[0],fy=c[1]-e[1],fz=c[2]-e[2];
+  let l=Math.hypot(fx,fy,fz);fx/=l;fy/=l;fz/=l;
+  let rx=fy*up[2]-fz*up[1],ry=fz*up[0]-fx*up[2],rz=fx*up[1]-fy*up[0];
+  l=Math.hypot(rx,ry,rz);rx/=l;ry/=l;rz/=l;
+  const ux=ry*fz-rz*fy,uy=rz*fx-rx*fz,uz=rx*fy-ry*fx;
+  return new Float32Array([rx,ux,-fx,0, ry,uy,-fy,0, rz,uz,-fz,0,
+    -(rx*e[0]+ry*e[1]+rz*e[2]),-(ux*e[0]+uy*e[1]+uz*e[2]),(fx*e[0]+fy*e[1]+fz*e[2]),1]);
+}
+function camBasis(){
+  const e=camEye();
+  let fx=cam.tx-e[0],fy=cam.ty-e[1],fz=cam.tz-e[2];
+  const l=Math.hypot(fx,fy,fz);fx/=l;fy/=l;fz/=l;
+  let R=[-fz,0,fx];const rl=Math.hypot(R[0],R[1],R[2])||1;R=[R[0]/rl,R[1]/rl,R[2]/rl];
+  const U=[R[1]*fz-R[2]*fy, R[2]*fx-R[0]*fz, R[0]*fy-R[1]*fx];
+  return{e,f:[fx,fy,fz],r:R,u:U};
+}
+function pickRay(nx,ny){
+  const {e,f,r,u}=camBasis(),asp=canvas.width/canvas.height;
+  const t=Math.tan(cam.fov/2);
+  let dx=f[0]+r[0]*nx*t*asp+u[0]*ny*t, dy=f[1]+r[1]*nx*t*asp+u[1]*ny*t, dz=f[2]+r[2]*nx*t*asp+u[2]*ny*t;
+  const l=Math.hypot(dx,dy,dz);dx/=l;dy/=l;dz/=l;
+  const hf=(X,Z)=>{ // bilinear terrain height (display scale)
+    const gx=clamp((X*0.5+0.5)*(N-1),0,N-1.001),gz=clamp((Z*0.5+0.5)*(N-1),0,N-1.001);
+    const x0=gx|0,z0=gz|0,fx2=gx-x0,fz2=gz-z0,a=idx(x0,z0);
+    return(b[a]*(1-fx2)*(1-fz2)+b[a+1]*fx2*(1-fz2)+b[a+N]*(1-fx2)*fz2+b[a+N+1]*fx2*fz2)*P.exag;
+  };
+  let t0=0;const tmax=12;
+  for(let i=0;i<220;i++){
+    const t=t0+(tmax-t0)*i/220;
+    const px=e[0]+dx*t,py=e[1]+dy*t,pz=e[2]+dz*t;
+    if(px<-1.05||px>1.05||pz<-1.05||pz>1.05){if(t>3)break;continue}
+    if(py<=hf(px,pz)){
+      let lo=t0+(tmax-t0)*(i-1)/220,hi=t;
+      for(let k=0;k<10;k++){const m=(lo+hi)/2;
+        (e[1]+dy*m<=hf(e[0]+dx*m,e[2]+dz*m))?hi=m:lo=m;}
+      const T=(lo+hi)/2;
+      return{x:e[0]+dx*T,y:e[1]+dy*T,z:e[2]+dz*T,hit:true};
+    }
+  }
+  return{hit:false};
+}
+
+/* ------------------------------ brushes ---------------------------------- */
+function brushAt(wx,wz){
+  const gx0=(wx*0.5+0.5)*(N-1),gz0=(wz*0.5+0.5)*(N-1);
+  const R=P.brushR*(N-1)/2,S=P.brushS*0.02;
+  const x0=Math.max(0,Math.floor(gx0-R)),x1=Math.min(N-1,Math.ceil(gx0+R));
+  const z0=Math.max(0,Math.floor(gz0-R)),z1=Math.min(N-1,Math.ceil(gz0+R));
+  const tool=P.tool;
+  for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++){
+    const dx=x-gx0,dz=z-gz0,r=Math.sqrt(dx*dx+dz*dz);
+    if(r>R)continue;
+    const fall=Math.exp(-r*r/(R*R*0.35));
+    const i=idx(x,z),k=S*fall;
+    if(tool==='raise')b[i]+=k;
+    else if(tool==='lower')b[i]=Math.max(-1.4,b[i]-k);
+    else if(tool==='water')d[i]+=k*3;
+    else if(tool==='sediment')s_[i]+=k*2;
+    else if(tool==='dry'){d[i]*=(1-Math.min(0.6,k*30));if(d[i]<1e-4)d[i]=0;}
+    else if(tool==='smooth'){
+      const xm=x>0?i-1:i,xp=x<N-1?i+1:i,zm=z>0?i-N:i,zp=z<N-1?i+N:i;
+      const avg=(b[xm]+b[xp]+b[zm]+b[zp])*0.25;
+      b[i]+=(avg-b[i])*Math.min(0.9,k*22);
+    }
+    else if(tool==='flatten'&&flatTarget!==null)
+      b[i]+=(flatTarget-b[i])*Math.min(0.9,k*22);
+  }
+  recomputeRange();markDirty();
+}
+let flatTarget=null;
+
+/* ------------------------------ input ------------------------------------ */
+const ptr={down:false,btn:0,id:-1,px:0,py:0,moved:false,pinch:0,id2:-1,px2:0,py2:0};
+let probePt=null;
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId);
+  if(ptr.down&&e.pointerId!==ptr.id){ptr.id2=e.pointerId;ptr.px2=e.clientX;ptr.py2=e.clientY;
+    ptr.pinch=Math.hypot(e.clientX-ptr.px,e.clientY-ptr.py);return;}
+  ptr.down=true;ptr.id=e.pointerId;ptr.px=e.clientX;ptr.py=e.clientY;ptr.moved=false;ptr.btn=e.button;
+  if(P.tool==='flatten'){const h=pickRay(...ndc(e));if(h.hit)flatTarget=h.y/P.exag;}
+  if(P.tool==='inspect'){const h=pickRay(...ndc(e));if(h.hit)probePt=h;}
+});
+canvas.addEventListener('pointermove',e=>{
+  if(ptr.id2===e.pointerId){ptr.px2=e.clientX;ptr.py2=e.clientY;return;}
+  const dx=e.clientX-ptr.px,dy=e.clientY-ptr.py;
+  if(!ptr.down){
+    const h=pickRay(...ndc(e));probePt=h.hit?h:null;updateProbe(h);return;
+  }
+  ptr.moved=ptr.moved||Math.abs(dx)+Math.abs(dy)>3;
+  const camDrag=ptr.btn===2||ptr.btn===1||(ptr.btn===0&&P.tool==='orbit')||(ptr.id2>=0);
+  if(ptr.id2>=0){ /* pinch zoom + two-finger pan */
+    const np=Math.hypot(ptr.px2-ptr.px,ptr.py2-ptr.py);
+    if(ptr.pinch>0)cam.dist=clamp(cam.dist*ptr.pinch/Math.max(1,np),0.6,9);
+    ptr.pinch=np;
+    camPan(dx,dy);
+  }else if(camDrag&&ptr.btn!==1&&ptr.btn===2||ptr.btn===0&&P.tool==='orbit'){
+    cam.yaw+=dx*0.008;cam.pitch=clamp(cam.pitch+dy*0.008,0.08,1.5);
+  }else if(ptr.btn===1){camPan(dx,dy);}
+  else if(ptr.btn===0){ /* paint along segment */
+    const h=pickRay(...ndc(e));
+    if(h.hit){paintSeg(h);}
+    ptr.moved=true;
+  }
+  ptr.px=e.clientX;ptr.py=e.clientY;
+});
+function camPan(dx,dy){
+  const s=cam.dist*0.0011;
+  const {r}=camBasis();
+  cam.tx-=r[0]*dx*s;cam.tz-=r[2]*dx*s;cam.ty+=dy*s;
+  cam.ty=clamp(cam.ty,-0.5,1.5);
+}
+let lastPaint=null,lastHit=null;
+function paintSeg(h){
+  lastHit=h;
+  if(lastPaint){
+    const dist=Math.hypot(h.x-lastPaint.x,h.z-lastPaint.z);
+    const steps=Math.ceil(dist/(P.brushR*0.4));
+    for(let i=1;i<=steps;i++)
+      brushAt(lastPaint.x+(h.x-lastPaint.x)*i/steps,lastPaint.z+(h.z-lastPaint.z)*i/steps);
+  }else brushAt(h.x,h.z);
+  lastPaint={x:h.x,z:h.z};
+}
+function ptrEnd(e){
+  if(e.pointerId===ptr.id2){ptr.id2=-1;ptr.pinch=0;return}
+  if(e.pointerId!==ptr.id)return;
+  ptr.down=false;ptr.id=-1;lastPaint=null;lastHit=null;flatTarget=null;
+}
+canvas.addEventListener('pointerup',ptrEnd);
+canvas.addEventListener('pointercancel',ptrEnd);
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('wheel',e=>{e.preventDefault();
+  cam.dist=clamp(cam.dist*Math.exp(e.deltaY*0.0012),0.6,9);},{passive:false});
+function ndc(e){const r=canvas.getBoundingClientRect();
+  return[((e.clientX-r.left)/r.width)*2-1,-(((e.clientY-r.top)/r.height)*2-1)]}
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.code==='Space'){e.preventDefault();togglePause();}
+  else if(e.key==='n'||e.key==='N'){doStep();}
+});
+
+/* ------------------------------ probe ------------------------------------ */
+function updateProbe(h){
+  const el=$('#probe');
+  if(!h||!h.hit){el.style.display='none';return}
+  const gx=clamp(Math.round((h.x*0.5+0.5)*(N-1)),0,N-1);
+  const gz=clamp(Math.round((h.z*0.5+0.5)*(N-1)),0,N-1);
+  const i=idx(gx,gz);
+  const xm=Math.max(0,gx-1),xp=Math.min(N-1,gx+1),zm=Math.max(0,gz-1),zp=Math.min(N-1,gz+1);
+  const sl=Math.hypot(b[idx(xp,gz)]-b[idx(xm,gz)],b[idx(gx,zp)]-b[idx(gx,zm)])/(2*cell);
+  el.style.display='block';
+  el.textContent=
+    `cell (${gx},${gz})\n`+
+    `elev    ${b[i].toFixed(4)}\n`+
+    `water   ${d[i].toFixed(5)}\n`+
+    `sedim   ${s_[i].toFixed(5)}\n`+
+    `slope   ${sl.toFixed(3)}\n`+
+    `flow    ${Math.hypot(vx[i],vz[i]).toFixed(3)}\n`+
+    `Δ erode ${eD[i].toFixed(4)}`;
+}
+
+/* ------------------------------ UI construction --------------------------- */
+function slider(sec,key,label,min,max,step,fmt){
+  const f=fmt||(v=>v.toFixed(step<0.01?3:step<0.1?2:1));
+  return`<div class="row"><label title="${label}">${label}</label>
+    <input type="range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${P[key]}">
+    <span class="val" data-v="${key}">${f(P[key])}</span></div>`;
+}
+function buildPanel(){
+  const B=$('#panelBody');
+  B.innerHTML=`
+  <details open><summary>Simulation</summary>
+    <div class="btnrow">
+      <button id="btnPause" title="pause / resume (Space)">Pause</button>
+      <button id="btnStep" title="advance one substep (N)">Step</button>
+    </div>
+    <div class="btnrow">
+      <button id="btnReset" title="restore initial terrain, clear water">Reset</button>
+      <button id="btnRegen" title="regenerate terrain from seed">Regenerate</button>
+      <button id="btnSeed" title="randomize seed">🎲</button>
+    </div>
+    <div class="row"><label title="deterministic seed">Seed</label>
+      <input type="number" id="inSeed" value="${P.seed}" step="1"></div>
+    <div class="row"><label title="simulation resolution (rebuilds)">Resolution</label>
+      <select id="inRes">${[64,96,128,160,192,256].map(r=>
+        `<option value="${r}"${r===P.res?' selected':''}>${r}×${r}</option>`).join('')}</select></div>
+    ${slider(0,'speed','Sim speed',0,4,0.05)}
+    ${slider(0,'substeps','Substeps',1,8,1,v=>v|0)}
+  </details>
+  <details open><summary>Water &amp; erosion</summary>
+    ${slider(0,'rain','Rainfall',0,0.1,0.002)}
+    ${slider(0,'evap','Evaporation',0,1.5,0.01)}
+    ${slider(0,'erode','Erosion rate',0,3,0.05)}
+    ${slider(0,'deposit','Deposition rate',0,3,0.05)}
+    ${slider(0,'capacity','Sediment capacity',0,3,0.05)}
+    ${slider(0,'flow','Flow strength',0.1,3,0.05)}
+    ${slider(0,'thermal','Thermal erosion',0,2,0.05)}
+  </details>
+  <details><summary>Brush</summary>
+    <div class="hint" id="toolHint">tool: <b>+ Water</b> — left-drag paints, right-drag orbits, wheel zooms</div>
+    ${slider(0,'brushR','Brush radius',0.02,0.4,0.005)}
+    ${slider(0,'brushS','Brush strength',0.05,2,0.05)}
+  </details>
+  <details><summary>Terrain</summary>
+    <div class="row"><label title="terrain preset">Preset</label>
+      <select id="inPreset">${Object.keys(PRESETS).map(k=>
+        `<option value="${k}"${k===P.preset?' selected':''}>${PRESETS[k].label}</option>`).join('')}</select></div>
+    <div class="row"><label title="base landform">Landform</label>
+      <select id="inBase">${['massif','plateau','island','valley'].map(k=>
+        `<option${k===P.base?' selected':''}>${k}</option>`).join('')}</select></div>
+    ${slider(0,'octaves','Noise octaves',1,8,1,v=>v|0)}
+    ${slider(0,'freq','Noise frequency',0.5,6,0.1)}
+    ${slider(0,'amp','Amplitude',0.05,0.8,0.01)}
+    ${slider(0,'ridge','Ridged noise',0,1,0.05)}
+    ${slider(0,'falloff','Edge falloff',0,1.5,0.05)}
+    <div class="hint">changes apply on Regenerate</div>
+  </details>
+  <details><summary>Display</summary>
+    <div class="row"><label title="visualization mode">View mode</label>
+      <select id="inMode">${MODE_NAMES.map((m,i)=>
+        `<option value="${i}"${i===P.mode?' selected':''}>${m}</option>`).join('')}</select></div>
+    ${slider(0,'exag','Vertical exaggeration',0.2,4,0.05)}
+    ${slider(0,'waterVis','Water visibility',0,1,0.05)}
+    ${slider(0,'lightAz','Light azimuth',0,360,1,v=>(v|0)+'°')}
+    ${slider(0,'lightEl','Light elevation',5,85,1,v=>(v|0)+'°')}
+    ${slider(0,'fog','Atmosphere',0,1.5,0.05)}
+    <div class="row"><label title="terrain self-shadowing">Shadows</label>
+      <input type="checkbox" id="inShad" ${P.shadows?'checked':''}></div>
+    <div class="row"><label title="contour lines">Contours</label>
+      <input type="checkbox" id="inCont" ${P.contours?'checked':''}></div>
+    <div class="row"><label title="wireframe grid overlay">Wireframe</label>
+      <input type="checkbox" id="inWire" ${P.wire?'checked':''}></div>
+  </details>
+  <details><summary>Import / Export</summary>
+    <div class="btnrow"><button id="btnPNG" title="heightfield → grayscale PNG">Export PNG</button></div>
+    <div class="btnrow">
+      <button id="btnJSON" title="full sim state → JSON">Export JSON</button>
+      <button id="btnImport" title="load sim state from JSON">Import JSON</button>
+    </div>
+    <div class="hint">JSON carries seed, params, terrain, water, sediment.</div>
+  </details>`;
+  /* tools */
+  const T=$('#tools');
+  T.innerHTML=TOOLS.map(([k,l])=>`<button data-tool="${k}" title="tool: ${l}">${l}</button>`).join('');
+  T.querySelectorAll('button').forEach(b2=>b2.addEventListener('click',()=>{
+    P.tool=b2.dataset.tool;
+    T.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b2));
+    $('#toolHint').innerHTML=`tool: <b>${b2.textContent}</b> — left-drag paints, right-drag orbits, wheel zooms`;
+    canvas.style.cursor=P.tool==='orbit'?'grab':'crosshair';
+  }));
+  T.querySelector(`[data-tool="${P.tool}"]`).classList.add('on');
+  /* wiring */
+  $('#btnPause').onclick=togglePause;
+  $('#btnStep').onclick=doStep;
+  $('#btnReset').onclick=()=>{resetSim();flash('reset');};
+  $('#btnRegen').onclick=()=>{P.seed=+$('#inSeed').value||0;generate();flash('regenerated seed '+P.seed);};
+  $('#btnSeed').onclick=()=>{P.seed=(Math.random()*1e9)|0;$('#inSeed').value=P.seed;generate();};
+  $('#inSeed').onchange=e=>{P.seed=+e.target.value||0};
+  $('#inRes').onchange=e=>{P.res=+e.target.value;generate();buildMesh();flash('resolution '+P.res);};
+  $('#inPreset').onchange=e=>{applyPreset(e.target.value);};
+  $('#inBase').onchange=e=>{P.base=e.target.value;};
+  $('#inMode').onchange=e=>{P.mode=+e.target.value;};
+  $('#inCont').onchange=e=>{P.contours=e.target.checked;};
+  $('#inWire').onchange=e=>{P.wire=e.target.checked;};
+  $('#inShad').onchange=e=>{P.shadows=e.target.checked;};
+  $('#btnPNG').onclick=exportPNG;
+  $('#btnJSON').onclick=exportJSON;
+  $('#btnImport').onclick=()=>$('#fileIn').click();
+  $('#fileIn').onchange=importJSON;
+  B.querySelectorAll('input[type=range]').forEach(r=>{
+    const k=r.dataset.k;
+    r.addEventListener('input',()=>{
+      P[k]=+r.value;
+      const v=B.querySelector(`[data-v="${k}"]`);
+      if(v)v.textContent=(+r.value)<1&&r.step<1?(+r.value).toFixed(3):(+r.value).toFixed(r.step<1?2:0);
+      if(k==='substeps')v.textContent=P[k]|0;
+      saveSettings();
+    });
+  });
+  B.querySelectorAll('select,input[type=number],input[type=checkbox]').forEach(el2=>{
+    el2.addEventListener('change',()=>saveSettings());
+  });
+}
+function flash(m){const h=$('#hud');h.dataset.flash=m;
+  clearTimeout(h._ft);h._ft=setTimeout(()=>delete h.dataset.flash,3500);}
+function togglePause(){P.paused=!P.paused;$('#btnPause').textContent=P.paused?'Resume':'Pause';}
+function doStep(){P.paused=true;safeStep();markDirty();
+  $('#btnPause').textContent='Resume';}
+function applyPreset(k){
+  const pr=PRESETS[k];if(!pr)return;P.preset=k;
+  const keepRes=P.res;
+  Object.assign(P,pr.p);
+  if(!pr.p.res)P.res=keepRes;
+  $('#inSeed').value=P.seed;
+  buildPanel();generate();buildMesh();
+  flash('preset: '+pr.label);
+}
+function saveSettings(){
+  try{const o={};for(const k in P)if(k!=='paused')o[k]=P[k];
+    localStorage.setItem('erosion-lab',JSON.stringify(o));}catch(e){}
+}
+function loadSettings(){
+  try{const o=JSON.parse(localStorage.getItem('erosion-lab')||'null');
+    if(o)for(const k in o)if(k in P)P[k]=o[k];}catch(e){}
+}
+
+/* ------------------------------ export / import -------------------------- */
+function download(name,href){
+  const a=document.createElement('a');a.href=href;a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+}
+function exportPNG(){
+  const c=document.createElement('canvas');c.width=N;c.height=N;
+  const ctx=c.getContext('2d'),im=ctx.createImageData(N,N);
+  const inv=255/(hMax-hMin);
+  for(let i=0;i<N*N;i++){
+    const v=clamp((b[i]-hMin)*inv,0,255);
+    im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=v;im.data[i*4+3]=255;
+  }
+  ctx.putImageData(im,0,0);
+  download(`erosion-height-${P.seed}-${N}.png`,c.toDataURL('image/png'));
+}
+function f64(arr){let s='';const CH=8192;
+  const u8=new Uint8Array(arr.buffer,arr.byteOffset,arr.byteLength);
+  for(let i=0;i<u8.length;i+=CH)s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH));
+  return btoa(s);}
+function b64(s){const bin=atob(s),u8=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);return new Float32Array(u8.buffer);}
+function exportJSON(){
+  const o={v:1,N,seed:P.seed,time:simTime,params:{...P},
+    h:f64(b),w:f64(d),s:f64(s_)};
+  const blob=new Blob([JSON.stringify(o)],{type:'application/json'});
+  const u=URL.createObjectURL(blob);
+  download(`erosion-state-${P.seed}.json`,u);
+  setTimeout(()=>URL.revokeObjectURL(u),4000);
+}
+function importJSON(e){
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{
+    const o=JSON.parse(rd.result);
+    if(o.v!==1||!o.N)throw new Error('bad format');
+    P.res=o.N;P.seed=o.seed||0;
+    if(o.params)for(const k in o.params)if(k in P)P[k]=o.params[k];
+    buildPanel();generate();buildMesh();
+    const h=b64(o.h),ww=b64(o.w),ss=b64(o.s);
+    if(h.length===N*N)b.set(h);
+    if(ww.length===N*N)d.set(ww);
+    if(ss.length===N*N)s_.set(ss);
+    initB=b.slice();simTime=o.time||0;
+    recomputeRange();markDirty();
+    flash('state imported');
+  }catch(err){errbar('import failed: '+err.message);}};
+  rd.readAsText(f);e.target.value='';
+}
+
+/* ------------------------------ main loop -------------------------------- */
+let lastT=0,fps=60,simMs=0,frame=0;
+function safeStep(){
+  const t0=performance.now();
+  const total=Math.min(0.064,0.016*P.speed);
+  /* auto-raise substeps so dt stays in the stable regime */
+  const ss=Math.max(1,P.substeps|0,Math.ceil(total/0.012)),dt=total/ss;
+  for(let i=0;i<ss;i++)simStep(dt);
+  if(frame%30===0||recoveries>0){if(sanitize())markDirty();}
+  simMs=simMs*0.9+(performance.now()-t0)*0.1;
+}
+function render(){
+  const w2=canvas.width,h2=canvas.height;
+  gl.viewport(0,0,w2,h2);
+  const eye=camEye();
+  const proj=perspective(cam.fov,w2/h2,0.02,30);
+  const view=lookAt(eye,[cam.tx,cam.ty,cam.tz],[0,1,0]);
+  const vp=matMul(proj,view);
+  const az=P.lightAz*Math.PI/180,el=P.lightEl*Math.PI/180;
+  const L=[Math.cos(el)*Math.cos(az),Math.sin(el),Math.cos(el)*Math.sin(az)];
+  /* sky */
+  gl.disable(gl.DEPTH_TEST);gl.depthMask(false);
+  gl.useProgram(progS.p);
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboSky);
+  gl.enableVertexAttribArray(progS.a.aP);
+  gl.vertexAttribPointer(progS.a.aP,2,gl.FLOAT,false,0,0);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.enable(gl.DEPTH_TEST);gl.depthMask(true);
+  /* terrain */
+  gl.useProgram(progT.p);
+  gl.uniformMatrix4fv(progT.u.uVP,false,vp);
+  gl.uniform3fv(progT.u.uLight,L);
+  gl.uniform3fv(progT.u.uCam,eye);
+  gl.uniform1i(progT.u.uMode,P.mode);
+  gl.uniform1f(progT.u.uCont,P.contours?1:0);
+  gl.uniform1f(progT.u.uFog,P.fog);
+  gl.uniform1f(progT.u.uSh,P.shadows?1:0);
+  gl.uniform1f(progT.u.uTime,performance.now()/1000);
+  gl.uniform1f(progT.u.uHMin,hMin*P.exag);
+  gl.uniform1f(progT.u.uHInv,(hMax-hMin)*P.exag*255/65535);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D,hgtTex);
+  gl.uniform1i(progT.u.uHgt,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboT);
+  const S=48;
+  gl.enableVertexAttribArray(progT.a.aPos);gl.vertexAttribPointer(progT.a.aPos,3,gl.FLOAT,false,S,0);
+  gl.enableVertexAttribArray(progT.a.aNrm);gl.vertexAttribPointer(progT.a.aNrm,3,gl.FLOAT,false,S,12);
+  gl.enableVertexAttribArray(progT.a.aDat);gl.vertexAttribPointer(progT.a.aDat,4,gl.FLOAT,false,S,24);
+  gl.enableVertexAttribArray(progT.a.aVel);gl.vertexAttribPointer(progT.a.aVel,2,gl.FLOAT,false,S,40);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
+  if(P.wire){gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(1,2);}
+  gl.drawElements(gl.TRIANGLES,idxT.length,gl.UNSIGNED_INT,0);
+  if(P.wire)gl.disable(gl.POLYGON_OFFSET_FILL);
+  /* wireframe overlay */
+  if(P.wire){
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,iboWire);
+    gl.uniform1i(progT.u.uMode,5);
+    gl.uniform1f(progT.u.uCont,0);
+    gl.drawElements(gl.LINES,idxW.length,gl.UNSIGNED_INT,0);
+    gl.uniform1i(progT.u.uMode,P.mode);
+    gl.uniform1f(progT.u.uCont,P.contours?1:0);
+  }
+  /* water */
+  if(P.waterVis>0.01){
+    gl.useProgram(progW.p);
+    gl.uniformMatrix4fv(progW.u.uVP,false,vp);
+    gl.uniform3fv(progW.u.uLight,L);
+    gl.uniform3fv(progW.u.uCam,eye);
+    gl.uniform1f(progW.u.uTime,performance.now()/1000);
+    gl.uniform1f(progW.u.uVis,P.waterVis);
+    gl.uniform1f(progW.u.uFog,P.fog);
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboW);
+    const S2=32;
+    gl.enableVertexAttribArray(progW.a.aPos);gl.vertexAttribPointer(progW.a.aPos,3,gl.FLOAT,false,S2,0);
+    gl.enableVertexAttribArray(progW.a.aNrm);gl.vertexAttribPointer(progW.a.aNrm,3,gl.FLOAT,false,S2,12);
+    gl.enableVertexAttribArray(progW.a.aDat);gl.vertexAttribPointer(progW.a.aDat,2,gl.FLOAT,false,S2,24);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
+    gl.drawElements(gl.TRIANGLES,idxT.length,gl.UNSIGNED_INT,0);
+    gl.depthMask(true);gl.disable(gl.BLEND);
+  }
+  /* probe marker */
+  if(probePt&&probePt.hit){
+    gl.useProgram(progP.p);
+    gl.uniformMatrix4fv(progP.u.uVP,false,vp);
+    gl.uniform1f(progP.u.uSz,16);
+    gl.uniform3f(progP.u.uCol,1,0.35,0.25);
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboPt);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([probePt.x,probePt.y+0.01,probePt.z]),gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(progP.a.aPos);
+    gl.vertexAttribPointer(progP.a.aPos,3,gl.FLOAT,false,0,0);
+    gl.drawArrays(gl.POINTS,0,1);
+    gl.depthMask(true);gl.disable(gl.BLEND);
+  }
+}
+let waterVol=0,sedVol=0;
+function hud(){
+  let wv=0,sv=0;
+  for(let i=0;i<d.length;i+=3){wv+=d[i];sv+=s_[i];}
+  waterVol=wv*cell*cell*3; sedVol=sv*cell*cell*3;
+  const el=$('#hud');
+  el.textContent=
+    `${fps.toFixed(0)} fps · sim ${simMs.toFixed(1)} ms\n`+
+    `grid ${N}×${N} · step ${steps}\n`+
+    `time ${simTime.toFixed(2)} · water ${waterVol.toFixed(3)}\n`+
+    `sediment ${sedVol.toFixed(3)} · mode ${MODE_NAMES[P.mode]}\n`+
+    `${P.paused?'⏸ PAUSED':'▶ running'}${recoveries?` · recoveries ${recoveries}`:''}`+
+    (glErr?`\nGL ERROR: ${glErr.slice(0,60)}`:'')+
+    (el.dataset.flash?`\n· ${el.dataset.flash}`:'');
+}
+function tick(t){
+  requestAnimationFrame(tick);
+  const dtms=t-lastT;lastT=t;
+  if(dtms>0)fps=fps*0.95+(1000/dtms)*0.05;
+  frame++;
+  if(ptr.down&&ptr.btn===0&&P.tool!=='orbit'&&P.tool!=='inspect'&&lastHit)paintSeg(lastHit);
+  if(!P.paused)safeStep();
+  if(dirty||!P.paused||frame%5===0)updateMesh();
+  render();
+  if(frame%10===0)hud();
+  if(probePt&&probePt.hit&&frame%15===0)updateProbe(probePt);
+}
+function resize(){
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const w2=canvas.clientWidth*dpr,h2=canvas.clientHeight*dpr;
+  if(canvas.width!==w2||canvas.height!==h2){canvas.width=w2;canvas.height=h2;}
+}
+window.addEventListener('resize',resize);
+
+/* ------------------------------ boot ------------------------------------- */
+$('#panelToggle').onclick=()=>{
+  $('#panel').classList.toggle('min');
+  $('#tools').classList.toggle('up');
+};
+loadSettings();
+initGL();
+buildPanel();
+generate();
+buildMesh();
+resize();
+/* expose for diagnostics/testing */
+window.__lab={P,get b(){return b},get d(){return d},get s(){return s_},get eD(){return eD},
+  get vx(){return vx},get vz(){return vz},get wet(){return wet},get F(){return F},
+  get N(){return N},get steps(){return steps},get simTime(){return simTime},
+  get recoveries(){return recoveries},get hMin(){return hMin},get hMax(){return hMax},
+  cam,regen:()=>generate(),reset:()=>resetSim(),step:(n)=>{for(let i=0;i<(n||1);i++)simStep(0.008);},
+  exportPNG,exportJSON,applyPreset,frame:()=>frame,
+  progs:()=>({Ta:progT.a,Tu:progT.u,Wa:progW.a,Wu:progW.u,Sa:progS.a,Pa:progP.a})};
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

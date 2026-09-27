@@ -1,0 +1,2089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>NIGHTSHIFT — Stealth Heist</title>
+<style>
+  :root{
+    --bg:#070a10; --panel:#0d1420; --panel2:#111a2a; --line:#1e2c44;
+    --ink:#c9d6e8; --dim:#5f7189; --accent:#ffd166; --cyan:#45e0d4;
+    --red:#ff5d6c; --green:#7ee081; --amber:#ffb35c;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%; overflow:hidden; background:var(--bg); color:var(--ink);
+    font-family:var(--mono); font-size:13px; }
+  #app{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#04060a}
+  #stage{position:relative; width:100%; height:100%; overflow:hidden}
+  canvas#game{position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated; touch-action:none; outline:none}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute; inset:0; pointer-events:none; user-select:none}
+  #statusbar{position:absolute; left:8px; bottom:8px; background:rgba(6,10,16,.82); border:1px solid var(--line);
+    padding:5px 9px; border-radius:4px; font-size:11px; line-height:1.55; color:var(--dim); white-space:pre; pointer-events:none}
+  #statusbar b{color:var(--ink); font-weight:600}
+  #objective{position:absolute; left:8px; top:8px; background:rgba(6,10,16,.82); border:1px solid var(--line);
+    border-left:3px solid var(--accent); padding:6px 10px; border-radius:4px; font-size:12px; max-width:44%}
+  #objective .sub{color:var(--dim); font-size:10.5px; margin-top:2px}
+  #alertbar{position:absolute; top:8px; left:50%; transform:translateX(-50%); display:flex; gap:8px; align-items:center}
+  #alertpips{display:flex; gap:4px}
+  .pip{width:26px; height:8px; border:1px solid var(--line); border-radius:2px; background:#0a0f18}
+  .pip.on{background:var(--red); box-shadow:0 0 8px var(--red)}
+  .pip.warn{background:var(--amber)}
+  #alertlabel{font-size:10px; letter-spacing:.18em; color:var(--dim)}
+  #alertlabel.hot{color:var(--red); animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.35}}
+  body.reduce-flash #alertlabel.hot{animation:none}
+
+  #gadgetbar{position:absolute; right:8px; bottom:8px; display:flex; gap:6px; pointer-events:auto}
+  .gslot{width:64px; padding:5px 4px 4px; background:rgba(6,10,16,.85); border:1px solid var(--line); border-radius:4px;
+    text-align:center; cursor:pointer; position:relative}
+  .gslot.sel{border-color:var(--cyan); box-shadow:0 0 8px rgba(69,224,212,.35)}
+  .gslot .ico{font-size:16px; line-height:1}
+  .gslot .nm{font-size:9px; color:var(--dim); margin-top:2px; letter-spacing:.05em}
+  .gslot .ch{position:absolute; top:2px; right:4px; font-size:9px; color:var(--accent)}
+  .gslot .cd{position:absolute; left:0; bottom:0; height:2px; background:var(--cyan); width:0%}
+  .gslot.empty{opacity:.38}
+  .gslot.empty .ch{color:var(--red)}
+
+  @media (max-width:620px){
+    .gslot{width:52px}
+    #statusbar{bottom:64px; font-size:10px}
+    #objective{max-width:58%; font-size:11px}
+  }
+
+  #prompt{position:absolute; left:50%; bottom:14%; transform:translateX(-50%); background:rgba(8,12,20,.9);
+    border:1px solid var(--accent); color:var(--accent); padding:6px 14px; border-radius:4px; font-size:12.5px;
+    display:none; pointer-events:none; letter-spacing:.04em}
+  #prompt .key{background:var(--accent); color:#10131c; border-radius:3px; padding:0 6px; font-weight:700; margin-right:6px}
+  #eye{position:absolute; left:50%; top:16%; transform:translateX(-50%); width:44px; height:44px; display:none}
+  #eye svg{width:100%; height:100%; filter:drop-shadow(0 0 6px rgba(255,93,108,.6))}
+  #centermsg{position:absolute; left:50%; top:34%; transform:translateX(-50%); font-size:20px; letter-spacing:.3em;
+    color:var(--red); text-shadow:0 0 18px var(--red); display:none; font-weight:700}
+  #toast{position:absolute; left:50%; top:58px; transform:translateX(-50%); background:rgba(10,16,26,.92);
+    border:1px solid var(--line); padding:6px 14px; border-radius:4px; color:var(--ink); font-size:12px;
+    display:none; pointer-events:none; transition:opacity .3s; z-index:40}
+
+  /* ---------- touch controls ---------- */
+  #touch{position:absolute; inset:0; pointer-events:none; display:none}
+  body.touch-on #touch{display:block}
+  #stick{position:absolute; width:120px; height:120px; border:1px solid var(--line); border-radius:50%;
+    background:rgba(10,16,26,.35); display:none; pointer-events:none}
+  #stick .nub{position:absolute; left:50%; top:50%; width:44px; height:44px; margin:-22px 0 0 -22px;
+    border-radius:50%; background:rgba(120,160,210,.45)}
+  .tbtn{position:absolute; pointer-events:auto; width:56px; height:56px; border-radius:50%;
+    background:rgba(10,16,26,.72); border:1px solid var(--line); color:var(--ink);
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-family:var(--mono);
+    letter-spacing:.05em; user-select:none; touch-action:none}
+  .tbtn:active{background:rgba(69,224,212,.25)}
+  #tb-act{right:18px; bottom:96px; border-color:var(--accent); color:var(--accent)}
+  #tb-gad{right:84px; bottom:34px}
+  #tb-use{right:18px; bottom:170px}
+  #tb-sneak{right:150px; bottom:14px; width:50px; height:50px}
+  #tb-pause{right:14px; top:44px; width:40px; height:40px; border-radius:6px}
+
+  /* ---------- screens ---------- */
+  .screen{position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(4,7,12,.86); backdrop-filter:blur(3px); z-index:30; overflow-y:auto; padding:20px}
+  .screen.show{display:flex}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:22px 26px;
+    width:min(660px,94vw); max-height:92vh; overflow-y:auto; box-shadow:0 12px 50px rgba(0,0,0,.6)}
+  .panel h1{font-size:24px; letter-spacing:.28em; color:var(--accent); font-weight:700}
+  .panel h1 .sub2{display:block; font-size:10px; letter-spacing:.34em; color:var(--dim); margin-top:4px}
+  .panel h2{font-size:13px; letter-spacing:.14em; color:var(--cyan); margin:16px 0 8px; font-weight:600}
+  .row{display:flex; gap:10px; align-items:center; margin:7px 0; flex-wrap:wrap}
+  .row label{color:var(--dim); min-width:110px; font-size:11.5px}
+  .btn{background:var(--panel2); border:1px solid var(--line); color:var(--ink); font-family:var(--mono);
+    font-size:12.5px; padding:8px 16px; border-radius:4px; cursor:pointer; letter-spacing:.06em}
+  .btn:hover{border-color:var(--cyan); color:var(--cyan)}
+  .btn.primary{background:var(--accent); color:#14100a; font-weight:700; border-color:var(--accent)}
+  .btn.primary:hover{background:#ffe09a; color:#14100a}
+  .btn.danger:hover{border-color:var(--red); color:var(--red)}
+  .btn:disabled{opacity:.4; cursor:default}
+  input[type=text],input[type=number],select,textarea{background:#0a101c; border:1px solid var(--line);
+    color:var(--ink); font-family:var(--mono); font-size:12px; padding:6px 8px; border-radius:4px}
+  input[type=text]{width:150px}
+  input[type=range]{accent-color:var(--cyan); width:140px}
+  .seg{display:flex; border:1px solid var(--line); border-radius:4px; overflow:hidden}
+  .seg button{background:transparent; border:0; color:var(--dim); font-family:var(--mono); font-size:11.5px;
+    padding:6px 14px; cursor:pointer; letter-spacing:.08em}
+  .seg button.on{background:var(--cyan); color:#062522; font-weight:700}
+  .seg button:hover:not(.on){color:var(--ink)}
+  table.hist{width:100%; border-collapse:collapse; font-size:11px; margin-top:4px}
+  table.hist td,table.hist th{border-bottom:1px solid var(--line); padding:4px 6px; text-align:left; color:var(--dim)}
+  table.hist td:last-child{color:var(--accent)}
+  .kv{display:grid; grid-template-columns:1fr auto; gap:4px 14px; font-size:12.5px}
+  .kv .k{color:var(--dim)}
+  .kv .v{color:var(--ink); text-align:right}
+  .rank{font-size:56px; font-weight:700; line-height:1; margin:8px 0}
+  .rank.S{color:var(--accent); text-shadow:0 0 24px var(--accent)}
+  .rank.A{color:var(--green)} .rank.B{color:var(--cyan)} .rank.C{color:var(--amber)} .rank.D{color:var(--red)}
+  .bindrow{display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid #141e30}
+  .bindrow .act{color:var(--dim); font-size:11.5px}
+  .bindrow .keybtn{min-width:88px; text-align:center}
+  .diagrow{display:flex; align-items:center; gap:8px; padding:3px 0; font-size:11.5px; color:var(--dim)}
+  .diagrow input{accent-color:var(--cyan)}
+  .hidden{display:none !important}
+  .footnote{color:var(--dim); font-size:10.5px; margin-top:12px; line-height:1.6}
+  .briefmap{color:var(--dim); font-size:11.5px; line-height:1.7}
+  .briefmap b{color:var(--ink)}
+  #endstats{margin:10px 0}
+  .cols{display:flex; gap:26px; flex-wrap:wrap}
+  .cols>div{flex:1; min-width:230px}
+  ::selection{background:var(--cyan); color:#06211f}
+  #fpsgraph{position:absolute; right:8px; top:44px; display:none}
+</style>
+</head>
+<body>
+<div id="app">
+ <div id="stage">
+  <canvas id="game" tabindex="0"></canvas>
+
+  <div id="hud">
+    <div id="objective"><span id="objtext">—</span><div class="sub" id="objsub"></div></div>
+    <div id="alertbar"><div id="alertpips"></div><div id="alertlabel">CALM</div></div>
+    <div id="statusbar"></div>
+    <div id="gadgetbar"></div>
+    <div id="prompt"></div>
+    <div id="eye"><svg viewBox="0 0 44 44"><path d="M22 12 C10 12 4 22 4 22 C4 22 10 32 22 32 C34 32 40 22 40 22 C40 22 34 12 22 12 Z" fill="none" stroke="#ff5d6c" stroke-width="2.4"/><circle id="eyepupil" cx="22" cy="22" r="5" fill="#ff5d6c"/></svg></div>
+    <div id="centermsg"></div>
+    <canvas id="fpsgraph" width="120" height="36"></canvas>
+  </div>
+
+  <div id="touch">
+    <div id="stick"><div class="nub"></div></div>
+    <div class="tbtn" id="tb-act">ACT</div>
+    <div class="tbtn" id="tb-gad">GADGET</div>
+    <div class="tbtn" id="tb-use">THROW</div>
+    <div class="tbtn" id="tb-sneak">SNEAK</div>
+    <div class="tbtn" id="tb-pause">| |</div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- BRIEFING -->
+  <div class="screen show" id="scr-brief">
+    <div class="panel">
+      <h1>NIGHTSHIFT<span class="sub2">PROCEDURAL STEALTH-HEIST SANDBOX</span></h1>
+      <div class="cols">
+        <div>
+          <h2>MISSION</h2>
+          <div class="row"><label>Preset</label>
+            <div class="seg" id="seg-preset">
+              <button data-p="compact">COMPACT</button>
+              <button data-p="standard" class="on">STANDARD</button>
+              <button data-p="vault">VAULT</button>
+            </div>
+          </div>
+          <div class="row"><label>Seed</label><input type="text" id="in-seed" value="1337" spellcheck="false">
+            <button class="btn" id="btn-randseed" title="random seed">⚄</button></div>
+          <div class="row"><label>Difficulty</label>
+            <div class="seg" id="seg-diff">
+              <button data-d="easy">EASY</button>
+              <button data-d="normal" class="on">NORMAL</button>
+              <button data-d="hard">HARD</button>
+            </div>
+          </div>
+          <h2>BRIEFING</h2>
+          <div class="briefmap" id="brieftext"></div>
+        </div>
+        <div>
+          <h2>LOADOUT</h2>
+          <div class="kv" id="loadout"></div>
+          <h2>RUN HISTORY</h2>
+          <table class="hist" id="hist"><thead><tr><th>seed</th><th>diff</th><th>result</th><th>time</th><th>rank</th></tr></thead><tbody></tbody></table>
+          <div class="row" style="margin-top:8px">
+            <button class="btn" id="btn-export">EXPORT RUN</button>
+            <button class="btn" id="btn-import">IMPORT JSON</button>
+            <button class="btn" id="btn-clearhist">CLEAR</button>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px; justify-content:space-between">
+        <button class="btn" id="btn-controls">CONTROLS</button>
+        <button class="btn primary" id="btn-start">▶ START MISSION</button>
+      </div>
+      <div class="footnote">WASD move · SHIFT run (loud) · C sneak · E interact · 1–4 gadget · F throw · ESC pause. Fully self-contained — no network, no assets.</div>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div class="screen" id="scr-pause">
+    <div class="panel">
+      <h1>PAUSED<span class="sub2" id="pause-seed">—</span></h1>
+      <div class="cols">
+        <div>
+          <h2>MISSION</h2>
+          <div class="row"><button class="btn primary" id="btn-resume">RESUME</button>
+            <button class="btn" id="btn-restart">RESTART</button>
+            <button class="btn danger" id="btn-quit">ABORT → MENU</button></div>
+          <div class="row"><button class="btn" id="btn-newmission">NEW SEED</button>
+            <button class="btn" id="btn-export2">EXPORT RUN</button>
+            <button class="btn" id="btn-import2">IMPORT JSON</button></div>
+          <h2>AUDIO / DISPLAY</h2>
+          <div class="row"><label>Master volume</label><input type="range" id="vol-master" min="0" max="100" value="70"><span id="vol-master-v" class="k"></span></div>
+          <div class="row"><label>Effects volume</label><input type="range" id="vol-fx" min="0" max="100" value="80"><span id="vol-fx-v"></span></div>
+          <div class="diagrow"><input type="checkbox" id="opt-rmotion"><label for="opt-rmotion">Reduced motion (no shake/particles)</label></div>
+          <div class="diagrow"><input type="checkbox" id="opt-rflash"><label for="opt-rflash">Reduced flash (no blink/strobe)</label></div>
+        </div>
+        <div>
+          <h2>DIAGNOSTICS</h2>
+          <div id="diaglist"></div>
+          <h2>CONTROLS</h2>
+          <div id="bindlist"></div>
+          <div class="row"><button class="btn" id="btn-resetbind">RESET BINDS</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- END -->
+  <div class="screen" id="scr-end">
+    <div class="panel">
+      <h1 id="end-title">—</h1>
+      <div class="sub2" id="end-sub" style="font-size:10px;letter-spacing:.34em;color:var(--dim);margin-top:4px">—</div>
+      <div class="cols">
+        <div>
+          <div class="rank" id="end-rank">—</div>
+          <div class="kv" id="endstats"></div>
+        </div>
+        <div>
+          <h2>RUN RECORD</h2>
+          <div class="kv" id="endrecord"></div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="btn-export3">EXPORT RUN JSON</button>
+            <button class="btn" id="btn-verify">VERIFY REPLAY</button></div>
+          <div class="footnote" id="verify-note">Exports embed the tick-level input log — verifying re-simulates the run deterministically and compares the outcome hash.</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px; justify-content:space-between">
+        <button class="btn" id="btn-menu">MENU</button>
+        <div>
+          <button class="btn" id="btn-retry">RETRY SEED</button>
+          <button class="btn primary" id="btn-next">NEW MISSION</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   NIGHTSHIFT — single-file procedural stealth heist.
+   Fixed-timestep deterministic sim (seeded RNG only) → replay-verifiable.
+   ========================================================================= */
+
+/* ---------------- utils ---------------- */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
+const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+const fmtT = s => { const m = Math.floor(s / 60), ss = Math.floor(s % 60); return m + ":" + String(ss).padStart(2, "0"); };
+const fmtSeed = s => String(s >>> 0);
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+/* ---------------- config ---------------- */
+const TILE = 28;
+const DIFFS = {
+  easy:   { guardN: -1, viewMul: 0.8, fovMul: 0.9, hearMul: 0.75, susMul: 0.7, speedMul: 0.85, chargeBonus: 1, label: "EASY" },
+  normal: { guardN: 0,  viewMul: 1.0, fovMul: 1.0, hearMul: 1.0,  susMul: 1.0, speedMul: 1.0, chargeBonus: 0, label: "NORMAL" },
+  hard:   { guardN: +2, viewMul: 1.2, fovMul: 1.1, hearMul: 1.3,  susMul: 1.45, speedMul: 1.12, chargeBonus: -1, label: "HARD" },
+};
+const PRESETS = {
+  compact:  { w: 34, h: 24, rooms: 5,  guards: 3, cams: 2, loot: 2, terminals: 2, label: "COMPACT" },
+  standard: { w: 46, h: 32, rooms: 9,  guards: 5, cams: 4, loot: 4, terminals: 3, label: "STANDARD" },
+  vault:    { w: 56, h: 38, rooms: 12, guards: 7, cams: 6, loot: 6, terminals: 4, label: "VAULT" },
+};
+const GADGETS = [
+  { id: "coin",  name: "COIN",  ico: "◉", charges: 3, cd: 0.8, desc: "Thrown lure — lands with a sharp noise" },
+  { id: "smoke", name: "SMOKE", ico: "☁", charges: 2, cd: 1.5, desc: "Vision-blocking cloud, ~9s" },
+  { id: "emp",   name: "EMP",   ico: "⚡", charges: 2, cd: 2.0, desc: "Disables cams & alarm in radius, 20s" },
+  { id: "pick",  name: "PICK",  ico: "⚿", charges: 4, cd: 0.5, desc: "Opens locked doors, slow & quiet" },
+];
+const GSTATES = ["PATROL", "IDLE", "SUSPICIOUS", "INVESTIGATE", "SEARCH", "ALERT"];
+const GS_COLOR = { PATROL: "#7ee081", IDLE: "#7ee081", SUSPICIOUS: "#ffd166", INVESTIGATE: "#ffb35c", SEARCH: "#ff9a5c", ALERT: "#ff5d6c" };
+
+/* tile flags */
+const T_WALL = 1, T_DOOR = 2, T_FLOOR = 4, T_RESTRICTED = 8;
+/* ---------------- map generation ----------------
+   Grid of tiles. Rooms carved on a loose layout, L-corridors via MST+extra,
+   doors at corridor/room boundaries. Entry + extraction, locked vault with
+   objective, loot, terminals, cameras, guard patrol routes. Validated by A*. */
+
+function genMap(seedNum, presetKey) {
+  const P = PRESETS[presetKey] || PRESETS.standard;
+  const rng = mulberry32(seedNum ^ hashStr(presetKey));
+  const W = P.w, H = P.h;
+  const g = new Uint8Array(W * H).fill(T_WALL);
+  const at = (x, y) => g[y * W + x];
+  const set = (x, y, v) => { g[y * W + x] = v; };
+  const inB = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const ri = (a, b) => a + Math.floor(rng() * (b - a + 1));
+
+  /* rooms on a jittered coarse grid */
+  const rooms = [];
+  const cols = Math.max(3, Math.round(Math.sqrt(P.rooms * W / H))), rows = Math.ceil(P.rooms / cols);
+  const cw = Math.floor(W / cols), ch = Math.floor(H / rows);
+  const cells = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push([c, r]);
+  // shuffle cells
+  for (let i = cells.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cells[i], cells[j]] = [cells[j], cells[i]]; }
+  const nRooms = Math.min(P.rooms, cells.length);
+  for (let i = 0; i < nRooms; i++) {
+    const [c, r] = cells[i];
+    const rw = ri(Math.max(4, cw - 4), cw - 2), rh = ri(Math.max(4, ch - 4), ch - 2);
+    const rx = c * cw + ri(1, Math.max(1, cw - rw - 1)), ry = r * ch + ri(1, Math.max(1, ch - rh - 1));
+    const room = { x: rx, y: ry, w: rw, h: rh, cx: rx + (rw >> 1), cy: ry + (rh >> 1), id: i, vault: false, restricted: false };
+    rooms.push(room);
+    for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) set(x, y, T_FLOOR);
+  }
+
+  /* corridors: connect rooms in sequence over shuffled order + extra loops */
+  const order = rooms.slice();
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  const links = [];
+  for (let i = 0; i < order.length - 1; i++) links.push([order[i], order[i + 1]]);
+  for (let i = 0; i < Math.floor(rooms.length * 0.35); i++) {
+    const a = rooms[Math.floor(rng() * rooms.length)], b = rooms[Math.floor(rng() * rooms.length)];
+    if (a !== b) links.push([a, b]);
+  }
+  const doorCells = [];
+  const carveCorr = (x0, y0, x1, y1) => {
+    const horizFirst = rng() < 0.5;
+    const carve = (x, y) => {
+      if (!inB(x, y)) return;
+      if (at(x, y) === T_WALL) {
+        set(x, y, T_FLOOR);
+        // corridor tile adjacent to a room interior? it's a doorway candidate
+      }
+    };
+    if (horizFirst) { for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) carve(x, y0); for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) carve(x1, y); }
+    else { for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) carve(x0, y); for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) carve(x, y1); }
+  };
+  for (const [a, b] of links) carveCorr(a.cx, a.cy, b.cx, b.cy);
+
+  /* place doors where corridor meets room edge: a floor tile with wall on two
+     opposite sides and floor on the other two → natural chokepoint */
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    if (at(x, y) !== T_FLOOR) continue;
+    const hWalls = at(x - 1, y) === T_WALL && at(x + 1, y) === T_WALL;
+    const vWalls = at(x, y - 1) === T_WALL && at(x, y + 1) === T_WALL;
+    const hFloor = at(x - 1, y) === T_FLOOR && at(x + 1, y) === T_FLOOR;
+    const vFloor = at(x, y - 1) === T_FLOOR && at(x, y + 1) === T_FLOOR;
+    if ((hWalls && vFloor) || (vWalls && hFloor)) {
+      if (rng() < 0.62) doorCells.push({ x, y, horiz: hWalls });
+    }
+  }
+
+  /* pick entry + vault: farthest room pair by tile distance */
+  let entry = rooms[0], vault = rooms[0], best = -1;
+  for (const a of rooms) for (const b of rooms) {
+    const d = dist2(a.cx, a.cy, b.cx, b.cy);
+    if (d > best) { best = d; entry = a; vault = b; }
+  }
+  vault.vault = true;
+
+  /* mark 1-2 non-entry rooms restricted */
+  const restCand = rooms.filter(r => r !== entry && r !== vault);
+  for (let i = 0; i < Math.min(2, restCand.length); i++) {
+    const r = restCand[Math.floor(rng() * restCand.length)];
+    r.restricted = true;
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++)
+      if (at(x, y) === T_FLOOR) set(x, y, T_FLOOR | T_RESTRICTED);
+  }
+
+  /* cover crates inside rooms (1-3 per room, not on center) */
+  const crates = [];
+  for (const r of rooms) {
+    const n = ri(0, 2);
+    for (let i = 0; i < n; i++) {
+      const x = ri(r.x + 1, r.x + r.w - 2), y = ri(r.y + 1, r.y + r.h - 2);
+      if (Math.abs(x - r.cx) + Math.abs(y - r.cy) < 2) continue;
+      if (at(x, y) === T_WALL) continue;
+      if (crates.some(c => c.x === x && c.y === y)) continue;
+      crates.push({ x, y });
+    }
+  }
+  const crateSet = new Set(crates.map(c => c.y * W + c.x));
+
+  /* doors objects (locked = vault access) */
+  const doors = doorCells.map(d => {
+    const inVault = (d.x >= vault.x - 1 && d.x <= vault.x + vault.w && d.y >= vault.y - 1 && d.y <= vault.y + vault.h);
+    return { x: d.x, y: d.y, horiz: d.horiz, open: false, locked: inVault && rng() < 0.9, t: 0 };
+  });
+  const doorSet = new Map(doors.map(d => [d.y * W + d.x, d]));
+  for (const d of doors) set(d.x, d.y, (at(d.x, d.y) & ~T_FLOOR) | T_DOOR);
+
+  /* walkability: floor or door, not wall, not crate */
+  const walkable = (x, y, forDoor) => {
+    if (!inB(x, y)) return false;
+    const t = at(x, y);
+    if (t & T_WALL) return false;
+    if (crateSet.has(y * W + x)) return false;
+    if ((t & T_DOOR) && !forDoor) {
+      const d = doorSet.get(y * W + x);
+      if (d && !d.open && !d.locked) return true; // closed door can be opened - treat passable for pathing
+    }
+    return true;
+  };
+
+  return { W, H, g, rooms, entry, vault, doors, doorSet, crates, crateSet, walkable, at, inB, rng };
+}
+
+/* A* on tile grid, 8-dir, no corner cutting. doorsPassable: locked too? */
+function findPath(map, x0, y0, x1, y1, opts) {
+  opts = opts || {};
+  const { W, H } = map;
+  const pass = (x, y) => {
+    if (!map.inB(x, y)) return false;
+    const t = map.at(x, y);
+    if (t & T_WALL) return false;
+    if (map.crateSet.has(y * W + x)) return false;
+    if (t & T_DOOR) {
+      const d = map.doorSet.get(y * W + x);
+      if (d && d.locked && !opts.lockedOk) return false;
+      if (d && !d.open && opts.closedBlock) return false;
+    }
+    return true;
+  };
+  const key = (x, y) => y * W + x;
+  const open = [{ x: x0, y: y0, f: 0, g: 0, p: null }];
+  const gScore = new Map([[key(x0, y0), 0]]);
+  const came = new Map();
+  const h = (x, y) => Math.hypot(x - x1, y - y1);
+  const seen = new Set();
+  let found = null;
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  let guard = 0;
+  while (open.length && guard++ < 20000) {
+    let bi = 0;
+    for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
+    const cur = open.splice(bi, 1)[0];
+    if (cur.x === x1 && cur.y === y1) { found = cur; break; }
+    const ck = key(cur.x, cur.y);
+    if (seen.has(ck)) continue;
+    seen.add(ck);
+    for (const [dx, dy] of dirs) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      if (!pass(nx, ny)) continue;
+      if (dx && dy && (!pass(cur.x + dx, cur.y) || !pass(cur.x, cur.y + dy))) continue; // no corner cut
+      const ng = cur.g + (dx && dy ? 1.414 : 1);
+      const nk = key(nx, ny);
+      if (gScore.has(nk) && gScore.get(nk) <= ng) continue;
+      gScore.set(nk, ng);
+      came.set(nk, cur);
+      open.push({ x: nx, y: ny, g: ng, f: ng + h(nx, ny) });
+    }
+  }
+  if (!found) return null;
+  const path = [];
+  let n = found;
+  while (n) { path.push({ x: n.x, y: n.y }); n = came.get(key(n.x, n.y)) || n.p; }
+  path.reverse();
+  return path;
+}
+
+/* BFS distance field for random reachable points */
+function reachableFrom(map, sx, sy, opts) {
+  const { W, H } = map;
+  const seen = new Uint8Array(W * H);
+  const q = [[sx, sy]];
+  seen[sy * W + sx] = 1;
+  const pass = (x, y) => {
+    const t = map.at(x, y);
+    if (t & T_WALL) return false;
+    if (map.crateSet.has(y * W + x)) return false;
+    if (t & T_DOOR) {
+      const d = map.doorSet.get(y * W + x);
+      if (d && d.locked && !(opts && opts.lockedOk)) return false;
+    }
+    return true;
+  };
+  while (q.length) {
+    const [x, y] = q.pop();
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (!map.inB(nx, ny) || seen[ny * W + nx] || !pass(nx, ny)) continue;
+      seen[ny * W + nx] = 1;
+      q.push([nx, ny]);
+    }
+  }
+  return seen;
+}
+
+/* ---------------- mission assembly ---------------- */
+function buildMission(seedStr, presetKey, diffKey) {
+  const seedNum = hashStr(String(seedStr));
+  const diff = DIFFS[diffKey] || DIFFS.normal;
+  let map = null, tries = 0;
+  // regenerate until connectivity validates
+  while (tries++ < 12) {
+    map = genMap(seedNum + tries - 1, presetKey);
+    const ex = map.entry.cx, ey = map.entry.cy;
+    const reach = reachableFrom(map, ex, ey, { lockedOk: true });
+    const reachNoLocked = reachableFrom(map, ex, ey, { lockedOk: false });
+    const okVault = reach[map.vault.cy * map.W + map.vault.cx];
+    // every room center reachable without opening locks (lockedOk false) OR vault via locks
+    let allOk = okVault;
+    for (const r of map.rooms) if (!reach[r.cy * map.W + r.cx]) { allOk = false; break; }
+    if (allOk) break;
+  }
+  const P = PRESETS[presetKey] || PRESETS.standard;
+  const rng = map.rng;
+  const { W, H } = map;
+  const reach = reachableFrom(map, map.entry.cx, map.entry.cy, { lockedOk: true });
+  const reachFree = reachableFrom(map, map.entry.cx, map.entry.cy, { lockedOk: false });
+  const freeTiles = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    if (reach[y * W + x] && !(map.at(x, y) & T_DOOR)) freeTiles.push({ x, y });
+
+  const pickFree = (filter, tries = 400) => {
+    for (let i = 0; i < tries; i++) {
+      const t = freeTiles[Math.floor(rng() * freeTiles.length)];
+      if (filter(t)) return t;
+    }
+    return null;
+  };
+  const inRoom = (t, r) => t.x >= r.x && t.x < r.x + r.w && t.y >= r.y && t.y < r.y + r.h;
+
+  /* objective: center of vault */
+  const objective = { x: map.vault.cx, y: map.vault.cy, got: false };
+
+  /* loot in random rooms */
+  const loot = [];
+  for (let i = 0; i < P.loot; i++) {
+    const t = pickFree(t => !inRoom(t, map.entry) && !(t.x === objective.x && t.y === objective.y));
+    if (t) loot.push({ x: t.x, y: t.y, got: false });
+  }
+
+  /* terminals: spread across non-entry rooms, near walls */
+  const terminals = [];
+  const termKinds = ["cams", "unlock"];
+  for (let i = 0; i < P.terminals; i++) {
+    const t = pickFree(t => !inRoom(t, map.entry) && !inRoom(t, map.vault) &&
+      reachFree[t.y * W + t.x] &&
+      !terminals.some(o => Math.abs(o.x - t.x) + Math.abs(o.y - t.y) < 8));
+    if (t) terminals.push({ x: t.x, y: t.y, kind: termKinds[i % termKinds.length], used: false, busy: 0 });
+  }
+  // guarantee one unlock terminal exists & reachable without picking locks
+  if (!terminals.some(t => t.kind === "unlock")) {
+    if (terminals.length) terminals[0].kind = "unlock";
+    else {
+      const t = pickFree(t => !inRoom(t, map.entry) && !inRoom(t, map.vault) && reachFree[t.y * W + t.x]);
+      if (t) terminals.push({ x: t.x, y: t.y, kind: "unlock", used: false, busy: 0 });
+    }
+  }
+
+  /* cameras: wall-adjacent floor tiles overlooking rooms/corridors */
+  const cams = [];
+  for (let i = 0; i < P.cams; i++) {
+    const t = pickFree(t => {
+      if (inRoom(t, map.entry)) return false;
+      if (!reachFree[t.y * W + t.x]) return false;
+      if (cams.some(c => Math.abs(c.x - t.x) + Math.abs(c.y - t.y) < 9)) return false;
+      // needs a wall neighbor to be "mounted"
+      return map.at(t.x + 1, t.y) === T_WALL || map.at(t.x - 1, t.y) === T_WALL ||
+             map.at(t.x, t.y + 1) === T_WALL || map.at(t.x, t.y - 1) === T_WALL;
+    });
+    if (t) {
+      // face away from wall toward open space
+      let base = rng() * TAU;
+      if (map.at(t.x + 1, t.y) === T_WALL) base = Math.PI;
+      else if (map.at(t.x - 1, t.y) === T_WALL) base = 0;
+      else if (map.at(t.x, t.y + 1) === T_WALL) base = -Math.PI / 2;
+      else if (map.at(t.x, t.y - 1) === T_WALL) base = Math.PI / 2;
+      cams.push({ x: t.x, y: t.y, base, pan: 0, panAmp: 0.5 + rng() * 0.45, panSpd: 0.35 + rng() * 0.4,
+                  dir: base, see: 0, off: 0, emp: 0, range: 8 * diff.viewMul, fov: 0.62 * diff.fovMul });
+    }
+  }
+
+  /* guards: patrol routes through reachable tiles spread out */
+  const guards = [];
+  const nG = Math.max(2, P.guards + diff.guardN);
+  for (let i = 0; i < nG; i++) {
+    const wps = [];
+    const nW = 3 + Math.floor(rng() * 3);
+    for (let w = 0; w < nW; w++) {
+      const t = pickFree(t => !inRoom(t, map.entry) && reachFree[t.y * W + t.x] && !wps.some(o => Math.abs(o.x - t.x) + Math.abs(o.y - t.y) < 7));
+      if (t) wps.push({ x: t.x, y: t.y });
+    }
+    if (wps.length < 2) { const t = pickFree(t => !inRoom(t, map.entry)); if (t) wps.push({ x: t.x, y: t.y }); }
+    if (!wps.length) continue;
+    guards.push({
+      x: wps[0].x + 0.5, y: wps[0].y + 0.5, dir: rng() * TAU,
+      wps, wi: 0, state: "PATROL", sus: 0, seeT: 0,
+      path: null, pi: 0, waitT: 1 + rng() * 2, investT: 0, searchT: 0, searchPts: [], searchI: 0,
+      lastKnown: null, alertT: 0, stare: null, loseT: 0, speed: 0,
+      viewDist: 8.5 * diff.viewMul, fov: 1.25 * diff.fovMul, hearMul: diff.hearMul, susMul: diff.susMul,
+      speedMul: diff.speedMul, id: i, spotCd: 0,
+    });
+  }
+
+  return { map, seedStr: String(seedStr), seedNum, presetKey, diffKey, diff,
+           objective, loot, terminals, cams, guards, doors: map.doors, crates: map.crates,
+           entry: { x: map.entry.cx, y: map.entry.cy }, extract: { x: map.entry.cx, y: map.entry.cy } };
+}
+/* ---------------- sim state ---------------- */
+let S = null;            // live sim
+let UI = { preset: "standard", diff: "normal", seed: "1337" };
+
+function newSim(seedStr, presetKey, diffKey) {
+  const mission = buildMission(seedStr, presetKey, diffKey);
+  const e = mission.entry;
+  S = {
+    m: mission, tick: 0, time: 0,
+    player: {
+      x: e.x + 0.5, y: e.y + 0.5, dir: 0, r: 0.34,
+      sneak: false, run: false, moving: false, noise: 0, speed: 0,
+      stepT: 0, channel: null, dead: false,
+      sel: 0, gadgets: GADGETS.map(g => ({ id: g.id, charges: Math.max(1, g.charges + mission.diff.chargeBonus), cd: 0 })),
+      loot: 0, hasObj: false,
+    },
+    sounds: [], smokes: [], thrown: [], parts: [],
+    alert: 0, alertT: 0, detections: 0, alarmsRaised: 0, alarmSup: 0,
+    inputLog: [], lastInput: null, outcome: null, events: [],
+    simRng: mulberry32(mission.seedNum ^ 0x9e3779b9),
+    stats: { spotted: 0 },
+  };
+  logEvent("mission_start", { seed: mission.seedStr, preset: presetKey, diff: diffKey });
+  return S;
+}
+function logEvent(type, data) { if (S) S.events.push({ t: S.tick, type, ...data }); }
+
+/* ---------------- LOS ----------------
+   Tile raymarch; blocked by walls, closed doors, smoke, crates. */
+function rayBlocked(map, x0, y0, x1, y1, smokes) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const d = Math.hypot(dx, dy);
+  const steps = Math.max(1, Math.ceil(d / 0.22));
+  let walls = 0;
+  for (let i = 1; i < steps; i++) {
+    const x = x0 + dx * i / steps, y = y0 + dy * i / steps;
+    const tx = Math.floor(x), ty = Math.floor(y);
+    if (!map.inB(tx, ty)) return { blocked: true, walls: 99 };
+    const t = map.at(tx, ty);
+    if (t & T_WALL) { walls++; return { blocked: true, walls }; }
+    if (map.crateSet.has(ty * map.W + tx)) return { blocked: true, walls };
+    if (t & T_DOOR) {
+      const door = map.doorSet.get(ty * map.W + tx);
+      if (door && !door.open) return { blocked: true, walls: walls + 1 };
+    }
+    if (smokes) for (const s of smokes) {
+      if (dist2(x, y, s.x, s.y) < s.r * s.r) return { blocked: true, walls, smoke: true };
+    }
+  }
+  return { blocked: false, walls };
+}
+const losClear = (map, a, b, smokes) => !rayBlocked(map, a.x, a.y, b.x, b.y, smokes).blocked;
+
+/* ---------------- sound ---------------- */
+function emitSound(x, y, intensity, kind) {
+  const ev = { x, y, i: intensity, kind, born: S.tick };
+  S.sounds.push(ev);
+  if (S.sounds.length > 60) S.sounds.shift();
+  // guards hear it NOW (distance + wall occlusion)
+  for (const g of S.m.guards) {
+    if (g.state === "ALERT") continue;
+    const d = Math.hypot(g.x - x, g.y - y);
+    if (d > intensity * g.hearMul) continue;
+    const ray = rayBlocked(S.m.map, g.x, g.y, x, y, null);
+    const occ = Math.max(0.15, 1 - ray.walls * 0.30);
+    const eff = intensity * occ * g.hearMul;
+    if (d < eff) {
+      g.lastKnown = { x, y };
+      g.sus = Math.min(1, g.sus + 0.4);
+      if (g.state === "PATROL" || g.state === "IDLE" || g.state === "SUSPICIOUS" || g.state === "SEARCH") {
+        setGuardState(g, "INVESTIGATE");
+      }
+    }
+  }
+}
+
+/* ---------------- guard helpers ---------------- */
+function setGuardState(g, st) {
+  if (g.state === st) return;
+  g.state = st; g.stateT = 0; g.path = null; g.pi = 0;
+  if (st === "SEARCH") { g.searchI = 0; g.searchPts = null; }
+  if (st === "INVESTIGATE") g.investT = 0;
+  logEvent("guard_state", { id: g.id, to: st });
+}
+function guardMoveTo(g, tx, ty, spd, dt) {
+  const map = S.m.map;
+  if (!g.path || g.px !== tx || g.py !== ty || g.pi >= g.path.length) {
+    const p = findPath(map, Math.floor(g.x), Math.floor(g.y), tx, ty, {});
+    if (!p || p.length < 2) { g.path = null; return true; }
+    g.path = p; g.pi = 1; g.px = tx; g.py = ty;
+  }
+  const wp = g.path[g.pi];
+  if (!wp) return true;
+  const wx = wp.x + 0.5, wy = wp.y + 0.5;
+  const d = Math.hypot(wx - g.x, wy - g.y);
+  if (d < 0.14) { g.pi++; return g.pi >= g.path.length; }
+  const step = Math.min(d, spd * dt);
+  g.x += (wx - g.x) / d * step; g.y += (wy - g.y) / d * step;
+  g.dir = Math.atan2(wy - g.y, wx - g.x);
+  g.speed = spd;
+  return false;
+}
+function raiseAlert(source, pos) {
+  if (S.alarmSup > 0) return;
+  S.alert = Math.min(3, S.alert + 1);
+  S.alertT = 0;
+  S.detections++;
+  if (source === "guard" || source === "camera") S.alarmsRaised++;
+  logEvent("alert", { src: source, lvl: S.alert });
+  SFX.alarm();
+  for (const g of S.m.guards) {
+    g.lastKnown = { x: pos.x, y: pos.y };
+    if (g.state === "PATROL" || g.state === "IDLE" || g.state === "SUSPICIOUS") setGuardState(g, "INVESTIGATE");
+  }
+}
+
+/* ---------------- player ---------------- */
+const SPD = { sneak: 2.1, walk: 4.0, run: 6.2 };
+
+function tileSolidFor(map, x, y, isGuard) {
+  const tx = Math.floor(x), ty = Math.floor(y);
+  if (!map.inB(tx, ty)) return true;
+  const t = map.at(tx, ty);
+  if (t & T_WALL) return true;
+  if (map.crateSet.has(ty * map.W + tx)) return true;
+  if (t & T_DOOR) {
+    const d = map.doorSet.get(ty * map.W + tx);
+    if (d && !d.open) {
+      if (d.locked) return true;
+      // closed door: auto-open on push (player only), makes noise
+      if (!isGuard) { d.open = true; d.t = 0; emitSound(x, y, 3.5, "door"); SFX.door(); logEvent("door", { x: tx, y: ty, how: "push" }); }
+      return false;
+    }
+  }
+  return false;
+}
+function moveCircle(map, e, dx, dy, isGuard) {
+  // axis-separated circle vs tile collision
+  const r = e.r;
+  const tryAxis = (nx, ny) => {
+    for (const [cx, cy] of [[nx - r, ny - r], [nx + r, ny - r], [nx - r, ny + r], [nx + r, ny + r], [nx, ny]]) {
+      if (tileSolidFor(map, cx, cy, isGuard)) return false;
+    }
+    return true;
+  };
+  if (dx && tryAxis(e.x + dx, e.y)) e.x += dx;
+  if (dy && tryAxis(e.x, e.y + dy)) e.y += dy;
+}
+
+function updatePlayer(inp, dt) {
+  const p = S.player, map = S.m.map;
+  if (p.dead || S.outcome) return;
+  if (p.channel) return; // busy picking/hacking
+
+  let mx = inp.mx, my = inp.my;
+  const mag = Math.hypot(mx, my);
+  if (mag > 1) { mx /= mag; my /= mag; }
+  p.sneak = !!inp.sneak; p.run = !!inp.run && !p.sneak;
+  const spd = p.sneak ? SPD.sneak : p.run ? SPD.run : SPD.walk;
+  p.moving = mag > 0.05;
+  p.speed = p.moving ? spd : 0;
+  if (p.moving) {
+    moveCircle(map, p, mx * spd * dt, my * spd * dt, false);
+    p.dir = Math.atan2(my, mx);
+    // footstep noise
+    p.stepT -= dt;
+    if (p.stepT <= 0) {
+      if (p.run) { p.stepT = 0.26; emitSound(p.x, p.y, 5.2, "steps"); SFX.step(1); p.noise = 1; }
+      else if (p.sneak) { p.stepT = 0.55; p.noise = 0.15; }
+      else { p.stepT = 0.38; emitSound(p.x, p.y, 2.4, "steps"); SFX.step(0.5); p.noise = 0.5; }
+    }
+  } else p.noise = Math.max(0, p.noise - dt * 3);
+
+  for (const g of p.gadgets) g.cd = Math.max(0, g.cd - dt);
+}
+
+/* ---------------- interactions ---------------- */
+function nearestInteract() {
+  const p = S.player, m = S.m;
+  const px = p.x, py = p.y;
+  const cand = [];
+  // doors adjacent
+  for (const d of m.doors) {
+    const d2 = dist2(px, py, d.x + 0.5, d.y + 0.5);
+    if (d2 < 1.6) cand.push({ d2, kind: d.locked ? "lockeddoor" : "door", o: d });
+  }
+  for (const t of m.terminals) {
+    const d2 = dist2(px, py, t.x + 0.5, t.y + 0.5);
+    if (d2 < 1.6) cand.push({ d2, kind: "terminal", o: t });
+  }
+  if (!m.objective.got) {
+    const d2 = dist2(px, py, m.objective.x + 0.5, m.objective.y + 0.5);
+    if (d2 < 1.6) cand.push({ d2, kind: "objective", o: m.objective });
+  }
+  for (const l of m.loot) if (!l.got) {
+    const d2 = dist2(px, py, l.x + 0.5, l.y + 0.5);
+    if (d2 < 1.6) cand.push({ d2, kind: "loot", o: l });
+  }
+  if (p.hasObj) {
+    const d2 = dist2(px, py, m.extract.x + 0.5, m.extract.y + 0.5);
+    if (d2 < 1.9) cand.push({ d2, kind: "extract", o: m.extract });
+  }
+  // doors are the weakest interaction — real targets outrank them unless far closer
+  const penalty = { door: 1.2, lockeddoor: 0.4, terminal: 0, objective: 0, loot: 0, extract: 0 };
+  cand.sort((a, b) => (a.d2 + penalty[a.kind]) - (b.d2 + penalty[b.kind]));
+  return cand[0] || null;
+}
+function interactLabel(it) {
+  const p = S.player;
+  switch (it.kind) {
+    case "door": return it.o.open ? "Close door" : "Open door";
+    case "lockeddoor": {
+      const pk = p.gadgets.find(g => g.id === "pick");
+      return pk && pk.charges > 0 ? "Pick lock (uses pick)" : "LOCKED — need pick or terminal";
+    }
+    case "terminal": return it.o.used ? "Terminal (spent)" : (it.o.kind === "cams" ? "Hack: kill cameras" : "Hack: unlock doors");
+    case "objective": return "Take the INTEL";
+    case "loot": return "Grab loot";
+    case "extract": return "EXTRACT";
+  }
+}
+function doInteract() {
+  const it = nearestInteract();
+  if (!it) return;
+  const p = S.player, m = S.m;
+  switch (it.kind) {
+    case "door":
+      it.o.open = !it.o.open; it.o.t = 0;
+      emitSound(p.x, p.y, 3.2, "door"); SFX.door();
+      logEvent("door", { x: it.o.x, y: it.o.y, how: "interact" });
+      break;
+    case "lockeddoor": {
+      const pk = p.gadgets.find(g => g.id === "pick");
+      if (pk && pk.charges > 0) {
+        p.channel = { kind: "pick", t: 2.6, o: it.o };
+        emitSound(p.x, p.y, 1.6, "pick");
+      }
+      break;
+    }
+    case "terminal":
+      if (!it.o.used) { p.channel = { kind: "hack", t: 1.6, o: it.o }; emitSound(p.x, p.y, 1.8, "hack"); }
+      break;
+    case "objective":
+      it.o.got = true; p.hasObj = true; SFX.pickup(); logEvent("objective", {});
+      toast("INTEL SECURED — get to extraction");
+      break;
+    case "loot": it.o.got = true; p.loot++; SFX.pickup(); logEvent("loot", { n: p.loot }); break;
+    case "extract": S.outcome = "extracted"; logEvent("extract", {}); break;
+  }
+}
+function updateChannel(dt) {
+  const p = S.player;
+  if (!p.channel) return;
+  p.channel.t -= dt;
+  if (p.channel.t > 0) return;
+  const c = p.channel; p.channel = null;
+  if (c.kind === "pick") {
+    c.o.locked = false; c.o.open = true; c.o.t = 0;
+    const pk = p.gadgets.find(g => g.id === "pick");
+    pk.charges--; pk.cd = GADGETS.find(g => g.id === "pick").cd;
+    SFX.unlock(); logEvent("unlock", { x: c.o.x, y: c.o.y, how: "pick" });
+    toast("Lock picked");
+  } else if (c.kind === "hack") {
+    c.o.used = true; SFX.hack();
+    if (c.o.kind === "cams") {
+      for (const cam of S.m.cams) cam.off = 45;
+      toast("Cameras looped — 45s");
+    } else {
+      let n = 0;
+      for (const d of S.m.doors) if (d.locked) { d.locked = false; n++; }
+      toast(n ? "Maglocks released" : "Nothing to unlock");
+    }
+    logEvent("hack", { kind: c.o.kind });
+  }
+}
+
+/* ---------------- gadgets ---------------- */
+function throwTarget(inp) {
+  // aim: pointer world pos if present else player facing * 5
+  const p = S.player;
+  if (inp && inp.ax != null) return { x: inp.ax, y: inp.ay };
+  return { x: p.x + Math.cos(p.dir) * 5, y: p.y + Math.sin(p.dir) * 5 };
+}
+function useGadget(inp) {
+  const p = S.player;
+  const g = p.gadgets[p.sel];
+  if (!g || g.charges <= 0 || g.cd > 0 || p.channel) return;
+  const def = GADGETS[p.sel];
+  g.cd = def.cd;
+  const t = throwTarget(inp);
+  if (g.id === "coin") {
+    // clamp throw to LOS & range 8
+    const d = Math.hypot(t.x - p.x, t.y - p.y);
+    const rr = Math.min(d, 8);
+    const a = Math.atan2(t.y - p.y, t.x - p.x);
+    let lx = p.x + Math.cos(a) * rr, ly = p.y + Math.sin(a) * rr;
+    // march to last free tile
+    const steps = Math.ceil(rr / 0.25);
+    let fx = p.x, fy = p.y;
+    for (let i = 1; i <= steps; i++) {
+      const x = p.x + Math.cos(a) * i * 0.25, y = p.y + Math.sin(a) * i * 0.25;
+      if (tileSolidFor(S.m.map, x, y, true)) break;
+      fx = x; fy = y;
+    }
+    S.thrown.push({ kind: "coin", x: fx, y: fy, t: 0.4 });
+    SFX.throw_(); logEvent("gadget", { id: "coin" });
+    g.charges--;
+  } else if (g.id === "smoke") {
+    S.smokes.push({ x: p.x, y: p.y, r: 2.7, t: 9 });
+    emitSound(p.x, p.y, 2.0, "smoke"); SFX.smoke(); g.charges--;
+    logEvent("gadget", { id: "smoke" });
+  } else if (g.id === "emp") {
+    let hit = 0;
+    for (const c of S.m.cams) if (dist2(c.x + 0.5, c.y + 0.5, p.x, p.y) < 4.5 * 4.5) { c.emp = 20; hit++; }
+    S.alarmSup = Math.max(S.alarmSup, 8);
+    for (const gr of S.m.guards) if (dist2(gr.x, gr.y, p.x, p.y) < 4.5 * 4.5) gr.noRadio = 10;
+    S.parts.push({ kind: "emp", x: p.x, y: p.y, t: 0, life: 0.5 });
+    SFX.emp(); g.charges--; logEvent("gadget", { id: "emp", hit });
+    toast(hit ? `EMP: ${hit} camera${hit > 1 ? "s" : ""} down` : "EMP: alarm jammed");
+  }
+}
+/* ---------------- guard FSM ---------------- */
+function guardSees(g) {
+  const p = S.player;
+  if (S.outcome || p.dead) return false;
+  const d = Math.hypot(p.x - g.x, p.y - g.y);
+  let vd = g.viewDist * (p.sneak ? 0.62 : 1);
+  if (d > vd) return false;
+  const ang = Math.atan2(p.y - g.y, p.x - g.x);
+  if (Math.abs(angDiff(ang, g.dir)) > g.fov) return false;
+  if (rayBlocked(S.m.map, g.x, g.y, p.x, p.y, S.smokes).blocked) return false;
+  return true;
+}
+function updateGuard(g, dt) {
+  const p = S.player, rng = S.simRng, map = S.m.map;
+  g.stateT = (g.stateT || 0) + dt;
+  g.spotCd = Math.max(0, (g.spotCd || 0) - dt);
+  g.noRadio = Math.max(0, (g.noRadio || 0) - dt);
+
+  /* ---- perception ---- */
+  const sees = guardSees(g);
+  if (sees) {
+    const d = Math.hypot(p.x - g.x, p.y - g.y);
+    let rate = (1.4 + 2.4 * (1 - d / g.viewDist)) * g.susMul;
+    const pt = map.at(Math.floor(p.x), Math.floor(p.y));
+    if (pt & T_RESTRICTED) rate *= 1.5;
+    if (p.run) rate *= 1.3;
+    g.sus = Math.min(1.2, g.sus + rate * dt);
+    g.lastKnown = { x: p.x, y: p.y };
+    g.loseT = 0;
+    if (g.sus >= 1 && g.state !== "ALERT") {
+      setGuardState(g, "ALERT");
+      S.stats.spotted++;
+      if (!g.noRadio) raiseAlert("guard", { x: p.x, y: p.y });
+      else logEvent("alert_jammed", { id: g.id });
+    } else if (g.sus > 0.35 && (g.state === "PATROL" || g.state === "IDLE")) {
+      setGuardState(g, "SUSPICIOUS");
+      g.stare = { x: p.x, y: p.y };
+    }
+    if (g.state === "INVESTIGATE" || g.state === "SEARCH") { g.lastKnown = { x: p.x, y: p.y }; }
+  } else {
+    g.sus = Math.max(0, g.sus - dt * 0.22);
+    if (g.state === "ALERT") { g.loseT += dt; if (g.loseT > 3.5) setGuardState(g, "SEARCH"); }
+    if (g.state === "SUSPICIOUS" && g.sus < 0.08) setGuardState(g, "PATROL");
+  }
+
+  /* ---- state behavior ---- */
+  const spdP = 1.7 * g.speedMul, spdI = 2.7 * g.speedMul, spdA = 4.6 * g.speedMul;
+  switch (g.state) {
+    case "PATROL": {
+      if (g.waitT > 0) { g.waitT -= dt; g.dir += Math.sin(S.tick * 0.03 + g.id) * 0.011; break; }
+      const wp = g.wps[g.wi];
+      if (guardMoveTo(g, wp.x, wp.y, spdP, dt)) { g.wi = (g.wi + 1) % g.wps.length; g.waitT = 1.2 + rng() * 2.4; }
+      break;
+    }
+    case "IDLE": g.dir += Math.sin(S.tick * 0.025 + g.id * 2) * 0.012; break;
+    case "SUSPICIOUS": {
+      if (g.stare) {
+        const a = Math.atan2(g.stare.y - g.y, g.stare.x - g.x);
+        g.dir += angDiff(a, g.dir) * Math.min(1, dt * 7);
+      }
+      break;
+    }
+    case "INVESTIGATE": {
+      if (!g.lastKnown) { setGuardState(g, "PATROL"); break; }
+      const done = guardMoveTo(g, Math.floor(g.lastKnown.x), Math.floor(g.lastKnown.y), spdI, dt);
+      if (done || dist2(g.x, g.y, g.lastKnown.x, g.lastKnown.y) < 0.8) {
+        g.investT = (g.investT || 0) + dt;
+        g.dir += dt * 1.6; // look around
+        if (g.investT > 3.2) { g.investT = 0; g.lastKnown = null; setGuardState(g, "PATROL"); }
+      }
+      break;
+    }
+    case "ALERT": {
+      if (g.lastKnown) {
+        guardMoveTo(g, Math.floor(g.lastKnown.x), Math.floor(g.lastKnown.y), spdA, dt);
+        g.repathT = (g.repathT || 0) - dt;
+        if (g.repathT <= 0) { g.path = null; g.repathT = 0.4; }
+      }
+      // catch
+      if (dist2(g.x, g.y, p.x, p.y) < 0.62) { S.outcome = "caught"; logEvent("caught", { by: g.id }); }
+      break;
+    }
+    case "SEARCH": {
+      if (!g.searchPts) {
+        g.searchPts = [];
+        const base = g.lastKnown || { x: g.x, y: g.y };
+        for (let i = 0; i < 4; i++) {
+          const a = rng() * TAU, r = 2 + rng() * 4;
+          const tx = Math.floor(base.x + Math.cos(a) * r), ty = Math.floor(base.y + Math.sin(a) * r);
+          if (map.inB(tx, ty) && !(map.at(tx, ty) & T_WALL) && !map.crateSet.has(ty * map.W + tx)) g.searchPts.push({ x: tx, y: ty });
+        }
+        g.searchT = 0; g.searchI = 0;
+      }
+      if (g.searchI >= g.searchPts.length) { g.searchPts = null; g.lastKnown = null; setGuardState(g, "PATROL"); break; }
+      const pt2 = g.searchPts[g.searchI];
+      if (guardMoveTo(g, pt2.x, pt2.y, spdI, dt)) {
+        g.searchT += dt; g.dir += dt * 2.1;
+        if (g.searchT > 1.6) { g.searchT = 0; g.searchI++; }
+      }
+      break;
+    }
+  }
+
+  // doors: guards open closed doors on their path
+  const gt = map.at(Math.floor(g.x), Math.floor(g.y));
+  if ((gt & T_DOOR)) { const d = map.doorSet.get(Math.floor(g.y) * map.W + Math.floor(g.x)); if (d && !d.open && !d.locked) { d.open = true; d.t = 0; } }
+  // auto-close behind? leave open — player can read traffic
+}
+
+/* ---------------- cameras ---------------- */
+function updateCameras(dt) {
+  const p = S.player;
+  for (const c of S.m.cams) {
+    c.off = Math.max(0, c.off - dt); c.emp = Math.max(0, c.emp - dt);
+    if (c.off > 0 || c.emp > 0) { c.see = Math.max(0, c.see - dt * 2); continue; }
+    c.dir = c.base + Math.sin(S.tick * 0.016 * c.panSpd * 4) * c.panAmp;
+    const d = Math.hypot(p.x - (c.x + 0.5), p.y - (c.y + 0.5));
+    let sees = false;
+    if (!S.outcome && d < c.range * (p.sneak ? 0.7 : 1)) {
+      const ang = Math.atan2(p.y - (c.y + 0.5), p.x - (c.x + 0.5));
+      if (Math.abs(angDiff(ang, c.dir)) < c.fov)
+        sees = !rayBlocked(S.m.map, c.x + 0.5, c.y + 0.5, p.x, p.y, S.smokes).blocked;
+    }
+    if (sees) {
+      c.see = Math.min(1.4, c.see + dt * 0.9);
+      c.lastSeen = { x: p.x, y: p.y };
+      if (c.see >= 1 && !c.tripped) { c.tripped = true; raiseAlert("camera", { x: p.x, y: p.y }); }
+    } else { c.see = Math.max(0, c.see - dt * 0.5); if (c.see <= 0) c.tripped = false; }
+  }
+}
+
+/* ---------------- tick ---------------- */
+const DT = 1 / 60;
+function step(inp) {
+  if (S.outcome) { S.tick++; return; }
+  S.tick++; S.time += DT;
+  S.alarmSup = Math.max(0, S.alarmSup - DT);
+
+  updatePlayer(inp, DT);
+  S.player.sel = inp.sel | 0;
+  if (!S.player.channel) {
+    if (inp.act) doInteract();
+    if (inp.use) useGadget(inp);
+  }
+  updateChannel(DT);
+
+  for (const g of S.m.guards) updateGuard(g, DT);
+  updateCameras(DT);
+
+  // alert decay
+  const anyHot = S.m.guards.some(g => g.state === "ALERT" || g.state === "SEARCH");
+  if (!anyHot && S.alert > 0) { S.alertT += DT; if (S.alertT > 18) { S.alert--; S.alertT = 0; logEvent("alert_decay", { lvl: S.alert }); } }
+
+  // timers
+  for (const th of S.thrown) { th.t -= DT; if (th.t <= 0 && !th.done) { th.done = true; emitSound(th.x, th.y, 7.5, "coin"); SFX.coin(); } }
+  S.thrown = S.thrown.filter(t => !t.done || t.t > -0.2);
+  for (const sm of S.smokes) sm.t -= DT;
+  S.smokes = S.smokes.filter(s => s.t > 0);
+  for (const d of S.m.doors) d.t = clamp(d.t + (d.open ? DT * 4 : -DT * 4), 0, 1);
+  for (const pt of S.parts) pt.t += DT;
+  S.parts = S.parts.filter(p2 => p2.t < p2.life);
+
+  // replay input log (store only changes)
+  const snap = { mx: +inp.mx.toFixed(2), my: +inp.my.toFixed(2), b: (inp.sneak?1:0)|(inp.run?2:0)|(inp.act?4:0)|(inp.use?8:0), s: inp.sel|0, ax: inp.ax == null ? null : +inp.ax.toFixed(2), ay: inp.ay == null ? null : +inp.ay.toFixed(2) };
+  const last = S.lastInput;
+  if (!last || JSON.stringify(snap) !== JSON.stringify(last)) S.inputLog.push({ t: S.tick, ...snap });
+  S.lastInput = snap;
+}
+
+function outcomeHash(s) {
+  // compact verifiable outcome digest
+  let h = hashStr(s.outcome + "|");
+  for (const g of s.m.guards) { h ^= Math.floor(g.x * 64) * 31 + Math.floor(g.y * 64); h = Math.imul(h, 2654435761) >>> 0; }
+  h ^= s.player.loot * 7 + (s.m.objective.got ? 1 : 0);
+  return (h >>> 0).toString(16);
+}
+
+/* headless deterministic replay → returns final sim */
+function replaySim(seedStr, presetKey, diffKey, inputLog) {
+  const saved = S;
+  if (!inputLog || !inputLog.length) return { outcome: null, hash: null, tick: 0, loot: 0 };
+  newSim(seedStr, presetKey, diffKey);
+  const sim = S;
+  let li = 0, maxTick = inputLog.length ? inputLog[inputLog.length - 1].t + 600 : 60 * 300;
+  maxTick = Math.min(maxTick, 60 * 600);
+  for (let t = 1; t <= maxTick && !sim.outcome; t++) {
+    while (li < inputLog.length - 1 && inputLog[li + 1].t <= t) li++;
+    const c = inputLog[li];
+    step({ mx: c.mx, my: c.my, sneak: !!(c.b & 1), run: !!(c.b & 2), act: !!(c.b & 4), use: !!(c.b & 8), sel: c.s, ax: c.ax, ay: c.ay });
+    // one-shot actions should not repeat every tick between log entries:
+  }
+  const res = { outcome: sim.outcome, hash: outcomeHash(sim), tick: sim.tick, loot: sim.player.loot };
+  S = saved;
+  return res;
+}
+/* ---------------- input ---------------- */
+const DEF_BINDS = {
+  up: "KeyW", down: "KeyS", left: "KeyA", right: "KeyD",
+  run: "ShiftLeft", sneak: "KeyC", act: "KeyE", use: "KeyF",
+  pause: "Escape", gad1: "Digit1", gad2: "Digit2", gad3: "Digit3", gad4: "Digit4",
+  mute: "KeyM", diag: "Backquote",
+};
+const ALT_KEYS = { up: ["ArrowUp"], down: ["ArrowDown"], left: ["ArrowLeft"], right: ["ArrowRight"], run: ["ShiftRight"] };
+let BINDS = { ...DEF_BINDS };
+try { const b = JSON.parse(localStorage.getItem("sh_binds") || "null"); if (b) BINDS = { ...DEF_BINDS, ...b }; } catch (e) {}
+
+const keysDown = new Set(), pressed = new Set();
+const INPUT = { mx: 0, my: 0, sneak: false, run: false, act: false, use: false, sel: 0, ax: null, ay: null, aimWorld: null, stick: null };
+
+const codeFor = a => BINDS[a];
+function actionDown(a) {
+  if (keysDown.has(codeFor(a))) return true;
+  for (const k of (ALT_KEYS[a] || [])) if (keysDown.has(k)) return true;
+  return false;
+}
+const GAME_CODES = new Set([...Object.values(DEF_BINDS), "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftRight", "Space", "F1","F2","F3","F4","F5","F6"]);
+
+let captureBind = null; // action currently being rebound
+window.addEventListener("keydown", e => {
+  if (captureBind) {
+    e.preventDefault();
+    BINDS[captureBind] = e.code; captureBind = null;
+    localStorage.setItem("sh_binds", JSON.stringify(BINDS));
+    buildBindList(); return;
+  }
+  if (APP.state === "play" && GAME_CODES.has(e.code)) e.preventDefault();
+  if (!e.repeat) {
+    pressed.add(e.code);
+    keysDown.add(e.code);
+  }
+  // diagnostics hotkeys
+  if (APP.state === "play") {
+    const dm = { F1: "nav", F2: "rays", F3: "sound", F4: "ai", F5: "coll", F6: "perf" };
+    if (dm[e.code]) { DIAG[dm[e.code]] = !DIAG[dm[e.code]]; syncDiagUI(); }
+  }
+});
+window.addEventListener("keyup", e => keysDown.delete(e.code));
+window.addEventListener("blur", () => { keysDown.clear(); INPUT.stick = null; if (APP.state === "play") pauseGame(true); });
+document.addEventListener("visibilitychange", () => { if (document.hidden && APP.state === "play") pauseGame(true); });
+
+const cv = document.getElementById("game");
+let pointerId = null;
+cv.addEventListener("contextmenu", e => e.preventDefault());
+cv.addEventListener("pointerdown", e => {
+  if (APP.state !== "play") return;
+  e.preventDefault(); cv.focus();
+  AUDIO.unlock();
+  pointerId = e.pointerId;
+  cv.setPointerCapture(e.pointerId);
+  INPUT.stick = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
+  INPUT.ax = e.clientX; INPUT.ay = e.clientY;
+  showStick(e.clientX, e.clientY);
+});
+cv.addEventListener("pointermove", e => {
+  INPUT.ax = e.clientX; INPUT.ay = e.clientY;
+  if (INPUT.stick && e.pointerId === pointerId) { INPUT.stick.x = e.clientX; INPUT.stick.y = e.clientY; moveStick(e.clientX, e.clientY); }
+});
+const endPointer = e => {
+  if (e.pointerId === pointerId) { pointerId = null; INPUT.stick = null; hideStick(); }
+};
+cv.addEventListener("pointerup", endPointer);
+cv.addEventListener("pointercancel", endPointer);
+
+function buildInput() {
+  const inp = { mx: 0, my: 0, sneak: false, run: false, act: false, use: false, sel: INPUT.sel, ax: null, ay: null };
+  if (actionDown("up")) inp.my -= 1;
+  if (actionDown("down")) inp.my += 1;
+  if (actionDown("left")) inp.mx -= 1;
+  if (actionDown("right")) inp.mx += 1;
+  if (INPUT.stick) {
+    const dx = (INPUT.stick.x - INPUT.stick.x0) / 46, dy = (INPUT.stick.y - INPUT.stick.y0) / 46;
+    const m = Math.hypot(dx, dy);
+    if (m > 0.18) { inp.mx = dx / Math.max(1, m); inp.my = dy / Math.max(1, m); }
+  }
+  inp.sneak = actionDown("sneak") || touchFlags.sneak;
+  inp.run = actionDown("run");
+  if (pressed.has(codeFor("act"))) inp.act = true;
+  if (pressed.has(codeFor("use"))) inp.use = true;
+  if (pressed.has("Space")) inp.act = true;
+  for (let i = 1; i <= 4; i++) if (pressed.has(codeFor("gad" + i))) { INPUT.sel = i - 1; inp.sel = INPUT.sel; }
+  if (touchFlags.act) { inp.act = true; touchFlags.act = false; }
+  if (touchFlags.use) { inp.use = true; touchFlags.use = false; }
+  // autopilot (validation/debug hook — drives through the same input record)
+  if (window.GAME && GAME._ap && S && !S.outcome) {
+    const a = GAME._ap, p = S.player;
+    if (!a.path || S.tick - a.pt > 30) {
+      a.path = findPath(S.m.map, Math.floor(p.x), Math.floor(p.y), a.tx, a.ty, { lockedOk: false });
+      a.pi = 1; a.pt = S.tick;
+      if (!a.path) { GAME._ap = null; }
+    }
+    if (GAME._ap && a.path) {
+      const wp = a.path[Math.min(a.pi, a.path.length - 1)];
+      const dx = wp.x + 0.5 - p.x, dy = wp.y + 0.5 - p.y, dd = Math.hypot(dx, dy);
+      if (dd < 0.22) a.pi++;
+      else { inp.mx = dx / dd; inp.my = dy / dd; }
+      if (a.pi >= a.path.length || dist2(p.x, p.y, a.tx + 0.5, a.ty + 0.5) < 0.4) { GAME._ap = null; inp.mx = 0; inp.my = 0; }
+      if (a.run) inp.run = true;
+      if (a.sneak) inp.sneak = true;
+    }
+  }
+  // aim in world coords for throws
+  if (INPUT.ax != null) {
+    const w = screenToWorld(INPUT.ax, INPUT.ay);
+    inp.ax = w.x; inp.ay = w.y;
+    INPUT.aimWorld = w;
+  }
+  // deterministic input playback (watch a recorded run) — overrides live input
+  if (window.GAME && GAME._pb && S) {
+    const log = GAME._pb.log;
+    while (GAME._pb.i < log.length - 1 && log[GAME._pb.i + 1].t <= S.tick + 1) GAME._pb.i++;
+    const c = log[GAME._pb.i];
+    if (c) { inp.mx = c.mx; inp.my = c.my; inp.sneak = !!(c.b & 1); inp.run = !!(c.b & 2); inp.act = !!(c.b & 4); inp.use = !!(c.b & 8); inp.sel = c.s; inp.ax = c.ax; inp.ay = c.ay; }
+  }
+  pressed.clear();
+  return inp;
+}
+
+/* touch flags set by on-screen buttons */
+const touchFlags = { act: false, use: false, sneak: false };
+function bindTouchBtn(id, down, up) {
+  const el = document.getElementById(id);
+  el.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); down(); });
+  if (up) { el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); }
+}
+const stickEl = document.getElementById("stick");
+function showStick(x, y) { stickEl.style.display = "block"; stickEl.style.left = (x - 60) + "px"; stickEl.style.top = (y - 60) + "px"; moveStick(x, y); }
+function moveStick(x, y) {
+  const s = INPUT.stick; if (!s) return;
+  const dx = clamp(x - s.x0, -46, 46), dy = clamp(y - s.y0, -46, 46);
+  stickEl.querySelector(".nub").style.transform = `translate(${dx}px,${dy}px)`;
+}
+function hideStick() { stickEl.style.display = "none"; }
+window.addEventListener("touchstart", () => document.body.classList.add("touch-on"), { once: true, passive: true });
+if (matchMedia("(pointer:coarse)").matches) document.body.classList.add("touch-on");
+
+/* ---------------- audio (all synthesized) ---------------- */
+const AUDIO = {
+  ctx: null, master: null, fx: null, vol: { master: 0.7, fx: 0.8 },
+  unlock() {
+    if (this.ctx) { if (this.ctx.state === "suspended") this.ctx.resume(); return; }
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain(); this.master.gain.value = this.vol.master;
+      this.fx = this.ctx.createGain(); this.fx.gain.value = this.vol.fx;
+      this.fx.connect(this.master); this.master.connect(this.ctx.destination);
+      this.hum();
+    } catch (e) { /* no audio */ }
+  },
+  setVol() { if (this.master) { this.master.gain.value = this.vol.master; this.fx.gain.value = this.vol.fx; } },
+  hum() { // ambient pad
+    const c = this.ctx, o = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain();
+    o.type = "sine"; o.frequency.value = 55; o2.type = "sine"; o2.frequency.value = 55.7;
+    g.gain.value = 0.022; o.connect(g); o2.connect(g); g.connect(this.master);
+    o.start(); o2.start();
+    const lfo = c.createOscillator(), lg = c.createGain();
+    lfo.frequency.value = 0.08; lg.gain.value = 0.008; lfo.connect(lg); lg.connect(g.gain); lfo.start();
+  },
+  blip(f, t, type, v, slide) {
+    if (!this.ctx) return;
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type || "square"; o.frequency.setValueAtTime(f, c.currentTime);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, c.currentTime + t);
+    g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + t);
+    o.connect(g); g.connect(this.fx); o.start(); o.stop(c.currentTime + t);
+  },
+  noise(t, v, f) {
+    if (!this.ctx) return;
+    const c = this.ctx, len = Math.ceil(c.sampleRate * t), buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter(); flt.type = "lowpass"; flt.frequency.value = f || 900;
+    const g = c.createGain(); g.gain.value = v;
+    src.connect(flt); flt.connect(g); g.connect(this.fx); src.start();
+  },
+};
+const SFX = {
+  step: v => AUDIO.noise(0.07, 0.05 * v, 500),
+  door: () => { AUDIO.blip(160, 0.14, "triangle", 0.1, 90); AUDIO.noise(0.08, 0.04, 700); },
+  pickup: () => { AUDIO.blip(660, 0.09, "sine", 0.12); setTimeout(() => AUDIO.blip(990, 0.12, "sine", 0.1), 70); },
+  unlock: () => { AUDIO.blip(330, 0.08, "square", 0.08); setTimeout(() => AUDIO.blip(520, 0.1, "square", 0.08), 90); },
+  hack: () => { for (let i = 0; i < 4; i++) setTimeout(() => AUDIO.blip(440 + i * 130, 0.05, "square", 0.05), i * 60); },
+  coin: () => AUDIO.blip(1900, 0.08, "sine", 0.09, 1400),
+  throw_: () => AUDIO.noise(0.09, 0.05, 1400),
+  smoke: () => AUDIO.noise(0.4, 0.12, 600),
+  emp: () => { AUDIO.blip(1400, 0.3, "sawtooth", 0.09, 90); AUDIO.noise(0.2, 0.07, 2400); },
+  alarm: () => { AUDIO.blip(520, 0.16, "square", 0.11, 760); setTimeout(() => AUDIO.blip(760, 0.16, "square", 0.11, 520), 170); setTimeout(() => AUDIO.blip(520, 0.2, "square", 0.1, 760), 340); },
+  caught: () => { AUDIO.blip(300, 0.5, "sawtooth", 0.16, 70); AUDIO.noise(0.4, 0.1, 400); },
+  win: () => { [440, 554, 659, 880].forEach((f, i) => setTimeout(() => AUDIO.blip(f, 0.18, "sine", 0.11), i * 110)); },
+  ui: () => AUDIO.blip(700, 0.05, "sine", 0.06),
+};
+
+/* ---------------- diagnostics flags ---------------- */
+const DIAG = { nav: false, rays: false, sound: false, ai: false, coll: false, perf: false };
+/* ---------------- render ---------------- */
+const ctx = cv.getContext("2d");
+const lightCv = document.createElement("canvas");
+const lctx = lightCv.getContext("2d");
+let camX = 0, camY = 0, viewW = 0, viewH = 0, dpr = 1, shake = 0;
+
+function resize() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  const st = document.getElementById("stage");
+  viewW = st.clientWidth; viewH = st.clientHeight;
+  cv.width = Math.round(viewW * dpr); cv.height = Math.round(viewH * dpr);
+  lightCv.width = cv.width; lightCv.height = cv.height;
+}
+window.addEventListener("resize", resize);
+resize();
+
+const OPT = { rmotion: false, rflash: false };
+function screenToWorld(sx, sy) {
+  const r = cv.getBoundingClientRect();
+  return { x: (sx - r.left) / TILE + camX, y: (sy - r.top) / TILE + camY };
+}
+const W2S = (x, y) => [(x - camX) * TILE, (y - camY) * TILE];
+
+/* visibility cone polygon via ray fan */
+function conePoly(x, y, dir, fov, range) {
+  const pts = [[x, y]];
+  const n = Math.max(8, Math.ceil(fov * 2 / 0.09));
+  for (let i = 0; i <= n; i++) {
+    const a = dir - fov + (fov * 2 * i / n);
+    let d = range;
+    const steps = Math.ceil(range / 0.24);
+    for (let s = 1; s <= steps; s++) {
+      const rx = x + Math.cos(a) * s * 0.24, ry = y + Math.sin(a) * s * 0.24;
+      const tx = Math.floor(rx), ty = Math.floor(ry);
+      if (!S.m.map.inB(tx, ty)) { d = s * 0.24; break; }
+      const t = S.m.map.at(tx, ty);
+      if (t & T_WALL || S.m.map.crateSet.has(ty * S.m.map.W + tx)) { d = (s - 0.5) * 0.24; break; }
+      if (t & T_DOOR) { const dd = S.m.map.doorSet.get(ty * S.m.map.W + tx); if (dd && !dd.open) { d = (s - 0.5) * 0.24; break; } }
+    }
+    pts.push([x + Math.cos(a) * d, y + Math.sin(a) * d]);
+  }
+  return pts;
+}
+function drawPoly(pts, fill) {
+  ctx.beginPath();
+  ctx.moveTo(...W2S(pts[0][0], pts[0][1]));
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(...W2S(pts[i][0], pts[i][1]));
+  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+}
+
+function render() {
+  const m = S.m, map = m.map, p = S.player;
+  const worldW = map.W * TILE, worldH = map.H * TILE;
+  // camera
+  let cx = p.x * TILE - viewW / 2, cy = p.y * TILE - viewH / 2;
+  if (worldW > viewW) cx = clamp(cx, 0, worldW - viewW); else cx = (worldW - viewW) / 2;
+  if (worldH > viewH) cy = clamp(cy, 0, worldH - viewH); else cy = (worldH - viewH) / 2;
+  if (shake > 0 && !OPT.rmotion) { cx += (Math.random() - 0.5) * shake * 10; cy += (Math.random() - 0.5) * shake * 10; }
+  camX = cx / TILE; camY = cy / TILE;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#04060a"; ctx.fillRect(0, 0, viewW, viewH);
+
+  const x0 = Math.max(0, Math.floor(camX) - 1), y0 = Math.max(0, Math.floor(camY) - 1);
+  const x1 = Math.min(map.W - 1, Math.ceil(camX + viewW / TILE) + 1), y1 = Math.min(map.H - 1, Math.ceil(camY + viewH / TILE) + 1);
+
+  /* floor + walls */
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const t = map.at(x, y);
+    const [sx, sy] = W2S(x, y);
+    if (t & T_WALL) {
+      // wall only drawn if adjacent to visible space
+      ctx.fillStyle = "#131c2c";
+      ctx.fillRect(sx, sy, TILE, TILE);
+      ctx.fillStyle = "#1a2740";
+      ctx.fillRect(sx, sy, TILE, 3);
+    } else {
+      const v = ((x * 7 + y * 13) % 5) * 2;
+      ctx.fillStyle = (t & T_RESTRICTED) ? `rgb(${38 + v},${22 + v},${30 + v})` : `rgb(${20 + v},${27 + v},${40 + v})`;
+      ctx.fillRect(sx, sy, TILE, TILE);
+      if (t & T_RESTRICTED) { ctx.fillStyle = "rgba(255,93,108,.05)"; ctx.fillRect(sx, sy, TILE, TILE); }
+      ctx.strokeStyle = "rgba(255,255,255,.025)"; ctx.strokeRect(sx + .5, sy + .5, TILE - 1, TILE - 1);
+    }
+  }
+
+  /* crates */
+  for (const c of m.crates) {
+    const [sx, sy] = W2S(c.x, c.y);
+    ctx.fillStyle = "#3a2f22"; ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+    ctx.strokeStyle = "#54452f"; ctx.strokeRect(sx + 2.5, sy + 2.5, TILE - 5, TILE - 5);
+    ctx.beginPath(); ctx.moveTo(sx + 3, sy + 3); ctx.lineTo(sx + TILE - 3, sy + TILE - 3); ctx.stroke();
+  }
+
+  /* doors */
+  for (const d of m.doors) {
+    const [sx, sy] = W2S(d.x, d.y);
+    const o = d.t; // anim 0 closed → 1 open
+    ctx.fillStyle = d.locked ? "#7a2d38" : "#2b3d5c";
+    if (d.horiz) { // walls left/right → door slides vertically
+      const h2 = (TILE / 2) * (1 - o);
+      ctx.fillRect(sx + TILE * 0.28, sy, TILE * 0.44, h2);
+      ctx.fillRect(sx + TILE * 0.28, sy + TILE - h2, TILE * 0.44, h2);
+    } else {
+      const w2 = (TILE / 2) * (1 - o);
+      ctx.fillRect(sx, sy + TILE * 0.28, w2, TILE * 0.44);
+      ctx.fillRect(sx + TILE - w2, sy + TILE * 0.28, w2, TILE * 0.44);
+    }
+    if (d.locked) { ctx.fillStyle = "#ff5d6c"; ctx.fillRect(sx + TILE/2 - 2, sy + TILE/2 - 2, 4, 4); }
+  }
+
+  /* extraction + entry markers */
+  const [ex, ey] = W2S(m.extract.x, m.extract.y);
+  ctx.strokeStyle = "#45e0d4"; ctx.lineWidth = 2;
+  ctx.strokeRect(ex + 3 + Math.sin(S.tick * 0.08) * 1.5, ey + 3 + Math.sin(S.tick * 0.08) * 1.5, TILE - 6 - Math.sin(S.tick*0.08)*3, TILE - 6 - Math.sin(S.tick*0.08)*3);
+  ctx.fillStyle = "rgba(69,224,212,.12)"; ctx.fillRect(ex, ey, TILE, TILE);
+  ctx.lineWidth = 1;
+
+  /* loot + objective */
+  for (const l of m.loot) if (!l.got) {
+    const [sx, sy] = W2S(l.x, l.y);
+    ctx.fillStyle = "#ffd166";
+    ctx.save(); ctx.translate(sx + TILE/2, sy + TILE/2); ctx.rotate(Math.PI/4);
+    ctx.fillRect(-5, -5, 10, 10); ctx.restore();
+  }
+  if (!m.objective.got) {
+    const [sx, sy] = W2S(m.objective.x, m.objective.y);
+    const pu = 1 + Math.sin(S.tick * 0.09) * 0.15;
+    ctx.fillStyle = "#ffd166"; ctx.strokeStyle = "#ffe9b0";
+    ctx.save(); ctx.translate(sx + TILE/2, sy + TILE/2); ctx.scale(pu, pu);
+    ctx.fillRect(-6, -7, 12, 14); ctx.strokeRect(-6, -7, 12, 14);
+    ctx.fillStyle = "#10131c"; ctx.fillRect(-3, -2, 6, 2);
+    ctx.restore();
+    // beacon ring
+    ctx.strokeStyle = "rgba(255,209,102,.3)";
+    ctx.beginPath(); ctx.arc(sx + TILE/2, sy + TILE/2, 14 + Math.sin(S.tick*0.09)*4, 0, TAU); ctx.stroke();
+  }
+
+  /* terminals */
+  for (const t of m.terminals) {
+    const [sx, sy] = W2S(t.x, t.y);
+    ctx.fillStyle = "#12202e"; ctx.fillRect(sx + 4, sy + 4, TILE - 8, TILE - 8);
+    ctx.fillStyle = t.used ? "#33475e" : (t.kind === "cams" ? "#45e0d4" : "#ffb35c");
+    const blink = t.used ? 0.4 : (Math.sin(S.tick * 0.12) * 0.5 + 0.5);
+    ctx.globalAlpha = 0.4 + blink * 0.6;
+    ctx.fillRect(sx + 7, sy + 7, TILE - 14, 4);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#0a1420"; ctx.fillRect(sx + 7, sy + 14, TILE - 14, TILE - 20);
+  }
+
+  /* camera vision cones */
+  for (const c of m.cams) {
+    if (c.off <= 0 && c.emp <= 0) {
+      const hot = c.see > 0.05;
+      drawPoly(conePoly(c.x + 0.5, c.y + 0.5, c.dir, c.fov, c.range), hot ? "rgba(255,93,108,.14)" : "rgba(255,179,92,.10)");
+    }
+    const [sx, sy] = W2S(c.x, c.y);
+    ctx.fillStyle = "#223048"; ctx.fillRect(sx + 8, sy + 8, TILE - 16, TILE - 16);
+    ctx.fillStyle = (c.off > 0 || c.emp > 0) ? "#33475e" : (c.see > 0.05 ? "#ff5d6c" : "#ffb35c");
+    ctx.beginPath(); ctx.arc(sx + TILE/2 + Math.cos(c.dir) * 5, sy + TILE/2 + Math.sin(c.dir) * 5, 3, 0, TAU); ctx.fill();
+  }
+
+  /* guard vision cones */
+  for (const g of m.guards) {
+    const hot = g.state === "ALERT", warm = g.state === "SUSPICIOUS" || g.state === "INVESTIGATE" || g.state === "SEARCH";
+    drawPoly(conePoly(g.x, g.y, g.dir, g.fov, g.viewDist * (p.sneak ? 0.62 : 1)),
+      hot ? "rgba(255,60,80,.16)" : warm ? "rgba(255,179,92,.12)" : "rgba(126,224,129,.08)");
+  }
+
+  /* thrown items */
+  for (const th of S.thrown) {
+    const [sx, sy] = W2S(th.x, th.y);
+    ctx.fillStyle = "#e8e0c8"; ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, TAU); ctx.fill();
+  }
+
+  /* sound rings */
+  for (const s of S.sounds) {
+    const age = (S.tick - s.born) / 60;
+    if (age > 1.1) continue;
+    const r = age / 1.1 * s.i * TILE;
+    const [sx, sy] = W2S(s.x, s.y);
+    ctx.strokeStyle = `rgba(140,190,255,${0.35 * (1 - age / 1.1)})`;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, TAU); ctx.stroke();
+  }
+
+  /* smoke */
+  for (const sm of S.smokes) {
+    const [sx, sy] = W2S(sm.x, sm.y);
+    const a = Math.min(0.55, sm.t / 9 * 0.8);
+    const grad = ctx.createRadialGradient(sx, sy, 4, sx, sy, sm.r * TILE);
+    grad.addColorStop(0, `rgba(150,160,175,${a})`); grad.addColorStop(1, "rgba(150,160,175,0)");
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(sx, sy, sm.r * TILE, 0, TAU); ctx.fill();
+  }
+
+  /* guards */
+  for (const g of m.guards) {
+    const [sx, sy] = W2S(g.x, g.y);
+    ctx.fillStyle = GS_COLOR[g.state];
+    ctx.beginPath(); ctx.arc(sx, sy, TILE * 0.32, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.stroke();
+    // facing tick
+    ctx.strokeStyle = "#0a0f18"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + Math.cos(g.dir) * TILE * 0.42, sy + Math.sin(g.dir) * TILE * 0.42); ctx.stroke();
+    ctx.lineWidth = 1;
+    // ! / ? marker
+    if (g.state === "ALERT" || g.state === "SUSPICIOUS" || g.state === "INVESTIGATE" || g.state === "SEARCH") {
+      ctx.fillStyle = g.state === "ALERT" ? "#ff5d6c" : "#ffd166";
+      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+      ctx.fillText(g.state === "ALERT" ? "!" : "?", sx, sy - TILE * 0.55);
+    }
+    // suspicion ring
+    if (g.sus > 0.05 && g.state !== "ALERT") {
+      ctx.strokeStyle = `rgba(255,209,102,${g.sus * 0.9})`;
+      ctx.beginPath(); ctx.arc(sx, sy, TILE * 0.44, -Math.PI/2, -Math.PI/2 + TAU * Math.min(1, g.sus)); ctx.stroke();
+    }
+  }
+
+  /* player */
+  {
+    const [sx, sy] = W2S(p.x, p.y);
+    if (!OPT.rmotion) { ctx.shadowColor = "rgba(69,224,212,.8)"; ctx.shadowBlur = 12; }
+    ctx.fillStyle = p.sneak ? "#2ea89e" : "#45e0d4";
+    ctx.beginPath(); ctx.arc(sx, sy, TILE * 0.3, 0, TAU); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#062a28"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + Math.cos(p.dir) * TILE * 0.42, sy + Math.sin(p.dir) * TILE * 0.42); ctx.stroke();
+    ctx.lineWidth = 1;
+    // channel progress
+    if (p.channel) {
+      const pr = 1 - p.channel.t / (p.channel.kind === "pick" ? 2.6 : 1.6);
+      ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(sx, sy, TILE * 0.5, -Math.PI/2, -Math.PI/2 + TAU * pr); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+    // noise aura while running
+    if (p.noise > 0.3) {
+      ctx.strokeStyle = `rgba(140,190,255,${p.noise * 0.25})`;
+      ctx.beginPath(); ctx.arc(sx, sy, TILE * (0.5 + p.noise * 0.5), 0, TAU); ctx.stroke();
+    }
+  }
+
+  /* emp blast + particles */
+  for (const pt of S.parts) {
+    if (pt.kind === "emp") {
+      const [sx, sy] = W2S(pt.x, pt.y);
+      ctx.strokeStyle = `rgba(120,200,255,${1 - pt.t / pt.life})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(sx, sy, pt.t / pt.life * 4.5 * TILE, 0, TAU); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+  }
+
+  /* lighting overlay */
+  lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  lctx.globalCompositeOperation = "source-over";
+  lctx.clearRect(0, 0, viewW, viewH);
+  lctx.fillStyle = "rgba(4,6,11,.5)"; lctx.fillRect(0, 0, viewW, viewH);
+  lctx.globalCompositeOperation = "destination-out";
+  const cut = (wx, wy, r, a) => {
+    const [sx, sy] = W2S(wx, wy);
+    const g2 = lctx.createRadialGradient(sx, sy, r * 0.15, sx, sy, r);
+    g2.addColorStop(0, `rgba(0,0,0,${a})`); g2.addColorStop(1, "rgba(0,0,0,0)");
+    lctx.fillStyle = g2; lctx.beginPath(); lctx.arc(sx, sy, r, 0, TAU); lctx.fill();
+  };
+  cut(p.x * TILE, p.y * TILE, TILE * (p.sneak ? 6.5 : 8.5), 0.9);
+  for (const t of m.terminals) cut((t.x + 0.5) * TILE, (t.y + 0.5) * TILE, TILE * 2, 0.55);
+  if (!m.objective.got) cut((m.objective.x + 0.5) * TILE, (m.objective.y + 0.5) * TILE, TILE * 2.4, 0.5);
+  cut((m.extract.x + 0.5) * TILE, (m.extract.y + 0.5) * TILE, TILE * 2.2, 0.5);
+  for (const sm of S.smokes) cut(sm.x * TILE, sm.y * TILE, sm.r * TILE * 0.7, 0.3);
+  ctx.drawImage(lightCv, 0, 0, viewW, viewH);
+
+  /* vignette */
+  const vg = ctx.createRadialGradient(viewW/2, viewH/2, viewH*0.42, viewW/2, viewH/2, viewH*0.85);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.42)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, viewW, viewH);
+
+  renderDiag();
+  renderMinimap();
+  updateHUD();
+}
+/* ---------------- diagnostics ---------------- */
+const frameTimes = [];
+function renderDiag() {
+  const m = S.m, map = m.map;
+  if (DIAG.coll) {
+    const x0 = Math.max(0, Math.floor(camX)), y0 = Math.max(0, Math.floor(camY));
+    const x1 = Math.min(map.W - 1, Math.ceil(camX + viewW / TILE)), y1 = Math.min(map.H - 1, Math.ceil(camY + viewH / TILE));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const t = map.at(x, y);
+      const [sx, sy] = W2S(x, y);
+      if (t & T_WALL) { ctx.strokeStyle = "rgba(255,80,80,.5)"; ctx.strokeRect(sx + 1, sy + 1, TILE - 2, TILE - 2); }
+      if (map.crateSet.has(y * map.W + x)) { ctx.strokeStyle = "rgba(255,160,60,.6)"; ctx.strokeRect(sx + 3, sy + 3, TILE - 6, TILE - 6); }
+    }
+  }
+  if (DIAG.nav) {
+    const x0 = Math.max(0, Math.floor(camX)), y0 = Math.max(0, Math.floor(camY));
+    const x1 = Math.min(map.W - 1, Math.ceil(camX + viewW / TILE)), y1 = Math.min(map.H - 1, Math.ceil(camY + viewH / TILE));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const t = map.at(x, y);
+      if (t & T_WALL || map.crateSet.has(y * map.W + x)) continue;
+      const [sx, sy] = W2S(x, y);
+      ctx.fillStyle = "rgba(69,224,212,.25)";
+      ctx.fillRect(sx + TILE/2 - 1.5, sy + TILE/2 - 1.5, 3, 3);
+    }
+    for (const g of m.guards) {
+      for (const w of g.wps) {
+        const [sx, sy] = W2S(w.x + 0.5, w.y + 0.5);
+        ctx.strokeStyle = "rgba(126,224,129,.7)"; ctx.strokeRect(sx - 4, sy - 4, 8, 8);
+      }
+      if (g.path) {
+        ctx.strokeStyle = "rgba(126,224,129,.55)"; ctx.beginPath();
+        for (let i = g.pi; i < g.path.length; i++) {
+          const [sx, sy] = W2S(g.path[i].x + 0.5, g.path[i].y + 0.5);
+          i === g.pi ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  if (DIAG.rays) {
+    for (const g of m.guards) {
+      const pts = conePoly(g.x, g.y, g.dir, g.fov, g.viewDist);
+      ctx.strokeStyle = "rgba(255,255,255,.28)";
+      for (let i = 1; i < pts.length; i += 2) {
+        const [ax, ay] = W2S(g.x, g.y), [bx, by] = W2S(pts[i][0], pts[i][1]);
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      }
+    }
+    // player LOS test line to nearest guard
+    let ng = null, nd = 1e9;
+    for (const g of m.guards) { const d = dist2(g.x, g.y, S.player.x, S.player.y); if (d < nd) { nd = d; ng = g; } }
+    if (ng) {
+      const [ax, ay] = W2S(S.player.x, S.player.y), [bx, by] = W2S(ng.x, ng.y);
+      const ok = losClear(map, S.player, ng, S.smokes);
+      ctx.strokeStyle = ok ? "rgba(255,80,80,.9)" : "rgba(80,255,120,.9)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.lineWidth = 1;
+    }
+  }
+  if (DIAG.sound) {
+    for (const s of S.sounds) {
+      const age = (S.tick - s.born) / 60;
+      const [sx, sy] = W2S(s.x, s.y);
+      ctx.strokeStyle = "rgba(140,190,255,.8)";
+      ctx.beginPath(); ctx.arc(sx, sy, s.i * TILE * 0.15 + 4, 0, TAU); ctx.stroke();
+      ctx.fillStyle = "#8cbeff"; ctx.font = "10px monospace"; ctx.textAlign = "center";
+      ctx.fillText(`${s.kind} i=${s.i.toFixed(1)}`, sx, sy - 8);
+    }
+  }
+  if (DIAG.ai) {
+    for (const g of m.guards) {
+      const [sx, sy] = W2S(g.x, g.y);
+      ctx.fillStyle = "#fff"; ctx.font = "9px monospace"; ctx.textAlign = "center";
+      ctx.fillText(`#${g.id} ${g.state} s=${g.sus.toFixed(2)}`, sx, sy - TILE * 0.8);
+      if (g.lastKnown) {
+        const [lx, ly] = W2S(g.lastKnown.x, g.lastKnown.y);
+        ctx.strokeStyle = "rgba(255,93,108,.8)";
+        ctx.beginPath(); ctx.moveTo(lx - 5, ly - 5); ctx.lineTo(lx + 5, ly + 5);
+        ctx.moveTo(lx + 5, ly - 5); ctx.lineTo(lx - 5, ly + 5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lx, ly); ctx.strokeStyle = "rgba(255,93,108,.35)"; ctx.stroke();
+      }
+      if (g.searchPts) for (const sp of g.searchPts) {
+        const [sx2, sy2] = W2S(sp.x + 0.5, sp.y + 0.5);
+        ctx.strokeStyle = "rgba(255,154,92,.7)"; ctx.strokeRect(sx2 - 4, sy2 - 4, 8, 8);
+      }
+    }
+  }
+  if (DIAG.perf) {
+    const g2 = document.getElementById("fpsgraph");
+    g2.style.display = "block";
+    const c2 = g2.getContext("2d");
+    c2.clearRect(0, 0, 120, 36);
+    c2.fillStyle = "rgba(6,10,16,.8)"; c2.fillRect(0, 0, 120, 36);
+    c2.strokeStyle = "#45e0d4"; c2.beginPath();
+    const n = Math.min(frameTimes.length, 120);
+    for (let i = 0; i < n; i++) {
+      const v = frameTimes[frameTimes.length - n + i];
+      const y = 34 - clamp(v / 33.3, 0, 1) * 32;
+      i ? c2.lineTo(i, y) : c2.moveTo(i, y);
+    }
+    c2.stroke();
+  } else document.getElementById("fpsgraph").style.display = "none";
+}
+
+/* ---------------- minimap ---------------- */
+function renderMinimap() {
+  const m = S.m, map = m.map;
+  const mw = Math.min(180, viewW * 0.28), mh = mw * map.H / map.W;
+  const ox = viewW - mw - 8, oy = 8;
+  const s = mw / map.W;
+  ctx.fillStyle = "rgba(5,8,14,.85)"; ctx.fillRect(ox - 2, oy - 2, mw + 4, mh + 4);
+  ctx.strokeStyle = "#1e2c44"; ctx.strokeRect(ox - 2, oy - 2, mw + 4, mh + 4);
+  for (let y = 0; y < map.H; y++) for (let x = 0; x < map.W; x++) {
+    const t = map.at(x, y);
+    if (t & T_WALL) continue;
+    ctx.fillStyle = (t & T_RESTRICTED) ? "rgba(255,93,108,.25)" : "rgba(90,120,160,.35)";
+    ctx.fillRect(ox + x * s, oy + y * s, Math.max(1, s), Math.max(1, s));
+  }
+  for (const d of m.doors) { ctx.fillStyle = d.locked ? "#ff5d6c" : "#8ea4c4"; ctx.fillRect(ox + d.x * s, oy + d.y * s, Math.max(2, s), Math.max(2, s)); }
+  // objective + extract
+  ctx.fillStyle = "#ffd166";
+  if (!m.objective.got) ctx.fillRect(ox + m.objective.x * s - 1, oy + m.objective.y * s - 1, 4, 4);
+  ctx.fillStyle = "#45e0d4"; ctx.fillRect(ox + m.extract.x * s - 1, oy + m.extract.y * s - 1, 4, 4);
+  for (const l of m.loot) if (!l.got) { ctx.fillStyle = "#ffd166"; ctx.fillRect(ox + l.x * s, oy + l.y * s, 2.5, 2.5); }
+  for (const c of m.cams) { ctx.fillStyle = (c.off > 0 || c.emp > 0) ? "#33475e" : "#ffb35c"; ctx.fillRect(ox + c.x * s, oy + c.y * s, 2.5, 2.5); }
+  for (const g of m.guards) { ctx.fillStyle = GS_COLOR[g.state]; ctx.fillRect(ox + g.x * s - 1, oy + g.y * s - 1, 3, 3); }
+  const p = S.player;
+  ctx.fillStyle = "#fff"; ctx.fillRect(ox + p.x * s - 1.5, oy + p.y * s - 1.5, 4, 4);
+  // viewport rect
+  ctx.strokeStyle = "rgba(255,255,255,.2)";
+  ctx.strokeRect(ox + camX * s, oy + camY * s, viewW / TILE * s, viewH / TILE * s);
+}
+
+/* ---------------- HUD ---------------- */
+const el = id => document.getElementById(id);
+const ALERT_LBL = ["CALM", "TRACKED", "HUNTED", "LOCKDOWN"];
+let hudT = 0;
+function updateHUD() {
+  hudT--;
+  if (hudT > 0) return;
+  hudT = 8;
+  const m = S.m, p = S.player;
+  // status bar
+  const counts = {};
+  for (const g of m.guards) counts[g.state] = (counts[g.state] || 0) + 1;
+  const gstr = GSTATES.map(s => counts[s] ? `${s[0]}${counts[s]}` : null).filter(Boolean).join(" ") || "—";
+  el("statusbar").innerHTML =
+    `<b>${PERF.fps}</b>fps  seed <b>${m.seedStr}</b>  ${m.diff.label}\n` +
+    `alert <b>${ALERT_LBL[S.alert]}</b>  ${p.hasObj ? "INTEL ✓" : "intel …"}  ${fmtT(S.time)}\n` +
+    `guards <b>${gstr}</b>  noise <b>${p.noise.toFixed(1)}</b>  ${p.sneak ? "SNEAK" : p.run ? "RUN" : "walk"}` +
+    (APP.state === "pause" ? "  <b>PAUSED</b>" : "");
+  // objective
+  el("objtext").textContent = p.hasObj ? "Return to EXTRACTION" : "Steal the INTEL from the vault";
+  el("objsub").textContent = p.hasObj ? `loot ${p.loot}/${m.loot.length} · don't get caught` :
+    `${m.doors.filter(d => d.locked).length} locked · ${m.cams.filter(c => c.off <= 0 && c.emp <= 0).length} cams live · loot ${p.loot}/${m.loot.length}`;
+  // alert pips
+  const pips = el("alertpips");
+  if (pips.childElementCount !== 3) { pips.innerHTML = "<div class=pip></div><div class=pip></div><div class=pip></div>"; }
+  [...pips.children].forEach((pip, i) => { pip.className = "pip" + (i < S.alert ? " on" : ""); });
+  el("alertlabel").textContent = ALERT_LBL[S.alert];
+  el("alertlabel").className = S.alert > 0 ? "hot" : "";
+  // eye indicator
+  const maxSus = Math.max(0, ...m.guards.map(g => g.sus), ...m.cams.map(c => c.off > 0 || c.emp > 0 ? 0 : c.see));
+  el("eye").style.display = maxSus > 0.08 ? "block" : "none";
+  el("eyepupil").setAttribute("r", 2 + Math.min(1, maxSus) * 5);
+  // gadget bar
+  const gb = el("gadgetbar");
+  if (gb.childElementCount !== p.gadgets.length) {
+    gb.innerHTML = "";
+    p.gadgets.forEach((g, i) => {
+      const d = GADGETS[i];
+      const div = document.createElement("div");
+      div.className = "gslot"; div.title = d.name + " — " + d.desc;
+      div.innerHTML = `<div class=ico>${d.ico}</div><div class=nm>${d.name}</div><div class=ch></div><div class=cd></div>`;
+      div.addEventListener("pointerdown", e => { e.stopPropagation(); INPUT.sel = i; });
+      gb.appendChild(div);
+    });
+  }
+  p.gadgets.forEach((g, i) => {
+    const div = gb.children[i];
+    div.classList.toggle("sel", i === INPUT.sel);
+    div.classList.toggle("empty", g.charges <= 0);
+    div.querySelector(".ch").textContent = "×" + g.charges;
+    div.querySelector(".cd").style.width = (g.cd / GADGETS[i].cd * 100) + "%";
+  });
+  // prompt
+  const it = APP.state === "play" && !S.outcome ? nearestInteract() : null;
+  const pr = el("prompt");
+  if (it) { pr.style.display = "block"; pr.innerHTML = `<span class=key>${keyLabel("act")}</span>${interactLabel(it)}`; }
+  else pr.style.display = "none";
+}
+function keyLabel(a) {
+  const c = codeFor(a);
+  return c.replace("Key", "").replace("Digit", "").replace("ShiftLeft", "SHIFT").replace("ShiftRight", "SHIFT");
+}
+function toast(msg) {
+  const t = el("toast");
+  t.textContent = msg; t.style.display = "block"; t.style.opacity = 1;
+  clearTimeout(t._to); t._to = setTimeout(() => { t.style.opacity = 0; setTimeout(() => t.style.display = "none", 350); }, 2400);
+}
+/* ---------------- app / game flow ---------------- */
+const APP = { state: "brief" }; // brief | play | pause | end
+const PERF = { fps: 0, acc: 0, frames: 0, last: performance.now() };
+
+function showScreen(id) {
+  for (const s of document.querySelectorAll(".screen")) s.classList.remove("show");
+  if (id) el(id).classList.add("show");
+}
+function startMission() {
+  AUDIO.unlock(); SFX.ui();
+  newSim(UI.seed, UI.preset, UI.diff);
+  INPUT.sel = 0; keysDown.clear(); pressed.clear();
+  if (window.GAME) { GAME._pb = null; GAME._ap = null; }
+  APP.state = "play"; showScreen(null);
+  toast(`Mission ${UI.seed} — steal the INTEL`);
+  cv.focus();
+}
+function pauseGame(auto) {
+  if (APP.state !== "play") return;
+  APP.state = "pause"; showScreen("scr-pause");
+  el("pause-seed").textContent = `SEED ${S.m.seedStr} · ${S.m.diff.label} · ${S.m.presetKey.toUpperCase()}`;
+  if (!auto) SFX.ui();
+}
+function resumeGame() {
+  if (!S) { APP.state = "brief"; showScreen("scr-brief"); return; }
+  APP.state = "play"; showScreen(null); cv.focus(); SFX.ui();
+}
+function endGame() {
+  APP.state = "end";
+  const won = S.outcome === "extracted";
+  if (won) SFX.win(); else SFX.caught();
+  shake = won ? 0 : 1;
+  // scoring
+  const par = { compact: 75, standard: 150, vault: 220 }[S.m.presetKey] || 150;
+  let score = 1000;
+  score -= S.detections * 120; score -= S.alarmsRaised * 80;
+  score += S.player.loot * 60;
+  score -= Math.max(0, S.time - par) * 2;
+  const rank = !won ? "D" : score >= 1050 ? "S" : score >= 850 ? "A" : score >= 650 ? "B" : "C";
+  el("end-title").textContent = won ? "CLEAN GETAWAY" : "BUSTED";
+  el("end-sub").textContent = won ? "intel extracted · " + S.m.seedStr : "a guard got you · " + S.m.seedStr;
+  const rk = el("end-rank"); rk.textContent = rank; rk.className = "rank " + rank;
+  el("endstats").innerHTML = [
+    ["Outcome", won ? "EXTRACTED" : "CAUGHT"],
+    ["Time", fmtT(S.time)],
+    ["Detections", S.detections],
+    ["Alarms raised", S.alarmsRaised],
+    ["Loot", `${S.player.loot}/${S.m.loot.length}`],
+    ["Score", Math.max(0, Math.round(score))],
+  ].map(([k, v]) => `<div class=k>${k}</div><div class=v>${v}</div>`).join("");
+  el("endrecord").innerHTML = [
+    ["Seed", S.m.seedStr], ["Preset", S.m.presetKey], ["Difficulty", S.m.diffKey],
+    ["Ticks", S.tick], ["Outcome hash", outcomeHash(S)],
+  ].map(([k, v]) => `<div class=k>${k}</div><div class=v>${v}</div>`).join("");
+  saveRun({ seed: S.m.seedStr, preset: S.m.presetKey, diff: S.m.diffKey, result: S.outcome, time: +S.time.toFixed(1), rank, score: Math.max(0, Math.round(score)), when: Date.now() });
+  showScreen("scr-end");
+}
+
+/* ---------------- persistence ---------------- */
+function loadRuns() { try { return JSON.parse(localStorage.getItem("sh_runs") || "[]"); } catch (e) { return []; } }
+function saveRun(r) { const rs = loadRuns(); rs.unshift(r); localStorage.setItem("sh_runs", JSON.stringify(rs.slice(0, 20))); }
+function renderHist() {
+  const tb = document.querySelector("#hist tbody");
+  tb.innerHTML = loadRuns().map(r =>
+    `<tr><td>${r.seed}</td><td>${r.diff}</td><td>${r.result}</td><td>${fmtT(r.time)}</td><td>${r.rank}</td></tr>`).join("") ||
+    `<tr><td colspan=5>no runs yet</td></tr>`;
+}
+
+/* ---------------- export / import / verify ---------------- */
+function runRecord() {
+  return {
+    v: 1, kind: "nightshift-run",
+    seed: S.m.seedStr, preset: S.m.presetKey, diff: S.m.diffKey,
+    outcome: S.outcome, tick: S.tick, time: +S.time.toFixed(2),
+    detections: S.detections, alarms: S.alarmsRaised, loot: S.player.loot,
+    hash: outcomeHash(S), inputLog: S.inputLog,
+    events: S.events.slice(0, 200),
+  };
+}
+function exportRun() {
+  const blob = new Blob([JSON.stringify(runRecord(), null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `nightshift-${S.m.seedStr}-${S.tick}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Run exported");
+}
+function importRun() {
+  const ta = document.createElement("textarea");
+  ta.placeholder = "paste run JSON here";
+  ta.style.cssText = "position:fixed;left:50%;top:20%;transform:translateX(-50%);width:min(520px,90vw);height:140px;z-index:99;background:#0a101c;border:1px solid #1e2c44;color:#c9d6e8;font-family:monospace;padding:8px;border-radius:4px";
+  const btn = document.createElement("button"); btn.className = "btn primary"; btn.textContent = "LOAD";
+  btn.style.cssText = "position:fixed;left:50%;top:calc(20% + 150px);transform:translateX(-50%);z-index:99";
+  document.body.append(ta, btn);
+  btn.onclick = () => {
+    try {
+      const r = JSON.parse(ta.value);
+      if (r.kind !== "nightshift-run") throw new Error("not a run file");
+      UI.seed = String(r.seed); UI.preset = r.preset in PRESETS ? r.preset : "standard"; UI.diff = r.diff in DIFFS ? r.diff : "normal";
+      el("in-seed").value = UI.seed; syncSegs();
+      ta.remove(); btn.remove();
+      const chk = replaySim(String(r.seed), r.preset, r.diff, r.inputLog || []);
+      toast(chk.hash === r.hash ? `Replay VERIFIED (${chk.outcome})` : `Replay diverged: ${chk.outcome}/${chk.hash} vs ${r.outcome}/${r.hash}`);
+    } catch (e) { toast("Import failed: " + e.message); }
+  };
+  ta.focus();
+}
+function verifyReplay() {
+  const chk = replaySim(S.m.seedStr, S.m.presetKey, S.m.diffKey, S.inputLog);
+  const ok = chk.hash === outcomeHash(S);
+  el("verify-note").textContent = ok
+    ? `✓ VERIFIED — deterministic replay reached "${chk.outcome}" at tick ${chk.tick}, hash ${chk.hash}`
+    : `✗ DIVERGED — replay reached "${chk.outcome}" (${chk.hash}) vs recorded "${S.outcome}" (${outcomeHash(S)})`;
+  el("verify-note").style.color = ok ? "#7ee081" : "#ff5d6c";
+}
+
+/* ---------------- menu wiring ---------------- */
+function syncSegs() {
+  document.querySelectorAll("#seg-preset button").forEach(b => b.classList.toggle("on", b.dataset.p === UI.preset));
+  document.querySelectorAll("#seg-diff button").forEach(b => b.classList.toggle("on", b.dataset.d === UI.diff));
+  updateBrief();
+}
+function updateBrief() {
+  const P = PRESETS[UI.preset], D = DIFFS[UI.diff];
+  el("brieftext").innerHTML =
+    `Infiltrate the site, take the <b>INTEL</b> from the vault, return to <b>extraction</b>.<br>` +
+    `Map ${P.w}×${P.h} · ~${Math.max(2, P.guards + D.guardN)} guards · ${P.cams} cameras · ${P.terminals} terminals.<br>` +
+    `Locked vault doors need a <b>pick</b> or an <b>unlock terminal</b>. Cameras can be looped at a <b>cam terminal</b> or EMP'd.<br>` +
+    `Difficulty tunes view distance, hearing, suspicion speed${D.guardN ? " & guard count" : ""}.`;
+  el("loadout").innerHTML = GADGETS.map((g, i) =>
+    `<div class=k>${i + 1} ${g.ico} ${g.name}</div><div class=v>×${Math.max(1, g.charges + D.chargeBonus)} — ${g.desc}</div>`).join("");
+}
+const DIAG_DEFS = [
+  ["nav", "F1 · nav grid + guard paths/waypoints"],
+  ["rays", "F2 · vision ray hits + LOS probe"],
+  ["sound", "F3 · sound events"],
+  ["ai", "F4 · guard state + last-known + search pts"],
+  ["coll", "F5 · collision geometry"],
+  ["perf", "F6 · frame timing graph"],
+];
+function buildDiagList() {
+  el("diaglist").innerHTML = "";
+  for (const [k, label] of DIAG_DEFS) {
+    const d = document.createElement("div");
+    d.className = "diagrow";
+    d.innerHTML = `<input type=checkbox id="dg-${k}" ${DIAG[k] ? "checked" : ""}><label for="dg-${k}">${label}</label>`;
+    d.querySelector("input").addEventListener("change", e => DIAG[k] = e.target.checked);
+    el("diaglist").appendChild(d);
+  }
+}
+function syncDiagUI() { for (const [k] of DIAG_DEFS) { const c = el("dg-" + k); if (c) c.checked = DIAG[k]; } }
+const BIND_LABELS = { up: "Move up", down: "Move down", left: "Move left", right: "Move right", run: "Run (loud)", sneak: "Sneak", act: "Interact", use: "Use gadget", pause: "Pause", gad1: "Gadget 1", gad2: "Gadget 2", gad3: "Gadget 3", gad4: "Gadget 4", mute: "Mute", diag: "Diag menu" };
+function buildBindList() {
+  el("bindlist").innerHTML = "";
+  for (const a of Object.keys(DEF_BINDS)) {
+    const d = document.createElement("div");
+    d.className = "bindrow";
+    d.innerHTML = `<span class=act>${BIND_LABELS[a] || a}</span>`;
+    const b = document.createElement("button");
+    b.className = "btn keybtn"; b.textContent = captureBind === a ? "press key…" : keyLabel(a) || BINDS[a];
+    b.onclick = () => { captureBind = a; buildBindList(); };
+    d.appendChild(b);
+    el("bindlist").appendChild(d);
+  }
+}
+
+/* buttons */
+el("btn-start").onclick = startMission;
+el("btn-randseed").onclick = () => { el("in-seed").value = String(Math.floor(Math.random() * 99999)); UI.seed = el("in-seed").value; updateBrief(); SFX.ui(); };
+el("in-seed").oninput = e => { UI.seed = e.target.value || "0"; updateBrief(); };
+document.querySelectorAll("#seg-preset button").forEach(b => b.onclick = () => { UI.preset = b.dataset.p; syncSegs(); SFX.ui(); });
+document.querySelectorAll("#seg-diff button").forEach(b => b.onclick = () => { UI.diff = b.dataset.d; syncSegs(); SFX.ui(); });
+el("btn-controls").onclick = () => { APP.state = "pause"; showScreen("scr-pause"); el("pause-seed").textContent = "CONTROLS & SETTINGS"; SFX.ui(); };
+el("btn-resume").onclick = resumeGame;
+el("btn-restart").onclick = () => { startMission(); };
+el("btn-quit").onclick = () => { APP.state = "brief"; showScreen("scr-brief"); renderHist(); };
+el("btn-newmission").onclick = () => { el("in-seed").value = String(Math.floor(Math.random() * 99999)); UI.seed = el("in-seed").value; startMission(); };
+el("btn-export").onclick = exportRun; el("btn-export2").onclick = exportRun; el("btn-export3").onclick = exportRun;
+el("btn-import").onclick = importRun; el("btn-import2").onclick = importRun;
+el("btn-clearhist").onclick = () => { localStorage.removeItem("sh_runs"); renderHist(); };
+el("btn-verify").onclick = verifyReplay;
+el("btn-menu").onclick = () => { APP.state = "brief"; showScreen("scr-brief"); renderHist(); };
+el("btn-retry").onclick = () => startMission();
+el("btn-next").onclick = () => { UI.seed = String(Math.floor(Math.random() * 99999)); el("in-seed").value = UI.seed; startMission(); };
+el("btn-resetbind").onclick = () => { BINDS = { ...DEF_BINDS }; localStorage.removeItem("sh_binds"); buildBindList(); };
+el("vol-master").oninput = e => { AUDIO.vol.master = e.target.value / 100; AUDIO.setVol(); el("vol-master-v").textContent = e.target.value; };
+el("vol-fx").oninput = e => { AUDIO.vol.fx = e.target.value / 100; AUDIO.setVol(); el("vol-fx-v").textContent = e.target.value; };
+el("opt-rmotion").onchange = e => { OPT.rmotion = e.target.checked; document.body.classList.toggle("reduce-motion", OPT.rmotion); };
+el("opt-rflash").onchange = e => { OPT.rflash = e.target.checked; document.body.classList.toggle("reduce-flash", OPT.rflash); };
+try {
+  const o = JSON.parse(localStorage.getItem("sh_opts") || "{}");
+  if (o.vm != null) { AUDIO.vol.master = o.vm; el("vol-master").value = o.vm * 100; }
+  if (o.vf != null) { AUDIO.vol.fx = o.vf; el("vol-fx").value = o.vf * 100; }
+  if (o.rm) { OPT.rmotion = true; el("opt-rmotion").checked = true; }
+  if (o.rf) { OPT.rflash = true; el("opt-rflash").checked = true; document.body.classList.add("reduce-flash"); }
+} catch (e) {}
+setInterval(() => localStorage.setItem("sh_opts", JSON.stringify({ vm: AUDIO.vol.master, vf: AUDIO.vol.fx, rm: OPT.rmotion, rf: OPT.rflash })), 4000);
+
+/* touch buttons */
+bindTouchBtn("tb-act", () => touchFlags.act = true);
+bindTouchBtn("tb-use", () => touchFlags.use = true);
+bindTouchBtn("tb-gad", () => { INPUT.sel = (INPUT.sel + 1) % 4; SFX.ui(); });
+bindTouchBtn("tb-sneak", () => touchFlags.sneak = !touchFlags.sneak);
+bindTouchBtn("tb-pause", () => { if (APP.state === "play") pauseGame(); else if (APP.state === "pause") resumeGame(); });
+
+/* pause key handled in main loop edge check */
+let pauseHeld = false;
+
+/* ---------------- main loop ---------------- */
+let acc = 0, lastT = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const ft = now - lastT; lastT = now;
+  frameTimes.push(ft); if (frameTimes.length > 240) frameTimes.shift();
+  PERF.frames++; if (now - PERF.last > 500) { PERF.fps = Math.round(PERF.frames * 1000 / (now - PERF.last)); PERF.frames = 0; PERF.last = now; }
+
+  // pause edge
+  const pd = pressed.has(codeFor("pause")) || pressed.has("KeyP");
+  if (pd) {
+    pressed.delete(codeFor("pause")); pressed.delete("KeyP");
+    if (APP.state === "play") pauseGame();
+    else if (APP.state === "pause") resumeGame();
+  }
+  if (pressed.has(codeFor("mute"))) { pressed.delete(codeFor("mute")); AUDIO.vol.master = AUDIO.vol.master > 0 ? 0 : 0.7; AUDIO.setVol(); toast(AUDIO.vol.master ? "Sound on" : "Muted"); }
+
+  if (APP.state === "play" && S && !S.outcome) {
+    acc = Math.min(acc + ft, 250);
+    while (acc >= 16.666) { step(buildInput()); acc -= 16.666; }
+    shake = Math.max(0, shake - ft / 900);
+    if (S.outcome && !S._endQueued) { S._endQueued = true; setTimeout(endGame, 700); shake = 1; }
+  } else if (APP.state === "play" && S && S.outcome) {
+    acc = 0;
+  }
+  if (S) render();
+  else { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = "#04060a"; ctx.fillRect(0, 0, viewW, viewH); }
+}
+
+/* ---------------- boot ---------------- */
+buildDiagList(); buildBindList(); renderHist(); syncSegs();
+AUDIO.unlock = AUDIO.unlock.bind(AUDIO);
+document.body.addEventListener("pointerdown", () => AUDIO.unlock(), { once: true });
+document.body.addEventListener("keydown", () => AUDIO.unlock(), { once: true });
+
+/* debug/testing handle */
+window.GAME = {
+  get S() { return S; }, get APP() { return APP; }, get DIAG() { return DIAG; },
+  newSim, step, buildInput, replaySim, runRecord, outcomeHash, findPath, losClear,
+  setInput(o) { Object.assign(INPUT, o); },
+  press(code) { pressed.add(code); keysDown.add(code); },
+  release(code) { keysDown.delete(code); },
+  start(seed, preset, diff) { UI.seed = String(seed); UI.preset = preset || "standard"; UI.diff = diff || "normal"; startMission(); },
+  auto(tx, ty, opts) { GAME._ap = { tx, ty, run: !!(opts && opts.run), sneak: !!(opts && opts.sneak), path: null }; },
+  stopAuto() { GAME._ap = null; },
+  playback(log) { if (!Array.isArray(log) || !log.length) { toast("No input log"); return; } GAME._ap = null; GAME._pb = { log, i: 0 }; },
+  stopPlayback() { GAME._pb = null; },
+};
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

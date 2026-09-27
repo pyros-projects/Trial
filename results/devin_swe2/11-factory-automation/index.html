@@ -1,0 +1,2593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Foundry — Factory Automation</title>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#131a23; --panel:#161e29; --panel2:#1c2634;
+  --line:#2a3646; --txt:#d7e1ec; --dim:#8b9bb0; --acc:#f0a832; --acc2:#3fb6ff;
+  --good:#4ade80; --bad:#f87171; --warn:#fbbf24;
+  --mono:ui-monospace,'Cascadia Code','JetBrains Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+  font-family:var(--mono);font-size:12px;user-select:none}
+canvas#cv{position:absolute;inset:0;display:block;touch-action:none;cursor:crosshair}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+button,select,input{font-family:var(--mono);font-size:12px;color:var(--txt);
+  background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+  padding:3px 7px;cursor:pointer}
+button:hover,select:hover{border-color:var(--acc2);background:#223040}
+button.on{border-color:var(--acc);color:var(--acc);background:#2a2416}
+button:disabled{opacity:.45;cursor:default}
+button.danger:hover{border-color:var(--bad);color:var(--bad)}
+input[type=range]{padding:0}
+label{color:var(--dim)}
+.hidden{display:none!important}
+
+/* top stat bar */
+#stats{position:absolute;top:0;left:0;right:0;height:26px;display:flex;align-items:center;
+  gap:10px;padding:0 8px;background:rgba(13,17,23,.92);border-bottom:1px solid var(--line);
+  font-size:11px;z-index:20;white-space:nowrap;overflow-x:auto;scrollbar-width:none}
+#stats::-webkit-scrollbar{display:none}
+#stats .st{display:flex;gap:4px;align-items:baseline}
+#stats .k{color:var(--dim)} #stats .v{color:var(--txt);font-weight:600}
+#stats .v.good{color:var(--good)} #stats .v.bad{color:var(--bad)} #stats .v.warn{color:var(--warn)}
+#stats .sep{color:var(--line)}
+
+/* left toolbar */
+#tools{position:absolute;top:34px;left:8px;z-index:20;display:flex;flex-direction:column;gap:3px;
+  max-height:calc(100% - 120px);overflow-y:auto;padding:5px;background:rgba(22,30,41,.95);
+  border:1px solid var(--line);border-radius:6px;scrollbar-width:thin}
+#tools button{width:118px;text-align:left;display:flex;gap:6px;align-items:center;padding:5px 7px}
+#tools button .ic{width:16px;text-align:center;flex:none}
+#tools button .cost{margin-left:auto;color:var(--dim);font-size:10px}
+#tools .tsep{height:1px;background:var(--line);margin:3px 0}
+#tools .tlabel{color:var(--dim);font-size:10px;padding:2px 4px 0}
+
+/* right panels */
+#side{position:absolute;top:34px;right:8px;width:280px;max-height:calc(100% - 46px);
+  display:flex;flex-direction:column;gap:6px;z-index:20;pointer-events:none}
+#side>*{pointer-events:auto}
+.sidecard{background:rgba(22,30,41,.95);border:1px solid var(--line);border-radius:6px;
+  padding:8px;overflow-y:auto;scrollbar-width:thin}
+.sidecard h3{font-size:11px;color:var(--acc);letter-spacing:.5px;margin-bottom:6px;
+  text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.sidecard h3 .x{margin-left:auto;cursor:pointer;color:var(--dim);font-size:14px;line-height:1}
+.sidecard h3 .x:hover{color:var(--bad)}
+.kv{display:flex;justify-content:space-between;gap:8px;padding:1.5px 0}
+.kv .k{color:var(--dim)} .kv .v{text-align:right}
+.rowbtns{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.spark{display:block;width:100%;height:30px;background:#0b0f14;border-radius:3px;margin-top:3px}
+.rate-table{width:100%;border-collapse:collapse;font-size:11px}
+.rate-table td,.rate-table th{padding:1px 4px;text-align:right;border-bottom:1px solid #1c2634}
+.rate-table th{color:var(--dim);font-weight:400;text-align:right}
+.rate-table td:first-child,.rate-table th:first-child{text-align:left}
+.chip{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.stallist{font-size:11px;color:var(--warn)}
+.stallist div{padding:1px 0}
+#insp .recbtn{margin:1px 2px 1px 0}
+#insp .recbtn.on{border-color:var(--good);color:var(--good)}
+
+/* bottom bar: sim controls */
+#simbar{position:absolute;left:50%;transform:translateX(-50%);bottom:8px;z-index:20;
+  display:flex;gap:4px;align-items:center;padding:5px 7px;background:rgba(22,30,41,.95);
+  border:1px solid var(--line);border-radius:6px;flex-wrap:wrap;justify-content:center;
+  max-width:calc(100% - 16px)}
+#simbar button{min-width:30px}
+#simbar select{padding:2px 4px}
+#simbar .lbl{color:var(--dim);font-size:10px}
+
+/* overlays / menus */
+#topright{position:absolute;top:34px;right:8px;z-index:19;display:flex;gap:4px}
+#topright button{font-size:11px}
+.menu{position:absolute;z-index:40;background:var(--panel);border:1px solid var(--line);
+  border-radius:6px;padding:10px;min-width:250px;max-width:340px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.menu h3{font-size:12px;color:var(--acc);margin-bottom:8px;text-transform:uppercase}
+.menu .mrow{display:flex;align-items:center;gap:6px;padding:3px 0;flex-wrap:wrap}
+.menu .mrow label{flex:1}
+.menu .mrow input[type=text]{width:80px}
+.menu .presetbtn{display:block;width:100%;text-align:left;margin:2px 0;padding:6px 8px}
+.menu .presetbtn small{display:block;color:var(--dim);font-size:10px;margin-top:1px}
+.ovlrow{display:flex;gap:8px;flex-wrap:wrap}
+.ovlrow label{display:flex;gap:4px;align-items:center;flex:none}
+
+#toast{position:absolute;left:50%;top:40px;transform:translateX(-50%);z-index:50;
+  display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none}
+.toast{background:var(--panel2);border:1px solid var(--acc2);padding:5px 12px;border-radius:5px;
+  font-size:12px;animation:tfade 3s forwards}
+.toast.err{border-color:var(--bad);color:var(--bad)}
+.toast.good{border-color:var(--good);color:var(--good)}
+@keyframes tfade{0%{opacity:0;transform:translateY(-6px)}8%{opacity:1;transform:none}
+  80%{opacity:1}100%{opacity:0}}
+
+#tooltip{position:absolute;z-index:30;pointer-events:none;background:rgba(10,14,19,.95);
+  border:1px solid var(--line);border-radius:4px;padding:4px 7px;font-size:11px;
+  max-width:240px;display:none}
+#tooltip .tt{color:var(--acc);font-weight:600}
+#tooltip .dim{color:var(--dim)}
+
+#banner{position:absolute;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+  background:rgba(5,8,12,.78)}
+#banner .card{background:var(--panel);border:1px solid var(--acc);border-radius:8px;
+  padding:24px 30px;text-align:center;max-width:420px}
+#banner h2{color:var(--acc);margin-bottom:8px}
+#banner .score{font-size:22px;color:var(--good);margin:10px 0}
+#banner p{color:var(--dim);margin-bottom:8px;font-size:12px}
+
+#contract{position:absolute;top:34px;left:134px;z-index:19;background:rgba(22,30,41,.92);
+  border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:11px;max-width:300px}
+#contract .ct{color:var(--acc);font-weight:600}
+#contract .cbar{height:5px;background:#0b0f14;border-radius:3px;margin-top:4px;overflow:hidden}
+#contract .cbar>div{height:100%;background:var(--acc2);transition:width .3s}
+#contract .ctime{color:var(--dim)}
+
+#selbox{position:absolute;z-index:22;display:flex;gap:4px;padding:4px;
+  background:rgba(22,30,41,.95);border:1px solid var(--acc2);border-radius:5px}
+#selbox.hidden{display:none}
+#hint{position:absolute;bottom:8px;left:8px;z-index:15;color:var(--dim);font-size:10px;
+  background:rgba(13,17,23,.8);padding:3px 8px;border-radius:4px;max-width:46%}
+@media(max-width:700px){
+  #tools button{width:44px;padding:5px 4px;justify-content:center}
+  #tools button .lbl,#tools button .cost,#tools .tlabel{display:none}
+  #contract{left:58px;max-width:45vw}
+  #side{width:230px}
+  #hint{display:none}
+  .menu{max-width:calc(100vw - 20px)}
+}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="stats"></div>
+<div id="tools"></div>
+
+<div id="topright">
+  <button id="btn-overlay" title="Overlay layers (O)">▦ Overlays</button>
+  <button id="btn-analytics" title="Analytics panel (A)">📊</button>
+  <button id="btn-presets" title="Load preset / mode">🏭</button>
+  <button id="btn-settings" title="Simulation settings">⚙</button>
+  <button id="btn-save" title="Save / load / share">💾</button>
+  <button id="btn-sound" title="Toggle sound">🔊</button>
+</div>
+
+<div id="contract" class="hidden"></div>
+<div id="selbox" class="hidden"></div>
+
+<div id="side">
+  <div id="insp" class="sidecard hidden"></div>
+  <div id="anal" class="sidecard hidden"></div>
+</div>
+
+<div id="simbar">
+  <button id="b-pause" title="Pause/Resume (Space)">⏸</button>
+  <button id="b-step" title="Single step (.)">⏭</button>
+  <button id="b-undo" title="Undo (Ctrl+Z)">↶</button>
+  <button id="b-redo" title="Redo (Ctrl+Y)">↷</button>
+  <button id="b-reset" class="danger" title="Reset factory">⟲</button>
+  <span class="lbl">speed</span>
+  <select id="sel-speed"><option>0.5x</option><option selected>1x</option><option>2x</option><option>4x</option></select>
+  <span class="lbl">zoom</span>
+  <button id="b-zout">−</button><button id="b-zin">+</button>
+  <button id="b-zfit" title="Zoom to fit">⤢</button>
+</div>
+
+<div id="menus"></div>
+<div id="toast"></div>
+<div id="tooltip"></div>
+<div id="hint">LMB build/drag · R rotate · Alt-click copy · Del erase · Ctrl+Z/Y undo/redo · Space pause · mid-drag/space-drag pan · wheel zoom</div>
+
+<div id="banner"><div class="card">
+  <h2 id="ban-title"></h2><p id="ban-sub"></p>
+  <div class="score" id="ban-score"></div>
+  <div id="ban-detail"></div>
+  <div class="rowbtns" style="justify-content:center;margin-top:12px">
+    <button id="ban-again">Restart contract</button>
+    <button id="ban-sandbox">Continue in sandbox</button>
+    <button id="ban-close">Close</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+// ============================================================ constants & defs
+const TAU = Math.PI * 2;
+const DIRS = [[1,0],[0,1],[-1,0],[0,-1]]; // 0=E 1=S 2=W 3=N
+const OPP = d => (d+2)&3;
+const DIRNAME = ['E','S','W','N'];
+
+function mulberry32(seed){ let a = seed>>>0; return function(){
+  a|=0; a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a);
+  t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+function hash2(x,y,s){ let h=(x*374761393+y*668265263+s*974634211)|0;
+  h=Math.imul(h^(h>>>13),1274126177); return ((h^(h>>>16))>>>0)/4294967296; }
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+// ---------------- items
+const ITEMS = {
+  iron_ore:   {name:'Iron ore',    color:'#c98a4b', glyph:'◆'},
+  copper_ore: {name:'Copper ore',  color:'#e07040', glyph:'◆'},
+  coal:       {name:'Coal',        color:'#3a3f4a', glyph:'◆'},
+  iron_plate: {name:'Iron plate',  color:'#9fb4c8', glyph:'▬'},
+  copper_plate:{name:'Copper plate',color:'#e8a15c',glyph:'▬'},
+  gear:       {name:'Gear',        color:'#7d93a8', glyph:'⚙'},
+  wire:       {name:'Copper wire', color:'#f0c060', glyph:'∿'},
+  circuit:    {name:'Circuit',     color:'#4ade80', glyph:'▣'},
+};
+const FUEL = {coal: 1, wood: 1};
+
+// ---------------- recipes (machines: smelter/assembler)
+const RECIPES = {
+  iron_plate:  {machine:'smelter',   in:{iron_ore:1},            out:{iron_plate:1},  time:1.6, name:'Iron plate'},
+  copper_plate:{machine:'smelter',   in:{copper_ore:1},          out:{copper_plate:1},time:1.6, name:'Copper plate'},
+  gear:        {machine:'assembler', in:{iron_plate:2},          out:{gear:1},        time:2.4, name:'Gear'},
+  wire:        {machine:'assembler', in:{copper_plate:1},        out:{wire:2},        time:1.2, name:'Copper wire'},
+  circuit:     {machine:'assembler', in:{gear:1, wire:2},        out:{circuit:1},     time:3.2, name:'Circuit'},
+};
+const RECIPES_FOR = {smelter:['iron_plate','copper_plate'], assembler:['gear','wire','circuit']};
+
+// ---------------- entity kinds
+// dir meaning: belt/splitter/merger/miner/machine/generator = output/forward side.
+// splitter: input from back, outputs alternate left+right. merger: inputs sides+back, output front.
+const KINDS = {
+  belt:      {name:'Conveyor belt', icon:'➤', cost:2,  color:'#5c6b7d', power:0,  cat:'logi'},
+  splitter:  {name:'Splitter',      icon:'⑃', cost:8,  color:'#7286a0', power:0,  cat:'logi'},
+  merger:    {name:'Merger',        icon:'⑂', cost:8,  color:'#7286a0', power:0,  cat:'logi'},
+  inserter:  {name:'Inserter',      icon:'⊢', cost:10, color:'#c8b060', power:4,  cat:'logi'},
+  miner:     {name:'Miner',         icon:'⛏', cost:25, color:'#a07850', power:12, cat:'prod'},
+  smelter:   {name:'Smelter',       icon:'♨', cost:30, color:'#b06848', power:18, cat:'prod'},
+  assembler: {name:'Assembler',     icon:'⚒', cost:45, color:'#5898b8', power:20, cat:'prod'},
+  generator: {name:'Generator',     icon:'⚡', cost:40, color:'#e8c840', power:0,  cat:'power'},
+  pole:      {name:'Power pole',    icon:'⌁', cost:5,  color:'#e8c840', power:0,  cat:'power'},
+  storage:   {name:'Storage',       icon:'▤', cost:15, color:'#8898a8', power:0,  cat:'logi'},
+  delivery:  {name:'Delivery pad',  icon:'◎', cost:50, color:'#48c888', power:0,  cat:'logi'},
+};
+const BUILD_ORDER=['select','pan','-','belt','splitter','merger','inserter','-',
+  'miner','smelter','assembler','-','generator','pole','-','storage','delivery','-','erase'];
+const TOOLDEF = {select:{name:'Select / inspect',icon:'▣'},pan:{name:'Pan camera',icon:'✋'},
+  erase:{name:'Erase (drag = area)',icon:'✕'}};
+
+const ISBELT   = k => k==='belt'||k==='splitter'||k==='merger';
+const ISMACHINE= k => k==='smelter'||k==='assembler';
+const NEEDPOWER= k => k==='miner'||k==='smelter'||k==='assembler'||k==='inserter';
+
+const TERRAIN = {empty:0, iron_ore:1, copper_ore:2, coal:3, rock:4};
+const TERRAIN_NAME={0:'',1:'Iron deposit',2:'Copper deposit',3:'Coal deposit',4:'Rock'};
+const TERRAIN_ITEM={1:'iron_ore',2:'copper_ore',3:'coal'};
+const TERRAIN_COL={1:'#7a5636',2:'#8a4a2e',3:'#23262e',4:'#3d4652'};
+
+const POLE_RANGE = 4;   // chebyshev
+const GEN_OUT = 100;    // PU per burning generator
+const BELT_SPACING = 0.34;
+const BUF_CAP = 8;      // per-item-type units in machine buffers
+const STORAGE_CAP = 60;
+
+const MODS = {
+  speed:{name:'Speed mod',    desc:'+50% speed, +60% power', cost:30, max:2},
+  eff:  {name:'Efficiency mod',desc:'-35% power draw',       cost:25, max:2},
+  prod: {name:'Capacity mod', desc:'+100% buffer size',      cost:20, max:2},
+};
+
+const SETTINGS_DEF = {
+  beltSpeed:{label:'Belt speed (cells/s)',min:0.5,max:4,step:0.1,def:1.8},
+  machineSpeed:{label:'Machine speed ×',min:0.5,max:3,step:0.25,def:1},
+  itemCap:{label:'Item cap (density)',min:500,max:20000,step:500,def:6000},
+  powerDiff:{label:'Power difficulty ×',min:0.5,max:2,step:0.25,def:1},
+  costMode:{label:'Construction costs',opts:['off','on'],def:'on'},
+  seed:{label:'Deterministic seed',def:1337},
+  gridW:{label:'Grid width',min:24,max:96,def:48},
+  gridH:{label:'Grid height',min:20,max:64,def:34},
+};
+
+const OVERLAY_DEFS = [
+  ['flow','Item flow'],['conn','Connections'],['power','Power net'],
+  ['util','Utilization'],['cong','Congestion'],['blocked','Blocked'],['status','Status'],
+];
+// ============================================================ world & simulation
+const W = {
+  W: 48, H: 34, tick: 0, time: 0, paused: false, speed: 1,
+  terrain: null, deposit: null, ents: null,
+  seq: 1, itemCount: 0,
+  settings: {beltSpeed:1.8, machineSpeed:1, itemCap:6000, powerDiff:1,
+             costMode:'on', seed:1337, gridW:48, gridH:34},
+  credits: 400, spent: 0,
+  contract: null, mode: 'sandbox', presetName: '',
+  nets: [], powerDirty: true,
+  stats: null, undoStack: [], redoStack: [],
+  sel: null, selRect: null, tool: 'select', buildDir: 0, buildKind: 'belt',
+  recipeSel: null, // per-kind pending recipe choice
+  clip: null,     // clipboard stamp
+  overlays: {status:1},
+  cam: {x:0, y:0, z:1},
+};
+
+function cellIdx(x,y){ return y*W.W+x; }
+function inB(x,y){ return x>=0 && y>=0 && x<W.W && y<W.H; }
+function entAt(x,y){ return inB(x,y) ? W.ents[cellIdx(x,y)] : null; }
+function terrainAt(x,y){ return inB(x,y) ? W.terrain[cellIdx(x,y)] : TERRAIN.rock; }
+
+function initStats(){
+  W.stats = {
+    produced:{}, consumed:{}, delivered:{},     // cumulative units
+    series:{},                                  // type -> [{p,c,d}] samples
+    powerSeries:[],                             // {s,d}
+    acc:{p:{},c:{},d:{}}, sampleT:0,
+    stalls:{starved:0, blocked:0, nopower:0, depleted:0, nofuel:0},
+    fps:0, ents:0, machines:0, stalled:0,
+  };
+  for(const t in ITEMS){ W.stats.produced[t]=0; W.stats.consumed[t]=0; W.stats.delivered[t]=0; }
+}
+
+function newWorld(w,h,seed){
+  W.W=w; W.H=h; W.tick=0; W.time=0; W.seq=1; W.itemCount=0;
+  W.terrain=new Uint8Array(w*h); W.deposit=new Int32Array(w*h);
+  W.ents=new Array(w*h).fill(null);
+  W.nets=[]; W.powerDirty=true; W.sel=null; W.selRect=null; W.clip=null;
+  W.undoStack=[]; W.redoStack=[];
+  W.credits=400; W.spent=0; W.contract=null; W.mode='sandbox'; W.presetName='';
+  W.settings.seed=seed; W.settings.gridW=w; W.settings.gridH=h;
+  initStats();
+  genTerrain(seed);
+}
+
+function genTerrain(seed){
+  const rng = mulberry32(seed);
+  const patches=[['iron_ore',TERRAIN.iron_ore],['copper_ore',TERRAIN.copper_ore],['coal',TERRAIN.coal]];
+  for(const [item,t] of patches){
+    const n = 3+Math.floor(rng()*3);
+    for(let i=0;i<n;i++){
+      const cx=2+Math.floor(rng()*(W.W-4)), cy=2+Math.floor(rng()*(W.H-4));
+      const r=1+rng()*2.2;
+      for(let y=Math.floor(cy-r);y<=Math.ceil(cy+r);y++)for(let x=Math.floor(cx-r);x<=Math.ceil(cx+r);x++){
+        if(!inB(x,y))continue;
+        const d=Math.hypot(x-cx,y-cy)+rng()*0.8;
+        if(d<r){ W.terrain[cellIdx(x,y)]=t; W.deposit[cellIdx(x,y)]=300+Math.floor(rng()*1200); }
+      }
+    }
+  }
+  // rocks
+  const nr=Math.floor(W.W*W.H*0.015);
+  for(let i=0;i<nr;i++){
+    const x=Math.floor(rng()*W.W), y=Math.floor(rng()*W.H);
+    if(W.terrain[cellIdx(x,y)]===0) W.terrain[cellIdx(x,y)]=TERRAIN.rock;
+  }
+}
+
+// ---------------- entity creation
+function mkEnt(kind,x,y,dir){
+  const e={id:W.seq++, kind, x, y, dir:dir||0, net:-1, stall:'', util:0, _act:0};
+  if(ISBELT(kind)){ e.items=[]; if(kind==='splitter')e.nextSide=0; }
+  if(kind==='miner'){ e.outBuf={}; e.progress=0; }
+  if(ISMACHINE(kind)){ e.inBuf={}; e.outBuf={}; e.progress=0; e.working=false;
+    e.recipe = RECIPES_FOR[kind][0]; e.mods={speed:0,eff:0,prod:0}; }
+  if(kind==='generator'){ e.inBuf={}; e.burnT=0; }
+  if(kind==='storage'){ e.inv={}; }
+  if(kind==='delivery'){ e.inv={}; }
+  if(kind==='inserter'){ e.held=null; e.t=0; }
+  return e;
+}
+
+function costOf(kind){
+  if(W.settings.costMode!=='on') return 0;
+  return KINDS[kind].cost;
+}
+
+function canPlace(kind,x,y){
+  if(!inB(x,y)) return 'outside grid';
+  const t=terrainAt(x,y);
+  if(t===TERRAIN.rock) return 'blocked by rock';
+  const ex=entAt(x,y);
+  if(ex) return (ISBELT(kind)&&ISBELT(ex.kind)) ? null : 'cell occupied';
+  if(kind==='miner'){
+    if(t!==TERRAIN.iron_ore && t!==TERRAIN.copper_ore && t!==TERRAIN.coal)
+      return 'miner must be placed on a resource deposit';
+  } else if(t!==TERRAIN.empty && t!==TERRAIN.rock && kind!=='miner'){
+    // deposits allow nothing else built on them except miners
+    return 'deposit cell — place a miner here';
+  }
+  return null;
+}
+
+function placeEnt(kind,x,y,dir,opts){
+  opts=opts||{};
+  const err = canPlace(kind,x,y);
+  if(err) return {err};
+  const cost = costOf(kind);
+  if(!opts.free && cost>W.credits) return {err:'not enough credits'};
+  const e=mkEnt(kind,x,y,dir);
+  if(opts.recipe && ISMACHINE(kind) && RECIPES[e.recipe] && RECIPES[e.recipe].machine===kind)
+    e.recipe=opts.recipe;
+  if(opts.mods) e.mods=Object.assign({},opts.mods);
+  const old=W.ents[cellIdx(x,y)];
+  if(old&&old.items&&e.items) e.items=old.items; // belt re-route keeps cargo
+  W.ents[cellIdx(x,y)]=e;
+  if(!opts.free){ W.credits-=cost; W.spent+=cost; }
+  W.powerDirty=true;
+  return {ent:e};
+}
+
+function removeEnt(x,y,refund){
+  const e=entAt(x,y); if(!e) return false;
+  if(e.items) W.itemCount -= e.items.reduce((s,i)=>s+(i._c||1),0);
+  if(e.kind==='inserter' && e.held) W.itemCount--;
+  if(refund===undefined) refund = W.settings.costMode==='on';
+  if(refund) W.credits += KINDS[e.kind].cost;
+  W.ents[cellIdx(x,y)]=null;
+  if(W.sel===e) W.sel=null;
+  W.powerDirty=true;
+  return true;
+}
+
+// ---------------- item transport
+function beltTailRoom(e){
+  if(!e.items || e.items.length===0) return true;
+  const last=e.items[e.items.length-1];
+  return last.pos > BELT_SPACING;
+}
+function bufCount(b){ let s=0; for(const k in b)s+=b[k]; return s; }
+function bufCap(e){ return BUF_CAP * (1+(e.mods?e.mods.prod:0)); }
+
+// can ent `src` push `item`(type,n) into ent `dst`?
+function acceptInto(dst, type, n, src){
+  if(!dst) return false;
+  switch(dst.kind){
+    case 'belt': case 'merger': {
+      if(src && ISBELT(src.kind) && src.dir===OPP(dst.dir)) return false; // head-on
+      return beltTailRoom(dst);
+    }
+    case 'splitter': {
+      // input only from behind
+      const d=DIRS[dst.dir];
+      if(!src || src.x!==dst.x-d[0] || src.y!==dst.y-d[1]) return false;
+      return beltTailRoom(dst);
+    }
+    case 'smelter': case 'assembler': {
+      const r=RECIPES[dst.recipe];
+      if(!r || !(type in r.in)) return false;
+      return (dst.inBuf[type]||0) < bufCap(dst);
+    }
+    case 'generator':
+      return FUEL[type] && (dst.inBuf[type]||0) < BUF_CAP;
+    case 'storage':
+      return bufCount(dst.inv) < STORAGE_CAP;
+    case 'delivery':
+      return true;
+  }
+  return false;
+}
+
+// perform push: returns true if consumed
+function pushInto(dst, type, n, src){
+  if(!acceptInto(dst,type,n,src)) return false;
+  switch(dst.kind){
+    case 'belt': case 'merger': case 'splitter':
+      dst.items.push({type, n, pos:0, stamp:W.tick});
+      W.itemCount += n;
+      return true;
+    case 'smelter': case 'assembler': case 'generator':
+      dst.inBuf[type]=(dst.inBuf[type]||0)+n; return true;
+    case 'storage':
+      dst.inv[type]=(dst.inv[type]||0)+n; return true;
+    case 'delivery':
+      dst.inv[type]=(dst.inv[type]||0)+n;
+      W.stats.delivered[type]=(W.stats.delivered[type]||0)+n;
+      W.stats.acc.d[type]=(W.stats.acc.d[type]||0)+n;
+      if(W.contract && W.contract.item===type && !W.contract.done){
+        W.contract.got+=n;
+        if(W.contract.got>=W.contract.amount) completeContract();
+      }
+      return true;
+  }
+  return false;
+}
+
+function forwardCell(e){ const d=DIRS[e.dir]; return [e.x+d[0], e.y+d[1]]; }
+
+function splitterTargets(e){
+  // left & right relative to dir
+  const l=(e.dir+3)&3, r=(e.dir+1)&3;
+  return [[e.x+DIRS[l][0], e.y+DIRS[l][1]],[e.x+DIRS[r][0], e.y+DIRS[r][1]]];
+}
+
+function moveBeltItems(e, dt){
+  const items=e.items;
+  if(!items||!items.length) return;
+  const spd=W.settings.beltSpeed*dt;
+  const merging = W.itemCount > W.settings.itemCap;
+  for(let i=0;i<items.length;i++){
+    const it=items[i];
+    if(it.stamp===W.tick) continue;
+    it.stamp=W.tick;
+    const ahead = i>0 ? items[i-1].pos - BELT_SPACING : 1e9;
+    let np = it.pos + spd;
+    if(np>=1){
+      // try transfer
+      let targets;
+      if(e.kind==='splitter'){
+        const st=splitterTargets(e);
+        targets = e.nextSide===0 ? [st[0],st[1]] : [st[1],st[0]];
+      } else {
+        targets=[forwardCell(e)];
+      }
+      let moved=false;
+      if(e.kind==='splitter') it._side = (targets[0]===splitterTargets(e)[0])?0:1;
+      for(const [tx,ty] of targets){
+        const dst=entAt(tx,ty);
+        if(dst && acceptInto(dst,it.type,it.n,e)){
+          // aggregate into tail packet if over cap
+          if(merging && ISBELT(dst.kind) && dst.items.length){
+            const tail=dst.items[dst.items.length-1];
+            if(tail.type===it.type && tail.pos>BELT_SPACING){ tail.n+=it.n; moved=true; break; }
+          }
+          if(pushInto(dst,it.type,it.n,e)){ W.itemCount-=it.n; moved=true;
+            if(e.kind==='splitter') e.nextSide^=1; break; }
+        }
+      }
+      if(moved){ items.splice(i,1); i--; }
+      else it.pos=Math.min(0.999, ahead);
+    } else {
+      it.pos=Math.min(np, ahead);
+    }
+  }
+}
+
+function recipeAccepts(e,type){
+  if(!e)return false;
+  if(e.kind==='generator')return !!FUEL[type];
+  const r=RECIPES[e.recipe];
+  return !!(r && type in r.in);
+}
+
+// ---------------- machines
+function powerFactor(e){
+  if(!NEEDPOWER(e.kind)) return 1;
+  const net=W.nets[e.net];
+  if(!net) return 0;
+  return net.factor;
+}
+function isPowered(e){ return !NEEDPOWER(e.kind) || powerFactor(e)>0; }
+
+function machineSpeedOf(e){
+  return W.settings.machineSpeed * (1+0.5*(e.mods?e.mods.speed:0));
+}
+function machineDrawOf(e){
+  const base=KINDS[e.kind].power;
+  return base * (1+0.6*(e.mods?e.mods.speed:0)) * Math.pow(0.65,(e.mods?e.mods.eff:0)) * W.settings.powerDiff;
+}
+
+function tickMachine(e, dt){
+  const r=RECIPES[e.recipe];
+  if(!r){ e.stall='no recipe'; return; }
+  const pf=powerFactor(e);
+  if(pf<=0){ e.stall='nopower'; return; }
+  // drain output toward forward cell
+  drainOutput(e);
+  const cap=bufCap(e);
+  if(e.working){
+    // completing blocked if output would overflow badly
+    if(e.progress>=1){
+      let blocked=false;
+      for(const t in r.out) if((e.outBuf[t]||0) >= cap) blocked=true;
+      if(blocked){ e.stall='blocked'; return; }
+      for(const t in r.out){ e.outBuf[t]=(e.outBuf[t]||0)+r.out[t];
+        W.stats.produced[t]=(W.stats.produced[t]||0)+r.out[t];
+        W.stats.acc.p[t]=(W.stats.acc.p[t]||0)+r.out[t]; }
+      e.working=false; e.progress=0; e.stall='';
+    } else {
+      e.progress += dt*machineSpeedOf(e)*pf/r.time;
+      e._act+=dt; e._want=true;
+      if(e.progress>=1){ /* completes next tick edge */ }
+      e.stall='';
+      return;
+    }
+  }
+  // try start craft
+  let can=true;
+  for(const t in r.in) if((e.inBuf[t]||0) < r.in[t]){ can=false; break; }
+  if(can){
+    for(const t in r.in){ e.inBuf[t]-=r.in[t];
+      W.stats.consumed[t]=(W.stats.consumed[t]||0)+r.in[t];
+      W.stats.acc.c[t]=(W.stats.acc.c[t]||0)+r.in[t]; }
+    e.working=true; e.progress=dt*machineSpeedOf(e)*pf/r.time; e._act+=dt; e._want=true; e.stall='';
+  } else {
+    // distinguish: starving vs no input connection
+    e.stall = e._hadInput? 'starved' : 'starved';
+    e._hadInput=false;
+    for(const t in r.in) if((e.inBuf[t]||0)>0){ e._hadInput=true; }
+  }
+}
+
+function drainOutput(e){
+  // push output buffer to forward cell, 1 unit per tick
+  if(!e.outBuf) return;
+  for(const t in e.outBuf){
+    if(e.outBuf[t]<=0) continue;
+    const [fx,fy]=forwardCell(e);
+    const dst=entAt(fx,fy);
+    if(dst && pushInto(dst,t,1,e)){ e.outBuf[t]-=1; if(e.outBuf[t]<=0)delete e.outBuf[t]; return; }
+  }
+}
+
+function tickMiner(e, dt){
+  // miners can hand-crank at 25% when unpowered — breaks the coal chicken-and-egg
+  let pf = powerFactor(e); const cranked = pf<=0;
+  if(cranked) pf=0.25;
+  const idx=cellIdx(e.x,e.y);
+  const t=W.terrain[idx];
+  const ore=TERRAIN_ITEM[t];
+  if(!ore){ e.stall='no deposit'; return; }
+  if(W.deposit[idx]<=0){ e.stall='depleted'; return; }
+  drainOutput(e);
+  if((e.outBuf[ore]||0)>=bufCap(e)){ e.stall='blocked'; return; }
+  e.progress += dt*machineSpeedOf(e)*pf/1.1;
+  e._act+=dt; e._want=true;
+  e.stall = cranked ? 'nopower' : '';
+  if(e.progress>=1){
+    e.progress=0;
+    e.outBuf[ore]=(e.outBuf[ore]||0)+1; W.deposit[idx]--;
+    W.stats.produced[ore]=(W.stats.produced[ore]||0)+1;
+    W.stats.acc.p[ore]=(W.stats.acc.p[ore]||0)+1;
+  }
+}
+
+function tickGenerator(e, dt){
+  const net=W.nets[e.net];
+  const demand = net ? net.demand : 0;
+  if(e.burnT<=0 && demand>0 && (e.inBuf.coal||0)>0){
+    e.inBuf.coal--; e.burnT=4.0;
+    W.stats.consumed.coal=(W.stats.consumed.coal||0)+1;
+    W.stats.acc.c.coal=(W.stats.acc.c.coal||0)+1;
+  }
+  if(e.burnT>0){ e.burnT-=dt; if(net) net.supply+=GEN_OUT; }
+  e.stall = (e.burnT>0)?'':((e.inBuf.coal||0)>0?'idle':'nofuel');
+}
+
+function tickInserter(e, dt){
+  const pf=powerFactor(e);
+  if(pf<=0){ e.stall='nopower'; return; }
+  const spd=2.6*machineSpeedOf(e)*pf; // swings per sec scale
+  const d=DIRS[e.dir];
+  const sx=e.x-d[0], sy=e.y-d[1], tx=e.x+d[0], ty=e.y+d[1];
+  if(!e.held){
+    // take from source
+    const src=entAt(sx,sy);
+    if(!src){ e.stall='idle'; return; }
+    let got=null;
+    const dstPeek=entAt(tx,ty);
+    if(ISBELT(src.kind) && src.items.length){
+      // grab front-most acceptable item far enough along; when target is a
+      // machine, only take items its recipe accepts (filter behavior)
+      const machineDst = dstPeek && (ISMACHINE(dstPeek.kind)||dstPeek.kind==='generator');
+      for(let i=0;i<src.items.length;i++){
+        const it=src.items[i];
+        if(it.pos<=0.45) continue;
+        if(machineDst && !recipeAccepts(dstPeek,it.type)) continue;
+        got={type:it.type,n:it.n}; src.items.splice(i,1); W.itemCount-=it.n; break;
+      }
+    } else if(ISMACHINE(src.kind)){
+      for(const t in src.outBuf){ if(src.outBuf[t]>0){ src.outBuf[t]--; if(src.outBuf[t]<=0)delete src.outBuf[t]; got={type:t,n:1}; break; } }
+    } else if(src.kind==='storage'){
+      for(const t in src.inv){ if(src.inv[t]>0){ src.inv[t]--; if(src.inv[t]<=0)delete src.inv[t]; got={type:t,n:1}; break; } }
+    }
+    if(got){ e.held=got; e.t=0; e._act+=dt; e._want=true; W.itemCount+=got.n; e.stall=''; }
+    else e.stall='idle';
+  } else {
+    e.t+=dt*spd;
+    if(e.t<0.5){ e._act+=dt; e._want=true; e.stall=''; return; }
+    const dst=entAt(tx,ty);
+    if(dst && pushInto(dst,e.held.type,e.held.n,e)){
+      W.itemCount-=e.held.n; e.held=null; e.t=0; e.stall='';
+    } else e.stall='blocked';
+  }
+}
+
+// ---------------- power networks
+function rebuildPower(){
+  W.powerDirty=false;
+  const members=[];
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    const e=W.ents[cellIdx(x,y)];
+    if(e && (e.kind==='pole'||e.kind==='generator')) members.push(e);
+    if(e) e.net=-1;
+  }
+  // union find
+  const par=members.map((_,i)=>i);
+  const find=i=>{ while(par[i]!==i){par[i]=par[par[i]];i=par[i];} return i; };
+  for(let i=0;i<members.length;i++)for(let j=i+1;j<members.length;j++){
+    const a=members[i],b=members[j];
+    if(Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y))<=POLE_RANGE){
+      const ra=find(i),rb=find(j); if(ra!==rb)par[rb]=ra;
+    }
+  }
+  const comp={};
+  members.forEach((m,i)=>{ const r=find(i); (comp[r]=comp[r]||[]).push(m); });
+  W.nets=Object.values(comp).map(ms=>({members:ms,supply:0,demand:0,factor:1,potential:0}));
+  W.nets.forEach((n,ni)=>{ for(const m of n.members) m.net=ni; });
+  // attach consumers
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    const e=W.ents[cellIdx(x,y)];
+    if(!e||!NEEDPOWER(e.kind))continue;
+    for(let n=0;n<W.nets.length;n++){
+      let hit=false;
+      for(const m of W.nets[n].members){
+        if(Math.max(Math.abs(m.x-e.x),Math.abs(m.y-e.y))<=POLE_RANGE){ hit=true; break; }
+      }
+      if(hit){ e.net=n; break; }
+    }
+  }
+}
+
+// ---------------- main tick
+function simTick(){
+  const dt=1/20;
+  W.tick++; W.time+=dt;
+  if(W.powerDirty) rebuildPower();
+  // reset net supply/demand
+  for(const n of W.nets){ n.supply=0; n.demand=0; }
+  // demand first (intent): active machines draw full, idle draw 15%
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    const e=W.ents[cellIdx(x,y)];
+    if(e && NEEDPOWER(e.kind) && e.net>=0){
+      const d=machineDrawOf(e);
+      W.nets[e.net].demand += e._want ? d : d*0.15;
+    }
+  }
+  // generators decide burn using demand
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    const e=W.ents[cellIdx(x,y)]; if(!e)continue;
+    if(e.kind==='generator') tickGenerator(e,dt);
+  }
+  for(const n of W.nets){
+    n.factor = n.demand>0 ? clamp(n.supply/n.demand,0,1) : 1;
+    n.potential = n.supply;
+  }
+  // entities
+  let machines=0, stalled=0;
+  W.stats.stalls={starved:0,blocked:0,nopower:0,depleted:0,nofuel:0};
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    const e=W.ents[cellIdx(x,y)]; if(!e)continue;
+    switch(e.kind){
+      case 'belt': case 'splitter': case 'merger': moveBeltItems(e,dt); break;
+      case 'smelter': case 'assembler': machines++; tickMachine(e,dt); break;
+      case 'miner': machines++; tickMiner(e,dt); break;
+      case 'inserter': machines++; tickInserter(e,dt); break;
+    }
+    const countable = ISMACHINE(e.kind)||e.kind==='miner'||e.kind==='inserter';
+    if(e.stall && e.stall!=='idle'){
+      if(countable)stalled++;
+      if(e.stall==='nopower')W.stats.stalls.nopower++;
+      else if(e.stall==='starved')W.stats.stalls.starved++;
+      else if(e.stall==='blocked')W.stats.stalls.blocked++;
+      else if(e.stall==='depleted')W.stats.stalls.depleted++;
+      else if(e.stall==='nofuel')W.stats.stalls.nofuel++;
+    }
+    // utilization EMA (per second-ish)
+    e.util = (e.util||0)*0.97 + (e._act>0?0.03:0);
+    e._want = e._act>0; e._act=0;
+  }
+  W.stats.machines=machines; W.stats.stalled=stalled;
+  // contract timer
+  if(W.contract && !W.contract.done){
+    W.contract.left = Math.max(0, W.contract.deadline - W.time);
+    if(W.contract.left<=0 && W.contract.got<W.contract.amount) failContract();
+  }
+  // stats sampling 1x/sec
+  W.stats.sampleT+=dt;
+  if(W.stats.sampleT>=1){
+    W.stats.sampleT=0;
+    sampleStats();
+  }
+}
+
+function sampleStats(){
+  const s=W.stats;
+  let ps=0,pd=0;
+  for(const n of W.nets){ ps+=n.supply; pd+=n.demand; }
+  s.powerSeries.push({s:Math.round(ps),d:Math.round(pd)});
+  if(s.powerSeries.length>120)s.powerSeries.shift();
+  for(const t in ITEMS){
+    const a={p:s.acc.p[t]||0, c:s.acc.c[t]||0, d:s.acc.d[t]||0};
+    (s.series[t]=s.series[t]||[]).push(a);
+    if(s.series[t].length>120)s.series[t].shift();
+    s.acc.p[t]=0;s.acc.c[t]=0;s.acc.d[t]=0;
+  }
+}
+
+// ---------------- contracts
+function startContract(item,amount,seconds,credits){
+  W.mode='contract';
+  W.contract={item,amount,deadline:seconds,got:0,left:seconds,done:false,
+    startTick:W.tick,time:seconds};
+  if(credits!==undefined){ W.credits=credits; W.spent=0; }
+}
+function completeContract(){
+  W.contract.done=true; W.contract.win=true;
+  const t=W.contract;
+  const timeBonus=Math.round(t.left*10);
+  const creditBonus=W.settings.costMode==='on'?W.credits:0;
+  const footprint=W.ents.filter(Boolean).length;
+  const score=Math.max(0, timeBonus + creditBonus + t.amount*20 - footprint*5);
+  W.contract.score={score,timeBonus,creditBonus,footprint};
+  showBanner(true);
+  sfx('win');
+}
+function failContract(){
+  W.contract.done=true; W.contract.win=false;
+  W.contract.score={score:0,timeBonus:0,creditBonus:0,footprint:W.ents.filter(Boolean).length};
+  showBanner(false);
+  sfx('err');
+}
+
+// run fixed ticks; dtReal seconds of wall time scaled by speed
+let _acc=0;
+function frame(dtReal){
+  if(W.paused){ return; }
+  _acc += dtReal*W.speed;
+  let n=0;
+  const MAXT=8; // max ticks per frame to avoid spiral
+  while(_acc>=1/20 && n<MAXT){ simTick(); _acc-=1/20; n++; }
+  if(_acc>1/20*MAXT) _acc=0;
+}
+function stepOnce(){ simTick(); }
+// ============================================================ serialization
+const SAVE_VERSION = 3;
+
+function serializeWorld(){
+  const ents=[];
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    const e=W.ents[cellIdx(x,y)]; if(!e)continue;
+    const s={k:e.kind,x,y,d:e.dir};
+    if(e.recipe)s.r=e.recipe;
+    if(e.mods&&(e.mods.speed||e.mods.eff||e.mods.prod))s.m=e.mods;
+    if(e.items&&e.items.length)s.it=e.items.map(i=>[i.type,i.n,Math.round(i.pos*1000)/1000]);
+    if(e.inBuf&&bufCount(e.inBuf))s.ib=e.inBuf;
+    if(e.outBuf&&bufCount(e.outBuf))s.ob=e.outBuf;
+    if(e.inv&&bufCount(e.inv))s.iv=e.inv;
+    if(e.inv&&e.kind==='delivery'&&bufCount(e.inv))s.iv=e.inv;
+    if(e.working){s.w=1;s.p=Math.round(e.progress*1000)/1000;}
+    if(e.burnT>0)s.bt=Math.round(e.burnT*100)/100;
+    if(e.held)s.h=[e.held.type,e.held.n];
+    if(e.nextSide)s.ns=e.nextSide;
+    ents.push(s);
+  }
+  // sparse terrain
+  const terr=[];
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    const i=cellIdx(x,y);
+    if(W.terrain[i]||W.deposit[i]) terr.push([x,y,W.terrain[i],W.deposit[i]]);
+  }
+  return {
+    v:SAVE_VERSION, seed:W.settings.seed, W:W.W, H:W.H,
+    settings:Object.assign({},W.settings),
+    tick:W.tick, time:Math.round(W.time*100)/100,
+    credits:W.credits, spent:W.spent, mode:W.mode, preset:W.presetName,
+    contract: W.contract?{item:W.contract.item,amount:W.contract.amount,
+      deadline:W.contract.deadline,got:W.contract.got,done:W.contract.done,
+      win:W.contract.win,score:W.contract.score,startTick:W.contract.startTick}:null,
+    terr, ents,
+    stats:{produced:W.stats.produced,consumed:W.stats.consumed,delivered:W.stats.delivered},
+  };
+}
+
+function validateSave(d){
+  if(!d||typeof d!=='object') return 'not an object';
+  if(typeof d.W!=='number'||typeof d.H!=='number'||d.W<8||d.H<8||d.W>200||d.H>200) return 'bad dimensions';
+  if(!Array.isArray(d.ents)||!Array.isArray(d.terr)) return 'missing arrays';
+  if(d.ents.length>60000||d.terr.length>60000) return 'too many entries';
+  for(const e of d.ents){
+    if(!e||typeof e.x!=='number'||typeof e.y!=='number'||typeof e.k!=='string') return 'bad entity';
+    if(!KINDS[e.k]) return 'unknown entity '+e.k;
+    if(e.x<0||e.y<0||e.x>=d.W||e.y>=d.H) return 'entity out of bounds';
+    if(e.it&&(!Array.isArray(e.it)||e.it.length>64)) return 'bad item list';
+  }
+  return null;
+}
+
+function deserializeWorld(d){
+  const err=validateSave(d);
+  if(err) return {err};
+  newWorld(d.W,d.H,(d.seed??1337));
+  W.terrain.fill(0); W.deposit.fill(0);
+  for(const [x,y,t,dep] of d.terr){
+    if(!inB(x,y))continue;
+    const i=cellIdx(x,y);
+    W.terrain[i]=clamp(t|0,0,4); W.deposit[i]=dep|0;
+  }
+  if(d.settings) Object.assign(W.settings, d.settings);
+  W.settings.gridW=d.W; W.settings.gridH=d.H;
+  W.tick=d.tick|0; W.time=d.time||0;
+  W.credits=d.credits??400; W.spent=d.spent||0; W.mode=d.mode||'sandbox';
+  W.presetName=d.preset||'';
+  for(const s of d.ents){
+    const e=mkEnt(s.k,s.x,s.y,s.d||0);
+    if(s.r&&RECIPES[s.r]&&ISMACHINE(s.k))e.recipe=s.r;
+    if(s.m)e.mods=Object.assign({speed:0,eff:0,prod:0},s.m);
+    if(s.it){ e.items=s.it.filter(i=>ITEMS[i[0]]).map(i=>({type:i[0],n:Math.max(1,i[1]|0),pos:clamp(i[2]||0,0,0.999),stamp:-1}));
+      e.items.sort((a,b)=>b.pos-a.pos); }
+    if(s.ib)e.inBuf=sanitizeBuf(s.ib);
+    if(s.ob)e.outBuf=sanitizeBuf(s.ob);
+    if(s.iv)e.inv=sanitizeBuf(s.iv);
+    if(s.w){e.working=true;e.progress=s.p||0;}
+    if(s.bt)e.burnT=s.bt;
+    if(s.h&&ITEMS[s.h[0]]){e.held={type:s.h[0],n:s.h[1]|0||1};W.itemCount+=e.held.n;}
+    if(s.ns)e.nextSide=s.ns;
+    W.ents[cellIdx(s.x,s.y)]=e;
+    if(e.items)for(const it of e.items)W.itemCount+=it.n;
+  }
+  if(d.contract) W.contract=Object.assign({left:0},d.contract,{done:d.contract.done});
+  if(d.stats){ for(const k of['produced','consumed','delivered']){
+    if(d.stats[k])for(const t in d.stats[k])if(ITEMS[t]!==undefined)W.stats[k][t]=d.stats[k][t]; } }
+  W.powerDirty=true;
+  W.undoStack=[];W.redoStack=[];
+  return {ok:true};
+}
+function sanitizeBuf(b){
+  const o={}; for(const t in b){ if(ITEMS[t]&&b[t]>0) o[t]=Math.min(9999,b[t]|0); } return o;
+}
+
+// ---------------- undo/redo (snapshot based)
+function pushUndo(){
+  try{
+    W.undoStack.push(JSON.stringify(serializeWorld()));
+    if(W.undoStack.length>40)W.undoStack.shift();
+    W.redoStack.length=0;
+  }catch(e){}
+}
+function undo(){
+  if(!W.undoStack.length)return;
+  const cur=JSON.stringify(serializeWorld());
+  const s=W.undoStack.pop();
+  const us=W.undoStack, rs=W.redoStack;   // deserialize clears stacks
+  const r=deserializeWorld(JSON.parse(s));
+  if(r.ok){
+    W.undoStack=us; W.redoStack=rs;
+    W.redoStack.push(cur);
+    toast('Undo');sfx('click');
+  }
+}
+function redo(){
+  if(!W.redoStack.length)return;
+  const cur=JSON.stringify(serializeWorld());
+  const s=W.redoStack.pop();
+  const us=W.undoStack, rs=W.redoStack;
+  const r=deserializeWorld(JSON.parse(s));
+  if(r.ok){
+    W.undoStack=us; W.redoStack=rs;
+    W.undoStack.push(cur);
+    toast('Redo');sfx('click');
+  }
+}
+
+// ---------------- share code (base64url of json)
+function shareEncode(){
+  const json=JSON.stringify(serializeWorld());
+  return 'FOUNDRY1.'+btoa(unescape(encodeURIComponent(json)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function shareDecode(str){
+  str=(str||'').trim();
+  if(!str.startsWith('FOUNDRY1.'))return{err:'bad header'};
+  let b=str.slice(9).replace(/-/g,'+').replace(/_/g,'/');
+  while(b.length%4)b+='=';
+  try{
+    const json=decodeURIComponent(escape(atob(b)));
+    return{data:JSON.parse(json)};
+  }catch(e){return{err:'decode failed'};}
+}
+
+// ---------------- local storage slots
+const LS_KEY='foundry.slots', LS_AUTO='foundry.autosave';
+function lsSlots(){
+  try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch(e){return{};}
+}
+function lsSave(name){
+  const s=lsSlots();
+  s[name]={t:Date.now(),data:serializeWorld()};
+  try{localStorage.setItem(LS_KEY,JSON.stringify(s));return true;}
+  catch(e){return false;}
+}
+function lsLoad(name){
+  const s=lsSlots(); if(!s[name])return null; return s[name].data;
+}
+function lsDelete(name){ const s=lsSlots(); delete s[name];
+  try{localStorage.setItem(LS_KEY,JSON.stringify(s));}catch(e){} }
+function lsAutosave(){
+  try{localStorage.setItem(LS_AUTO,JSON.stringify({t:Date.now(),data:serializeWorld()}));}catch(e){}
+}
+function lsAutosaveGet(){
+  try{const d=JSON.parse(localStorage.getItem(LS_AUTO)||'null');return d?d.data:null;}catch(e){return null;}
+}
+// ============================================================ presets & contracts
+// Geometry rules:
+//  - belt pushes items to the cell its dir faces; merges allowed into
+//    belt cells from side/behind (never head-on)
+//  - machine input = item pushed INTO its cell; output pushed to dir cell
+//  - inserter dir=d: grabs from (x-d,y-d), places to (x+d,y+d); grabs only
+//    items the target machine accepts (filter behavior)
+//  - splitter dir=d: input from behind, alternates outputs left/right
+//  - miners sit on deposit cells, output must face a non-deposit cell
+//  - generator accepts coal pushed into it (fuel buffer)
+function _blank(w,h,seed){ newWorld(w,h,seed); W.terrain.fill(0); W.deposit.fill(0); }
+function _depo(t,x,y,amt){ if(!inB(x,y))return; const i=cellIdx(x,y);
+  W.terrain[i]=t; W.deposit[i]=amt===undefined?99999:amt; }
+function _patch(t,cx,cy,r,amt){
+  for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++)
+    if(Math.hypot(x-cx,y-cy)<=r+0.2)_depo(t,x,y,amt);
+}
+function _rect(t,x0,y0,x1,y1,amt){
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)_depo(t,x,y,amt);
+}
+function _bp(kind,x,y,dir,opts){
+  const r=placeEnt(kind,x,y,dir||0,Object.assign({free:true},opts||{}));
+  if(r.err) console.warn('[preset]',kind,x,y,r.err);
+  return r.ent;
+}
+function _belt(x,y,dir){ return _bp('belt',x,y,dir); }
+function _run(x1,y1,x2,y2){ // axis aligned; dir = travel direction
+  const dx=Math.sign(x2-x1), dy=Math.sign(y2-y1);
+  const dir = dx>0?0 : dy>0?1 : dx<0?2 : 3;
+  let x=x1,y=y1; _belt(x,y,dir);
+  while(x!==x2||y!==y2){ x+=dx; y+=dy; _belt(x,y,dir); }
+}
+function _path(pts){ // polyline; dir from successor (last keeps segment dir)
+  for(let i=0;i<pts.length;i++){
+    const [x,y]=pts[i]; let dir=0;
+    if(i<pts.length-1){ const [nx,ny]=pts[i+1]; dir = nx>x?0 : ny>y?1 : nx<x?2 : 3; }
+    else if(i>0){ const [px,py]=pts[i-1]; dir = x>px?0 : y>py?1 : x<px?2 : 3; }
+    _belt(x,y,dir);
+  }
+}
+function _poles(list){ for(const [x,y] of list)_bp('pole',x,y,0); }
+function _poleGrid(x0,y0,x1,y1){ // stride-3 lattice inside POLE_RANGE=4
+  for(let y=y0;y<=y1;y+=3)for(let x=x0;x<=x1;x+=3)
+    if(!entAt(x,y)&&terrainAt(x,y)===TERRAIN.empty)_bp('pole',x,y,0);
+}
+function _asm(x,y,dir,recipe){ const a=_bp('assembler',x,y,dir); a.recipe=recipe; return a; }
+function _sml(x,y,dir,recipe){ const s=_bp('smelter',x,y,dir); s.recipe=recipe; return s; }
+
+const PRESETS = [
+// ================================================== STARTER LINE
+{id:'starter', name:'Starter Line', kind:'sandbox',
+ desc:'Iron line + coal power. Produces plates immediately.',
+ build(){
+  _blank(48,34,101); W.settings.costMode='off';
+  _patch(TERRAIN.iron_ore,5,9,3);   // covers x2-8 y6-12
+  _patch(TERRAIN.coal,6,21,3);      // covers x3-9 y18-24
+  _patch(TERRAIN.copper_ore,40,26,3);
+  _bp('miner',8,8,0); _bp('miner',8,10,0);
+  _run(9,8,14,8); _run(9,10,14,10);
+  _sml(15,8,3,'iron_plate');        // out N -> (15,7)
+  _sml(15,10,0,'iron_plate');       // out E -> (16,10)
+  _run(15,7,26,7);
+  _path([[26,7],[26,8],[26,9]]);    // drop, merges into bus at (26,10)
+  _run(16,10,26,10);                // plate bus
+  _bp('delivery',27,10,0);
+  // coal -> splitter -> 2 generators
+  _bp('miner',9,21,0);
+  _run(10,21,13,21);
+  _bp('splitter',14,21,0);          // -> (14,20) & (14,22)
+  _belt(14,20,0); _bp('generator',15,20,0);
+  _belt(14,22,0); _bp('generator',15,22,0);
+  // poles: one lattice powers the whole footprint
+  _poleGrid(8,6,27,22);
+  W.cam={x:100,y:120,z:1.5};
+ }},
+// ================================================== BALANCED FACTORY
+{id:'balanced', name:'Balanced Factory', kind:'sandbox',
+ desc:'Iron+copper smelting, gears, wires and a circuit cell.',
+ build(){
+  _blank(56,38,202); W.settings.costMode='off';
+  _patch(TERRAIN.iron_ore,5,5,3);   // x2-8 y2-8
+  _patch(TERRAIN.copper_ore,5,16,3);// x2-8 y13-19
+  _patch(TERRAIN.coal,6,31,3);      // x3-9 y28-34
+  // iron -> plate bus y=5
+  _bp('miner',8,4,0); _bp('miner',8,6,0);
+  _run(9,4,11,4); _run(9,6,11,6);
+  _sml(12,4,1,'iron_plate');        // out S -> (12,5)
+  _sml(12,6,3,'iron_plate');        // out N -> (12,5)
+  _run(12,5,44,5);                  // plate bus E
+  // copper -> plate bus y=16
+  _bp('miner',8,15,0); _bp('miner',8,17,0);
+  _run(9,15,11,15); _run(9,17,11,17);
+  _sml(12,15,1,'copper_plate');     // out S -> (12,16)
+  _sml(12,17,3,'copper_plate');     // out N -> (12,16)
+  _run(12,16,44,16);                // copper bus E
+  // gear assemblers tap plate bus; output lane y=8
+  for(const gx of [20,26]){
+    _bp('inserter',gx,6,1);         // src (gx,5) -> dst (gx,7)
+    _asm(gx,7,1,'gear');            // out S -> (gx,8)
+    _belt(gx,8,0);
+  }
+  _run(19,8,46,8);                  // gear lane E
+  // wire assemblers tap copper bus; output lane y=19
+  for(const wx of [20,26]){
+    _bp('inserter',wx,17,1);        // src (wx,16) -> dst (wx,18)
+    _asm(wx,18,1,'wire');           // out S -> (wx,19)
+    _belt(wx,19,0);
+  }
+  _run(19,19,46,19);                // wire lane E
+  // gear feed lane y=10 W (drop at x=46); wire feed lane y=14 W (rise x=46)
+  _path([[46,8],[46,9],[46,10],[45,10]]);
+  _run(44,10,34,10);
+  _path([[46,19],[46,18],[46,17],[46,16],[46,15],[46,14],[45,14]]);
+  _run(44,14,30,14);
+  // circuit assembler (34,12): gears via ins(34,11)S src(34,10), wire via ins(34,13)N src(34,14)
+  _asm(34,12,0,'circuit');
+  _bp('inserter',34,11,1);
+  _bp('inserter',34,13,3);
+  _run(35,12,45,12);                // circuit lane E
+  _bp('delivery',46,12,0);
+  // power: 2 coal lanes -> splitters -> 3 gens
+  _bp('miner',9,30,0); _bp('miner',9,32,0);
+  _run(10,30,14,30); _run(10,32,14,32);
+  _bp('splitter',15,30,0);          // input (14,30) -> (15,29) & (15,31)
+  _belt(15,29,0); _bp('generator',16,29,0);
+  _belt(15,31,0); _bp('generator',16,31,0);
+  _bp('splitter',15,32,0);          // input (14,32) -> (15,31) & (15,33)
+  _belt(15,33,0); _bp('generator',16,33,0);
+  // poles
+  _poleGrid(8,4,46,34);
+  W.cam={x:60,y:30,z:1.05};
+ }},
+// ================================================== CONGESTED BELTS
+{id:'congested', name:'Congested Belts', kind:'sandbox',
+ desc:'Six miners jam one artery + a bypass splitter. Watch queues.',
+ build(){
+  _blank(48,34,303); W.settings.costMode='off';
+  _rect(TERRAIN.iron_ore,6,4,14,12);  // rect patch
+  _patch(TERRAIN.coal,8,26,3);
+  // 3 miners north edge (y=4) dir N -> lane y=3; 3 south edge (y=12) dir S -> lane y=13
+  for(const mx of [7,10,13]){ _bp('miner',mx,4,3); _bp('miner',mx,12,1); }
+  _run(7,3,20,3);                   // north trunk E
+  _path([[20,3],[20,4],[20,5],[20,6],[20,7]]); // drop -> merges artery (20,8)
+  _run(7,13,20,13);                 // south trunk E
+  _path([[20,13],[20,12],[20,11],[20,10],[20,9]]); // rise -> merges (20,8)
+  _run(6,8,21,8);                   // artery E up to splitter
+  // bypass splitter demo: outputs N & S lanes rejoin artery
+  _bp('splitter',22,8,0);           // -> (22,7) & (22,9)
+  _belt(22,7,0); _belt(23,7,1);     // (23,7) dir S rejoins (23,8)
+  _belt(22,9,0); _belt(23,9,3);     // (23,9) dir N rejoins (23,8)
+  _run(23,8,25,8);
+  const s1=_sml(26,8,0,'iron_plate');
+  _run(27,8,34,8);
+  _bp('delivery',35,8,0);
+  // power: 2 coal miners -> 2 gens
+  _bp('miner',11,25,0); _run(12,25,15,25); _bp('generator',16,25,0);
+  _bp('miner',11,27,0); _run(12,27,15,27); _bp('generator',16,27,0);
+  _poleGrid(6,3,35,27);
+  W.cam={x:60,y:100,z:1.4};
+ }},
+// ================================================== POWER CRISIS
+{id:'powercrisis', name:'Power Crisis', kind:'sandbox',
+ desc:'One weak generator vs a hungry grid. Diagnose the brownout.',
+ build(){
+  _blank(48,34,404); W.settings.costMode='off'; W.settings.powerDiff=1.5;
+  _patch(TERRAIN.iron_ore,6,8,3);   // x3-9 y5-11
+  _patch(TERRAIN.coal,41,28,3);     // x38-44 y25-31
+  _bp('miner',9,7,0); _bp('miner',9,9,0); _bp('miner',9,11,0);
+  _run(10,7,12,7); _run(10,9,12,9); _run(10,11,12,11);
+  _sml(13,7,0,'iron_plate'); _sml(13,9,0,'iron_plate'); _sml(13,11,0,'iron_plate');
+  // outputs E -> column x=14 drop to bus y=13
+  _belt(14,7,1); _belt(14,8,1); _belt(14,9,1); _belt(14,10,1);
+  _belt(14,11,1); _belt(14,12,1); _belt(14,13,0);
+  _run(15,13,34,13);                // plate bus E
+  _bp('delivery',35,13,0);
+  // hungry assemblers tap bus -> gears -> storage
+  for(const ax of [22,28]){
+    _bp('inserter',ax,14,1);        // src (ax,13) -> dst (ax,15)
+    _asm(ax,15,0,'gear');           // out E
+    _belt(ax+1,15,0); _bp('storage',ax+2,15,0);
+  }
+  // ONE generator; long coal feed: miners on south edge -> trunk y32 -> north
+  _bp('miner',39,30,1); _bp('miner',41,31,1); _bp('miner',43,30,1);
+  _belt(39,31,1); _belt(43,31,1);     // edge outputs drop to trunk row
+  _run(43,32,25,32);                  // trunk W (miners push onto it)
+  _path([[25,32],[25,31],[25,30],[25,29],[25,28],[25,27],[25,26],[24,26]]);
+  _bp('generator',23,26,0);
+  // pole chains: gen -> consumers; east -> coal miners
+  _poles([[23,23],[23,20],[23,17],[23,14],[20,12],[18,11],[15,11],[12,10],[12,8],[12,6],
+          [26,12],[29,14],
+          [26,30],[29,31],[32,31],[35,31],[38,31],[41,33]]);
+  W.cam={x:40,y:100,z:1.2};
+ }},
+// ================================================== MULTI-PRODUCT BUS
+{id:'multibus', name:'Multi-Product Bus', kind:'sandbox',
+ desc:'Full chain: ore → plates → gears+wire → circuits.',
+ build(){
+  _blank(56,38,505); W.settings.costMode='off';
+  _patch(TERRAIN.iron_ore,5,4,3);    // x2-8 y1-7
+  _patch(TERRAIN.copper_ore,5,15,3); // x2-8 y12-18
+  _patch(TERRAIN.coal,5,30,3);       // x2-8 y27-33
+  // iron: edge miners -> ore merge at (11,4) -> splitter -> 2 smelters -> bus y=4
+  _bp('miner',8,3,0); _bp('miner',8,5,0);
+  _run(9,3,10,3); _belt(11,3,1);      // lane ends pushing S into (11,4)
+  _run(9,5,10,5); _belt(11,5,3);      // lane ends pushing N into (11,4)
+  _belt(11,4,0); _belt(12,4,0);       // merge cell flows E to splitter
+  _bp('splitter',13,4,0);           // -> (13,3) & (13,5)
+  _belt(13,3,0); _belt(14,3,0); _sml(15,3,1,'iron_plate');  // out S -> (15,4)
+  _belt(13,5,0); _belt(14,5,0); _sml(15,5,3,'iron_plate');  // out N -> (15,4)
+  _run(15,4,46,4);                  // plate bus E
+  // gear assemblers (gx,6): ins (gx,5)S src bus; out S -> gear lane y=7
+  for(const gx of [20,26]){
+    _bp('inserter',gx,5,1);
+    _asm(gx,6,1,'gear');
+    _belt(gx,7,0);
+  }
+  _run(19,7,46,7);                  // gear lane E
+  // copper -> cu bus y=15
+  _bp('miner',8,14,0); _bp('miner',8,16,0);
+  _run(9,14,11,14); _run(9,16,11,16);
+  _sml(12,14,1,'copper_plate');     // out S -> (12,15)
+  _sml(12,16,3,'copper_plate');     // out N -> (12,15)
+  _run(12,15,46,15);                // copper bus E
+  // wire assemblers (wx,17): ins (wx,16)S; out S -> wire lane y=18
+  for(const wx of [20,26]){
+    _bp('inserter',wx,16,1);
+    _asm(wx,17,1,'wire');
+    _belt(wx,18,0);
+  }
+  _run(19,18,46,18);                // wire lane E
+  // gears: drop x=46 to y=10 -> lane W ; wires: rise x=47 to y=14 -> lane W
+  _belt(46,7,1); _belt(46,8,1); _belt(46,9,1); _belt(46,10,2);
+  _run(45,10,36,10);
+  _belt(47,18,3); _belt(47,17,3); _belt(47,16,3); _belt(47,15,3); _belt(47,14,2);
+  _run(46,14,36,14);
+  // circuit assembler (36,12): ins(36,11)S src(36,10)gears; ins(36,13)N src(36,14)wire
+  _asm(36,12,0,'circuit');
+  _bp('inserter',36,11,1);
+  _bp('inserter',36,13,3);
+  _run(37,12,44,12);                // circuit lane E
+  _bp('delivery',45,12,0);
+  // power: coal merge trunk -> splitter tree -> 4 gens
+  _bp('miner',8,29,0); _bp('miner',8,30,0); _bp('miner',8,31,0);
+  _run(9,29,10,29); _run(9,30,10,30); _run(9,31,10,31);
+  _belt(10,29,1); _belt(10,31,3);   // merge into trunk cell (10,30)
+  _belt(11,30,0);
+  _bp('splitter',12,30,0);          // -> (12,29) & (12,31)
+  _belt(12,29,0);
+  _bp('splitter',13,29,0);          // -> (13,28) & (13,30)
+  _belt(13,28,0); _bp('generator',14,28,0);
+  _belt(13,30,0); _bp('generator',14,30,0);
+  _belt(12,31,0); _belt(13,31,1); _belt(13,32,1);
+  _bp('splitter',13,33,1);          // input from N -> outputs (12,33) & (14,33)
+  _belt(12,33,2); _bp('generator',11,33,0);
+  _belt(14,33,0); _bp('generator',15,33,0);
+  // poles: lattice powers everything incl. gen island
+  _poleGrid(8,3,46,36);
+  W.cam={x:40,y:10,z:1.0};
+ }},
+// ================================================== STRESS TEST
+{id:'stress', name:'Throughput Stress', kind:'sandbox',
+ desc:'Dense miners, smelters and bus lanes. FPS + item-count check.',
+ build(){
+  _blank(72,44,606); W.settings.costMode='off';
+  _rect(TERRAIN.iron_ore,4,6,12,14);    // iron A
+  _rect(TERRAIN.iron_ore,4,26,12,36);   // iron B
+  _rect(TERRAIN.copper_ore,34,6,42,14); // copper
+  _rect(TERRAIN.coal,58,34,66,40);      // coal
+  // iron A: miners E edge x=12 -> belts -> smelters x=20 -> collector x=21 -> bus y=17
+  // (skip row 10: leaves a pole corridor so the whole band gets power)
+  for(let y=6;y<=14;y++){
+    if(y===10)continue;
+    _bp('miner',12,y,0); _run(13,y,19,y);
+    _sml(20,y,0,'iron_plate');          // out E -> (21,y)
+    _belt(21,y,1);
+  }
+  for(let y=6;y<=16;y++) if(!entAt(21,y)) _belt(21,y,1);
+  _belt(21,17,0); _run(22,17,47,17);    // bus stops before copper col x=49
+  _bp('delivery',48,17,0);
+  _poles([[14,10],[18,10],[14,15],[18,15],[14,5],[18,5]]);
+  // iron B (skip row 30: pole corridor)
+  for(let y=26;y<=36;y++){
+    if(y===30)continue;
+    _bp('miner',12,y,0); _run(13,y,19,y);
+    _sml(20,y,0,'iron_plate');
+    _belt(21,y,1);
+  }
+  for(let y=26;y<=36;y++) if(!entAt(21,y)) _belt(21,y,1);
+  _belt(21,37,0); _run(22,37,56,37);
+  _bp('delivery',57,37,0);
+  _poles([[14,30],[18,30],[14,37],[18,37],[14,25],[18,25]]);
+  // copper: miners E edge x=42 -> smelters x=48 -> col x=49 -> bus y=20
+  for(let y=6;y<=14;y++){
+    if(y===10)continue;
+    _bp('miner',42,y,0); _run(43,y,47,y);
+    _sml(48,y,0,'copper_plate');
+    _belt(49,y,1);
+  }
+  for(let y=6;y<=19;y++) if(!entAt(49,y)) _belt(49,y,1);
+  _belt(49,20,0); _run(50,20,60,20);
+  _bp('delivery',61,20,0);
+  _poles([[44,10],[46,10],[44,5],[46,5],[44,15],[46,15]]);
+  // coal: west-edge miners dir W -> splitter fans -> gens col x=52
+  //       east-edge miners dir E -> splitter fans -> gens col x=71
+  for(const my of [34,38]){
+    _bp('miner',58,my,2); _run(57,my,54,my);
+    _bp('splitter',53,my,2);            // dir W: outputs (53,my-1) & (53,my+1)
+    _belt(53,my-1,2); _bp('generator',52,my-1,0);
+    _belt(53,my+1,2); _bp('generator',52,my+1,0);
+    _bp('miner',66,my,0); _run(67,my,69,my);
+    _bp('splitter',70,my,0);            // dir E: outputs (70,my-1) & (70,my+1)
+    _belt(70,my-1,0); _bp('generator',71,my-1,0);
+    _belt(70,my+1,0); _bp('generator',71,my+1,0);
+  }
+  // pole lattice
+  for(let px=6;px<=70;px+=4)for(let py=4;py<=40;py+=4)
+    if(!entAt(px,py)&&terrainAt(px,py)===TERRAIN.empty)_bp('pole',px,py,0);
+  W.cam={x:0,y:0,z:0.85};
+ }},
+];
+
+// ================================================== contracts
+const CONTRACTS = [
+{id:'c1', name:'Contract: First Plates',
+ desc:'Deliver 40 iron plates in 4:00. Starter layout, cost mode on.',
+ build(){
+  PRESETS[0].build();
+  W.settings.costMode='on'; W.credits=120; W.spent=0;
+  startContract('iron_plate',40,240);
+ }},
+{id:'c2', name:'Contract: Circuit Order',
+ desc:'Deliver 30 circuits in 9:00. Bus layout running, expand it.',
+ build(){
+  PRESETS[4].build();
+  W.settings.costMode='on'; W.credits=350; W.spent=0;
+  startContract('circuit',30,540);
+ }},
+];
+
+function loadPreset(id){
+  const p=PRESETS.find(p=>p.id===id)||CONTRACTS.find(c=>c.id===id);
+  if(!p)return false;
+  try{
+    p.build();
+    W.presetName=p.name;
+    W.powerDirty=true; W.paused=false;
+    hideBanner(); updateToolbar(); updateContractPanel(); refreshToolCosts();
+    toast('Loaded: '+p.name); sfx('click');
+    return true;
+  }catch(e){ console.error(e); toast('Preset failed: '+e.message,'err'); return false; }
+}
+// ============================================================ procedural audio
+const AudioSys = {
+  ctx:null, enabled:true, master:null,
+  init(){
+    if(this.ctx) return;
+    try{
+      this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      this.master=this.ctx.createGain(); this.master.gain.value=0.18;
+      this.master.connect(this.ctx.destination);
+    }catch(e){ this.enabled=false; }
+  },
+  env(t0,a,d,peak){
+    const g=this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.linearRampToValueAtTime(peak,t0+a);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+a+d);
+    g.connect(this.master); return g;
+  },
+  osc(type,f0,f1,t0,dur,peak){
+    const o=this.ctx.createOscillator();
+    o.type=type; o.frequency.setValueAtTime(f0,t0);
+    if(f1!==f0)o.frequency.exponentialRampToValueAtTime(Math.max(1,f1),t0+dur);
+    o.connect(this.env(t0,0.005,dur,peak));
+    o.start(t0); o.stop(t0+dur+0.05);
+  },
+  noise(t0,dur,peak,fc){
+    const n=this.ctx.sampleRate*dur;
+    const buf=this.ctx.createBuffer(1,n,this.ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
+    const src=this.ctx.createBufferSource(); src.buffer=buf;
+    const f=this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=fc||1200;
+    src.connect(f); f.connect(this.env(t0,0.003,dur,peak));
+    src.start(t0);
+  },
+};
+function sfx(kind){
+  if(!AudioSys.enabled) return;
+  AudioSys.init();
+  if(!AudioSys.ctx) return;
+  if(AudioSys.ctx.state==='suspended') AudioSys.ctx.resume();
+  const t=AudioSys.ctx.currentTime;
+  switch(kind){
+    case 'place': AudioSys.osc('square',520,340,t,0.07,0.5); break;
+    case 'belt':  AudioSys.osc('square',400,300,t,0.045,0.3); break;
+    case 'erase': AudioSys.noise(t,0.09,0.4,900); AudioSys.osc('triangle',200,80,t,0.09,0.4); break;
+    case 'err':   AudioSys.osc('sawtooth',160,110,t,0.18,0.4); break;
+    case 'click': AudioSys.osc('square',700,650,t,0.03,0.25); break;
+    case 'rotate':AudioSys.osc('square',300,420,t,0.05,0.3); break;
+    case 'deliver':AudioSys.osc('sine',880,1320,t,0.12,0.35); break;
+    case 'win':
+      [523,659,784,1047].forEach((f,i)=>AudioSys.osc('sine',f,f,t+i*0.11,0.25,0.4));
+      break;
+    case 'pick':  AudioSys.osc('triangle',900,1100,t,0.04,0.3); break;
+  }
+}
+// ============================================================ rendering
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+const CS=32; // world px per cell
+let DPR=1;
+
+function resizeCanvas(){
+  DPR=Math.min(2.5,window.devicePixelRatio||1);
+  cv.width=Math.floor(innerWidth*DPR); cv.height=Math.floor(innerHeight*DPR);
+  cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px';
+}
+addEventListener('resize',resizeCanvas);
+
+function s2w(sx,sy){ return [sx/W.cam.z+W.cam.x, sy/W.cam.z+W.cam.y]; }
+function s2c(sx,sy){ const [wx,wy]=s2w(sx,sy); return [Math.floor(wx/CS),Math.floor(wy/CS)]; }
+function cellScreen(x,y){ return [(x*CS-W.cam.x)*W.cam.z,(y*CS-W.cam.y)*W.cam.z]; }
+
+function zoomFit(){
+  let minx=W.W,miny=W.H,maxx=0,maxy=0,found=false;
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++){
+    if(W.ents[cellIdx(x,y)]||W.terrain[cellIdx(x,y)]){
+      found=true; if(x<minx)minx=x; if(y<miny)miny=y; if(x>maxx)maxx=x; if(y>maxy)maxy=y;
+    }
+  }
+  if(!found){minx=0;miny=0;maxx=W.W;maxy=W.H;}
+  const pad=3; minx-=pad;miny-=pad;maxx+=pad;maxy+=pad;
+  const zw=innerWidth/((maxx-minx)*CS), zh=innerHeight/((maxy-miny)*CS);
+  W.cam.z=clamp(Math.min(zw,zh),0.25,2.5);
+  W.cam.x=minx*CS-(innerWidth/W.cam.z-(maxx-minx)*CS)/2;
+  W.cam.y=miny*CS-(innerHeight/W.cam.z-(maxy-miny)*CS)/2;
+}
+
+function draw(t){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#0b0f14'; ctx.fillRect(0,0,innerWidth,innerHeight);
+  ctx.scale(W.cam.z,W.cam.z); ctx.translate(-W.cam.x,-W.cam.y);
+  const [vx0,vy0]=s2w(0,0),[vx1,vy1]=s2w(innerWidth,innerHeight);
+  const cx0=Math.max(0,Math.floor(vx0/CS)-1),cy0=Math.max(0,Math.floor(vy0/CS)-1);
+  const cx1=Math.min(W.W-1,Math.ceil(vx1/CS)+1),cy1=Math.min(W.H-1,Math.ceil(vy1/CS)+1);
+  const z=W.cam.z;
+  // ---- terrain
+  for(let y=cy0;y<=cy1;y++)for(let x=cx0;x<=cx1;x++){
+    const i=cellIdx(x,y),tr=W.terrain[i];
+    if(tr){
+      ctx.fillStyle=TERRAIN_COL[tr];
+      ctx.fillRect(x*CS,y*CS,CS,CS);
+      if(tr!==TERRAIN.rock){
+        // speckles
+        ctx.fillStyle='rgba(255,255,255,.16)';
+        for(let s=0;s<3;s++){
+          const hx=hash2(x*3+s,y*7+s,11),hy=hash2(x*5,y*3+s,23);
+          ctx.fillRect(x*CS+4+hx*20,y*CS+4+hy*20,3,3);
+        }
+      } else {
+        ctx.fillStyle='rgba(0,0,0,.25)';
+        ctx.fillRect(x*CS+6,y*CS+6,CS-12,CS-12);
+      }
+    } else {
+      ctx.fillStyle=((x+y)&1)?'#10151c':'#111720';
+      ctx.fillRect(x*CS,y*CS,CS,CS);
+    }
+  }
+  // grid lines
+  if(z>0.5){
+    ctx.strokeStyle='rgba(60,75,95,.35)'; ctx.lineWidth=1/z; ctx.beginPath();
+    for(let x=cx0;x<=cx1+1;x++){ctx.moveTo(x*CS,cy0*CS);ctx.lineTo(x*CS,(cy1+1)*CS);}
+    for(let y=cy0;y<=cy1+1;y++){ctx.moveTo(cx0*CS,y*CS);ctx.lineTo((cx1+1)*CS,y*CS);}
+    ctx.stroke();
+  }
+  // ---- entities
+  for(let y=cy0;y<=cy1;y++)for(let x=cx0;x<=cx1;x++){
+    const e=W.ents[cellIdx(x,y)]; if(!e)continue;
+    drawEnt(e,t,z);
+  }
+  // ---- items on belts
+  const agg = W.itemCount>3500;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let y=cy0;y<=cy1;y++)for(let x=cx0;x<=cx1;x++){
+    const e=W.ents[cellIdx(x,y)]; if(!e||!e.items)continue;
+    if(agg){
+      const tot=e.items.reduce((s,i)=>s+i.n,0);
+      if(tot>0){
+        ctx.fillStyle='rgba(240,200,90,.9)';
+        ctx.font='bold 10px monospace';
+        ctx.fillText(tot,x*CS+CS/2,y*CS+CS/2);
+      }
+      continue;
+    }
+    for(const it of e.items){
+      const d=DIRS[e.dir];
+      let px=x*CS + CS/2 + d[0]*(it.pos-0.5)*(CS-8);
+      let py=y*CS + CS/2 + d[1]*(it.pos-0.5)*(CS-8);
+      // splitter: drift toward chosen side near exit
+      if(e.kind==='splitter'&&it.pos>0.55){
+        const sd = it._side? DIRS[(e.dir+1)&3] : DIRS[(e.dir+3)&3];
+        const f=(it.pos-0.55)/0.45*0.28*CS;
+        px+=sd[0]*f; py+=sd[1]*f;
+      }
+      const c=ITEMS[it.type];
+      ctx.fillStyle=c.color;
+      const r= it.n>1?6:4.5;
+      ctx.beginPath(); ctx.arc(px,py,r,0,TAU); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.5)'; ctx.lineWidth=1; ctx.stroke();
+      if(it.n>1&&z>0.7){
+        ctx.fillStyle='#fff'; ctx.font='bold 8px monospace';
+        ctx.fillText(it.n,px,py-0.5);
+      }
+    }
+  }
+  // ---- overlays
+  drawOverlays(t,cx0,cy0,cx1,cy1);
+  // ---- ghosts / previews
+  drawGhosts(t);
+  // ---- selection rect
+  if(W.selRect){
+    const [a,b]=W.selRect;
+    const x=Math.min(a[0],b[0])*CS,y=Math.min(a[1],b[1])*CS;
+    const w=(Math.abs(a[0]-b[0])+1)*CS,h=(Math.abs(a[1]-b[1])+1)*CS;
+    ctx.fillStyle='rgba(63,182,255,.12)';ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle='#3fb6ff';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
+  }
+  // selected entity outline
+  if(W.sel){
+    ctx.strokeStyle='#f0a832';ctx.lineWidth=2;ctx.setLineDash([6,3]);
+    ctx.strokeRect(W.sel.x*CS+1,W.sel.y*CS+1,CS-2,CS-2);ctx.setLineDash([]);
+  }
+}
+
+function drawEnt(e,t,z){
+  const x=e.x*CS,y=e.y*CS,k=e.kind,def=KINDS[k];
+  const px=x+CS/2,py=y+CS/2;
+  const stall=e.stall;
+  // base tile
+  if(k!=='pole'){
+    ctx.fillStyle=def.color;
+    ctx.globalAlpha = (NEEDPOWER(k)&&powerFactor(e)<=0)?0.45:0.92;
+    rr(ctx,x+2,y+2,CS-4,CS-4,4);ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=1;rr(ctx,x+2,y+2,CS-4,CS-4,4);ctx.stroke();
+  }
+  ctx.fillStyle='#0d1117';
+  switch(k){
+    case 'belt':{
+      ctx.fillStyle='#46535f';ctx.fillRect(x+2,y+2,CS-4,CS-4);
+      // chevron
+      const d=DIRS[e.dir];
+      ctx.strokeStyle='#8fa3b8';ctx.lineWidth=3;ctx.beginPath();
+      const ox=px+d[0]*5,oy=py+d[1]*5;
+      ctx.moveTo(ox-d[1]*6-d[0]*5,oy-d[0]*6-d[1]*5);
+      ctx.lineTo(ox,oy);
+      ctx.lineTo(ox+d[1]*6-d[0]*5,oy+d[0]*6-d[1]*5);
+      ctx.stroke();
+      break;
+    }
+    case 'splitter':{
+      ctx.fillStyle='#4d5f75';ctx.fillRect(x+2,y+2,CS-4,CS-4);
+      ctx.strokeStyle='#c8d8ea';ctx.lineWidth=2;ctx.beginPath();
+      const ld=DIRS[(e.dir+3)&3],rd=DIRS[(e.dir+1)&3];
+      ctx.moveTo(px-ld[0]*9,py-ld[1]*9);ctx.lineTo(px+ld[0]*9,py+ld[1]*9);
+      ctx.moveTo(px-rd[0]*9,py-rd[1]*9);ctx.lineTo(px+rd[0]*9,py+rd[1]*9);
+      ctx.stroke();
+      ctx.fillStyle='#c8d8ea';
+      // input notch
+      const bd=DIRS[OPP(e.dir)];
+      ctx.fillRect(px+bd[0]*10-3,py+bd[1]*10-3,6,6);
+      break;
+    }
+    case 'merger':{
+      ctx.fillStyle='#4d5f75';ctx.fillRect(x+2,y+2,CS-4,CS-4);
+      ctx.strokeStyle='#c8d8ea';ctx.lineWidth=2;ctx.beginPath();
+      const d=DIRS[e.dir];
+      ctx.moveTo(px-d[0]*9,py-d[1]*9);ctx.lineTo(px+d[0]*9,py+d[1]*9);
+      ctx.moveTo(px+d[0]*2-d[1]*6,py+d[1]*2-d[0]*6);ctx.lineTo(px+d[0]*9,py+d[1]*9);
+      ctx.lineTo(px+d[0]*2+d[1]*6,py+d[1]*2+d[0]*6);
+      ctx.stroke();
+      break;
+    }
+    case 'inserter':{
+      // base + arm toward dir
+      const d=DIRS[e.dir];
+      const ang=Math.atan2(d[1],d[0]);
+      const sw=e.held? Math.min(1,e.t*2):0;
+      ctx.strokeStyle='#c8b060';ctx.lineWidth=4;ctx.beginPath();
+      ctx.moveTo(px-d[0]*10,py-d[1]*10);
+      const mx=px-d[0]*10+(d[0]*20)*sw, my=py-d[1]*10+(d[1]*20)*sw;
+      ctx.lineTo(mx,my);ctx.stroke();
+      ctx.fillStyle='#e8d080';ctx.beginPath();ctx.arc(mx,my,4,0,TAU);ctx.fill();
+      if(e.held){ctx.fillStyle=ITEMS[e.held.type].color;ctx.beginPath();ctx.arc(mx,my,5,0,TAU);ctx.fill();}
+      break;
+    }
+    case 'miner':{
+      ctx.fillStyle='#2c3844';ctx.font='15px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('⛏',px,py);
+      // progress bar
+      bar(x+5,y+CS-7,CS-10,3,e.progress,'#f0a832');
+      const left=W.deposit[cellIdx(e.x,e.y)];
+      if(left<200&&z>0.8){ctx.fillStyle='#f87171';ctx.font='8px monospace';ctx.fillText(left,px,y+8);}
+      break;
+    }
+    case 'smelter': case 'assembler':{
+      ctx.fillStyle='#0d1117';ctx.font='13px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(k==='smelter'?'♨':'⚒',px,py-3);
+      const r=RECIPES[e.recipe];
+      if(r&&z>0.6){
+        const outs=Object.keys(r.out);
+        ctx.font='9px monospace';
+        ctx.fillStyle=ITEMS[outs[0]].color;
+        ctx.fillText(ITEMS[outs[0]].glyph,px,py+7);
+      }
+      bar(x+5,y+CS-6,CS-10,3,e.working?e.progress:0,'#4ade80');
+      // output arrow
+      dirArrow(e.dir,px,py,'#4ade80');
+      break;
+    }
+    case 'generator':{
+      ctx.fillStyle='#0d1117';ctx.font='14px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('⚡',px,py-2);
+      const fuelT=(e.inBuf.coal||0)+ (e.burnT>0?1:0);
+      bar(x+5,y+CS-6,CS-10,3,Math.min(1,fuelT/8), e.burnT>0?'#fbbf24':'#6b7280');
+      if(e.burnT>0){
+        ctx.fillStyle=`rgba(251,191,36,${0.25+0.2*Math.sin(t*8)})`;
+        ctx.beginPath();ctx.arc(px,py,10+2*Math.sin(t*8),0,TAU);ctx.fill();
+      }
+      break;
+    }
+    case 'pole':{
+      ctx.strokeStyle='#e8c840';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(px,py-8);ctx.lineTo(px,py+8);
+      ctx.moveTo(px-6,py-4);ctx.lineTo(px+6,py-4);ctx.stroke();
+      ctx.fillStyle='#e8c840';ctx.beginPath();ctx.arc(px,py-8,2.5,0,TAU);ctx.fill();
+      break;
+    }
+    case 'storage':{
+      ctx.strokeStyle='#8898a8';ctx.lineWidth=2;
+      ctx.strokeRect(x+7,y+8,CS-14,CS-16);
+      const tot=bufCount(e.inv);
+      bar(x+8,y+CS-12,CS-16,4,tot/STORAGE_CAP,'#8898a8');
+      if(tot>0&&z>0.6){ctx.fillStyle='#d7e1ec';ctx.font='9px monospace';ctx.fillText(tot,px,py-2);}
+      break;
+    }
+    case 'delivery':{
+      ctx.strokeStyle='#48c888';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(px,py,10,0,TAU);ctx.stroke();
+      ctx.beginPath();ctx.arc(px,py,4,0,TAU);ctx.stroke();
+      const p=0.15*Math.sin(t*3)+0.85;
+      ctx.strokeStyle=`rgba(72,200,136,${p})`;
+      ctx.beginPath();ctx.arc(px,py,12+3*Math.sin(t*3),0,TAU);ctx.stroke();
+      break;
+    }
+  }
+  // status glyph (subtle, always on if status overlay)
+  if(W.overlays.status&&stall){
+    ctx.fillStyle=stallColor(stall);ctx.font='bold 10px monospace';ctx.textAlign='right';
+    ctx.fillText(stallIcon(stall),x+CS-4,y+9);
+    ctx.textAlign='center';
+  }
+}
+function stallIcon(s){return s==='nopower'?'⚡':s==='starved'?'…':s==='blocked'?'✦':s==='depleted'?'∅':s==='nofuel'?'▱':s==='idle'?'·':'!';}
+function stallColor(s){return s==='nopower'?'#fbbf24':s==='blocked'?'#f87171':s==='starved'?'#fb923c':'#9ca3af';}
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function bar(x,y,w,h,f,col){f=clamp(f,0,1);ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(x,y,w,h);ctx.fillStyle=col;ctx.fillRect(x,y,w*f,h);}
+function dirArrow(d,px,py,col){
+  const v=DIRS[d];ctx.fillStyle=col;ctx.beginPath();
+  const bx=px+v[0]*10,by=py+v[1]*10;
+  ctx.moveTo(bx+v[0]*3,by+v[1]*3);
+  ctx.lineTo(bx-v[0]*3-v[1]*4,by-v[1]*3-v[0]*4);
+  ctx.lineTo(bx-v[0]*3+v[1]*4,by-v[1]*3+v[0]*4);
+  ctx.closePath();ctx.fill();
+}
+
+// ---------------- overlays
+function drawOverlays(t,cx0,cy0,cx1,cy1){
+  const o=W.overlays;
+  if(!(o.flow||o.conn||o.power||o.util||o.cong||o.blocked))return;
+  const NETCOL=['#3fb6ff','#4ade80','#f0a832','#f87171','#c084fc','#2dd4bf','#f472b6','#a3e635'];
+  for(let y=cy0;y<=cy1;y++)for(let x=cx0;x<=cx1;x++){
+    const e=W.ents[cellIdx(x,y)];if(!e)continue;
+    const px=e.x*CS,py=e.y*CS;
+    if(o.flow&&ISBELT(e.kind)){
+      // animated flow chevrons
+      const d=DIRS[e.dir];
+      const ph=(t*1.2)%1;
+      ctx.strokeStyle='rgba(63,182,255,.55)';ctx.lineWidth=2;ctx.beginPath();
+      for(let s=0;s<2;s++){
+        const p=((ph+s*0.5)%1);
+        const ax=px+CS/2+d[0]*(p-0.5)*(CS-10), ay=py+CS/2+d[1]*(p-0.5)*(CS-10);
+        ctx.moveTo(ax-d[0]*3-d[1]*4,ay-d[1]*3-d[0]*4);
+        ctx.lineTo(ax,ay);ctx.lineTo(ax-d[0]*3+d[1]*4,ay-d[1]*3+d[0]*4);
+      }
+      ctx.stroke();
+    }
+    if(o.cong&&e.items&&e.items.length){
+      const f=e.items.length/3;
+      ctx.fillStyle=`rgba(248,113,113,${f*0.45})`;ctx.fillRect(px+2,py+2,CS-4,CS-4);
+    }
+    if(o.util&&NEEDPOWER(e.kind)){
+      const u=clamp(e.util||0,0,1);
+      ctx.fillStyle=`rgba(${Math.round(248-(248-74)*u)},${Math.round(113+(222-113)*u)},113,.35)`;
+      ctx.fillRect(px+2,py+2,CS-4,CS-4);
+    }
+    if(o.blocked&&(e.stall==='blocked'||e.stall==='nopower')){
+      ctx.strokeStyle='#f87171';ctx.lineWidth=2;ctx.strokeRect(px+1,py+1,CS-2,CS-2);
+    }
+    if(o.conn){
+      ctx.strokeStyle='rgba(160,180,200,.5)';ctx.lineWidth=1.5;ctx.beginPath();
+      const cxp=px+CS/2,cyp=py+CS/2;
+      if(ISBELT(e.kind)){
+        const targets=e.kind==='splitter'?splitterTargets(e):[forwardCell(e)];
+        for(const [tx,ty] of targets){ctx.moveTo(cxp,cyp);ctx.lineTo(tx*CS+CS/2,ty*CS+CS/2);}
+      } else if(ISMACHINE(e.kind)||e.kind==='miner'||e.kind==='generator'){
+        const [fx,fy]=forwardCell(e);
+        ctx.moveTo(cxp,cyp);ctx.lineTo(fx*CS+CS/2,fy*CS+CS/2);
+      } else if(e.kind==='inserter'){
+        const d=DIRS[e.dir];
+        ctx.moveTo(cxp-d[0]*CS,cyp-d[1]*CS);ctx.lineTo(cxp,cyp);
+        ctx.lineTo(cxp+d[0]*CS,cyp+d[1]*CS);
+      }
+      ctx.stroke();
+    }
+    if(o.power){
+      if(e.kind==='pole'||e.kind==='generator'){
+        const nc=e.net>=0?NETCOL[e.net%NETCOL.length]:'#666';
+        ctx.strokeStyle=nc;ctx.globalAlpha=.5;ctx.lineWidth=1.5;
+        ctx.strokeRect(px-POLE_RANGE*CS,py-POLE_RANGE*CS,(2*POLE_RANGE+1)*CS,(2*POLE_RANGE+1)*CS);
+        ctx.globalAlpha=1;
+      }
+      if(NEEDPOWER(e.kind)){
+        ctx.fillStyle=e.net>=0?NETCOL[e.net%NETCOL.length]:'rgba(248,113,113,.8)';
+        ctx.fillRect(px+CS-8,py+3,5,5);
+      }
+    }
+  }
+  // power net links
+  if(o.power){
+    ctx.lineWidth=1.5;
+    for(const n of W.nets){
+      ctx.strokeStyle=NETCOL[W.nets.indexOf(n)%NETCOL.length];ctx.globalAlpha=.6;
+      ctx.beginPath();
+      for(const m of n.members)for(const m2 of n.members){
+        if(m!==m2&&Math.max(Math.abs(m.x-m2.x),Math.abs(m.y-m2.y))<=POLE_RANGE){
+          ctx.moveTo(m.x*CS+CS/2,m.y*CS+CS/2);ctx.lineTo(m2.x*CS+CS/2,m2.y*CS+CS/2);
+        }
+      }
+      ctx.stroke();ctx.globalAlpha=1;
+    }
+  }
+}
+
+// ---------------- build ghosts
+let ghostPath=[]; // belt drag preview cells [{x,y,dir,ok}]
+function drawGhosts(t){
+  const hov=W.hover;
+  if(!hov)return;
+  const [hx,hy]=hov;
+  const k=W.tool;
+  if(ghostPath.length&&k==='belt'){
+    for(const g of ghostPath){
+      ctx.globalAlpha=.55;
+      if(g.ok){ctx.fillStyle='#5c6b7d';ctx.fillRect(g.x*CS+2,g.y*CS+2,CS-4,CS-4);
+        const d=DIRS[g.dir];ctx.strokeStyle='#c8d8ea';ctx.lineWidth=3;ctx.beginPath();
+        const px=g.x*CS+CS/2+d[0]*5,py=g.y*CS+CS/2+d[1]*5;
+        ctx.moveTo(px-d[1]*6-d[0]*5,py-d[0]*6-d[1]*5);ctx.lineTo(px,py);ctx.lineTo(px+d[1]*6-d[0]*5,py+d[0]*6-d[1]*5);ctx.stroke();
+      } else {ctx.fillStyle='rgba(248,113,113,.5)';ctx.fillRect(g.x*CS+2,g.y*CS+2,CS-4,CS-4);}
+      ctx.globalAlpha=1;
+    }
+    return;
+  }
+  if(KINDS[k]){
+    const ok=!canPlace(k,hx,hy)&&(!W.settings.costMode||W.settings.costMode!=='on'||costOf(k)<=W.credits);
+    ctx.globalAlpha=.55;
+    ctx.fillStyle=ok?KINDS[k].color:'#f87171';
+    ctx.fillRect(hx*CS+2,hy*CS+2,CS-4,CS-4);
+    ctx.globalAlpha=1;
+    const d=DIRS[W.buildDir];
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();
+    const px=hx*CS+CS/2,py=hy*CS+CS/2;
+    ctx.moveTo(px,py);ctx.lineTo(px+d[0]*10,py+d[1]*10);ctx.stroke();
+    if(k==='pole'){
+      ctx.strokeStyle='rgba(232,200,64,.4)';ctx.lineWidth=1;
+      ctx.strokeRect(hx*CS-POLE_RANGE*CS,hy*CS-POLE_RANGE*CS,(2*POLE_RANGE+1)*CS,(2*POLE_RANGE+1)*CS);
+    }
+  } else if(k==='erase'){
+    ctx.strokeStyle='#f87171';ctx.lineWidth=2;ctx.strokeRect(hx*CS+1,hy*CS+1,CS-2,CS-2);
+  }
+}
+// ============================================================ UI (DOM side)
+const $=id=>document.getElementById(id);
+const elStats=$('stats'),elTools=$('tools'),elInsp=$('insp'),elAnal=$('anal'),
+  elContract=$('contract'),elTooltip=$('tooltip'),elMenus=$('menus'),
+  elToast=$('toast'),elBanner=$('banner'),elSelBox=$('selbox');
+
+function toast(msg,cls){
+  const d=document.createElement('div');
+  d.className='toast '+(cls||'');
+  d.textContent=msg; elToast.appendChild(d);
+  setTimeout(()=>d.remove(),3100);
+}
+function itemChip(t){const c=ITEMS[t];return `<span class="chip" style="background:${c.color}"></span>${c?c.name:t}`;}
+function fmt(n){return n>=10000?(n/1000).toFixed(1)+'k':Math.round(n*10)/10;}
+
+// ---------------- toolbar
+function buildToolbar(){
+  elTools.innerHTML='';
+  const mkBtn=(id,icon,label,cost)=>{
+    const b=document.createElement('button');
+    b.dataset.tool=id;
+    b.innerHTML=`<span class="ic">${icon}</span><span class="lbl">${label}</span>`+
+      (cost!==undefined?`<span class="cost">${cost}</span>`:'');
+    b.onclick=()=>{setTool(id);sfx('click');};
+    elTools.appendChild(b);
+  };
+  for(const id of BUILD_ORDER){
+    if(id==='-'){const s=document.createElement('div');s.className='tsep';elTools.appendChild(s);continue;}
+    if(TOOLDEF[id]){mkBtn(id,TOOLDEF[id].icon,TOOLDEF[id].name);}
+    else mkBtn(id,KINDS[id].icon,KINDS[id].name,KINDS[id].cost);
+  }
+  refreshToolCosts();
+}
+function refreshToolCosts(){
+  elTools.querySelectorAll('button').forEach(b=>{
+    const id=b.dataset.tool, c=b.querySelector('.cost');
+    if(c&&KINDS[id]){
+      const cost=costOf(id);
+      c.textContent=W.settings.costMode==='on'?cost:'∞';
+      b.classList.toggle('broke',W.settings.costMode==='on'&&cost>W.credits);
+    }
+  });
+}
+function setTool(t){
+  W.tool=t; ghostPath=[];
+  if(KINDS[t])W.buildKind=t;
+  updateToolbar();
+}
+function updateToolbar(){
+  elTools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===W.tool));
+}
+
+// ---------------- stats bar (live overlay)
+let lastStatsTxt='';
+function updateStatsBar(){
+  const s=W.stats;
+  let sup=0,dem=0; for(const n of W.nets){sup+=n.supply;dem+=n.demand;}
+  const dm=W.stats.series;
+  let dpm=0;
+  for(const t in dm){const arr=dm[t];for(let i=Math.max(0,arr.length-10);i<arr.length;i++)dpm+=arr[i].d;}
+  dpm*=6;
+  const pcls=sup>=dem?'good':'bad';
+  const obj=W.contract?`${itemChip(W.contract.item)} ${W.contract.got}/${W.contract.amount}`:'sandbox';
+  const txt=
+   `<span class="st"><span class="k">FPS</span><span class="v">${s.fps|0}</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">tick</span><span class="v">${W.tick}</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">speed</span><span class="v">${W.paused?'⏸':W.speed+'x'}</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">items</span><span class="v">${W.itemCount}</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">mach</span><span class="v good">${s.machines-s.stalled}</span><span class="k">/</span><span class="v ${s.stalled?'warn':'good'}">${s.stalled}⏸</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">⚡</span><span class="v ${pcls}">${Math.round(sup)}/${Math.round(dem)}</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">deliv</span><span class="v">${dpm.toFixed(0)}/m</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">tool</span><span class="v">${(KINDS[W.tool]||TOOLDEF[W.tool]||{name:W.tool}).name.split(' ')[0]}${KINDS[W.tool]?' '+DIRNAME[W.buildDir]:''}</span></span><span class="sep">|</span>`+
+   `<span class="st"><span class="k">obj</span><span class="v">${obj}</span></span>`+
+   (W.settings.costMode==='on'?`<span class="sep">|</span><span class="st"><span class="k">¢</span><span class="v ${W.credits<20?'warn':''}">${W.credits}</span></span>`:'');
+  if(txt!==lastStatsTxt){elStats.innerHTML=txt;lastStatsTxt=txt;}
+}
+
+// ---------------- contract panel
+function updateContractPanel(){
+  if(!W.contract){elContract.classList.add('hidden');return;}
+  const c=W.contract;
+  elContract.classList.remove('hidden');
+  const mm=Math.floor(c.left/60),ss=Math.floor(c.left%60);
+  elContract.innerHTML=
+    `<div><span class="ct">CONTRACT</span> ${itemChip(c.item)}</div>`+
+    `<div>${c.got} / ${c.amount} delivered <span class="ctime">· ${mm}:${String(ss).padStart(2,'0')} left</span></div>`+
+    `<div class="cbar"><div style="width:${(100*c.got/c.amount).toFixed(1)}%"></div></div>`+
+    (W.settings.costMode==='on'?`<div class="ctime">credits: ${W.credits}</div>`:'');
+}
+
+// ---------------- banner
+function showBanner(win){
+  const c=W.contract;if(!c)return;
+  elBanner.style.display='flex';
+  $('ban-title').textContent=win?'Contract fulfilled':'Contract failed';
+  $('ban-sub').innerHTML=win?
+    `${itemChip(c.item)} ${c.got}/${c.amount} delivered with ${Math.round(c.left)}s to spare`:
+    `Only ${c.got}/${c.amount} ${itemChip(c.item)} delivered.`;
+  const s=c.score||{score:0};
+  $('ban-score').textContent='Score: '+s.score;
+  $('ban-detail').innerHTML=`<div class="kv"><span class="k">time bonus</span><span class="v">${s.timeBonus||0}</span></div>`+
+    `<div class="kv"><span class="k">credits left</span><span class="v">${s.creditBonus||0}</span></div>`+
+    `<div class="kv"><span class="k">footprint</span><span class="v">${s.footprint||0} tiles</span></div>`;
+}
+function hideBanner(){elBanner.style.display='none';}
+
+// ---------------- inspector
+let inspTimer=null;
+function updateInspector(){
+  const e=W.sel;
+  if(!e){elInsp.classList.add('hidden');return;}
+  elInsp.classList.remove('hidden');
+  const def=KINDS[e.kind];
+  let h=`<h3>${def.icon} ${def.name} <span style="color:var(--dim)">(${e.x},${e.y}) ${DIRNAME[e.dir]}</span><span class="x" id="inx">✕</span></h3>`;
+  if(e.stall)h+=`<div class="kv"><span class="k">status</span><span class="v" style="color:${stallColor(e.stall)}">${e.stall}</span></div>`;
+  else if(NEEDPOWER(e.kind)&&e.net<0)h+=`<div class="kv"><span class="k">status</span><span class="v" style="color:var(--warn)">unpowered</span></div>`;
+  if(NEEDPOWER(e.kind)){
+    const net=W.nets[e.net];
+    h+=`<div class="kv"><span class="k">power</span><span class="v">${e.net<0?'—':(powerFactor(e)*100).toFixed(0)+'%'} · draw ${machineDrawOf(e).toFixed(1)}</span></div>`;
+  }
+  if(ISMACHINE(e.kind)){
+    const r=RECIPES[e.recipe];
+    h+=`<div class="kv"><span class="k">recipe</span><span class="v">${r?r.name:'—'}</span></div>`;
+    h+=`<div style="margin:4px 0">`+RECIPES_FOR[e.kind].map(rid=>{
+      const rr=RECIPES[rid];
+      return `<button class="recbtn ${e.recipe===rid?'on':''}" data-rec="${rid}">${ITEMS[Object.keys(rr.out)[0]].glyph} ${rr.name}</button>`;
+    }).join('')+`</div>`;
+    h+=`<div class="kv"><span class="k">in</span><span class="v">${bufStr(e.inBuf)}</span></div>`;
+    h+=`<div class="kv"><span class="k">out</span><span class="v">${bufStr(e.outBuf)}</span></div>`;
+    h+=`<div class="kv"><span class="k">progress</span><span class="v">${(e.progress*100).toFixed(0)}%</span></div>`;
+    // modules
+    h+=`<div class="kv"><span class="k">modules</span><span class="v">⚡${e.mods.speed} ⛽${e.mods.eff} ▤${e.mods.prod}</span></div>`;
+    h+=`<div class="rowbtns">`+Object.keys(MODS).map(mk=>{
+      const m=MODS[mk];
+      return `<button data-mod="${mk}" ${e.mods[mk]>=m.max?'disabled':''} title="${m.desc} (${m.cost}¢)">+${m.name.split(' ')[0]}</button>`;
+    }).join('')+`</div>`;
+  }
+  if(e.kind==='miner'){
+    const i=cellIdx(e.x,e.y);
+    h+=`<div class="kv"><span class="k">deposit</span><span class="v">${W.deposit[i]} left</span></div>`;
+    h+=`<div class="kv"><span class="k">out</span><span class="v">${bufStr(e.outBuf)}</span></div>`;
+    h+=`<div class="kv"><span class="k">progress</span><span class="v">${(e.progress*100).toFixed(0)}%</span></div>`;
+  }
+  if(e.kind==='generator'){
+    const net=W.nets[e.net];
+    h+=`<div class="kv"><span class="k">fuel</span><span class="v">${e.inBuf.coal||0} coal ${e.burnT>0?'+burning '+e.burnT.toFixed(1)+'s':'(idle)'}</span></div>`;
+    h+=`<div class="kv"><span class="k">output</span><span class="v">${e.burnT>0?GEN_OUT:0} PU</span></div>`;
+    if(net)h+=`<div class="kv"><span class="k">network</span><span class="v">${Math.round(net.supply)}/${Math.round(net.demand)} PU (${(net.factor*100).toFixed(0)}%)</span></div>`;
+  }
+  if(e.items){
+    h+=`<div class="kv"><span class="k">carrying</span><span class="v">${e.items.map(i=>ITEMS[i.type].glyph+(i.n>1?'×'+i.n:'')).join(' ')||'—'}</span></div>`;
+    h+=`<div class="kv"><span class="k">fill</span><span class="v">${e.items.length}/3 slots</span></div>`;
+  }
+  if(e.kind==='storage'||e.kind==='delivery'){
+    h+=`<div class="kv"><span class="k">contents</span><span class="v">${bufStr(e.inv)}</span></div>`;
+  }
+  if(e.kind==='inserter'){
+    h+=`<div class="kv"><span class="k">holding</span><span class="v">${e.held?ITEMS[e.held.type].name+' ×'+e.held.n:'—'}</span></div>`;
+  }
+  h+=`<canvas class="spark" id="ispark" width="260" height="30"></canvas>`;
+  h+=`<div class="rowbtns">`+
+     `<button id="irot" title="Rotate (R)">⟳ Rotate</button>`+
+     `<button id="icopy" title="Copy config">⧉ Copy</button>`+
+     `<button id="idel" class="danger" title="Delete">✕ Delete</button></div>`;
+  elInsp.innerHTML=h;
+  $('inx').onclick=()=>{W.sel=null;updateInspector();};
+  $('irot').onclick=()=>{e.dir=(e.dir+1)&3;W.powerDirty=true;sfx('rotate');updateInspector();};
+  $('idel').onclick=()=>{pushUndo();removeEnt(e.x,e.y);sfx('erase');updateInspector();};
+  $('icopy').onclick=()=>{copyEntConfig(e);sfx('pick');};
+  elInsp.querySelectorAll('[data-rec]').forEach(b=>b.onclick=()=>{e.recipe=b.dataset.rec;sfx('click');updateInspector();});
+  elInsp.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{
+    const mk=b.dataset.mod,m=MODS[mk];
+    if(W.settings.costMode==='on'&&W.credits<m.cost){toast('Not enough credits','err');return;}
+    if(e.mods[mk]>=m.max)return;
+    pushUndo(); if(W.settings.costMode==='on')W.credits-=m.cost;
+    e.mods[mk]++; W.powerDirty=true; sfx('place'); updateInspector();
+  });
+}
+function bufStr(b){
+  const parts=[];for(const t in b){if(b[t]>0)parts.push(`${ITEMS[t].glyph}${b[t]}`);}
+  return parts.join(' ')||'—';
+}
+function copyEntConfig(e){
+  W.buildKind=e.kind;W.buildDir=e.dir;W.tool=e.kind;
+  if(ISMACHINE(e.kind))W.recipeSel=e.recipe;
+  updateToolbar();
+}
+
+// ---------------- analytics
+function ratesFor(t){
+  const s=W.stats.series[t]||[];
+  let p=0,c=0,d=0;const n=Math.min(10,s.length);
+  for(let i=s.length-n;i<s.length;i++){p+=s[i].p;c+=s[i].c;d+=s[i].d;}
+  return{p:p*6,c:c*6,d:d*6}; // units/min
+}
+function updateAnalytics(){
+  if(elAnal.classList.contains('hidden'))return;
+  let h='<h3>Analytics <span class="x" id="anx">✕</span></h3>';
+  h+='<table class="rate-table"><tr><th>item</th><th>+prod/m</th><th>−cons/m</th><th>➔deliv/m</th><th>stock</th></tr>';
+  for(const t in ITEMS){
+    const r=ratesFor(t);
+    const tot=W.stats.delivered[t]||0;
+    if(r.p+r.c+r.d===0&&tot===0&&!(W.stats.produced[t]))continue;
+    h+=`<tr><td><span class="chip" style="background:${ITEMS[t].color}"></span>${ITEMS[t].name}</td>`+
+       `<td>${r.p?r.p.toFixed(0):''}</td><td>${r.c?r.c.toFixed(0):''}</td><td>${r.d?r.d.toFixed(0):''}</td><td>${tot||''}</td></tr>`;
+  }
+  h+='</table><canvas class="spark" id="as-rate" width="260" height="34"></canvas>';
+  // power
+  let sup=0,dem=0;for(const n of W.nets){sup+=n.supply;dem+=n.demand;}
+  h+=`<div class="kv" style="margin-top:6px"><span class="k">power supply/demand</span><span class="v" style="color:${sup>=dem?'var(--good)':'var(--bad)'}">${Math.round(sup)} / ${Math.round(dem)} PU</span></div>`;
+  h+=`<canvas class="spark" id="as-pow" width="260" height="30"></canvas>`;
+  // stalls
+  const st=W.stats.stalls;
+  const tot=st.starved+st.blocked+st.nopower+st.depleted+st.nofuel;
+  h+=`<div class="kv"><span class="k">stalled machines</span><span class="v">${tot}</span></div><div class="stallist">`;
+  if(st.nopower)h+=`<div>⚡ no power ×${st.nopower}</div>`;
+  if(st.starved)h+=`<div>… starved inputs ×${st.starved}</div>`;
+  if(st.blocked)h+=`<div>✦ blocked outputs ×${st.blocked}</div>`;
+  if(st.nofuel)h+=`<div>▱ no fuel ×${st.nofuel}</div>`;
+  if(st.depleted)h+=`<div>∅ depleted ×${st.depleted}</div>`;
+  if(!tot)h+=`<div style="color:var(--dim)">no stalls detected</div>`;
+  h+='</div>';
+  // machine list (utilization) — top 8 by util
+  const ms=[];
+  for(let i=0;i<W.ents.length;i++){const e=W.ents[i];if(e&&(ISMACHINE(e.kind)||e.kind==='miner'||e.kind==='inserter'))ms.push(e);}
+  ms.sort((a,b)=>(b.util||0)-(a.util||0));
+  h+='<div class="kv" style="margin-top:4px"><span class="k">machines</span><span class="k">util / stall</span></div>';
+  for(const e of ms.slice(0,8)){
+    h+=`<div class="kv"><span class="k">${KINDS[e.kind].icon} (${e.x},${e.y})</span><span class="v">${((e.util||0)*100).toFixed(0)}% ${e.stall||''}</span></div>`;
+  }
+  elAnal.innerHTML=h;
+  $('anx').onclick=()=>elAnal.classList.add('hidden');
+  // sparklines
+  drawSpark($('as-pow'),W.stats.powerSeries.map(s=>s.s),W.stats.powerSeries.map(s=>s.d));
+  // combined prod rate
+  const comb=[];
+  const len=Math.max(0,...Object.values(W.stats.series).map(s=>s.length));
+  for(let i=0;i<len;i++){let s=0;for(const t in W.stats.series){const a=W.stats.series[t];if(a[i])s+=a[i].p;}comb.push(s);}
+  drawSpark($('as-rate'),comb,null,'#4ade80');
+}
+function drawSpark(cv2,seriesA,seriesB,colA){
+  if(!cv2)return;
+  const c=cv2.getContext('2d');c.clearRect(0,0,cv2.width,cv2.height);
+  const all=(seriesA||[]).concat(seriesB||[]);
+  const mx=Math.max(1,...all);
+  const plot=(series,col)=>{
+    if(!series||!series.length)return;
+    c.strokeStyle=col;c.lineWidth=1.5;c.beginPath();
+    series.forEach((v,i)=>{
+      const x=i/(Math.max(1,series.length-1))*cv2.width;
+      const y=cv2.height-2-(v/mx)*(cv2.height-6);
+      i?c.lineTo(x,y):c.moveTo(x,y);
+    });
+    c.stroke();
+  };
+  plot(seriesA,colA||'#3fb6ff');plot(seriesB,'#f0a832');
+}
+
+// ---------------- menus (presets / settings / save)
+let openMenu=null;
+function closeMenus(){elMenus.innerHTML='';openMenu=null;}
+function toggleMenu(name,builder){
+  if(openMenu===name){closeMenus();return;}
+  closeMenus();openMenu=name;
+  const m=document.createElement('div');m.className='menu';
+  const r=$('btn-'+name).getBoundingClientRect();
+  m.style.top=(r.bottom+6)+'px';m.style.right=Math.max(8,innerWidth-r.right)+'px';
+  builder(m);
+  elMenus.appendChild(m);
+}
+
+function menuPresets(m){
+  m.innerHTML='<h3>Presets & Contracts</h3>';
+  const sec=(t)=>{const d=document.createElement('div');d.className='tlabel';
+    d.style.cssText='color:var(--dim);font-size:10px;margin:6px 0 2px';d.textContent=t;m.appendChild(d);};
+  sec('CONTRACTS');
+  for(const c of CONTRACTS){
+    const b=document.createElement('button');b.className='presetbtn';
+    b.innerHTML=`<b>${c.name}</b><small>${c.desc}</small>`;
+    b.onclick=()=>{loadPreset(c.id);closeMenus();};
+    m.appendChild(b);
+  }
+  sec('SANDBOX PRESETS');
+  for(const p of PRESETS){
+    const b=document.createElement('button');b.className='presetbtn';
+    b.innerHTML=`<b>${p.name}</b><small>${p.desc}</small>`;
+    b.onclick=()=>{loadPreset(p.id);closeMenus();};
+    m.appendChild(b);
+  }
+  sec('EMPTY MAP');
+  const b=document.createElement('button');b.className='presetbtn';
+  b.innerHTML='<b>Blank map</b><small>Fresh terrain from current seed</small>';
+  b.onclick=()=>{newWorld(W.settings.gridW,W.settings.gridH,W.settings.seed);
+    W.presetName='Blank';zoomFit();closeMenus();};
+  m.appendChild(b);
+}
+
+function menuSettings(m){
+  m.innerHTML='<h3>Simulation settings</h3>';
+  const rows=[];
+  for(const k in SETTINGS_DEF){
+    const d=SETTINGS_DEF[k];
+    const row=document.createElement('div');row.className='mrow';
+    if(d.opts){
+      row.innerHTML=`<label>${d.label}</label>`;
+      const sel=document.createElement('select');
+      d.opts.forEach(o=>{const op=document.createElement('option');op.value=o;op.textContent=o;sel.appendChild(op);});
+      sel.value=W.settings[k];
+      sel.onchange=()=>{W.settings[k]=sel.value;if(k==='costMode')refreshToolCosts();};
+      row.appendChild(sel);
+    } else {
+      row.innerHTML=`<label>${d.label}</label>`;
+      const inp=document.createElement('input');
+      inp.type='text';inp.value=W.settings[k];inp.style.width='70px';
+      inp.onchange=()=>{
+        let v=parseFloat(inp.value);
+        if(isNaN(v)){inp.value=W.settings[k];return;}
+        if(d.min!==undefined)v=clamp(v,d.min,d.max);
+        W.settings[k]=v;
+        if((k==='gridW'||k==='gridH'||k==='seed')&&(v!==W.W&&k==='gridW'||v!==W.H&&k==='gridH'||k==='seed'))
+          toast('Grid/seed applies on next blank map or preset','err');
+      };
+      row.appendChild(inp);
+      if(d.min!==undefined)row.title=`${d.min} – ${d.max}`;
+    }
+    m.appendChild(row);rows.push(row);
+  }
+  const note=document.createElement('div');
+  note.style.cssText='color:var(--dim);font-size:10px;margin-top:6px';
+  note.textContent='Speed/belt/machine/density changes apply live. Grid & seed apply to new maps.';
+  m.appendChild(note);
+}
+
+function menuSave(m){
+  m.innerHTML='<h3>Save / Load / Share</h3>';
+  const row=(html)=>{const d=document.createElement('div');d.className='mrow';d.innerHTML=html;m.appendChild(d);return d;};
+  row(`<button id="sv-dl" style="flex:1">⬇ Export JSON</button><button id="sv-png" style="flex:1">🖼 PNG</button><button id="sv-share" style="flex:1">🔗 Share code</button>`);
+  row(`<button id="sv-ul" style="flex:1">⬆ Import JSON…</button><button id="sv-paste" style="flex:1">📋 Import code</button><input type="file" id="sv-file" accept=".json" class="hidden">`);
+  const slots=lsSlots();
+  row(`<div style="width:100%;color:var(--dim);font-size:10px">NAMED SLOTS (localStorage)</div>`);
+  const nr=row(`<input type="text" id="sv-name" placeholder="slot name" style="flex:1"><button id="sv-save">Save</button>`);
+  const names=Object.keys(slots).sort();
+  if(lsAutosaveGet()){
+    const r=row(`<button style="flex:1" data-auto>↺ autosave (${new Date(JSON.parse(localStorage.getItem(LS_AUTO)).t).toLocaleTimeString()})</button>`);
+    r.querySelector('[data-auto]').onclick=()=>{
+      const d=lsAutosaveGet();const res=deserializeWorld(d);
+      if(res.ok){toast('Autosave loaded');zoomFit();closeMenus();}else toast('Load failed: '+res.err,'err');
+    };
+  }
+  for(const nm of names){
+    const r=row(`<button style="flex:1" data-load="${nm}">${nm}</button><button class="danger" data-del="${nm}">✕</button>`);
+    r.querySelector('[data-load]').onclick=()=>{
+      const d=lsLoad(nm);const res=deserializeWorld(d);
+      if(res.ok){toast('Loaded slot '+nm);zoomFit();closeMenus();}else toast('Load failed: '+res.err,'err');
+    };
+    r.querySelector('[data-del]').onclick=()=>{lsDelete(nm);closeMenus();};
+  }
+  m.querySelector('#sv-save').onclick=()=>{
+    const nm=m.querySelector('#sv-name').value.trim()||('slot'+Date.now()%10000);
+    if(lsSave(nm))toast('Saved "'+nm+'"');else toast('Save failed (storage full?)','err');
+  };
+  m.querySelector('#sv-dl').onclick=()=>{
+    const blob=new Blob([JSON.stringify(serializeWorld())],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='foundry-save.json';a.click();URL.revokeObjectURL(a.href);
+  };
+  m.querySelector('#sv-ul').onclick=()=>m.querySelector('#sv-file').click();
+  m.querySelector('#sv-file').onchange=ev=>{
+    const f=ev.target.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=()=>{try{
+      const res=deserializeWorld(JSON.parse(rd.result));
+      if(res.ok){toast('Imported save');zoomFit();closeMenus();}
+      else toast('Import failed: '+res.err,'err');
+    }catch(e){toast('Import failed: bad JSON','err');}};
+    rd.readAsText(f);
+  };
+  m.querySelector('#sv-share').onclick=()=>{
+    const code=shareEncode();
+    navigator.clipboard?.writeText(code).then(()=>toast('Share code copied ('+code.length+' chars)'))
+      .catch(()=>{prompt('Share code:',code);});
+  };
+  m.querySelector('#sv-paste').onclick=()=>{
+    const code=prompt('Paste share code:');
+    if(!code)return;
+    const r=shareDecode(code);
+    if(r.err){toast('Bad code: '+r.err,'err');return;}
+    const res=deserializeWorld(r.data);
+    if(res.ok){toast('Share code imported');zoomFit();closeMenus();}
+    else toast('Import failed: '+res.err,'err');
+  };
+  m.querySelector('#sv-png').onclick=()=>exportPNG();
+}
+
+function exportPNG(){
+  // render whole factory bounds to offscreen canvas
+  let minx=W.W,miny=W.H,maxx=0,maxy=0;
+  for(let y=0;y<W.H;y++)for(let x=0;x<W.W;x++)
+    if(W.ents[cellIdx(x,y)]||W.terrain[cellIdx(x,y)]){
+      if(x<minx)minx=x;if(y<miny)miny=y;if(x>maxx)maxx=x;if(y>maxy)maxy=y;}
+  minx=Math.max(0,minx-1);miny=Math.max(0,miny-1);
+  maxx=Math.min(W.W-1,maxx+1);maxy=Math.min(W.H-1,maxy+1);
+  const oc=document.createElement('canvas');
+  oc.width=(maxx-minx+1)*CS;oc.height=(maxy-miny+1)*CS;
+  const oc2=oc.getContext('2d');
+  const oldCam={...W.cam},oldCtx=ctx;
+  // temporarily render via main ctx is complex; draw simplified snapshot
+  oc2.fillStyle='#0b0f14';oc2.fillRect(0,0,oc.width,oc.height);
+  for(let y=miny;y<=maxy;y++)for(let x=minx;x<=maxx;x++){
+    const i=cellIdx(x,y),tr=W.terrain[i];
+    const px=(x-minx)*CS,py=(y-miny)*CS;
+    oc2.fillStyle=tr?TERRAIN_COL[tr]:(((x+y)&1)?'#10151c':'#111720');
+    oc2.fillRect(px,py,CS,CS);
+    const e=W.ents[i];
+    if(e){
+      oc2.fillStyle=KINDS[e.kind].color;oc2.fillRect(px+2,py+2,CS-4,CS-4);
+      const d=DIRS[e.dir];
+      oc2.strokeStyle='#0d1117';oc2.lineWidth=3;oc2.beginPath();
+      oc2.moveTo(px+CS/2-d[0]*8,py+CS/2-d[1]*8);oc2.lineTo(px+CS/2+d[0]*8,py+CS/2+d[1]*8);oc2.stroke();
+      if(e.items)for(const it of e.items){
+        oc2.fillStyle=ITEMS[it.type].color;
+        oc2.beginPath();oc2.arc(px+CS/2+d[0]*(it.pos-0.5)*20,py+CS/2+d[1]*(it.pos-0.5)*20,4,0,TAU);oc2.fill();
+      }
+    }
+  }
+  const a=document.createElement('a');a.href=oc.toDataURL('image/png');
+  a.download='foundry-factory.png';a.click();
+  toast('PNG exported');
+}
+
+// ---------------- overlay menu
+function menuOverlay(m){
+  m.innerHTML='<h3>Overlays</h3><div class="ovlrow"></div>';
+  const c=m.querySelector('.ovlrow');
+  for(const [k,label] of OVERLAY_DEFS){
+    const lb=document.createElement('label');
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!W.overlays[k];
+    cb.onchange=()=>{W.overlays[k]=cb.checked?1:0;sfx('click');};
+    lb.appendChild(cb);lb.appendChild(document.createTextNode(label));
+    c.appendChild(lb);
+  }
+}
+
+// ---------------- selection box actions
+function updateSelBox(){
+  if(!W.selRect){elSelBox.classList.add('hidden');return;}
+  const [a,b]=W.selRect;
+  const x0=Math.min(a[0],b[0]),y0=Math.min(a[1],b[1]);
+  const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]);
+  const [sx,sy]=cellScreen(x1+1,y0);
+  elSelBox.classList.remove('hidden');
+  elSelBox.style.left=(sx+6)+'px';elSelBox.style.top=sy+'px';
+  if(!elSelBox.dataset.built){
+    elSelBox.dataset.built='1';
+    elSelBox.innerHTML='<button id="sb-copy" title="Copy cells">⧉</button>'+
+      '<button id="sb-del" class="danger" title="Delete all (Del)">✕</button>';
+    $('sb-del').onclick=()=>deleteSelection();
+    $('sb-copy').onclick=()=>copySelection();
+  }
+}
+function forEachSelCell(fn){
+  if(!W.selRect)return;
+  const [a,b]=W.selRect;
+  const x0=Math.min(a[0],b[0]),y0=Math.min(a[1],b[1]);
+  const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)fn(x,y);
+}
+function deleteSelection(){
+  if(!W.selRect)return;
+  pushUndo();let n=0;
+  forEachSelCell((x,y)=>{if(removeEnt(x,y))n++;});
+  W.selRect=null;updateSelBox();
+  toast('Deleted '+n+' structures');sfx('erase');
+}
+function copySelection(){
+  if(!W.selRect)return;
+  const [a,b]=W.selRect;
+  const x0=Math.min(a[0],b[0]),y0=Math.min(a[1],b[1]);
+  const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]);
+  W.clip={w:x1-x0+1,h:y1-y0+1,cells:[]};
+  forEachSelCell((x,y)=>{
+    const e=entAt(x,y);
+    if(e)W.clip.cells.push({k:e.kind,dx:x-x0,dy:y-y0,dir:e.dir,recipe:e.recipe,mods:e.mods?{...e.mods}:undefined});
+  });
+  toast('Copied '+W.clip.cells.length+' structures — click map to stamp');sfx('pick');
+  W.selRect=null;updateSelBox();
+}
+function stampClipboard(hx,hy){
+  if(!W.clip)return;
+  pushUndo();let placed=0,skipped=0;
+  for(const c of W.clip.cells){
+    const r=placeEnt(c.k,hx+c.dx,hy+c.dy,c.dir,{recipe:c.recipe,mods:c.mods});
+    if(r.ent)placed++;else skipped++;
+  }
+  toast(`Stamped ${placed}${skipped?' ('+skipped+' blocked)':''}`);
+  if(placed)sfx('place');
+}
+// ============================================================ input
+const pointers=new Map(); // pointerId -> {x,y}
+let dragging=false, dragBtn=0, dragCell=null, panning=false, panStart=null, camStart=null;
+let selDragging=false, spaceHeld=false, pinchD0=0, pinchZ0=1, beltDrag=false;
+let downPos=null, downTime=0, moved=false;
+
+function canvasPos(ev){
+  const r=cv.getBoundingClientRect();
+  return [ev.clientX-r.left, ev.clientY-r.top];
+}
+
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+cv.addEventListener('pointerdown',ev=>{
+  cv.setPointerCapture(ev.pointerId);
+  const [sx,sy]=canvasPos(ev);
+  pointers.set(ev.pointerId,{x:sx,y:sy});
+  if(pointers.size===2){
+    const p=[...pointers.values()];
+    pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); pinchZ0=W.cam.z;
+    panning=false;beltDrag=false;dragging=false;selDragging=false;
+    return;
+  }
+  downPos=[sx,sy];downTime=performance.now();moved=false;
+  const [cx,cy]=s2c(sx,sy);
+  dragCell=[cx,cy];
+  // pan triggers: middle/right button, space+drag, or pan tool
+  if(ev.button===1||ev.button===2&&W.tool==='select'||spaceHeld||W.tool==='pan'){
+    panning=true;panStart=[sx,sy];camStart={x:W.cam.x,y:W.cam.y};return;
+  }
+  if(ev.button===2){ // right-click = quick erase
+    pushUndo(); if(removeEnt(cx,cy)){sfx('erase');}
+    dragging=true;dragBtn=2;return;
+  }
+  if(ev.button!==0)return;
+  // eyedropper on Alt+click
+  if(ev.altKey){const e=entAt(cx,cy);if(e){copyEntConfig(e);sfx('pick');}return;}
+  if(W.clip){stampClipboard(cx,cy);return;}
+  const tool=W.tool;
+  if(tool==='select'){
+    const e=entAt(cx,cy);
+    W.sel=e||null;
+    selDragging=true;
+    W.selRect=null;updateSelBox();
+    updateInspector();
+    if(e)sfx('click');
+    return;
+  }
+  if(tool==='erase'){pushUndo();removeEnt(cx,cy);dragging=true;dragBtn=0;sfx('erase');return;}
+  if(KINDS[tool]){
+    pushUndo();
+    if(tool==='belt'){beltDrag=true;ghostPath=[];beltTryAdd(cx,cy);}
+    else tryPlace(tool,cx,cy);
+    dragging=true;dragBtn=0;
+  }
+});
+
+cv.addEventListener('pointermove',ev=>{
+  const [sx,sy]=canvasPos(ev);
+  const prev=pointers.get(ev.pointerId);
+  if(prev){prev.x=sx;prev.y=sy;}
+  const [cx,cy]=s2c(sx,sy);
+  W.hover=[cx,cy];
+  if(pointers.size===2){ // pinch
+    const p=[...pointers.values()];
+    const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+    if(pinchD0>0){
+      const mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+      const nz=clamp(pinchZ0*d/pinchD0,0.25,3);
+      W.cam.x+=mx/W.cam.z-mx/nz; W.cam.y+=my/W.cam.z-my/nz; W.cam.z=nz;
+    }
+    return;
+  }
+  if(downPos&&Math.hypot(sx-downPos[0],sy-downPos[1])>4)moved=true;
+  if(panning){
+    W.cam.x=camStart.x-(sx-panStart[0])/W.cam.z;
+    W.cam.y=camStart.y-(sy-panStart[1])/W.cam.z;
+    return;
+  }
+  if(beltDrag){beltTryAdd(cx,cy);return;}
+  if(selDragging&&moved&&W.tool==='select'){
+    const a=dragCell;
+    W.selRect=[a,[cx,cy]];updateSelBox();
+    return;
+  }
+  if(dragging&&dragBtn===0){
+    if(W.tool==='erase'){const e=entAt(cx,cy);if(e){removeEnt(cx,cy);}}
+    else if(KINDS[W.tool]&&W.tool!=='belt'&&(cx!==dragCell[0]||cy!==dragCell[1])){
+      // single-place tools: no drag paint (except poles allowed to drag-place)
+      if(W.tool==='pole'){tryPlace('pole',cx,cy);}
+    }
+  }
+  if(dragging&&dragBtn===2){if(removeEnt(cx,cy))sfx('erase');}
+  updateTooltip(cx,cy,sx,sy);
+});
+
+function endPointer(ev){
+  pointers.delete(ev.pointerId);
+  if(beltDrag){
+    // commit ghost path
+    let n=0;
+    for(const g of ghostPath)if(g.ok){const r=placeEnt('belt',g.x,g.y,g.dir);if(r.ent)n++;}
+    if(n)sfx('belt');
+    ghostPath=[];
+  }
+  if(selDragging&&!moved){ /* click select already done */ }
+  dragging=false;panning=false;beltDrag=false;selDragging=false;downPos=null;
+}
+cv.addEventListener('pointerup',endPointer);
+cv.addEventListener('pointercancel',endPointer);
+
+cv.addEventListener('wheel',ev=>{
+  ev.preventDefault();
+  const [sx,sy]=canvasPos(ev);
+  const f=ev.deltaY<0?1.12:1/1.12;
+  const nz=clamp(W.cam.z*f,0.25,3);
+  W.cam.x+=sx/W.cam.z-sx/nz; W.cam.y+=sy/W.cam.z-sy/nz; W.cam.z=nz;
+},{passive:false});
+
+// belt drag: extend ghostPath with L-route to (cx,cy)
+function beltTryAdd(cx,cy){
+  if(!inB(cx,cy))return;
+  if(!ghostPath.length){
+    ghostPath.push({x:cx,y:cy,dir:W.buildDir,ok:!canPlace('belt',cx,cy)||entAt(cx,cy)?.kind==='belt'});
+    return;
+  }
+  let last=ghostPath[ghostPath.length-1];
+  if(last.x===cx&&last.y===cy)return;
+  // route: prefer continuing last's travel axis
+  while(last.x!==cx||last.y!==cy){
+    const dx=cx-last.x, dy=cy-last.y;
+    let stepX=false;
+    if(dx===0)stepX=false; else if(dy===0)stepX=true;
+    else stepX = (last._axis==='x'); // continue same axis first
+    let nx=last.x,ny=last.y,dir;
+    if(stepX){nx+=Math.sign(dx);dir=dx>0?0:2;last._axis='x';}
+    else{ny+=Math.sign(dy);dir=dy>0?1:3;last._axis='y';}
+    // update previous cell dir to point toward this new one (cornering)
+    const ndir = nx>last.x?0 : ny>last.y?1 : nx<last.x?2 : 3;
+    if(ghostPath.length&&last.dir!==undefined)last.dir=ndir;
+    const cellEnt=entAt(nx,ny);
+    const ok=!canPlace('belt',nx,ny)||(cellEnt&&cellEnt.kind==='belt');
+    const g={x:nx,y:ny,dir,ok,_axis:last._axis};
+    ghostPath.push(g);last=g;
+    if(ghostPath.length>600)break;
+  }
+}
+
+function tryPlace(kind,x,y){
+  const opts={};
+  if(ISMACHINE(kind)&&W.recipeSel&&RECIPES[W.recipeSel].machine===kind)opts.recipe=W.recipeSel;
+  const r=placeEnt(kind,x,y,W.buildDir,opts);
+  if(r.err){toast(r.err,'err');sfx('err');}
+  else{sfx('place');refreshToolCosts();}
+}
+
+// ---------------- keyboard
+addEventListener('keydown',ev=>{
+  if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT'||ev.target.tagName==='TEXTAREA')return;
+  const k=ev.key;
+  if(k===' '){spaceHeld=true;W.paused=!W.paused;$('b-pause').textContent=W.paused?'▶':'⏸';ev.preventDefault();}
+  else if(k==='.'){W.paused=true;$('b-pause').textContent='▶';stepOnce();}
+  else if(k==='r'||k==='R'){
+    if(W.hover){const e=entAt(W.hover[0],W.hover[1]);
+      if(e){e.dir=(e.dir+1)&3;W.powerDirty=true;sfx('rotate');updateInspector();return;}}
+    W.buildDir=(W.buildDir+1)&3;sfx('rotate');
+  }
+  else if(k==='Delete'||k==='Backspace'){
+    if(W.selRect)deleteSelection();
+    else if(W.sel){pushUndo();removeEnt(W.sel.x,W.sel.y);W.sel=null;updateInspector();sfx('erase');}
+    else if(W.hover){const e=entAt(W.hover[0],W.hover[1]);if(e){pushUndo();removeEnt(e.x,e.y);sfx('erase');}}
+  }
+  else if(k==='z'&&ev.ctrlKey||k==='Z'&&ev.ctrlKey){ev.preventDefault();undo();}
+  else if((k==='y'&&ev.ctrlKey)||(k==='Z'&&ev.ctrlKey&&ev.shiftKey)){ev.preventDefault();redo();}
+  else if(k==='i'||k==='I'){if(W.hover){const e=entAt(W.hover[0],W.hover[1]);if(e){copyEntConfig(e);sfx('pick');}}}
+  else if(k==='Escape'){W.selRect=null;W.sel=null;W.clip=null;ghostPath=[];closeMenus();updateSelBox();updateInspector();}
+  else if(k==='o'||k==='O')toggleMenu('overlay',menuOverlay);
+  else if(k==='a'||k==='A')elAnal.classList.toggle('hidden');
+  else if(k>='1'&&k<='9'){
+    const order=BUILD_ORDER.filter(t=>t!=='-');
+    const i=+k-1;if(order[i])setTool(order[i]);
+  }
+});
+addEventListener('keyup',ev=>{if(ev.key===' ')spaceHeld=false;});
+
+// ---------------- tooltip
+function updateTooltip(cx,cy,sx,sy){
+  const e=entAt(cx,cy);
+  const t=terrainAt(cx,cy);
+  let h='';
+  if(e){
+    const d=KINDS[e.kind];
+    h=`<span class="tt">${d.icon} ${d.name}</span> <span class="dim">${DIRNAME[e.dir]}</span>`;
+    if(e.stall)h+=`<br><span style="color:${stallColor(e.stall)}">${e.stall}</span>`;
+    if(ISMACHINE(e.kind)){const r=RECIPES[e.recipe];
+      h+=`<br><span class="dim">${r?r.name:'no recipe'} · ${(e.progress*100)|0}%</span>`;
+      h+=`<br><span class="dim">in ${bufStr(e.inBuf)} out ${bufStr(e.outBuf)}</span>`;}
+    if(e.kind==='miner')h+=`<br><span class="dim">${W.deposit[cellIdx(cx,cy)]} left · ${(e.progress*100)|0}%</span>`;
+    if(e.kind==='generator')h+=`<br><span class="dim">coal ${e.inBuf.coal||0} ${e.burnT>0?'· burning':''}</span>`;
+    if(e.items&&e.items.length)h+=`<br><span class="dim">${e.items.map(i=>ITEMS[i.type].glyph).join(' ')}</span>`;
+    if(e.inv&&bufCount(e.inv))h+=`<br><span class="dim">${bufStr(e.inv)}</span>`;
+  } else if(t){
+    h=`<span class="tt">${TERRAIN_NAME[t]}</span>`;
+    if(t!==TERRAIN.rock)h+=`<br><span class="dim">${W.deposit[cellIdx(cx,cy)]} units — place a miner</span>`;
+    else h+=`<br><span class="dim">impassable</span>`;
+  } else if(KINDS[W.tool]){
+    const cost=costOf(W.tool);
+    h=`<span class="dim">${KINDS[W.tool].icon} place ${KINDS[W.tool].name}${cost?' · '+cost+'¢':''} · R rotates</span>`;
+  }
+  if(h){elTooltip.innerHTML=h;elTooltip.style.display='block';
+    elTooltip.style.left=Math.min(innerWidth-250,sx+14)+'px';elTooltip.style.top=(sy+16)+'px';}
+  else elTooltip.style.display='none';
+}
+// ============================================================ main loop & boot
+let lastT=0, fpsAcc=0, fpsN=0, fpsT=0;
+let uiTick=0;
+
+function loop(t){
+  const dt=Math.min(0.1,(t-lastT)/1000)||0.016;
+  lastT=t;
+  // fps meter
+  fpsAcc+=dt;fpsN++;fpsT+=dt;
+  if(fpsT>0.5){W.stats.fps=fpsN/fpsT;fpsN=0;fpsT=0;}
+  frame(dt);
+  draw(t/1000);
+  uiTick+=dt;
+  if(uiTick>0.25){
+    uiTick=0;
+    updateStatsBar();
+    if(W.contract&&!W.contract.done)updateContractPanel();
+    if(W.sel)updateInspector();
+    updateAnalytics();
+    refreshToolCosts();
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------------- buttons
+function wireUI(){
+  buildToolbar();
+  $('b-pause').onclick=()=>{W.paused=!W.paused;$('b-pause').textContent=W.paused?'▶':'⏸';sfx('click');};
+  $('b-step').onclick=()=>{W.paused=true;$('b-pause').textContent='▶';stepOnce();sfx('click');};
+  $('b-undo').onclick=()=>undo();
+  $('b-redo').onclick=()=>redo();
+  $('b-reset').onclick=()=>{
+    if(confirm('Reset factory? Current layout will be lost.')){
+      if(W.presetName){const p=[...PRESETS,...CONTRACTS].find(p=>p.name===W.presetName);
+        if(p){loadPreset(p.id);return;}}
+      newWorld(W.settings.gridW,W.settings.gridH,W.settings.seed);
+      zoomFit();
+    }
+  };
+  $('sel-speed').onchange=e=>{W.speed=parseFloat(e.target.value);sfx('click');};
+  $('b-zin').onclick=()=>{W.cam.z=clamp(W.cam.z*1.25,0.25,3);};
+  $('b-zout').onclick=()=>{W.cam.z=clamp(W.cam.z/1.25,0.25,3);};
+  $('b-zfit').onclick=()=>zoomFit();
+  $('btn-overlay').onclick=()=>toggleMenu('overlay',menuOverlay);
+  $('btn-presets').onclick=()=>toggleMenu('presets',menuPresets);
+  $('btn-settings').onclick=()=>toggleMenu('settings',menuSettings);
+  $('btn-save').onclick=()=>toggleMenu('save',menuSave);
+  $('btn-analytics').onclick=()=>elAnal.classList.toggle('hidden');
+  $('btn-sound').onclick=()=>{
+    AudioSys.enabled=!AudioSys.enabled;
+    $('btn-sound').textContent=AudioSys.enabled?'🔊':'🔇';
+    if(AudioSys.enabled)sfx('click');
+  };
+  $('ban-again').onclick=()=>{
+    const c=[...CONTRACTS].find(c=>c.name===W.presetName)||CONTRACTS[0];
+    hideBanner();loadPreset(c.id);
+  };
+  $('ban-sandbox').onclick=()=>{W.contract=null;W.mode='sandbox';hideBanner();updateContractPanel();};
+  $('ban-close').onclick=()=>hideBanner();
+  // close menus when clicking canvas
+  cv.addEventListener('pointerdown',()=>closeMenus(),{capture:true});
+}
+
+// ---------------- autosave every 20s
+setInterval(()=>{lsAutosave();},20000);
+addEventListener('beforeunload',()=>lsAutosave());
+
+// ---------------- debug/testing API (also used by validator)
+window.GAME={
+  W, entAt, terrainAt, placeEnt, removeEnt, serializeWorld, deserializeWorld,
+  shareEncode, shareDecode, loadPreset, simTick, stepOnce, zoomFit,
+  state(){ let sup=0,dem=0;for(const n of W.nets){sup+=n.supply;dem+=n.demand;}
+    return{tick:W.tick,items:W.itemCount,machines:W.stats.machines,stalled:W.stats.stalled,
+      supply:sup,demand:dem,delivered:{...W.stats.delivered},credits:W.credits,
+      contract:W.contract?{item:W.contract.item,got:W.contract.got,amount:W.contract.amount,done:W.contract.done}:null,
+      ents:W.ents.filter(Boolean).length, stalls:{...W.stats.stalls}};},
+};
+
+// ---------------- boot
+resizeCanvas();
+wireUI();
+loadPreset('starter');
+zoomFit();
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

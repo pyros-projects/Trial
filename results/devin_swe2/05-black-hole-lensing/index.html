@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Black Hole — Gravitational Lensing Explorer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23000' stroke='%23f80'/></svg>">
+<style>
+  :root{
+    --bg:#05060a; --panel:rgba(13,16,24,.92); --line:#232a3a; --txt:#c9d4e6;
+    --dim:#7d8aa3; --acc:#5fb4ff; --acc2:#ffb35f; --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font:12px/1.45 var(--mono);-webkit-font-smoothing:antialiased}
+  #gl,#ov{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #gl{cursor:grab}
+  #gl.drag{cursor:grabbing}
+  #ov{pointer-events:none}
+
+  /* ---- perf HUD ---- */
+  #hud{position:fixed;top:10px;left:10px;z-index:5;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11px;
+    color:var(--dim);backdrop-filter:blur(8px);white-space:nowrap}
+  #hud b{color:var(--txt);font-weight:600}
+  #hud .st{color:var(--acc)}
+
+  /* ---- control panel ---- */
+  #panel{position:fixed;top:10px;right:10px;bottom:10px;width:308px;z-index:6;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    backdrop-filter:blur(10px);display:flex;flex-direction:column;overflow:hidden;
+    transition:transform .25s ease}
+  #panel.hidden{transform:translateX(330px)}
+  #phead{padding:10px 12px 8px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:8px;flex:none}
+  #phead h1{font-size:12px;font-weight:700;letter-spacing:.4px;color:#fff;flex:1}
+  #phead h1 span{color:var(--acc)}
+  #pbody{overflow-y:auto;flex:1;padding:6px 10px 14px;scrollbar-width:thin}
+  details{border-bottom:1px solid var(--line);padding:4px 0}
+  details:last-child{border-bottom:0}
+  summary{cursor:pointer;color:var(--acc);font-weight:700;font-size:11px;
+    letter-spacing:.6px;text-transform:uppercase;padding:5px 2px;list-style:none;user-select:none}
+  summary::before{content:'▸ ';color:var(--dim)}
+  details[open] summary::before{content:'▾ '}
+  .row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .row label{flex:0 0 108px;color:var(--dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row input[type=range]{flex:1;min-width:0;accent-color:var(--acc);height:14px}
+  .row .val{flex:0 0 46px;text-align:right;color:var(--txt);font-size:11px}
+  .row select,.row input[type=number]{flex:1;min-width:0;background:#0a0e18;color:var(--txt);
+    border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit}
+  .btnrow{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0}
+  button{background:#141a28;color:var(--txt);border:1px solid var(--line);border-radius:6px;
+    padding:5px 9px;font:inherit;font-size:11px;cursor:pointer}
+  button:hover{border-color:var(--acc);color:#fff}
+  button.on{background:#16324f;border-color:var(--acc);color:var(--acc)}
+  button.warn{border-color:#5f3a2a;color:var(--acc2)}
+  .chk{display:flex;align-items:center;gap:6px;margin:5px 0;color:var(--dim);cursor:pointer;font-size:11px}
+  .chk input{accent-color:var(--acc)}
+  .hint{color:#525f78;font-size:10px;margin:4px 0 8px;line-height:1.5}
+  #menuBtn{position:fixed;top:10px;right:10px;z-index:7;display:none;
+    width:34px;height:34px;font-size:16px;padding:0}
+
+  /* ---- ray inspector ---- */
+  #ray{position:fixed;left:10px;bottom:10px;z-index:5;width:300px;max-width:calc(100vw - 20px);
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    backdrop-filter:blur(10px);padding:10px 12px;display:none}
+  #ray.show{display:block}
+  #ray h2{font-size:11px;color:var(--acc);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
+  #ray .grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-size:11px}
+  #ray .grid span{color:var(--dim)}
+  #ray .grid b{color:var(--txt);font-weight:600;text-align:right}
+  #rayCanvas{width:100%;height:170px;margin-top:8px;background:#070a12;border:1px solid var(--line);border-radius:6px}
+  #rayClose{position:absolute;top:6px;right:8px;border:0;background:none;color:var(--dim);font-size:14px;padding:2px 6px}
+
+  /* ---- error modal ---- */
+  #err{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+    background:rgba(3,4,8,.9);padding:20px}
+  #err.show{display:flex}
+  #errBox{max-width:640px;background:#10131d;border:1px solid #4a2a2a;border-radius:12px;padding:24px}
+  #errBox h2{color:#ff8f6b;font-size:15px;margin-bottom:10px}
+  #errBox pre{color:#b9c4d8;white-space:pre-wrap;font-size:11px;max-height:300px;overflow:auto;margin-top:10px;
+    background:#0a0d15;padding:10px;border-radius:6px}
+  #errBox p{color:var(--dim);line-height:1.6}
+
+  @media (max-width:700px){
+    #panel{width:min(300px,86vw)}
+    #menuBtn{display:block}
+    #hud{font-size:10px;padding:5px 8px}
+    #ray{width:min(300px,calc(100vw - 20px))}
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="ov"></canvas>
+<div id="hud">…</div>
+<button id="menuBtn" title="Controls">☰</button>
+<div id="panel"><div id="phead"><h1><span>◉</span> BLACK HOLE EXPLORER</h1></div><div id="pbody"></div></div>
+<div id="ray"><button id="rayClose" title="Close">✕</button><h2>Selected Ray</h2>
+  <div class="grid" id="rayGrid"></div><canvas id="rayCanvas" width="560" height="340"></canvas></div>
+<div id="err"><div id="errBox"><h2 id="errTitle">Renderer unavailable</h2><p id="errMsg"></p><pre id="errLog"></pre></div></div>
+
+<script>
+'use strict';
+/* ============================================================================
+   BLACK HOLE & GRAVITATIONAL LENSING EXPLORER
+   Single-file WebGL2 geodesic ray tracer.
+
+   Light transport: photon geodesics in a Schwarzschild geometry integrated in
+   Cartesian coordinates via the orbit-equation acceleration
+       d²x/dλ² = -(3/2)·rs·h²·x / r⁵ ,  h = |x × dx/dλ|
+   plus a first-order frame-dragging term (p rotated about the spin axis at
+   ω ≈ a·rs²/r³ per unit affine length) as a spin approximation.
+   The accretion disk is a mathematically intersected slab (plane crossings +
+   volumetric sampling) with Keplerian shear turbulence, temperature profile,
+   relativistic Doppler beaming and gravitational redshift.
+============================================================================ */
+
+const $ = s => document.querySelector(s);
+const glCanvas = $('#gl'), ovCanvas = $('#ov'), hud = $('#hud');
+
+/* ------------------------------- state ---------------------------------- */
+const P = {
+  running:true, timeScale:1.0, simTime:0,
+  mass:1.0, spin:0.55, horizon:1.0,
+  diskIn:2.6, diskOut:10.0, diskThick:0.08, diskInc:78, diskTemp:1.0,
+  turb:0.7, doppler:1.0, redshift:0.75,
+  exposure:1.15, contrast:1.06, bloom:0.55,
+  stepSize:0.035, maxSteps:450, renderScale:0.85, taa:true,
+  viz:0, autoOrbit:true,
+  ovHorizon:true, ovPhoton:true, ovDisk:false, ovRay:true,
+};
+const QUALITY = {
+  low:    {scale:.50, steps:220, dt:.060, bloom:false, taa:false},
+  medium: {scale:.66, steps:320, dt:.045, bloom:true,  taa:false},
+  high:   {scale:.85, steps:450, dt:.035, bloom:true,  taa:true},
+  ultra:  {scale:1.0, steps:700, dt:.025, bloom:true,  taa:true},
+};
+let qualityName = 'high';
+const cam = { theta:0.65, phi:1.32, dist:9.0, tx:0, ty:0, tz:0 };
+const PRESETS = [
+  ['Cinematic',  {theta:0.65, phi:1.32, dist:9.0}],
+  ['Edge-On',    {theta:0.0,  phi:1.55, dist:11.0}],
+  ['Polar',      {theta:0.4,  phi:0.42, dist:10.0}],
+  ['Close-In',   {theta:2.1,  phi:1.18, dist:4.4}],
+  ['Deep Field', {theta:5.4,  phi:1.45, dist:20.0}],
+];
+let hdrOK=false, accumN=0, needRender=true;
+let selRay=null;                 // CPU-integrated selected ray
+let statsAvg={steps:0,t:0};
+
+/* ------------------------------ error box -------------------------------- */
+function fatal(title,msg,log){
+  $('#errTitle').textContent=title; $('#errMsg').textContent=msg;
+  $('#errLog').textContent=log||'';
+  $('#err').classList.add('show');
+}
+
+/* ------------------------------- WebGL ----------------------------------- */
+const gl = glCanvas.getContext('webgl2',{antialias:false,alpha:false,depth:false,
+  powerPreference:'high-performance'});
+if(!gl){
+  fatal('WebGL2 not available',
+    'This explorer needs a WebGL2-capable browser (Chrome, Edge, Firefox, Safari 15+). '+
+    'The renderer integrates photon geodesics in a fragment shader, which requires '+
+    'dynamic loops and floating-point render targets that WebGL1 cannot provide.','');
+  throw new Error('no webgl2');
+}
+hdrOK = !!gl.getExtension('EXT_color_buffer_float');
+if(!hdrOK){ P.taa=false; }   // accumulation needs float buffers; bloom still works LDR-ish
+let softGL=false;
+{
+  const dbg=gl.getExtension('WEBGL_debug_renderer_info');
+  const rn=dbg?String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)):'';
+  softGL=/swiftshader|llvmpipe|softpipe|software/i.test(rn);
+}
+let userScale=P.renderScale;   // adaptive resolution recovers up to this
+
+const VS = `#version 300 es
+layout(location=0) in vec2 aP; out vec2 vUV;
+void main(){ vUV=aP*.5+.5; gl_Position=vec4(aP,0,1); }`;
+
+/* ------------------------- scene raymarch shader -------------------------- */
+const FS_SCENE = `#version 300 es
+precision highp float;
+out vec4 O;
+uniform vec2  uRes, uJitter;
+uniform vec3  uCamPos, uCamR, uCamU, uCamF;
+uniform float uTanH, uAspect, uTime;
+uniform float uMass, uSpin, uHor;
+uniform vec3  uAxis;            // spin axis = disk normal (world)
+uniform mat3  uW2D;             // world -> disk frame
+uniform float uRIn, uROut, uThick, uTemp, uTurb, uDop, uRed;
+uniform float uStep;
+uniform int   uMaxSteps, uViz;
+
+const int MAXI = 1400;
+
+float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float vnoise(vec2 p){
+  vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
+             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
+}
+float fbm(vec2 p){
+  float s=0., a=.5;
+  for(int k=0;k<5;k++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; }
+  return s;
+}
+vec2 octa(vec3 d){
+  float t=abs(d.x)+abs(d.y)+abs(d.z);
+  vec2 q=d.xy/max(t,1e-6);
+  if(d.z<0.) q=(1.-abs(q.yx))*vec2(q.x>=0.?1.:-1., q.y>=0.?1.:-1.);
+  return q*.5+.5;
+}
+vec3 stars(vec3 d){
+  vec3 c=vec3(0.);
+  // two star layers at different densities
+  for(int L=0;L<2;L++){
+    vec2 uv = octa(d)*vec2(L==0?60.:110., L==0?34.:64.);
+    vec2 id=floor(uv), f=fract(uv);
+    for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+      vec2 g=id+vec2(i,j);
+      float h=hash(g+float(L)*13.7);
+      if(h>(L==0?.72:.80)) continue;
+      vec2 sp=vec2(hash(g+7.1),hash(g+3.7));
+      vec2 dv=f-vec2(i,j)-sp;
+      float m=hash(g+11.3);
+      float sz=.018+.05*pow(m,8.);
+      float b=exp(-dot(dv,dv)/(sz*sz));
+      vec3 sc=mix(vec3(1.,.62,.42),vec3(.62,.78,1.),hash(g+5.5));
+      c+=b*sc*(.25+3.0*pow(m,5.))*(L==0?1.:.5);
+    }
+  }
+  // galactic band
+  float band=exp(-pow(dot(d,normalize(vec3(.35,.75,.55))),2.)/.02);
+  float neb=fbm(d.xz*2.4+d.y*1.7+3.0);
+  c+=band*(vec3(.10,.16,.30)*(.4+neb)+vec3(.22,.12,.30)*neb*neb)*1.4;
+  c+=vec3(.012,.016,.028);                       // deep-space floor
+  return c;
+}
+vec3 bb(float t){                                   // stylised blackbody ramp
+  t=clamp(t,0.,3.5);
+  vec3 lo=vec3(1.,.22,.03), mid=vec3(1.,.72,.42), hi=vec3(.80,.90,1.35);
+  return t<1. ? mix(lo,mid,t) : mix(mid,hi,min(t-1.,1.));
+}
+vec3 heat(float t){
+  t=clamp(t,0.,1.);
+  return vec3(smoothstep(.0,.45,t)+smoothstep(.7,1.,t)*.2,
+              smoothstep(.15,.65,t)*.9, smoothstep(.5,1.,t)*.25+(.5-t)*.4);
+}
+vec3 hsv(float h,float s,float v){
+  vec3 k=clamp(abs(mod(h*6.+vec3(0,4,2),6.)-3.)-1.,0.,1.);
+  return v*mix(vec3(1.),k,s);
+}
+
+struct Ray { float minR; float firstG; vec2 hitC; int cross; int fate; int steps; vec3 col; };
+
+Ray trace(vec3 ro, vec3 rd){
+  Ray R; R.minR=1e9; R.firstG=-1.; R.hitC=vec2(-1); R.cross=0; R.fate=0; R.steps=0;
+  float RS=uMass, rH=RS*uHor;
+  float escR=max(60.*RS, length(ro)*1.7+8.);
+  vec3 x=ro, p=rd, col=vec3(0.);
+  float tr=1., dt=uStep*RS;
+  vec3 xpP=uW2D*x;
+  for(int i=0;i<MAXI;i++){
+    if(i>=uMaxSteps){ R.fate=3; break; }
+    R.steps=i+1;
+    float r=length(x);
+    R.minR=min(R.minR,r);
+    if(r<rH){ R.fate=1; break; }
+    if(r>escR){ R.fate=2; break; }
+    if(r>25.*RS && dot(x,p)>0.){ R.fate=2; break; }  // far-field: ~straight, escape
+    vec3 h=cross(x,p); float h2=dot(h,h);
+    float r2=r*r, r5=r2*r2*r;
+    vec3 a=-1.5*RS*h2*x/r5;                          // geodesic acceleration
+    dt=uStep*RS*clamp(r/(2.*RS), .2, 5.0);           // adaptive step
+    p+=a*dt;
+    float om=uSpin*RS*RS/(r2*r);                     // frame-drag approx.
+    p+=om*dt*cross(uAxis,p);
+    p=normalize(p);
+    vec3 xn=x+p*dt;
+    vec3 xp=uW2D*xn;
+    // ---- volumetric slab sampling (mid-step point) ----
+    vec3 xm=uW2D*(x+.5*p*dt);
+    float rc=length(xm.xy);
+    if(abs(xm.z)<uThick && rc>uRIn && rc<uROut){
+      float phi=atan(xm.y,xm.x);
+      float omr=pow(rc,-1.5);
+      float n=fbm(vec2(phi*3.-omr*uTime*3., log(rc)*4.));
+      float dens=max(0., .6+uTurb*2.2*(n-.5));
+      float prof=pow(uRIn/rc,1.7)*smoothstep(uRIn,uRIn*1.12,rc)
+                                 *smoothstep(uROut,uROut*.8,rc);
+      vec3 velW=normalize(cross(uAxis,x));
+      float beta=min(.75, sqrt(RS/(2.*rc)));
+      float gam=1./sqrt(max(.05,1.-beta*beta));
+      float dop=1./(gam*(1.-beta*dot(velW,-p)));
+      float gg=sqrt(max(0.,1.-RS/rc));
+      float gF=mix(1.,dop,uDop)*mix(1.,gg,uRed);
+      if(R.firstG<0.){ R.firstG=gF; R.hitC=vec2(rc,mod(atan(xm.y,xm.x),6.2832)); }
+      float T=uTemp*pow(uRIn/rc,.75)*gF;
+      float I=prof*dens*pow(max(gF,.01),3.);
+      float aS=clamp(dens*prof*dt/max(uThick*2.,1e-4),0.,1.);
+      col+=tr*aS*bb(T)*I*1.6;
+      tr*=1.-aS*.9;
+    }
+    // ---- crisp thin-disk plane crossing ----
+    if(xpP.z*xp.z<0.){
+      float t=xpP.z/(xpP.z-xp.z);
+      vec3 xh=mix(x,xn,t); vec3 xhD=uW2D*xh;
+      float rch=length(xhD.xy);
+      if(rch>uRIn && rch<uROut){
+        R.cross++;
+        vec3 velW=normalize(cross(uAxis,xh));
+        float beta=min(.75,sqrt(RS/(2.*rch)));
+        float gam=1./sqrt(max(.05,1.-beta*beta));
+        float dop=1./(gam*(1.-beta*dot(velW,-p)));
+        float gg=sqrt(max(0.,1.-RS/rch));
+        float gF=mix(1.,dop,uDop)*mix(1.,gg,uRed);
+        float phih=mod(atan(xhD.y,xhD.x),6.2832);
+        if(R.firstG<0.){ R.firstG=gF; R.hitC=vec2(rch,phih); }
+        float n=fbm(vec2(phih*3.-pow(rch,-1.5)*uTime*3., log(rch)*4.));
+        float dens=max(0.,.6+uTurb*2.2*(n-.5));
+        float prof=pow(uRIn/rch,1.7)*smoothstep(uRIn,uRIn*1.12,rch)
+                                   *smoothstep(uROut,uROut*.8,rch);
+        float T=uTemp*pow(uRIn/rch,.75)*gF;
+        col+=tr*bb(T)*prof*dens*pow(max(gF,.01),3.)*.6;
+        tr*=.7;
+      }
+    }
+    xpP=xp; x=xn;
+    if(tr<.02){ if(R.fate==0) R.fate=2; break; }
+  }
+  if(R.fate==0) R.fate=3;
+  if(R.fate==2||R.fate==3) col+=tr*stars(normalize(p));
+  R.col=col;
+
+  // ---- diagnostics ----
+  if(uViz==1)      R.col=heat(float(R.steps)/float(uMaxSteps));
+  else if(uViz==2){ float d=acos(clamp(dot(rd,p),-1.,1.)); R.col=heat(d/3.14159); }
+  else if(uViz==3){
+    R.col = R.firstG<0. ? vec3(.04)
+      : R.firstG<1. ? mix(vec3(1.),vec3(.1,.35,1.),clamp(1.-R.firstG,0.,1.)*1.4)
+                    : mix(vec3(1.),vec3(1.,.15,0.),clamp(R.firstG-1.,0.,1.)*1.4);
+  }
+  else if(uViz==4) R.col = R.hitC.x<0. ? vec3(.04)
+      : hsv(R.hitC.y/6.2832,.85,clamp(R.hitC.x/uROut,.1,1.));
+  else if(uViz==5) R.col=heat(clamp(R.minR/(10.*RS),0.,1.));
+  else if(uViz==6) R.col = R.fate==1 ? vec3(0.)
+      : R.fate==3 ? vec3(1.,.15,.05)
+      : R.cross>0 ? vec3(1.,.7,.2) : vec3(.2,.5,1.);
+  return R;
+}
+void main(){
+  vec2 uv=((gl_FragCoord.xy+uJitter)/uRes)*2.-1.;
+  vec3 rd=normalize(uCamF + uv.x*uTanH*uAspect*uCamR + uv.y*uTanH*uCamU);
+  Ray R=trace(uCamPos,rd);
+  O=vec4(min(R.col,vec3(60.)),1.);
+}`;
+
+/* --------------------------- post shaders --------------------------------- */
+const FS_BRIGHT = `#version 300 es
+precision highp float; in vec2 vUV; out vec4 O; uniform sampler2D uT;
+void main(){ vec3 c=texture(uT,vUV).rgb; O=vec4(max(c-1.0,vec3(0.))*1.2,1.); }`;
+
+const FS_BLUR = `#version 300 es
+precision highp float; in vec2 vUV; out vec4 O;
+uniform sampler2D uT; uniform vec2 uDir;   // (1/w,0) or (0,1/h)
+void main(){
+  vec3 c=texture(uT,vUV).rgb*.227;
+  c+=(texture(uT,vUV+uDir*1.384).rgb+texture(uT,vUV-uDir*1.384).rgb)*.316;
+  c+=(texture(uT,vUV+uDir*3.230).rgb+texture(uT,vUV-uDir*3.230).rgb)*.070;
+  O=vec4(c,1.);
+}`;
+
+const FS_ACCUM = `#version 300 es
+precision highp float; in vec2 vUV; out vec4 O;
+uniform sampler2D uPrev,uCur; uniform float uW;
+void main(){ O=mix(texture(uPrev,vUV),texture(uCur,vUV),uW); }`;
+
+const FS_COMP = `#version 300 es
+precision highp float; in vec2 vUV; out vec4 O;
+uniform sampler2D uT,uB; uniform float uExp,uCon,uBloomAmt,uVig; uniform int uViz;
+void main(){
+  vec3 c=texture(uT,vUV).rgb;
+  if(uViz>0){ O=vec4(pow(clamp(c,0.,1.),vec3(1./2.2)),1.); return; }
+  c+=texture(uB,vUV).rgb*uBloomAmt;
+  c*=uExp;
+  c=(c*(2.51*c+.03))/(c*(2.43*c+.59)+.14);          // ACES-ish
+  c=pow(max(c,0.),vec3(1./2.2));
+  c=(c-.5)*uCon+.5;
+  vec2 q=vUV-.5; c*=1.-uVig*dot(q,q);
+  O=vec4(clamp(c,0.,1.),1.);
+}`;
+
+/* ----------------------------- GL plumbing -------------------------------- */
+function shader(type,src,label){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+    fatal('Shader compilation failed',
+      'The '+label+' shader failed to compile on this GPU/driver. The full driver log is below.',
+      gl.getShaderInfoLog(s));
+    throw new Error(label+' compile failed');
+  }
+  return s;
+}
+function program(fs,label){
+  const p=gl.createProgram();
+  gl.attachShader(p,shader(gl.VERTEX_SHADER,VS,'vertex'));
+  gl.attachShader(p,shader(gl.FRAGMENT_SHADER,fs,label));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){
+    fatal('Shader link failed','Could not link the '+label+' program.',gl.getProgramInfoLog(p));
+    throw new Error(label+' link failed');
+  }
+  p.u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){ const inf=gl.getActiveUniform(p,i);
+    p.u[inf.name.replace(/\[0\]$/,'')]=gl.getUniformLocation(p,inf.name); }
+  return p;
+}
+let progScene,progBright,progBlur,progAccum,progComp;
+try{
+  progScene=program(FS_SCENE,'scene');
+  progBright=program(FS_BRIGHT,'bloom-bright');
+  progBlur=program(FS_BLUR,'bloom-blur');
+  progAccum=program(FS_ACCUM,'accumulate');
+  progComp=program(FS_COMP,'composite');
+}catch(e){ throw e; }
+
+const vao=gl.createVertexArray();
+gl.bindVertexArray(vao);
+const vbo=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1, 3,-1, -1,3]),gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+
+function makeTex(w,h,floatOK){
+  const t=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  if(floatOK) gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+  else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  return t;
+}
+function makeFBO(w,h,floatOK){
+  const f=gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  const t=makeTex(w,h,floatOK);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  return {f,t,w,h};
+}
+let fboScene,fboA,fboB,accA,accB;
+let RW=0,RH=0;               // internal render dims
+
+function allocFBOs(){
+  for(const o of [fboScene,fboA,fboB,accA,accB]){
+    if(o){ gl.deleteFramebuffer(o.f); gl.deleteTexture(o.t); }
+  }
+  fboScene=makeFBO(RW,RH,hdrOK);
+  fboA=makeFBO(Math.max(1,RW>>1),Math.max(1,RH>>1),hdrOK);
+  fboB=makeFBO(Math.max(1,RW>>1),Math.max(1,RH>>1),hdrOK);
+  accA=makeFBO(RW,RH,hdrOK); accB=makeFBO(RW,RH,hdrOK);
+}
+
+function bindTex(unit,tex,loc){
+  gl.activeTexture(gl.TEXTURE0+unit);
+  gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.uniform1i(loc,unit);
+}
+function draw(){ gl.bindVertexArray(vao); gl.drawArrays(gl.TRIANGLES,0,3); }
+
+/* ------------------------------- camera ----------------------------------- */
+let camFwd=[0,0,-1],camRight=[1,0,0],camUp=[0,1,0],camPos=[0,0,9];
+const TANH=Math.tan(28*Math.PI/180);           // 56° vertical fov
+function updCam(){
+  const sp=Math.sin(cam.phi),cp=Math.cos(cam.phi);
+  camPos=[cam.tx+cam.dist*sp*Math.cos(cam.theta),
+          cam.ty+cam.dist*cp,
+          cam.tz+cam.dist*sp*Math.sin(cam.theta)];
+  let f=[cam.tx-camPos[0],cam.ty-camPos[1],cam.tz-camPos[2]];
+  const fl=Math.hypot(...f); f=f.map(v=>v/fl);
+  let r=[-f[2],0,f[0]];                          // cross(f,(0,1,0))
+  const rl=Math.hypot(...r)||1e-6; r=r.map(v=>v/rl);
+  const u=[r[1]*f[2]-r[2]*f[1], r[2]*f[0]-r[0]*f[2], r[0]*f[1]-r[1]*f[0]];
+  camFwd=f; camRight=r; camUp=u;
+}
+function diskAxisW(){
+  const a=P.diskInc*Math.PI/180;
+  return [0,-Math.sin(a),Math.cos(a)];          // disk normal in world
+}
+
+/* --------------------------- CPU ray integrator ---------------------------- */
+/* Mirrors the shader ODE exactly — used for the selected-ray inspector and the
+   average-step-count statistic. */
+function jsHash(x,y){ const s=Math.sin(x*127.1+y*311.7)*43758.5453; return s-Math.floor(s); }
+function jsNoise(x,y){
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy);
+  const a=jsHash(ix,iy),b=jsHash(ix+1,iy),c=jsHash(ix,iy+1),d=jsHash(ix+1,iy+1);
+  return a+(b-a)*ux+(c-a)*uy+(a-b-c+d)*ux*uy;
+}
+function jsFbm(x,y){
+  let s=0,a=.5;
+  for(let k=0;k<5;k++){ s+=a*jsNoise(x,y); x=x*2.03+17.3; y=y*2.03+9.1; a*=.5; }
+  return s;
+}
+function traceRayJS(rd){
+  const RS=P.mass, rH=RS*P.horizon;
+  const escR=Math.max(60*RS, Math.hypot(...camPos)*1.7+8);
+  const ax=diskAxisW();
+  // world->disk = rotation about X by -inc: y' = c·y + s·z ; z' = -s·y + c·z
+  const a=P.diskInc*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+  const w2df=v=>[v[0], c*v[1]+s*v[2], -s*v[1]+c*v[2]];
+  let x=[...camPos], p=[...rd];
+  let steps=0, minR=1e9, fate=0, cross=0, firstG=-1, hitR=-1, hitPhi=-1, trans=1;
+  let xpP=w2df(x);
+  const path=[], plane=[];
+  // orbital-plane basis for the 2D diagram
+  const e1len=Math.hypot(...x), e1=x.map(v=>v/e1len);
+  let e2=[p[0]-e1[0]*(p[0]*e1[0]+p[1]*e1[1]+p[2]*e1[2]),
+          p[1]-e1[1]*(p[0]*e1[0]+p[1]*e1[1]+p[2]*e1[2]),
+          p[2]-e1[2]*(p[0]*e1[0]+p[1]*e1[1]+p[2]*e1[2])];
+  const e2l=Math.hypot(...e2)||1e-9; e2=e2.map(v=>v/e2l);
+  let defl=0;
+  for(let i=0;i<P.maxSteps;i++){
+    steps=i+1;
+    const r=Math.hypot(...x);
+    if(r<minR)minR=r;
+    if(r<rH){fate=1;break;}
+    if(r>escR){fate=2;break;}
+    if(r>25*RS && x[0]*p[0]+x[1]*p[1]+x[2]*p[2]>0){fate=2;break;}
+    const h=[x[1]*p[2]-x[2]*p[1], x[2]*p[0]-x[0]*p[2], x[0]*p[1]-x[1]*p[0]];
+    const h2=h[0]*h[0]+h[1]*h[1]+h[2]*h[2];
+    const r5=r*r*r*r*r, k=-1.5*RS*h2/r5;
+    const dt=P.stepSize*RS*Math.min(5,Math.max(.2,r/(2*RS)));
+    p=p.map((v,j)=>v+k*x[j]*dt);
+    const om=P.spin*RS*RS/(r*r*r);
+    const cp=[ax[1]*p[2]-ax[2]*p[1], ax[2]*p[0]-ax[0]*p[2], ax[0]*p[1]-ax[1]*p[0]];
+    p=p.map((v,j)=>v+om*dt*cp[j]);
+    const pl=Math.hypot(...p); p=p.map(v=>v/pl);
+    const xn=x.map((v,j)=>v+p[j]*dt);
+    const xp=w2df(xn), xm=w2df(x.map((v,j)=>v+.5*p[j]*dt));
+    const rc=Math.hypot(xm[0],xm[1]);
+    const diskData=()=>{
+      const vel=[ax[1]*x[2]-ax[2]*x[1], ax[2]*x[0]-ax[0]*x[2], ax[0]*x[1]-ax[1]*x[0]];
+      const vl=Math.hypot(...vel)||1e-9;
+      const beta=Math.min(.75,Math.sqrt(RS/(2*rc)));
+      const gam=1/Math.sqrt(Math.max(.05,1-beta*beta));
+      const dv=(vel[0]*(-p[0])+vel[1]*(-p[1])+vel[2]*(-p[2]))/vl;
+      const dop=1/(gam*(1-beta*dv));
+      const gg=Math.sqrt(Math.max(0,1-RS/rc));
+      return (1+(dop-1)*P.doppler)*(1+(gg-1)*P.redshift);
+    };
+    if(Math.abs(xm[2])<P.diskThick && rc>P.diskIn && rc<P.diskOut){
+      if(firstG<0){ firstG=diskData(); hitR=rc; hitPhi=Math.atan2(xm[1],xm[0]); }
+      trans*=.96;
+    }
+    if(xpP[2]*xp[2]<0){
+      const t=xpP[2]/(xpP[2]-xp[2]);
+      const xh=x.map((v,j)=>v+(xn[j]-v)*t);
+      const xhD=w2df(xh), rch=Math.hypot(xhD[0],xhD[1]);
+      if(rch>P.diskIn && rch<P.diskOut){
+        cross++;
+        if(firstG<0){ firstG=diskData(); hitR=rch; hitPhi=Math.atan2(xhD[1],xhD[0]); }
+        trans*=.82;
+      }
+    }
+    xpP=xp; x=xn;
+    if(i%2===0&&path.length<900){
+      path.push([...x]);
+      plane.push([x[0]*e1[0]+x[1]*e1[1]+x[2]*e1[2], x[0]*e2[0]+x[1]*e2[1]+x[2]*e2[2]]);
+    }
+    if(trans<.02){fate=2;break;}
+  }
+  if(fate===0)fate=3;
+  defl=Math.acos(Math.max(-1,Math.min(1,rd[0]*p[0]+rd[1]*p[1]+rd[2]*p[2])))*180/Math.PI;
+  return {steps,minR,fate,cross,firstG,hitR,hitPhi,defl,path,plane,rd:[...rd]};
+}
+window.__lastRay=null;   // test hook
+
+/* -------------------------------- UI build -------------------------------- */
+const body=$('#pbody');
+let syncing=false;
+function section(name,open=true){
+  const d=document.createElement('details'); if(open)d.open=true;
+  const s=document.createElement('summary'); s.textContent=name; d.appendChild(s);
+  body.appendChild(d); return d;
+}
+function slider(sec,label,key,min,max,step,fmt){
+  const r=document.createElement('div'); r.className='row';
+  const l=document.createElement('label'); l.textContent=label; l.title=label;
+  const i=document.createElement('input'); i.type='range';
+  i.dataset.k=key;
+  i.min=min;i.max=max;i.step=step;i.value=P[key];
+  const v=document.createElement('span'); v.className='val';
+  const show=()=>v.textContent=fmt?fmt(P[key]):(+P[key]).toFixed(2);
+  i.oninput=()=>{P[key]=+i.value;
+    if(!syncing&&['stepSize','maxSteps','renderScale','bloom'].includes(key))qualityName='custom';
+    if(key==='renderScale'&&!syncing)userScale=P[key];show();invalidate();};
+  show(); r.append(l,i,v); sec.appendChild(r); return i;
+}
+function btns(sec,list){
+  const d=document.createElement('div'); d.className='btnrow';
+  for(const [t,fn] of list){
+    const b=document.createElement('button'); b.textContent=t; b.onclick=fn;
+    d.appendChild(b);
+  }
+  sec.appendChild(d); return d;
+}
+function chk(sec,label,key){
+  const l=document.createElement('label'); l.className='chk';
+  const i=document.createElement('input'); i.type='checkbox'; i.checked=P[key];
+  i.dataset.k=key;
+  i.onchange=()=>{P[key]=i.checked;invalidate();};
+  l.append(i,document.createTextNode(label)); sec.appendChild(l);
+}
+function sel(sec,label,key,opts){
+  const r=document.createElement('div'); r.className='row';
+  const l=document.createElement('label'); l.textContent=label;
+  const s=document.createElement('select');
+  for(const [v,t] of opts){ const o=document.createElement('option');
+    o.value=v;o.textContent=t;s.appendChild(o); }
+  s.value=P[key];
+  s.onchange=()=>{P[key]=isNaN(+s.value)?s.value:+s.value;invalidate();};
+  r.append(l,s); sec.appendChild(r); return s;
+}
+
+const sSim=section('Simulation');
+btns(sSim,[['⏯ Pause / Resume',()=>togglePause()],['⟲ Reset Time',()=>{P.simTime=0;}]]);
+slider(sSim,'Time scale','timeScale',0,4,.05);
+slider(sSim,'Mass (rs)','mass',.3,3,.01);
+slider(sSim,'Spin approx','spin',0,1,.01);
+slider(sSim,'Horizon scale','horizon',.5,1.5,.01);
+
+const sDisk=section('Accretion Disk');
+slider(sDisk,'Inner radius','diskIn',1.05,8,.05);
+slider(sDisk,'Outer radius','diskOut',4,30,.1);
+slider(sDisk,'Thickness','diskThick',.01,.8,.005);
+slider(sDisk,'Inclination °','diskInc',0,90,.5,v=>v.toFixed(0)+'°');
+slider(sDisk,'Temperature','diskTemp',.2,3,.01);
+slider(sDisk,'Turbulence','turb',0,1.5,.01);
+slider(sDisk,'Doppler beaming','doppler',0,1.5,.01);
+slider(sDisk,'Grav. redshift','redshift',0,1.5,.01);
+
+const sRen=section('Rendering',false);
+sel(sRen,'Quality','quality',Object.keys(QUALITY).map(k=>[k,k[0].toUpperCase()+k.slice(1)]))
+  .onchange=e=>applyQuality(e.target.value);
+slider(sRen,'Exposure','exposure',.1,4,.01);
+slider(sRen,'Contrast','contrast',.5,1.8,.01);
+slider(sRen,'Bloom','bloom',0,2,.01);
+slider(sRen,'Step size','stepSize',.01,.12,.001);
+slider(sRen,'Max steps','maxSteps',50,1400,10,v=>v.toFixed(0));
+slider(sRen,'Render scale','renderScale',.2,1.2,.01);
+if(hdrOK) chk(sRen,'Temporal accumulation (AA)','taa');
+
+const sViz=section('Visualization',true);
+sel(sViz,'Mode','viz',[[0,'Cinematic'],[1,'Ray step count'],[2,'Deflection'],
+  [3,'Redshift / Doppler g'],[4,'Disk hit coords'],[5,'Min. distance'],[6,'Ray fate']]);
+
+const sCam=section('Camera',true);
+btns(sCam,PRESETS.map(([n,cfg])=>[n,()=>{Object.assign(cam,cfg);cam.tx=cam.ty=cam.tz=0;invalidate();}]));
+const bAuto=document.createElement('button'); bAuto.textContent='Auto-orbit';
+bAuto.className=P.autoOrbit?'on':''; bAuto.onclick=()=>{P.autoOrbit=!P.autoOrbit;bAuto.className=P.autoOrbit?'on':'';};
+const bReset=document.createElement('button'); bReset.textContent='Reset view';
+bReset.onclick=()=>{Object.assign(cam,{theta:.65,phi:1.32,dist:9,tx:0,ty:0,tz:0});invalidate();};
+const r1=document.createElement('div');r1.className='btnrow';r1.append(bAuto,bReset);sCam.appendChild(r1);
+const hint=document.createElement('div');hint.className='hint';
+hint.textContent='Drag: orbit · Shift/right-drag: pan · Wheel: zoom · Click: inspect ray · Space: pause';
+sCam.appendChild(hint);
+
+const sOv=section('Overlays',false);
+chk(sOv,'Event horizon','ovHorizon');
+chk(sOv,'Photon sphere','ovPhoton');
+chk(sOv,'Disk plane','ovDisk');
+chk(sOv,'Selected ray path','ovRay');
+
+$('#menuBtn').onclick=()=>$('#panel').classList.toggle('hidden');
+if(innerWidth<700) $('#panel').classList.add('hidden');
+applyQuality(softGL?'low':'high');   // software rasterizers start conservative
+$('#rayClose').onclick=()=>{$('#ray').classList.remove('show');selRay=null;};
+
+function applyQuality(name){
+  const q=QUALITY[name]; if(!q)return;
+  qualityName=name;
+  P.renderScale=q.scale;userScale=q.scale;
+  P.maxSteps=q.steps;P.stepSize=q.dt;
+  P.bloom=q.bloom?P.bloom||.7:0;P.taa=q.taa&&hdrOK;
+  rebuildPanelVals();invalidate();
+}
+function rebuildPanelVals(){
+  syncing=true;
+  body.querySelectorAll('input[type=range]').forEach(i=>{
+    const k=i.dataset.k;
+    if(k&&P[k]!==undefined){ i.value=P[k]; i.dispatchEvent(new Event('input')); }
+  });
+  syncing=false;
+  body.querySelectorAll('input[type=checkbox]').forEach(i=>{
+    const k=i.dataset.k; if(k&&P[k]!==undefined) i.checked=P[k];
+  });
+}
+
+function togglePause(){ P.running=!P.running; invalidate(); }
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.code==='Space'){e.preventDefault();togglePause();}
+  if(e.key==='o'||e.key==='O')bAuto.onclick();
+});
+
+/* ------------------------------ input ------------------------------------- */
+let drag=null;
+glCanvas.addEventListener('pointerdown',e=>{
+  try{glCanvas.setPointerCapture(e.pointerId);}catch(_){/* synthetic pointers may lack an id */}
+  drag={x:e.clientX,y:e.clientY,btn:e.button,shift:e.shiftKey,moved:0,t:performance.now()};
+  glCanvas.classList.add('drag');
+});
+glCanvas.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  drag.moved+=Math.abs(dx)+Math.abs(dy);
+  drag.x=e.clientX;drag.y=e.clientY;
+  if(drag.btn===2||drag.shift){
+    const s=cam.dist*0.0016;
+    cam.tx-=camRight[0]*dx*s; cam.ty-=camRight[1]*dx*s; cam.tz-=camRight[2]*dx*s;
+    cam.tx+=camUp[0]*dy*s;   cam.ty+=camUp[1]*dy*s;   cam.tz+=camUp[2]*dy*s;
+  }else{
+    cam.theta+=dx*.005;
+    cam.phi=Math.min(3.05,Math.max(.09,cam.phi-dy*.005));
+  }
+  invalidate();
+});
+glCanvas.addEventListener('pointerup',e=>{
+  glCanvas.classList.remove('drag');
+  const wasClick=drag&&drag.moved<6;
+  drag=null;
+  if(wasClick&&e.button===0) selectRay(e.clientX,e.clientY);
+});
+glCanvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  cam.dist=Math.min(60,Math.max(1.6,cam.dist*Math.exp(e.deltaY*.0012)));
+  invalidate();
+},{passive:false});
+glCanvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+function selectRay(cx,cy){
+  const rect=glCanvas.getBoundingClientRect();
+  const u=(cx-rect.left)/rect.width*2-1, v=1-(cy-rect.top)/rect.height*2;
+  const aspect=rect.width/rect.height;
+  const rd0=[camFwd[0]+u*TANH*aspect*camRight[0]+v*TANH*camUp[0],
+             camFwd[1]+u*TANH*aspect*camRight[1]+v*TANH*camUp[1],
+             camFwd[2]+u*TANH*aspect*camRight[2]+v*TANH*camUp[2]];
+  const l=Math.hypot(...rd0), rd=rd0.map(x=>x/l);
+  selRay=traceRayJS(rd); selRay.px=[cx-rect.left,cy-rect.top];
+  window.__lastRay={steps:selRay.steps,minR:selRay.minR,fate:selRay.fate,
+    cross:selRay.cross,g:selRay.firstG,defl:selRay.defl};
+  const fates=['—','Captured (horizon)','Escaped','Max steps'];
+  const rows=[
+    ['Steps',selRay.steps],['Min. radius',selRay.minR.toFixed(2)+' rs'],
+    ['Deflection',selRay.defl.toFixed(1)+'°'],['Fate',fates[selRay.fate]],
+    ['Disk crossings',selRay.cross],
+    ['g-factor',selRay.firstG<0?'—':selRay.firstG.toFixed(3)],
+    ['Hit radius',selRay.hitR<0?'—':selRay.hitR.toFixed(2)+' rs'],
+    ['Hit φ',selRay.hitPhi<0?'—':(selRay.hitPhi*180/Math.PI).toFixed(0)+'°'],
+  ];
+  $('#rayGrid').innerHTML=rows.map(([k,v])=>`<span>${k}</span><b>${v}</b>`).join('');
+  $('#ray').classList.add('show');
+  drawRayDiagram();
+}
+
+/* --------------------------- overlay drawing ------------------------------- */
+const ov=ovCanvas.getContext('2d');
+function project(pt,w,h){
+  const v=[pt[0]-camPos[0],pt[1]-camPos[1],pt[2]-camPos[2]];
+  const z=v[0]*camFwd[0]+v[1]*camFwd[1]+v[2]*camFwd[2];
+  if(z<=.01)return null;
+  const aspect=w/h;
+  const sx=(v[0]*camRight[0]+v[1]*camRight[1]+v[2]*camRight[2])/(z*TANH*aspect);
+  const sy=(v[0]*camUp[0]+v[1]*camUp[1]+v[2]*camUp[2])/(z*TANH);
+  return [(sx*.5+.5)*w, (.5-sy*.5)*h];
+}
+function drawOverlay(){
+  const w=ovCanvas.width,h=ovCanvas.height;
+  ov.clearRect(0,0,w,h);
+  const dpr=Math.min(devicePixelRatio||1,2);
+  ov.save(); ov.scale(dpr,dpr);
+  const W=w/dpr,H=h/dpr;
+  const ring=(rad,color,dash)=>{
+    ov.strokeStyle=color;ov.lineWidth=1;ov.setLineDash(dash||[]);
+    ov.beginPath();
+    let started=false;
+    for(let i=0;i<=96;i++){
+      const t=i/96*Math.PI*2;
+      // silhouette circle of a sphere: radius rad at origin, in plane ⊥ view
+      const pt=[camRight[0]*Math.cos(t)*rad+camUp[0]*Math.sin(t)*rad,
+                camRight[1]*Math.cos(t)*rad+camUp[1]*Math.sin(t)*rad,
+                camRight[2]*Math.cos(t)*rad+camUp[2]*Math.sin(t)*rad];
+      const s=project(pt,W,H);
+      if(!s){started=false;continue;}
+      started?ov.lineTo(s[0],s[1]):ov.moveTo(s[0],s[1]);
+      started=true;
+    }
+    ov.stroke();ov.setLineDash([]);
+  };
+  if(P.ovHorizon) ring(P.mass*P.horizon,'rgba(255,120,80,.9)');
+  if(P.ovPhoton)  ring(P.mass*1.5,'rgba(120,190,255,.8)',[5,4]);
+  if(P.ovDisk){
+    const a=P.diskInc*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+    for(const [rr,col] of [[P.diskIn,'rgba(255,180,90,.5)'],[P.diskOut,'rgba(255,180,90,.3)']]){
+      ov.strokeStyle=col;ov.beginPath();let st=false;
+      for(let i=0;i<=96;i++){
+        const t=i/96*Math.PI*2;
+        const d=[Math.cos(t)*rr,Math.sin(t)*rr,0];
+        // disk->world: inverse of w2df = rot about X by +a: y'=c y - s z; z'=s y + c z
+        const wp=[d[0], c*d[1]-s*d[2], s*d[1]+c*d[2]];
+        const sc=project(wp,W,H);
+        if(!sc){st=false;continue;}
+        st?ov.lineTo(sc[0],sc[1]):ov.moveTo(sc[0],sc[1]);st=true;
+      }
+      ov.stroke();
+    }
+  }
+  if(selRay&&P.ovRay&&selRay.path.length>1){
+    ov.strokeStyle='rgba(90,255,180,.95)';ov.lineWidth=1.4;ov.beginPath();
+    let st=false;
+    for(const pt of selRay.path){
+      const s=project(pt,W,H);
+      if(!s){st=false;continue;}
+      st?ov.lineTo(s[0],s[1]):ov.moveTo(s[0],s[1]);st=true;
+    }
+    ov.stroke();
+    if(selRay.px){
+      ov.strokeStyle='rgba(90,255,180,.9)';ov.lineWidth=1;
+      const [px,py]=selRay.px;
+      ov.strokeRect(px-5,py-5,10,10);
+      ov.beginPath();ov.moveTo(px-9,py);ov.lineTo(px+9,py);
+      ov.moveTo(px,py-9);ov.lineTo(px,py+9);ov.stroke();
+    }
+  }
+  ov.restore();
+}
+function drawRayDiagram(){
+  const c=$('#rayCanvas'),x2=c.getContext('2d');
+  const W=c.width,H=c.height;
+  x2.clearRect(0,0,W,H);x2.fillStyle='#070a12';x2.fillRect(0,0,W,H);
+  if(!selRay||!selRay.plane.length)return;
+  let m=2;
+  for(const p of selRay.plane)m=Math.max(m,Math.hypot(p[0],p[1]));
+  m=Math.min(m,Math.hypot(...camPos)*1.1);
+  const sc=(Math.min(W,H)/2-14)/m, cx=W/2, cy=H/2;
+  const circ=(r,col,dash)=>{x2.strokeStyle=col;x2.setLineDash(dash||[]);
+    x2.beginPath();x2.arc(cx,cy,r*sc,0,7);x2.stroke();x2.setLineDash([]);};
+  circ(P.mass*P.horizon,'rgba(255,120,80,.9)');
+  circ(P.mass*1.5,'rgba(120,190,255,.8)',[4,4]);
+  x2.fillStyle='rgba(255,120,80,.9)';
+  x2.beginPath();x2.arc(cx,cy,P.mass*P.horizon*sc,0,7);x2.fill();
+  // disk chord through orbital plane
+  x2.strokeStyle='rgba(255,180,90,.35)';x2.lineWidth=1;
+  x2.beginPath();x2.moveTo(cx-P.diskOut*sc,cy);x2.lineTo(cx-P.diskIn*sc,cy);
+  x2.moveTo(cx+P.diskIn*sc,cy);x2.lineTo(cx+P.diskOut*sc,cy);x2.stroke();
+  x2.strokeStyle='rgba(90,255,180,.95)';x2.lineWidth=1.3;x2.beginPath();
+  selRay.plane.forEach((p,i)=>i?x2.lineTo(cx+p[0]*sc,cy-p[1]*sc):x2.moveTo(cx+p[0]*sc,cy-p[1]*sc));
+  x2.stroke();
+  x2.fillStyle='#5fb4ff';x2.font='10px monospace';
+  x2.fillText('orbital plane · dashed = photon sphere · orange = disk',10,14);
+}
+
+/* ------------------------------- render ------------------------------------ */
+function invalidate(){accumN=0;}
+function resize(){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  const w=glCanvas.clientWidth,h=glCanvas.clientHeight;
+  const cw=Math.round(w*dpr),ch=Math.round(h*dpr);
+  if(glCanvas.width!==cw||glCanvas.height!==ch){
+    glCanvas.width=cw;glCanvas.height=ch;
+    ovCanvas.width=cw;ovCanvas.height=ch;
+  }
+  const rw=Math.max(8,Math.round(w*dpr*P.renderScale));
+  const rh=Math.max(8,Math.round(h*dpr*P.renderScale));
+  if(rw!==RW||rh!==RH){RW=rw;RH=rh;allocFBOs();invalidate();}
+}
+new ResizeObserver(resize).observe(glCanvas);
+resize();updCam();
+
+let lastT=performance.now(),fpsEMA=60,frames=0,fpsT=0,adaptT=0;
+function syncSlider(k){
+  const i=body.querySelector(`input[data-k="${k}"]`);
+  if(i){syncing=true;i.value=P[k];i.dispatchEvent(new Event('input'));syncing=false;}
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  const dtms=Math.min(100,now-lastT);lastT=now;
+  fpsEMA=fpsEMA*.92+(1000/Math.max(dtms,1))*.08;
+
+  if(P.running)P.simTime+=dtms/1000*P.timeScale;
+  if(P.autoOrbit){cam.theta+=dtms*.00004;cam.phi=1.32+Math.sin(now*.00005)*.08;}
+
+  resize();updCam();
+
+  // ---- scene pass ----
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fboScene.f);
+  gl.viewport(0,0,RW,RH);
+  gl.useProgram(progScene);
+  const u=progScene.u;
+  gl.uniform2f(u.uRes,RW,RH);
+  const jit=P.taa&&hdrOK?[(Math.random()-.5),(Math.random()-.5)]:[0,0];
+  gl.uniform2f(u.uJitter,jit[0],jit[1]);
+  gl.uniform3fv(u.uCamPos,camPos);
+  gl.uniform3fv(u.uCamR,camRight);
+  gl.uniform3fv(u.uCamU,camUp);
+  gl.uniform3fv(u.uCamF,camFwd);
+  gl.uniform1f(u.uTanH,TANH);
+  gl.uniform1f(u.uAspect,RW/RH);
+  gl.uniform1f(u.uTime,P.simTime);
+  gl.uniform1f(u.uMass,P.mass);
+  gl.uniform1f(u.uSpin,P.spin);
+  gl.uniform1f(u.uHor,P.horizon);
+  gl.uniform3fv(u.uAxis,diskAxisW());
+  gl.uniformMatrix3fv(u.uW2D,false,new Float32Array(diskRotM()));
+  gl.uniform1f(u.uRIn,P.diskIn);gl.uniform1f(u.uROut,P.diskOut);
+  gl.uniform1f(u.uThick,P.diskThick);gl.uniform1f(u.uTemp,P.diskTemp);
+  gl.uniform1f(u.uTurb,P.turb);gl.uniform1f(u.uDop,P.doppler);
+  gl.uniform1f(u.uRed,P.redshift);
+  gl.uniform1f(u.uStep,P.stepSize);
+  gl.uniform1i(u.uMaxSteps,Math.min(1400,Math.round(P.maxSteps)));
+  gl.uniform1i(u.uViz,P.viz);
+  draw();
+
+  // ---- temporal accumulation ----
+  let srcTex=fboScene.t;
+  if(P.taa&&hdrOK&&P.viz===0){
+    accumN=Math.min(accumN+1,64);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,accB.f);
+    gl.viewport(0,0,RW,RH);
+    gl.useProgram(progAccum);
+    bindTex(0,accA.t,progAccum.u.uPrev);
+    bindTex(1,fboScene.t,progAccum.u.uCur);
+    gl.uniform1f(progAccum.u.uW,1/accumN);
+    draw();
+    [accA,accB]=[accB,accA];
+    srcTex=accA.t;
+  }else accumN=0;
+
+  // ---- bloom ----
+  if(P.bloom>0&&P.viz===0){
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fboA.f);
+    gl.viewport(0,0,fboA.w,fboA.h);
+    gl.useProgram(progBright);bindTex(0,srcTex,progBright.u.uT);draw();
+    for(let i=0;i<2;i++){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,fboB.f);
+      gl.useProgram(progBlur);bindTex(0,fboA.t,progBlur.u.uT);
+      gl.uniform2f(progBlur.u.uDir,1/fboA.w,0);draw();
+      gl.bindFramebuffer(gl.FRAMEBUFFER,fboA.f);
+      bindTex(0,fboB.t,progBlur.u.uT);
+      gl.uniform2f(progBlur.u.uDir,0,1/fboA.h);draw();
+    }
+  }
+
+  // ---- composite ----
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.viewport(0,0,glCanvas.width,glCanvas.height);
+  gl.useProgram(progComp);
+  bindTex(0,srcTex,progComp.u.uT);
+  bindTex(1,fboA.t,progComp.u.uB);
+  gl.uniform1f(progComp.u.uExp,P.exposure);
+  gl.uniform1f(progComp.u.uCon,P.contrast);
+  gl.uniform1f(progComp.u.uBloomAmt,P.viz===0?P.bloom:0);
+  gl.uniform1f(progComp.u.uVig,.55);
+  gl.uniform1i(progComp.u.uViz,P.viz);
+  draw();
+
+  drawOverlay();
+
+  // ---- stats (avg step estimate, ~1.5 Hz, 5×5 grid) ----
+  if(now-statsAvg.t>650){
+    statsAvg.t=now;let s=0,n=0;
+    const aspect=glCanvas.clientWidth/glCanvas.clientHeight;
+    for(let j=-2;j<=2;j++)for(let i=-2;i<=2;i++){
+      const uu=i*.3,vv=j*.3;
+      const rd0=[camFwd[0]+uu*TANH*aspect*camRight[0]+vv*TANH*camUp[0],
+                 camFwd[1]+uu*TANH*aspect*camRight[1]+vv*TANH*camUp[1],
+                 camFwd[2]+uu*TANH*aspect*camRight[2]+vv*TANH*camUp[2]];
+      const l=Math.hypot(...rd0),rd=rd0.map(x=>x/l);
+      s+=traceRayJS(rd).steps;n++;
+    }
+    statsAvg.steps=s/n;
+  }
+
+  // ---- adaptive resolution: recover interactivity on slow GPUs ----
+  if(now-adaptT>2000){
+    adaptT=now;
+    if(fpsEMA<22&&P.renderScale>0.28){
+      P.renderScale=Math.max(.25,P.renderScale*.8);
+      if(qualityName!=='auto')qualityName='auto';
+      syncSlider('renderScale');invalidate();
+    }else if(fpsEMA>55&&P.renderScale<userScale){
+      P.renderScale=Math.min(userScale,P.renderScale*1.15);
+      syncSlider('renderScale');invalidate();
+    }
+  }
+
+  // ---- HUD ----
+  if(now-fpsT>250){
+    fpsT=now;
+    const modes=['Cinematic','Steps','Deflection','Doppler g','Hit coords','Min dist','Fate'];
+    hud.innerHTML=
+      `<b>${fpsEMA.toFixed(0)}</b> fps · ${RW}×${RH} · `+
+      `steps <span class="st">${selRay?selRay.steps:'~'+Math.round(statsAvg.steps)}</span> · `+
+      `${qualityName} · ${modes[P.viz]} · d=<b>${cam.dist.toFixed(1)}</b> · `+
+      `t=<b>${P.simTime.toFixed(1)}</b>s · `+
+      `${P.running?'<b style="color:#7fe0a8">▶</b>':'<b style="color:#ffb35f">⏸</b>'}`+
+      (hdrOK?'':' · <b style="color:#ffb35f">LDR</b>');
+  }
+}
+// world->disk rotation matrix, column-major: R_x(-inc)
+function diskRotM(){
+  const a=P.diskInc*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+  return [1,0,0, 0,c,-s, 0,s,c];
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

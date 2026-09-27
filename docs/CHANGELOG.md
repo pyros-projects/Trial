@@ -1,5 +1,11 @@
 # Changelog
 
+## SWE-2 joins the showcase: 2026-09-27
+
+- Added Cognition's SWE-2 with thirteen builds, using Devin CLI at High. It appears directly after Grok 4.6 with its own rose tint.
+- Updated previews and share pages; the collection now contains 117 builds from seven models. Original submissions are preserved, and raw evidence is excluded from the website.
+- Added a public-gallery runtime notice for SWE-2's stealth game: periodic settings saves raise sandbox-storage errors, although the mission still starts.
+
 ## GLM drone racing, ecosystem, and Qwen waves: 2026-09-09
 
 - Added GLM's drone racer and evolutionary ecosystem, extending its collection through prompt 14, and Qwen's wave laboratory, bringing its collection to seven builds.

@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Falling-Sand Alchemy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230b0d12'/><rect x='2' y='9' width='4' height='4' fill='%23e8b64c'/><rect x='6' y='11' width='4' height='4' fill='%234a9eff'/><rect x='10' y='7' width='4' height='4' fill='%23ff6a2a'/></svg>">
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#12161d; --panel2:#171c25; --line:#262d3a;
+    --txt:#cfd6e4; --dim:#7b8698; --acc:#ffb454; --acc2:#4fc3ff;
+    --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%; overflow:hidden; background:var(--bg); color:var(--txt);
+    font:13px/1.45 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+  #stage{position:fixed; inset:0; cursor:crosshair; touch-action:none}
+  canvas#view{position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute; top:10px; left:10px; z-index:5; pointer-events:none;
+    font-family:var(--mono); font-size:11px; color:#aeb8ca;
+    background:rgba(10,13,18,.72); border:1px solid var(--line); border-radius:8px;
+    padding:8px 10px; min-width:220px; backdrop-filter:blur(6px); white-space:pre}
+  #hud b{color:#e8eefb; font-weight:600}
+  #hud .hot{color:#ff9a5a} #hud .cold{color:#6ec5ff} #hud .warn{color:#ffd166}
+
+  /* ---------- Panel ---------- */
+  #panel{position:absolute; top:0; right:0; bottom:0; width:288px; z-index:6;
+    background:linear-gradient(180deg,var(--panel),#0e1219 70%);
+    border-left:1px solid var(--line); display:flex; flex-direction:column;
+    transition:transform .22s ease}
+  #panel.hidden{transform:translateX(100%)}
+  #phead{display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line)}
+  #phead .logo{font-size:15px}
+  #phead h1{font-size:13px; font-weight:650; letter-spacing:.3px; color:#e8eefb; flex:1}
+  #pbody{flex:1; overflow-y:auto; padding:10px 12px 30px; scrollbar-width:thin; scrollbar-color:#2c3544 transparent}
+  #pbody::-webkit-scrollbar{width:8px} #pbody::-webkit-scrollbar-thumb{background:#2c3544; border-radius:4px}
+
+  .sec{margin-bottom:14px}
+  .sec>h2{font-size:10px; text-transform:uppercase; letter-spacing:1.2px; color:var(--dim);
+    margin-bottom:7px; display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none}
+  .sec>h2::after{content:''; flex:1; height:1px; background:var(--line)}
+  .sec>h2 .car{transition:transform .15s; font-size:9px}
+  .sec.closed>h2 .car{transform:rotate(-90deg)}
+  .sec.closed .sbody{display:none}
+
+  /* material palette */
+  #mats{display:grid; grid-template-columns:repeat(5,1fr); gap:5px}
+  .swatch{position:relative; aspect-ratio:1; border-radius:6px; border:1px solid rgba(255,255,255,.09);
+    cursor:pointer; display:flex; align-items:flex-end; justify-content:center; overflow:hidden;
+    transition:transform .08s, border-color .08s}
+  .swatch:hover{transform:scale(1.12); z-index:2}
+  .swatch.sel{border-color:var(--acc); box-shadow:0 0 0 1px var(--acc), 0 0 10px rgba(255,180,84,.4)}
+  .swatch span{font-size:8px; font-family:var(--mono); color:rgba(255,255,255,.92);
+    text-shadow:0 1px 2px rgba(0,0,0,.9); padding-bottom:1px; pointer-events:none; letter-spacing:-.2px}
+
+  /* tools */
+  #tools{display:grid; grid-template-columns:repeat(4,1fr); gap:5px}
+  .tbtn{display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 2px 5px;
+    background:var(--panel2); border:1px solid var(--line); border-radius:7px; cursor:pointer;
+    color:var(--txt); font-size:9.5px; font-family:inherit; transition:all .1s}
+  .tbtn .ic{font-size:14px; line-height:1}
+  .tbtn:hover{border-color:#3d4a5e; background:#1b222e}
+  .tbtn.sel{border-color:var(--acc2); box-shadow:0 0 0 1px var(--acc2); color:#dff2ff}
+
+  /* rows of small buttons */
+  .btnrow{display:flex; flex-wrap:wrap; gap:5px}
+  .btn{flex:1; min-width:56px; padding:6px 8px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:6px; color:var(--txt); font-size:11px; font-family:inherit; cursor:pointer;
+    transition:all .1s; text-align:center; white-space:nowrap}
+  .btn:hover{border-color:#3d4a5e; background:#1d2430}
+  .btn.primary{border-color:var(--acc); color:var(--acc)}
+  .btn.danger:hover{border-color:#ff6b6b; color:#ff8f8f}
+  .btn.on{border-color:#4ade80; color:#4ade80}
+
+  /* sliders */
+  .ctl{margin-bottom:7px}
+  .ctl label{display:flex; justify-content:space-between; font-size:11px; color:var(--dim); margin-bottom:2px}
+  .ctl label output{color:var(--txt); font-family:var(--mono); font-size:10.5px}
+  input[type=range]{width:100%; height:18px; -webkit-appearance:none; background:transparent; cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{height:4px; background:#232b38; border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:13px; height:13px; margin-top:-4.5px;
+    border-radius:50%; background:var(--acc); border:2px solid #0d1017}
+  input[type=range]::-moz-range-track{height:4px; background:#232b38; border-radius:2px}
+  input[type=range]::-moz-range-thumb{width:11px; height:11px; border-radius:50%; background:var(--acc); border:2px solid #0d1017}
+  select,input[type=text],input[type=number]{width:100%; padding:5px 7px; background:#0d1219; color:var(--txt);
+    border:1px solid var(--line); border-radius:6px; font:11px var(--mono); outline:none}
+  select:focus,input:focus{border-color:var(--acc2)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+  .hint{font-size:10px; color:#5b6576; margin-top:5px; line-height:1.5}
+  kbd{font:9px var(--mono); background:#1a2130; border:1px solid #2c3544; border-bottom-width:2px;
+    border-radius:3px; padding:0 3px; color:#9fb2cc}
+
+  /* mobile toggle */
+  #burger{position:absolute; top:10px; right:10px; z-index:7; width:38px; height:38px;
+    border-radius:9px; border:1px solid var(--line); background:rgba(16,20,28,.85);
+    color:var(--txt); font-size:17px; cursor:pointer; display:none; backdrop-filter:blur(6px)}
+
+  #toast{position:absolute; bottom:14px; left:50%; transform:translateX(-50%); z-index:8;
+    background:rgba(14,18,25,.92); border:1px solid var(--line); border-radius:8px;
+    padding:7px 14px; font-size:11.5px; color:#d5deee; opacity:0; transition:opacity .25s;
+    pointer-events:none; white-space:nowrap}
+  #toast.show{opacity:1}
+  #brush{position:absolute; z-index:4; pointer-events:none; border:1px solid rgba(255,255,255,.55);
+    border-radius:50%; display:none; mix-blend-mode:difference}
+
+  @media (max-width:720px){
+    #panel{width:min(84vw,300px); box-shadow:-12px 0 40px rgba(0,0,0,.55)}
+    #burger{display:block}
+    #hud{font-size:9.5px; min-width:0; padding:6px 8px; max-width:62vw}
+  }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="view"></canvas><div id="brush"></div></div>
+<div id="hud">booting…</div>
+<button id="burger" title="Menu">☰</button>
+
+<div id="panel">
+  <div id="phead"><span class="logo">⚗️</span><h1>Falling-Sand Alchemy</h1>
+    <button class="btn" id="hideBtn" style="flex:0;min-width:0;padding:4px 8px">⟨</button></div>
+  <div id="pbody">
+    <div class="sec"><h2><span class="car">▾</span>Materials</h2><div class="sbody"><div id="mats"></div></div></div>
+    <div class="sec"><h2><span class="car">▾</span>Tools</h2><div class="sbody"><div id="tools"></div></div></div>
+    <div class="sec"><h2><span class="car">▾</span>Brush</h2><div class="sbody" id="brushCtl"></div></div>
+    <div class="sec"><h2><span class="car">▾</span>Simulation</h2><div class="sbody">
+      <div class="btnrow" style="margin-bottom:8px">
+        <button class="btn primary" id="pauseBtn">⏸ Pause</button>
+        <button class="btn" id="stepBtn">⏭ Step</button>
+        <button class="btn" id="resetBtn">↺ Reset</button>
+        <button class="btn danger" id="clearBtn">✕ Clear</button>
+      </div>
+      <div id="simCtl"></div>
+    </div></div>
+    <div class="sec"><h2><span class="car">▾</span>View &amp; Data</h2><div class="sbody">
+      <div class="ctl"><label>Visualization</label><select id="vizSel"></select></div>
+      <div class="ctl"><label>Preset</label>
+        <div style="display:flex;gap:5px"><select id="presetSel" style="flex:1"></select>
+        <button class="btn" id="presetBtn" style="flex:0;min-width:52px">Load</button></div>
+      </div>
+      <div class="ctl"><label>Seed <output id="seedOut"></output></label>
+        <div style="display:flex;gap:5px"><input type="number" id="seedIn" style="flex:1">
+        <button class="btn" id="seedBtn" style="flex:0;min-width:44px" title="Random seed">🎲</button></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="saveBtn">💾 Save</button>
+        <button class="btn" id="loadBtn">📂 Load</button>
+        <button class="btn" id="pngBtn">🖼 PNG</button>
+        <button class="btn" id="autoBtn" title="localStorage autosave">Auto: on</button>
+      </div>
+      <div class="hint">
+        Drag to paint · right-drag erases · <kbd>alt</kbd>+click picks ·
+        <kbd>space</kbd> pause · <kbd>.</kbd> step · <kbd>[</kbd><kbd>]</kbd> brush ·
+        <kbd>1</kbd>–<kbd>9</kbd>,<kbd>0</kbd>… materials · <kbd>V</kbd> viz · <kbd>H</kbd> panel
+      </div>
+    </div></div>
+  </div>
+</div>
+<div id="toast"></div>
+<input type="file" id="fileIn" accept=".json,.fsa" style="display:none">
+
+<script>
+'use strict';
+/* ================================================================
+   FALLING-SAND ALCHEMY — cellular automaton sandbox
+   grid: typed-array SoA · chunked activity tracking · 4-dir gravity
+   ================================================================ */
+
+// ---------- seeded RNG ----------
+let rngState = 1;
+function srand(s){ rngState = (s>>>0) || 1; }
+function rand(){ // mulberry32
+  rngState |= 0; rngState = (rngState + 0x6D2B79F5) | 0;
+  let t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const ri = n => (rand()*n)|0;
+
+// ---------- material ids ----------
+const EMPTY=0, WALL=1, SAND=2, WATER=3, OIL=4, SALT=5, WOOD=6, PLANT=7, FIRE=8,
+      SMOKE=9, STEAM=10, ICE=11, LAVA=12, STONE=13, METAL=14, MMETAL=15, ACID=16,
+      GAS=17, SPARK=18, POWD=19, SWATER=20;
+const PH={FIX:0,POW:1,LIQ:2,GAS:3,NRG:4};
+
+// phase, density, conductivity, fuel, ignition temp, acid-resistance, base color
+const MAT=[];
+function defM(id,name,ph,d,cond,fuel,ign,res,c,opts){
+  MAT[id]=Object.assign({n:name,ph,d,cond,fuel,ign,res,c,liq:1},opts||{});
+}
+defM(EMPTY ,'Empty'   ,PH.FIX,0   ,0   ,0  ,0   ,99 ,[6,8,12]);
+defM(WALL  ,'Wall'    ,PH.FIX,99  ,0.04,0  ,0   ,999,[54,58,66]);
+defM(SAND  ,'Sand'    ,PH.POW,1.6 ,0.20,0  ,0   ,0.9,[216,185,106]);
+defM(WATER ,'Water'   ,PH.LIQ,1.0 ,0.45,0  ,0   ,0.6,[46,111,219],{liq:6});
+defM(OIL   ,'Oil'     ,PH.LIQ,0.8 ,0.30,230,240 ,0.5,[80,62,40],{liq:4});
+defM(SALT  ,'Salt'    ,PH.POW,1.5 ,0.25,0  ,0   ,0.8,[232,232,236]);
+defM(WOOD  ,'Wood'    ,PH.FIX,0.7 ,0.06,170,300 ,0.35,[122,82,48]);
+defM(PLANT ,'Plant'   ,PH.FIX,0.5 ,0.10,70 ,230 ,0.15,[63,155,63]);
+defM(FIRE  ,'Fire'    ,PH.NRG,0.1 ,0.30,0  ,0   ,0  ,[255,122,26]);
+defM(SMOKE ,'Smoke'   ,PH.GAS,0.30,0.15,0  ,0   ,0.9,[112,112,118],{life:900});
+defM(STEAM ,'Steam'   ,PH.GAS,0.25,0.35,0  ,0   ,0.9,[196,210,222],{life:1400});
+defM(ICE   ,'Ice'     ,PH.FIX,0.9 ,0.40,0  ,0   ,0.5,[188,230,255]);
+defM(LAVA  ,'Lava'    ,PH.LIQ,2.6 ,0.55,0  ,0   ,0.95,[255,64,8],{liq:3});
+defM(STONE ,'Stone'   ,PH.FIX,2.5 ,0.30,0  ,0   ,0.75,[136,136,140]);
+defM(METAL ,'Metal'   ,PH.FIX,7.0 ,0.90,0  ,0   ,0.5,[182,190,204]);
+defM(MMETAL,'Molten'  ,PH.LIQ,6.0 ,0.90,0  ,0   ,0.6,[255,150,60],{liq:2});
+defM(ACID  ,'Acid'    ,PH.LIQ,1.05,0.40,0  ,0   ,0.2,[163,255,46],{liq:5});
+defM(GAS   ,'Gas'     ,PH.GAS,0.20,0.10,26 ,180 ,0.3,[178,228,158],{life:4000});
+defM(SPARK ,'Spark'   ,PH.NRG,0   ,0   ,0  ,0   ,0  ,[255,243,107]);
+defM(POWD  ,'Powder'  ,PH.POW,1.4 ,0.20,10 ,140 ,0.4,[58,58,62]);
+defM(SWATER,'Brine'   ,PH.LIQ,1.1 ,0.60,0  ,0   ,0.6,[56,124,196],{liq:6});
+const NMAT=MAT.length;
+const PAINTABLE=[SAND,WATER,OIL,SALT,WOOD,PLANT,FIRE,SMOKE,STEAM,ICE,LAVA,STONE,METAL,MMETAL,ACID,GAS,SPARK,POWD,SWATER,WALL];
+const CONDUCTIVE=new Set([METAL,MMETAL,WATER,SWATER,PLANT]); // PLANT weakly (sap)
+const FLAMMABLE=m=>MAT[m].fuel>0;
+
+// ---------- parameters ----------
+const P={
+  speed:1, substeps:1, gravity:0,           // gravity: 0=down 1=up 2=left 3=right
+  cell:3, ambient:22, heatRate:1, reactRate:1,
+  liqMob:6, gasDiff:1, fireInt:1, explStr:1,
+};
+const B={size:6, shape:0, density:0.9, temp:NaN, vel:0, jitter:0.35}; // brush
+let tool='paint', selMat=SAND, vizMode=0, paused=false;
+const GRAV=[[0,1],[0,-1],[-1,0],[1,0]];
+
+// ---------- grid state ----------
+let W=0,H=0,N=0,CW=0,CH=0;
+let mat,temp,life,vx,vy,chg,cor,colr,oc,stamp,uord,flg;
+let active,dirty,activeList=[];
+let frame=0, ordCtr=0, reactions=0, activeCells=0, movedCnt=0;
+const explQueue=[];
+
+function alloc(w,h){
+  W=w;H=h;N=w*h;CW=Math.ceil(w/16);CH=Math.ceil(h/16);
+  mat=new Uint8Array(N); temp=new Float32Array(N); life=new Int16Array(N);
+  vx=new Float32Array(N); vy=new Float32Array(N); chg=new Float32Array(N);
+  cor=new Uint8Array(N); colr=new Uint8Array(N); oc=new Uint8Array(N);
+  stamp=new Uint32Array(N); uord=new Uint32Array(N); flg=new Uint8Array(N);
+  active=new Int16Array(CW*CH); dirty=new Uint8Array(CW*CH); activeList=[]; inList.clear();
+  temp.fill(P.ambient);
+  for(let i=0;i<N;i++) colr[i]=ri(256);
+}
+
+// ---------- chunk activity ----------
+const inList=new Set();
+function wake2(x,y){
+  const cx=x>>4, cy=y>>4;
+  const m=2;
+  if((x&15)<m){ wk(cx-1,cy); wk(cx-1,cy-1); wk(cx-1,cy+1); }
+  if((x&15)>=16-m){ wk(cx+1,cy); wk(cx+1,cy-1); wk(cx+1,cy+1); }
+  if((y&15)<m){ wk(cx,cy-1); wk(cx-1,cy-1); wk(cx+1,cy-1); }
+  if((y&15)>=16-m){ wk(cx,cy+1); wk(cx-1,cy+1); wk(cx+1,cy+1); }
+  wk(cx,cy);
+}
+function wk(cx,cy){
+  if(cx<0||cy<0||cx>=CW||cy>=CH)return;
+  const c=cy*CW+cx;
+  active[c]=60; dirty[c]=1;
+  if(!inList.has(c)){inList.add(c); activeList.push(c);}
+}
+const wakeCell=wake2;
+
+function wakeAll(){ for(let c=0;c<CW*CH;c++){active[c]=60;dirty[c]=1;if(!inList.has(c)){inList.add(c);activeList.push(c);}} }
+
+// ---------- cell primitives ----------
+function clearCell(i){
+  mat[i]=EMPTY; life[i]=0; vx[i]=0; vy[i]=0; chg[i]=0; cor[i]=0; oc[i]=0;
+  temp[i]=P.ambient;
+}
+function setCell(i,m,t){
+  mat[i]=m; oc[i]=0; cor[i]=0; chg[i]=0; vx[i]=0; vy[i]=0;
+  life[i]=MAT[m].life||0;
+  temp[i]=(t!==undefined)?t:P.ambient;
+}
+function copyCell(s,d){
+  mat[d]=mat[s]; temp[d]=temp[s]; life[d]=life[s]; vx[d]=vx[s]; vy[d]=vy[s];
+  chg[d]=chg[s]; cor[d]=cor[s]; colr[d]=colr[s]; oc[d]=oc[s];
+}
+function moveCell(s,d){ copyCell(s,d); clearCellKeep(s); }
+function clearCellKeep(i){ // clear but keep ambient temp blending (avoid heat teleport artifacts)
+  mat[i]=EMPTY; life[i]=0; vx[i]=0; vy[i]=0; chg[i]=0; cor[i]=0; oc[i]=0;
+}
+function swapCell(a,b){
+  const tm=mat[a],tt=temp[a],tl=life[a],tx=vx[a],ty=vy[a],tc=chg[a],tr=cor[a],to=oc[a],tcol=colr[a];
+  mat[a]=mat[b];temp[a]=temp[b];life[a]=life[b];vx[a]=vx[b];vy[a]=vy[b];chg[a]=chg[b];cor[a]=cor[b];oc[a]=oc[b];colr[a]=colr[b];
+  mat[b]=tm;temp[b]=tt;life[b]=tl;vx[b]=tx;vy[b]=ty;chg[b]=tc;cor[b]=tr;oc[b]=to;colr[b]=tcol;
+}
+
+const IDX=(x,y)=>y*W+x;
+const inB=(x,y)=>x>=0&&y>=0&&x<W&&y<H;
+
+// gravity vectors for current frame
+let gx=0,gy=1,px=-1,py=0;
+function setGrav(){ const g=GRAV[P.gravity]; gx=g[0]; gy=g[1]; px=-gy; py=gx; }
+
+// can cell at i (material m) move into j? mode: 0 along gravity, 1 against, 2 lateral
+function canMove(m,j,mode){
+  const tj=mat[j];
+  if(tj===EMPTY) return true;
+  if(tj===WALL) return false;
+  const ph=MAT[tj].ph;
+  if(mode===0) return (ph===PH.LIQ||ph===PH.GAS||ph===PH.NRG) && MAT[tj].d < MAT[m].d;
+  if(mode===1) return (ph===PH.LIQ||ph===PH.GAS) && MAT[tj].d > MAT[m].d;
+  return tj===EMPTY || ph===PH.GAS;
+}
+
+function tryMove(i,x,y,dx,dy,mode){
+  const nx=x+dx, ny=y+dy;
+  if(!inB(nx,ny)) return false;
+  const j=IDX(nx,ny), m=mat[i];
+  if(!canMove(m,j,mode)) return false;
+  if(mat[j]===EMPTY){ moveCell(i,j); }
+  else swapCell(i,j);
+  stamp[j]=frame; flg[j]|=2; movedCnt++;
+  wakeCell(nx,ny);
+  return true;
+}
+
+// lateral slide: walk cell-by-cell, land on furthest reachable (no wall teleport)
+function slideTo(i,x,y,dx,dy,maxD){
+  let last=0;
+  for(let k=1;k<=maxD;k++){
+    const nx=x+dx*k, ny=y+dy*k;
+    if(!inB(nx,ny)) break;
+    const j=IDX(nx,ny);
+    if(canMove(mat[i],j,2)) last=k; else break;
+  }
+  if(!last) return false;
+  const nx=x+dx*last, ny=y+dy*last, j=IDX(nx,ny);
+  if(mat[j]===EMPTY) moveCell(i,j); else swapCell(i,j);
+  stamp[j]=frame; flg[j]|=2; movedCnt++; wakeCell(nx,ny);
+  return true;
+}
+
+// projectile flight for cells with velocity
+function fly(i,x,y,m){
+  const sp=Math.hypot(vx[i],vy[i]);
+  if(sp<1.2) return false;
+  const steps=Math.min(6,Math.ceil(sp));
+  const dx=vx[i]/sp, dy=vy[i]/sp;
+  let cx=x, cy=y, ci=i;
+  for(let s=0;s<steps;s++){
+    const nx=Math.round(cx+dx), ny=Math.round(cy+dy);
+    if(!inB(nx,ny)) break;
+    const j=IDX(nx,ny), tj=mat[j];
+    if(tj===EMPTY||(MAT[tj].ph===PH.GAS&&tj!==m)){
+      if(tj===EMPTY) moveCell(ci,j); else swapCell(ci,j);
+      stamp[j]=frame; flg[j]|=2; movedCnt++;
+      wakeCell(nx,ny);
+      cx=nx; cy=ny; ci=j;
+    } else { vx[ci]*=-0.15; vy[ci]*=-0.15; break; }
+  }
+  // phase-dependent drag: fire/gas lose momentum fast, debris keeps it
+  const drag=m===FIRE||m===SPARK?0.72:(MAT[m].ph===PH.GAS?0.82:(MAT[m].ph===PH.POW||MAT[m].ph===PH.FIX?0.95:0.9));
+  vx[ci]*=drag; vy[ci]=vy[ci]*drag+gy*0.25;
+  if(P.gravity>=2){ vx[ci]+=gx*0.25; }
+  return true;
+}
+
+// ---------- reactions ----------
+function ignite(i,m){
+  const M=MAT[m];
+  if(m===POWD){ queueExplode(i%W,(i/W)|0,5*P.explStr); return; }
+  if(m===GAS){ // gas flash: whole cell becomes hot fire, no oc
+    mat[i]=FIRE; oc[i]=0; life[i]=8+ri(10); temp[i]=700; reactions++;
+    return;
+  }
+  oc[i]=m; mat[i]=FIRE; life[i]=M.fuel; temp[i]=Math.max(temp[i],620); vx[i]=0; vy[i]=0;
+  reactions++;
+}
+function queueExplode(x,y,r){ if(explQueue.length<300) explQueue.push([x,y,r]); }
+
+function explode(ex,ey,rad){
+  reactions++;
+  const r=Math.max(2,rad|0), r2=r*r;
+  for(let dy=-r;dy<=r;dy++){
+    for(let dx=-r;dx<=r;dx++){
+      const d2=dx*dx+dy*dy; if(d2>r2) continue;
+      const x=ex+dx, y=ey+dy; if(!inB(x,y)) continue;
+      const i=IDX(x,y), m=mat[i];
+      if(m===WALL) continue;
+      const d=Math.sqrt(d2), f=1-d/r;
+      temp[i]+=500*f*P.explStr;
+      if(m!==EMPTY){
+        const M=MAT[m];
+        if(M.fuel&&m!==POWD&&rand()<f*0.8) { ignite(i,m); }
+        else if(m===POWD && rand()<f){ queueExplode(x,y,4*P.explStr); mat[i]=FIRE; oc[i]=0; life[i]=6; temp[i]=800; }
+        else if(M.ph===PH.FIX&&M!==MAT[WALL]&&f>0.45&&rand()<f*0.7){ // damage solids near center
+          cor[i]+=90;
+          if(cor[i]>200){ setCell(i,rand()<0.4?SMOKE:EMPTY,300); }
+        }
+      }
+      if(mat[i]===EMPTY&&f>0.6&&rand()<0.35){ setCell(i,FIRE,700); life[i]=4+ri(8); }
+      // impulse
+      const imp=f*10*P.explStr;
+      const inv=d>0.001?1/d:0;
+      vx[i]+=dx*inv*imp; vy[i]+=dy*inv*imp;
+      wakeCell(x,y); flg[i]|=1;
+    }
+  }
+}
+
+// acid corrosion resistance consumed via cor[] damage
+function corrode(i,j){
+  const tj=mat[j], M=MAT[tj];
+  if(tj===EMPTY||tj===WALL||tj===ACID) return;
+  if(tj===WATER||tj===SWATER){ if(rand()<0.06*P.reactRate){ setCell(i,WATER); reactions++; } return; } // dilution
+  if(rand()>P.reactRate*0.5) return;
+  const dmg=(12+ri(40))*(1-M.res);
+  if(dmg<=1) return;
+  cor[j]=Math.min(255,cor[j]+dmg);
+  flg[j]|=1; reactions++;
+  if(tj===METAL&&rand()<0.10){ // acid + metal -> hydrogen gas
+    const x=j%W,y=(j/W)|0, yy=y-1;
+    if(yy>=0&&mat[IDX(x,yy)]===EMPTY) setCell(IDX(x,yy),GAS,40);
+  }
+  if(cor[j]>180){
+    setCell(j,rand()<0.3?SMOKE:EMPTY,60);
+    if(rand()<0.35) setCell(i,WATER); // acid spent
+  }
+  wakeCell(j%W,(j/W)|0);
+}
+
+// heat exchange with +x/+y neighbours (each pair once) + ambient relaxation
+function thermal(i,x,y){
+  const m=mat[i], M=MAT[m];
+  if(x+1<W){ const j=i+1;
+    const d=(temp[j]-temp[i])*Math.min(M.cond,MAT[mat[j]].cond)*0.18*P.heatRate;
+    if(Math.abs(d)>0.001){ temp[i]+=d; temp[j]-=d;
+      if(Math.abs(d)>0.02){ dirty[(y>>4)*CW+(x>>4)]=1; wk(x+1,y); } }
+  }
+  if(y+1<H){ const j=i+W;
+    const d=(temp[j]-temp[i])*Math.min(M.cond,MAT[mat[j]].cond)*0.18*P.heatRate;
+    if(Math.abs(d)>0.001){ temp[i]+=d; temp[j]-=d;
+      if(Math.abs(d)>0.02){ dirty[(y>>4)*CW+(x>>4)]=1; wk(x,y+1); } }
+  }
+  temp[i]+=(P.ambient-temp[i])*0.0004;
+}
+// extra thermal passes (substeps) over active chunks
+function thermalSweep(){
+  for(let li=0;li<activeList.length;li++){
+    const c=activeList[li];
+    const cx0=(c%CW)<<4, cy0=((c/CW)|0)<<4;
+    const cx1=Math.min(cx0+16,W), cy1=Math.min(cy0+16,H);
+    for(let y=cy0;y<cy1;y++)for(let x=cx0;x<cx1;x++){
+      const i=IDX(x,y); if(mat[i]!==EMPTY&&mat[i]!==WALL) thermal(i,x,y);
+    }
+  }
+}
+
+// ---------- per-cell update ----------
+function updateCell(i,x,y){
+  const m=mat[i];
+  if(m===EMPTY||m===WALL) return;
+  const M=MAT[m];
+  stamp[i]=frame; uord[i]=ordCtr++;
+  flg[i]&=~3;
+
+  // --- thermal: exchange with right & down neighbors (each pair once) ---
+  thermal(i,x,y);
+
+  // --- charge behaviour for conductors handled below; phase transitions ---
+  let nt=m;
+  switch(m){
+    case ICE:    if(temp[i]>0) nt=WATER; break;
+    case WATER:  if(temp[i]<=-2) nt=ICE; else if(temp[i]>=100) nt=STEAM; break;
+    case SWATER: if(temp[i]<=-2) nt=ICE; else if(temp[i]>=100){ nt=STEAM; if(rand()<0.25){ // brine -> steam + salt recrystallizes below
+        const by=y+gy, bx=x+gx;
+        if(inB(bx,by)&&mat[IDX(bx,by)]===EMPTY) setCell(IDX(bx,by),SALT,P.ambient+20);
+      }} break;
+    case STEAM:  if(temp[i]<70) nt=WATER; break;
+    case METAL:  if(temp[i]>1400) nt=MMETAL; break;
+    case MMETAL: if(temp[i]<1150) nt=METAL; break;
+    case STONE:  if(temp[i]>1250) nt=LAVA; break;
+    case LAVA:   temp[i]+=(1250-temp[i])*0.003; if(temp[i]<1000) nt=STONE; break;
+    case SAND:   if(temp[i]>1600) nt=LAVA; break;
+    case SMOKE:  if(life[i]>0){life[i]--; if(life[i]<=0){nt=EMPTY;}} break;
+    case GAS:    if(life[i]>0){life[i]--;} break;
+  }
+  if(M.fuel&&temp[i]>M.ign) { ignite(i,m); return; }
+  if(nt!==m){
+    const keepT=temp[i];
+    setCell(i,nt,keepT);
+    if(nt===STEAM){life[i]=1400;}
+    reactions++; flg[i]|=1; wakeCell(x,y);
+    if(mat[i]===EMPTY) return;
+  }
+
+  // --- contact reactions: sample 4 neighbours ---
+  for(let d4=0;d4<4;d4++){
+    const nx=x+((d4===0)-(d4===1)), ny=y+((d4===2)-(d4===3));
+    if(!inB(nx,ny)) continue;
+    const j=IDX(nx,ny), tj=mat[j];
+    if(tj===EMPTY) continue;
+    // fire / lava igniting neighbours
+    if((m===FIRE||m===LAVA)&&FLAMMABLE(tj)){
+      const p=(m===LAVA?0.5:0.28)*P.fireInt;
+      if(rand()<p){ ignite(j,tj); stamp[j]=frame; wakeCell(nx,ny); }
+    }
+    if(FLAMMABLE(m)&&(tj===FIRE||tj===LAVA||(tj===SPARK))){
+      if(rand()<0.3*P.fireInt){ ignite(i,m); return; }
+    }
+    if(m===ACID) corrode(i,j);
+    // lava + water -> steam + obsidian
+    if(m===LAVA&&(tj===WATER||tj===SWATER)){
+      if(rand()<0.5*P.reactRate){
+        setCell(j,STEAM,160); life[j]=900; stamp[j]=frame;
+        if(rand()<0.45){ setCell(i,STONE,700); }
+        else temp[i]-=200;
+        reactions++; flg[i]|=1; wakeCell(nx,ny); wakeCell(x,y);
+        return;
+      }
+    }
+    if((m===WATER||m===SWATER)&&tj===LAVA){
+      if(rand()<0.4*P.reactRate){ setCell(i,STEAM,160); life[i]=900; if(rand()<0.4)setCell(j,STONE,700); stamp[j]=frame; reactions++; wakeCell(nx,ny); return; }
+    }
+    // water quenches fire
+    if((m===WATER||m===SWATER)&&tj===FIRE){
+      if(rand()<0.6){ // extinguish fire, restore fuel partially
+        if(oc[j]){ mat[j]=oc[j]; oc[j]=0; cor[j]+=60; life[j]=0; temp[j]=90; }
+        else setCell(j,EMPTY,60);
+        temp[i]+=45; if(temp[i]>=100){setCell(i,STEAM,140);life[i]=700;}
+        stamp[j]=frame; reactions++; wakeCell(nx,ny); return;
+      }
+    }
+    // salt dissolves in water
+    if(m===SALT&&tj===WATER&&rand()<0.05*P.reactRate){
+      setCell(j,SWATER); clearCellKeep(i); stamp[j]=frame; reactions++; wakeCell(nx,ny); return;
+    }
+    if(m===SALT&&tj===SWATER&&rand()<0.02*P.reactRate){ clearCellKeep(i); reactions++; return; }
+    // spark <-> conductor
+    if(m===SPARK&&CONDUCTIVE.has(tj)){
+      chg[j]=Math.min(1.4,chg[j]+1.0); flg[j]|=1; wakeCell(nx,ny);
+    }
+    if(CONDUCTIVE.has(m)&&chg[i]>0.08&&CONDUCTIVE.has(tj)&&chg[j]<chg[i]-0.06){
+      const d=(chg[i]-chg[j])*0.5; chg[j]+=d; chg[i]-=d; flg[j]|=1; wakeCell(nx,ny);
+    }
+    if(CONDUCTIVE.has(m)&&chg[i]>0.5&&FLAMMABLE(tj)&&rand()<0.10){ ignite(j,tj); stamp[j]=frame; }
+    if(CONDUCTIVE.has(m)&&chg[i]>0.4&&tj===WATER&&rand()<0.05){ // electrolysis
+      if(inB(nx,ny-1)&&mat[IDX(nx,ny-1)]===EMPTY){ setCell(IDX(nx,ny-1),GAS,50); reactions++; }
+    }
+    // plant growth
+    if(m===PLANT&&(tj===WATER||tj===SWATER)){
+      dirty[(y>>4)*CW+(x>>4)]=1; // living tissue keeps the chunk awake
+      if(rand()<0.14*P.reactRate){
+        const spots=[[x+1,y],[x-1,y],[x,y-1],[x,y+1]];
+        const s=spots[ri(4)];
+        const sm=inB(s[0],s[1])?mat[IDX(s[0],s[1])]:WALL;
+        if((sm===EMPTY||sm===WATER)&&life[i]>0){
+          setCell(IDX(s[0],s[1]),PLANT,Math.max(P.ambient,10)); life[IDX(s[0],s[1])]=Math.max(0,life[i]-40);
+          life[i]-=40; if(rand()<0.5)setCell(j,EMPTY); // drink the water
+          reactions++; wakeCell(s[0],s[1]); wakeCell(nx,ny);
+        }
+      }
+    }
+    // hot neighbour ignition (radiant)
+    if(FLAMMABLE(m)&&temp[j]>M.ign*1.4&&rand()<0.15*P.fireInt){ ignite(i,m); return; }
+  }
+
+  // --- charge decay + spark emission ---
+  if(chg[i]>0.01){
+    chg[i]*=0.965; flg[i]|=1; dirty[(y>>4)*CW+(x>>4)]=1;
+    if(chg[i]>0.55&&CONDUCTIVE.has(m)&&rand()<0.06){
+      const d=[[1,0],[-1,0],[0,1],[0,-1]][ri(4)];
+      if(inB(x+d[0],y+d[1])&&mat[IDX(x+d[0],y+d[1])]===EMPTY){
+        setCell(IDX(x+d[0],y+d[1]),SPARK,300); life[IDX(x+d[0],y+d[1])]=10+ri(8);
+        chg[i]*=0.5;
+      }
+    }
+  }
+
+  // --- per-phase movement ---
+  if(Math.abs(vx[i])+Math.abs(vy[i])>1.2){ if(fly(i,x,y,mat[i])) return; }
+
+  const r1=rand()<0.5;
+  switch(M.ph){
+    case PH.POW: {
+      if(tryMove(i,x,y,gx,gy,0)) return;
+      const s=r1?1:-1;
+      if(tryMove(i,x,y,gx+px*s,gy+py*s,0)) return;
+      if(tryMove(i,x,y,gx-px*s,gy-py*s,0)) return;
+      // powder sinking sideways through liquid
+      if(rand()<0.3){ if(tryMove(i,x,y,px*s,py*s,0)) return; }
+      break;
+    }
+    case PH.LIQ: {
+      if(tryMove(i,x,y,gx,gy,0)) return;
+      const s=r1?1:-1;
+      if(tryMove(i,x,y,gx+px*s,gy+py*s,0)) return;
+      if(tryMove(i,x,y,gx-px*s,gy-py*s,0)) return;
+      // lateral dispersion
+      const dist=1+ri(Math.max(1,P.liqMob));
+      if(slideTo(i,x,y,px*s,py*s,dist)) return;
+      if(slideTo(i,x,y,-px*s,-py*s,2)) return;
+      break;
+    }
+    case PH.GAS: {
+      if(tryMove(i,x,y,-gx,-gy,1)) return;
+      const s=r1?1:-1;
+      if(tryMove(i,x,y,-gx+px*s,-gy+py*s,1)) return;
+      if(tryMove(i,x,y,-gx-px*s,-gy-py*s,1)) return;
+      if(rand()<0.5*P.gasDiff){
+        if(slideTo(i,x,y,px*s,py*s,1+ri(3))) return;
+      }
+      if(rand()<0.1*P.gasDiff) tryMove(i,x,y,rand()<0.5?px:-px,rand()<0.5?py:-py,2);
+      break;
+    }
+    case PH.NRG: {
+      if(m===FIRE){
+        life[i]-= 1+ri(2);
+        temp[i]=Math.max(temp[i]-3,480);
+        if(oc[i]){ // anchored flame burns its fuel
+          if(rand()<0.12&&inB(x-gx,y-gy)&&mat[IDX(x-gx,y-gy)]===EMPTY){ // lick upward
+            const j=IDX(x-gx,y-gy); setCell(j,FIRE,600); life[j]=4+ri(6); stamp[j]=frame; wakeCell(x-gx,y-gy);
+          }
+          if(rand()<0.02){ const j2=IDX(x-gx,y-gy); if(inB(x-gx,y-gy)&&mat[j2]===EMPTY){setCell(j2,SMOKE,120);life[j2]=500+ri(300);} }
+        } else {
+          if(!tryMove(i,x,y,-gx,-gy,1)){
+            const s=r1?1:-1;
+            tryMove(i,x,y,-gx+px*s,-gy+py*s,1)||tryMove(i,x,y,px*s,py*s,2);
+          }
+        }
+        if(life[i]<=0){
+          if(oc[i]){ clearCellKeep(i); if(rand()<0.35){setCell(i,SMOKE,110); life[i]=400+ri(300);} }
+          else setCell(i,rand()<0.4?SMOKE:EMPTY,80), life[i]=300;
+          reactions++;
+        }
+      } else if(m===SPARK){
+        if(!oc[i]) life[i]--; // sparks persist while riding inside a conductor
+        else chg[i]=Math.min(1.4,chg[i]+0.6);
+        let moved=false;
+        // move into the least-charged adjacent conductor (travel down the wire)
+        const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+        let best=-1,bestC=1e9;
+        for(let t2=0;t2<4;t2++){
+          const nx=x+dirs[t2][0], ny=y+dirs[t2][1];
+          if(!inB(nx,ny)) continue;
+          const j=IDX(nx,ny);
+          if(CONDUCTIVE.has(mat[j])&&chg[j]<bestC){bestC=chg[j];best=j;}
+        }
+        if(best>=0&&bestC<1.15){
+          const j=best, tj=mat[j];
+          mat[j]=SPARK; oc[j]=tj; temp[j]=Math.max(temp[j],200);
+          chg[j]=Math.min(1.4,chg[j]+0.9);
+          life[j]=life[i]; colr[j]=colr[i];
+          mat[i]=oc[i]||EMPTY; oc[i]=0;
+          stamp[j]=frame; wakeCell(best%W,(best/W)|0); moved=true;
+        }
+        if(!moved){
+          const d=dirs[ri(4)];
+          tryMove(i,x,y,d[0],d[1],2);
+        }
+        if(life[i]<=0){ mat[i]=oc[i]||EMPTY; oc[i]=0; }
+      }
+      break;
+    }
+  }
+}
+
+// ---------- simulation step ----------
+function step(){
+  frame++; ordCtr=0; reactions=0; movedCnt=0;
+  setGrav();
+  // process queued explosions
+  if(explQueue.length){
+    const n=Math.min(explQueue.length, 24);
+    for(let k=0;k<n;k++){ const e=explQueue.shift(); explode(e[0],e[1],e[2]); }
+  }
+  const rows=gy===1?-1:1, cols=gx===1?-1:1;
+  const x0=gx===1?W-1:0, y0=gy===1?H-1:0;
+  const xEnd=gx===1?-1:W, yEnd=gy===1?-1:H;
+  const flip=frame&1;
+
+  for(let li=activeList.length-1;li>=0;li--){
+    const c=activeList[li];
+    if(active[c]<=0){ activeList.splice(li,1); inList.delete(c); continue; }
+    const cx0=(c%CW)<<4, cy0=((c/CW)|0)<<4;
+    const cx1=Math.min(cx0+16,W), cy1=Math.min(cy0+16,H);
+    dirty[c]=0;
+    if(gy!==0){ // vertical gravity: iterate rows
+      for(let y=gy===1?cy1-1:cy0; gy===1?y>=cy0:y<cy1; y+=rows){
+        if(flip) for(let x=cx0;x<cx1;x++){const i=IDX(x,y); if(stamp[i]!==frame&&mat[i])updateCell(i,x,y);}
+        else     for(let x=cx1-1;x>=cx0;x--){const i=IDX(x,y); if(stamp[i]!==frame&&mat[i])updateCell(i,x,y);}
+      }
+    } else { // horizontal gravity: iterate columns
+      for(let x=gx===1?cx1-1:cx0; gx===1?x>=cx0:x<cx1; x+=cols){
+        for(let y=cy0;y<cy1;y++){const i=y*W+x; if(stamp[i]!==frame&&mat[i])updateCell(i,x,y);}
+      }
+    }
+    if(!dirty[c]) active[c]-=1; else active[c]=60;
+  }
+  // thermal substeps: extra diffusion passes for heat-fidelity at high speed
+  for(let s=1;s<P.substeps;s++) thermalSweep();
+}
+
+// ---------- painting / tools ----------
+function stampBrush(cx,cy,material){
+  const r=B.size, r2=r*r;
+  const jit=B.jitter*r;
+  for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+    let inside;
+    if(B.shape===0) inside=dx*dx+dy*dy<=r2;
+    else if(B.shape===1) inside=Math.abs(dx)<=r&&Math.abs(dy)<=r;
+    else inside=Math.abs(dx)+Math.abs(dy)<=r;
+    if(!inside) continue;
+    const x=cx+dx+(jit?Math.round((rand()*2-1)*jit):0), y=cy+dy+(jit?Math.round((rand()*2-1)*jit):0);
+    if(!inB(x,y)) continue;
+    if(rand()>B.density) continue;
+    const i=IDX(x,y);
+    if(material===EMPTY){ if(mat[i]!==EMPTY){clearCell(i); wakeCell(x,y);} continue; }
+    const prev=mat[i];
+    setCell(i,material, isNaN(B.temp)?P.ambient:B.temp);
+    if(material===FIRE){life[i]=20+ri(30); temp[i]=650;}
+    if(material===LAVA)temp[i]=1250;
+    if(material===MMETAL)temp[i]=1350;
+    if(material===STEAM)temp[i]=140;
+    if(material===SMOKE)temp[i]=90;
+    if(material===SPARK){life[i]=14+ri(10); temp[i]=300; if(CONDUCTIVE.has(prev)){oc[i]=prev;chg[i]=0.9;}}
+    if(material===ICE)temp[i]=Math.min(temp[i],-15);
+    if(material===PLANT)life[i]=300;
+    if(B.vel){vx[i]=gx*B.vel*-1; vy[i]=gy*B.vel*-1;} // sprayed against gravity? no—along pointer? give upward-ish spread
+    wakeCell(x,y);
+  }
+}
+let forceErase=false;
+function applyToolAt(cx,cy,dx,dy){
+  const r=Math.max(2,B.size), r2=r*r;
+  if(tool==='paint'||tool==='wall'||tool==='erase'||forceErase){
+    stampBrush(cx,cy, (tool==='erase'||forceErase)?EMPTY: tool==='wall'?WALL: selMat);
+    return;
+  }
+  for(let yy=-r;yy<=r;yy++)for(let xx=-r;xx<=r;xx++){
+    if(xx*xx+yy*yy>r2) continue;
+    const x=cx+xx,y=cy+yy; if(!inB(x,y))continue;
+    const i=IDX(x,y);
+    switch(tool){
+      case 'heat': temp[i]+=60; wakeCell(x,y); break;
+      case 'cool': temp[i]-=60; wakeCell(x,y); break;
+      case 'wind': {
+        const m=mat[i]; if(m===EMPTY)break;
+        const w={0:0.05,1:1.6,2:1.2,3:3.4,4:2.6}[MAT[m].ph]||1;
+        vx[i]+=dx*w; vy[i]+=dy*w; wakeCell(x,y); break;
+      }
+      case 'explode': break;
+      case 'pick': break;
+    }
+  }
+}
+function floodFill(sx,sy,material){
+  const si=IDX(sx,sy), target=mat[si];
+  if(target===material) return;
+  const stack=[si], seen=new Uint8Array(N); seen[si]=1;
+  let n=0;
+  while(stack.length&&n<N){
+    const i=stack.pop(); n++;
+    if(mat[i]!==target) continue;
+    if(material===EMPTY) clearCell(i); else setCell(i,material,isNaN(B.temp)?P.ambient:B.temp);
+    wakeCell(i%W,(i/W)|0);
+    const x=i%W,y=(i/W)|0;
+    for(const d of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+d[0],ny=y+d[1];
+      if(!inB(nx,ny))continue;
+      const j=IDX(nx,ny);
+      if(!seen[j]&&mat[j]===target){seen[j]=1;stack.push(j);}
+    }
+  }
+}
+
+// ---------- pointer input ----------
+const cv=document.getElementById('view'), stage=document.getElementById('stage');
+let ptrDown=false, lastGX=-1,lastGY=-1, curGX=0,curGY=0, lastPX=0,lastPY=0;
+let pendingExplode=false, lastWindX=0,lastWindY=-1;
+
+function toGrid(e){
+  const rct=cv.getBoundingClientRect();
+  return [Math.floor((e.clientX-rct.left)/rct.width*W), Math.floor((e.clientY-rct.top)/rct.height*H)];
+}
+function lineStamp(x0,y0,x1,y1,dx,dy){
+  const dist=Math.max(Math.abs(x1-x0),Math.abs(y1-y0),1);
+  for(let s=0;s<=dist;s++){
+    const x=Math.round(x0+(x1-x0)*s/dist), y=Math.round(y0+(y1-y0)*s/dist);
+    applyToolAt(x,y,dx,dy);
+  }
+}
+stage.addEventListener('pointerdown',e=>{
+  if(e.target!==cv&&e.target!==stage) return;
+  const [gx2,gy2]=toGrid(e);
+  if(e.altKey||tool==='pick'){
+    const i=IDX(Math.min(W-1,Math.max(0,gx2)),Math.min(H-1,Math.max(0,gy2)));
+    if(mat[i]!==EMPTY){ selMat=mat[i]; syncMatUI(); toast('Picked '+MAT[selMat].n); tool='paint'; syncToolUI(); }
+    return;
+  }
+  ptrDown=true; stage.setPointerCapture(e.pointerId);
+  lastGX=gx2; lastGY=gy2; curGX=gx2; curGY=gy2; lastPX=e.clientX; lastPY=e.clientY;
+  if(tool==='explode'){ queueExplode(gx2,gy2,(6+B.size)*P.explStr); pendingExplode=true; }
+  else if(tool==='fill'){ floodFill(gx2,gy2,selMat); }
+  else if(e.button===2){ stampBrush(gx2,gy2,EMPTY); }
+  else applyToolAt(gx2,gy2,0,0);
+});
+stage.addEventListener('pointermove',e=>{
+  const [gx2,gy2]=toGrid(e); curGX=gx2; curGY=gy2;
+  const bEl=document.getElementById('brush');
+  if(e.target===cv||e.target===stage){
+    const rct=cv.getBoundingClientRect(), sc=rct.width/W;
+    bEl.style.display='block';
+    bEl.style.left=(e.clientX-B.size*sc)+'px'; bEl.style.top=(e.clientY-B.size*sc)+'px';
+    bEl.style.width=bEl.style.height=(B.size*2*sc)+'px';
+    bEl.style.borderRadius=B.shape===1?'2px':B.shape===2?'4px':'50%';
+  } else bEl.style.display='none';
+  if(!ptrDown) return;
+  const wdx=e.clientX-lastPX, wdy=e.clientY-lastPY;
+  const wl=Math.hypot(wdx,wdy)||1;
+  if(tool==='explode'){ if(Math.hypot(gx2-lastGX,gy2-lastGY)>B.size*2+4){queueExplode(gx2,gy2,(6+B.size)*P.explStr); lastGX=gx2;lastGY=gy2;} return; }
+  forceErase=!!(e.buttons&2);
+  if(tool==='wind'&&!forceErase){ lastWindX=wdx/wl*2.2; lastWindY=wdy/wl*2.2; }
+  else lineStamp(lastGX,lastGY,gx2,gy2,0,0);
+  forceErase=false;
+  lastGX=gx2;lastGY=gy2; lastPX=e.clientX;lastPY=e.clientY;
+});
+addEventListener('pointerup',()=>{ptrDown=false; pendingExplode=false;});
+stage.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ---------- rendering ----------
+const off=document.createElement('canvas'), offCtx=off.getContext('2d');
+const ctx=cv.getContext('2d');
+let img=null;
+const VIZNAMES=['Normal','Temperature','Movement','Density','Electric charge','Fuel / life','Corrosion & activity','Update order'];
+
+function heatColor(t,out,o){ // blue->cyan->green->yellow->red->white
+  const x=Math.max(0,Math.min(1,(t+40)/1240));
+  const r=Math.min(255,x*720), g=Math.min(255,Math.max(0,x*510-60)), b=Math.min(255,Math.max(0,260-x*320));
+  out[o]=r; out[o+1]=g; out[o+2]=b;
+}
+function render(){
+  const d=img.data;
+  const t0=performance.now();
+  let actC=0;
+  for(let i=0;i<N;i++){
+    const m=mat[i], o=i*4;
+    if(m!==EMPTY) actC++;
+    if(vizMode===0){
+      const M=MAT[m], c=M.c, v=0.82+0.36*(colr[i]/255);
+      let r=c[0]*v, g=c[1]*v, b=c[2]*v;
+      const t=temp[i];
+      if(t>240){ const f=Math.min(1,(t-240)/900); r+= (255-r)*f; g+=(90-g)*f; b+=(10-b)*f; }
+      else if(t<-5){ const f=Math.min(1,(-t-5)/60); r+=(160-r)*f*0.5; g+=(210-g)*f*0.5; b+=(255-b)*f*0.5; }
+      if(chg[i]>0.12){ const f=Math.min(1,chg[i]); r+=(120-r)*f; g+=(220-g)*f; b+=(255-b)*f; }
+      if(m===FIRE){ const fl=(colr[i]+frame*37)&255; r=255; g=90+fl*0.5; b=fl*0.12; }
+      if(m===SMOKE||m===STEAM){ r=r*0.92+20; g=g*0.92+22; b=b*0.92+26; }
+      if(cor[i]>30){ const f=Math.min(1,cor[i]/255); r+=(140-r)*f*0.5; g+=(60-g)*f*0.5; b+=(30-b)*f*0.5; }
+      d[o]=r; d[o+1]=g; d[o+2]=b; d[o+3]=255;
+    } else if(vizMode===1){ // temperature
+      if(m===EMPTY){d[o]=8;d[o+1]=9;d[o+2]=14;}
+      else heatColor(temp[i],d,o);
+      d[o+3]=255;
+    } else if(vizMode===2){ // movement
+      const sp=Math.min(1,Math.hypot(vx[i],vy[i])/8)*220+((flg[i]&2)?35:0);
+      d[o]=m===EMPTY?8:Math.min(255,20+sp); d[o+1]=m===EMPTY?9:Math.min(255,40+sp*0.8); d[o+2]=m===EMPTY?14:80+sp*0.3; d[o+3]=255;
+    } else if(vizMode===3){ // density
+      const v=m===EMPTY?8:Math.min(255,MAT[m].d*90);
+      d[o]=v*0.4+20; d[o+1]=v*0.55+25; d[o+2]=v+40; d[o+3]=255;
+    } else if(vizMode===4){ // charge
+      const c=Math.min(1,chg[i]);
+      d[o]=m===EMPTY?8:30+c*225; d[o+1]=m===EMPTY?9:60+c*195; d[o+2]=m===EMPTY?14:120+c*135; d[o+3]=255;
+    } else if(vizMode===5){ // fuel/life
+      const f=m===EMPTY?0:(m===FIRE?Math.min(1,life[i]/170):(MAT[m].fuel?0.55+(cor[i]/255)*0.3:0.12));
+      d[o]=m===EMPTY?8:30+f*225; d[o+1]=m===EMPTY?9:30+f*140; d[o+2]=m===EMPTY?14:60; d[o+3]=255;
+    } else if(vizMode===6){ // corrosion & activity
+      const cvv=cor[i]/255, act=(flg[i]&1)?1:0;
+      d[o]=m===EMPTY?8:40+cvv*180+act*35; d[o+1]=m===EMPTY?9:50+act*180-cvv*30; d[o+2]=m===EMPTY?14:60+cvv*60; d[o+3]=255;
+    } else { // update order
+      if(m===EMPTY||stamp[i]!==frame){ d[o]=10;d[o+1]=11;d[o+2]=16; }
+      else { const h=(uord[i]%512)/512; d[o]=40+h*215; d[o+1]=180-h*120; d[o+2]=255-h*160; }
+      d[o+3]=255;
+    }
+  }
+  activeCells=actC;
+  offCtx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(off,0,0,W,H,0,0,cv.width,cv.height);
+  renderMs=renderMs*0.9+(performance.now()-t0)*0.1;
+}
+let renderMs=0, simMs=0;
+
+// ---------- resize / resolution ----------
+function resize(keep){
+  const rct=stage.getBoundingClientRect();
+  const dpr=Math.min(2,devicePixelRatio||1);
+  cv.width=Math.max(64,Math.round(rct.width*dpr));
+  cv.height=Math.max(64,Math.round(rct.height*dpr));
+  const nw=Math.max(32,Math.floor(cv.width/P.cell)), nh=Math.max(32,Math.floor(cv.height/P.cell));
+  if(nw===W&&nh===H) { return; }
+  const om=mat,ot=temp,ol=life,ocor=cor,oW=W,oH=H,ochg=chg,ocol=colr,ooc=oc;
+  alloc(nw,nh);
+  off.width=W; off.height=H; img=offCtx.createImageData(W,H);
+  if(keep&&om){
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const ox=Math.min(oW-1,(x*oW/W)|0), oy=Math.min(oH-1,(y*oH/H)|0);
+      const oi=oy*oW+ox, ni=y*W+x;
+      mat[ni]=om[oi]; temp[ni]=ot[oi]; life[ni]=ol[oi]; cor[ni]=ocor[oi]; chg[ni]=ochg[oi]; colr[ni]=ocol[oi]; oc[ni]=ooc[oi];
+    }
+    wakeAll();
+  }
+}
+addEventListener('resize',()=>{resize(true);});
+
+// ---------- serialization ----------
+function rle(bytes){
+  const out=[]; let i=0;
+  while(i<bytes.length){
+    let v=bytes[i],n=1;
+    while(i+n<bytes.length&&bytes[i+n]===v&&n<65535)n++;
+    out.push(n&255,(n>>8)&255,v); i+=n;
+  }
+  return new Uint8Array(out);
+}
+function unrle(buf,len){
+  const out=new Uint8Array(len);
+  let o=0;
+  for(let i=0;i+2<buf.length&&o<len;i+=3){
+    const n=buf[i]|(buf[i+1]<<8), v=buf[i+2];
+    out.fill(v,o,o+n); o+=n;
+  }
+  return out;
+}
+function b64enc(u8){ let s=''; for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192)); return btoa(s); }
+function b64dec(s){ const b=atob(s),u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return u; }
+function packPlane(u8){ const r=rle(u8); if(r.length<u8.length){ const o=new Uint8Array(r.length+1); o[0]=1; o.set(r,1); return o; } const o=new Uint8Array(u8.length+1); o[0]=0; o.set(u8,1); return o; }
+function unpackPlane(u8,len){ return u8[0]===1?unrle(u8.subarray(1),len):u8.subarray(1,1+len); }
+
+function serialize(){
+  const i16=new Uint8Array(N*2), t16=new Uint8Array(N*2), v16=new Uint8Array(N*4);
+  for(let i=0;i<N;i++){
+    const q=Math.max(-32000,Math.min(32000,Math.round(temp[i]*8)));
+    t16[i*2]=q&255; t16[i*2+1]=(q>>8)&255;
+    const l=Math.max(-32000,Math.min(32000,life[i]));
+    i16[i*2]=l&255; i16[i*2+1]=(l>>8)&255;
+    const a=Math.max(-32000,Math.min(32000,Math.round(vx[i]*256))), b=Math.max(-32000,Math.min(32000,Math.round(vy[i]*256)));
+    v16[i*4]=a&255;v16[i*4+1]=(a>>8)&255;v16[i*4+2]=b&255;v16[i*4+3]=(b>>8)&255;
+  }
+  const cq=new Uint8Array(N), rq=new Uint8Array(N);
+  for(let i=0;i<N;i++){ cq[i]=Math.max(0,Math.min(255,Math.round(chg[i]*180))); rq[i]=cor[i]; }
+  return JSON.stringify({v:1,w:W,h:H,seed:curSeed,rng:rngState,P,B,selMat,
+    mat:b64enc(packPlane(mat)), temp:b64enc(packPlane(t16)), life:b64enc(packPlane(i16)),
+    vel:b64enc(packPlane(v16)), chg:b64enc(packPlane(cq)), cor:b64enc(packPlane(rq)),
+    colr:b64enc(packPlane(colr)), oc:b64enc(packPlane(oc))});
+}
+function deserialize(json){
+  const o=typeof json==='string'?JSON.parse(json):json;
+  if(o.v!==1) throw new Error('bad version');
+  alloc(o.w,o.h); off.width=W;off.height=H; img=offCtx.createImageData(W,H);
+  mat.set(unpackPlane(b64dec(o.mat),N));
+  const t16=unpackPlane(b64dec(o.temp),N*2), l16=unpackPlane(b64dec(o.life),N*2), v16=unpackPlane(b64dec(o.vel),N*4);
+  const cq=unpackPlane(b64dec(o.chg),N), rq=unpackPlane(b64dec(o.cor),N);
+  colr.set(unpackPlane(b64dec(o.colr),N)); oc.set(unpackPlane(b64dec(o.oc),N));
+  for(let i=0;i<N;i++){
+    let q=t16[i*2]|(t16[i*2+1]<<8); if(q>32767)q-=65536; temp[i]=q/8;
+    let l=l16[i*2]|(l16[i*2+1]<<8); if(l>32767)l-=65536; life[i]=l;
+    let a=v16[i*4]|(v16[i*4+1]<<8); if(a>32767)a-=65536; vx[i]=a/256;
+    let b=v16[i*4+2]|(v16[i*4+3]<<8); if(b>32767)b-=65536; vy[i]=b/256;
+    chg[i]=cq[i]/180; cor[i]=rq[i];
+  }
+  Object.assign(P,o.P||{}); Object.assign(B,o.B||{});
+  if(!(typeof B.temp==='number'&&B.temp>=0)) B.temp=NaN; // NaN serializes as null
+  curSeed=o.seed||1; srand(o.seed||1); rngState=o.rng||rngState;
+  selMat=o.selMat??selMat;
+  stamp.fill(0); explQueue.length=0; wakeAll();
+  syncAllUI();
+}
+
+// ---------- presets ----------
+let curSeed=1337;
+function rect(x0,y0,x1,y1,m,t){ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++) if(inB(x,y)){const i=IDX(x,y); setCell(i,m,t);} }
+function disc(cx,cy,r,m,t){ for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++) if(x*x+y*y<=r*r&&inB(cx+x,cy+y)) setCell(IDX(cx+x,cy+y),m,t); }
+function hline(x0,x1,y,m,t){ for(let x=x0;x<=x1;x++)if(inB(x,y))setCell(IDX(x,y),m,t); }
+function vline(x,y0,y1,m,t){ for(let y=y0;y<=y1;y++)if(inB(x,y))setCell(IDX(x,y),m,t); }
+
+const PRESETS=[
+ {n:'Volcano & Ocean',f(){
+   // ground
+   rect(0,H-8,W-1,H-1,STONE);
+   // volcano cone (left third) — wide at base, narrow at crater
+   const vx0=(W*0.28)|0, top=H-8, vh=(H*0.55)|0;
+   for(let y=0;y<vh;y++){
+     const w2=((vh-y)*0.5)|0;
+     hline(vx0-w2,vx0+w2,top-y,STONE);
+   }
+   // crater + lava chamber
+   const crY=top-((H*0.55)|0)+2;
+   disc(vx0,crY+4,4,LAVA,1250);
+   rect(vx0-3,crY-1,vx0+3,crY+6,LAVA,1250);
+   // magma pocket deep
+   disc(vx0,H-14,6,LAVA,1300);
+   rect(vx0-2,crY+6,vx0+2,H-14,LAVA,1250);
+   // ocean right
+   rect((W*0.55)|0,H-38,W-1,H-9,WATER);
+   rect((W*0.55)|0,H-40,(W*0.7)|0,H-39,SAND);
+   hline(0,(W*0.55)|0,H-9,SAND);
+   // some scattered plants on the beach
+   for(let k=0;k<6;k++){const x=(W*0.45)|0+ri((W*0.1)|0); setCell(IDX(x,H-9),PLANT); life[IDX(x,H-9)]=200;}
+ }},
+ {n:'Burning Building',f(){
+   rect(0,H-4,W-1,H-1,STONE);
+   const bx=(W*0.3)|0,bw=(W*0.4)|0,bt=(H*0.25)|0,bb=H-5;
+   // walls + floors
+   vline(bx,bt,bb,WALL); vline(bx+bw,bt,bb,WALL); hline(bx,bx+bw,bt,WALL);
+   const floors=3;
+   for(let f=1;f<=floors;f++){ const fy=bt+((bb-bt)*f/(floors+1))|0; hline(bx+1,bx+bw-1,fy,WOOD); }
+   // furniture
+   for(let k=0;k<10;k++){ const x=bx+2+ri(bw-4), y=bt+2+ri(bb-bt-4); if(mat[IDX(x,y)]===EMPTY)setCell(IDX(x,y),WOOD); }
+   // oil barrels
+   disc(bx+6,bb-3,3,OIL); disc(bx+bw-6,bb-3,3,OIL);
+   // ignition source
+   disc(bx+3,bb-2,2,FIRE,700);
+   disc(bx+bw-8,bt+4,2,POWD);
+ }},
+ {n:'Electrical Lab',f(){
+   rect(0,H-4,W-1,H-1,STONE);
+   // wire grid maze
+   const y0=(H*0.2)|0,y1=(H*0.55)|0;
+   hline((W*0.1)|0,(W*0.9)|0,y0,METAL);
+   hline((W*0.1)|0,(W*0.9)|0,y1,METAL);
+   for(let k=0;k<7;k++){ const x=(W*0.15)|0+k*((W*0.1)|0); vline(x,y0,y1,METAL); }
+   // battery: spark source box
+   rect((W*0.08)|0,y0-2,(W*0.12)|0,y0+2,METAL);
+   // water bath under part of the grid
+   rect((W*0.35)|0,y1+4,(W*0.6)|0,y1+10,WALL);
+   rect((W*0.35)|0+1,y1+5,(W*0.6)|0-1,y1+9,WATER);
+   hline((W*0.45)|0,(W*0.5)|0,y1+5,METAL); // electrode dipping in
+   vline((W*0.47)|0,y1,y1+5,METAL);
+   // gas pocket
+   rect((W*0.7)|0,(H*0.75)|0,(W*0.85)|0,H-10,WALL);
+   rect((W*0.7)|0+1,(H*0.75)|0+1,(W*0.85)|0-1,H-11,GAS);
+   hline((W*0.77)|0,(W*0.78)|0,(H*0.75)|0,METAL); // wire into gas chamber
+   vline((W*0.77)|0,y1,(H*0.75)|0,METAL);
+   // powder store
+   disc((W*0.5)|0,H-10,3,POWD);
+ }},
+ {n:'Acid Factory',f(){
+   rect(0,H-4,W-1,H-1,STONE);
+   // three vats
+   for(let v=0;v<3;v++){
+     const x0=((W*0.12)+(W*0.27)*v)|0, x1=x0+((W*0.2)|0), yv=(H*0.45)|0;
+     vline(x0,yv,H-5,WALL); vline(x1,yv,H-5,WALL); hline(x0,x1,H-5,WALL);
+     rect(x0+1,yv+6,x1-1,H-6,ACID);
+     // things suspended over acid
+     hline(x0+2,x1-2,yv+3,v===0?WOOD:v===1?METAL:SALT);
+   }
+   // acid drip pipe
+   rect((W*0.45)|0,(H*0.12)|0,(W*0.55)|0,(H*0.14)|0,METAL);
+   vline((W*0.5)|0,(H*0.14)|0,(H*0.2)|0,METAL);
+   rect((W*0.46)|0,(H*0.2)|0,(W*0.54)|0,(H*0.21)|0,ACID);
+   // metal roof pieces to be dripped on
+   hline((W*0.44)|0,(W*0.56)|0,(H*0.32)|0,METAL);
+   // salt pile
+   disc((W*0.88)|0,H-10,4,SALT);
+ }},
+ {n:'Steam Engine',f(){
+   rect(0,H-4,W-1,H-1,STONE);
+   const bx=(W*0.3)|0,bw=(W*0.22)|0,bb=H-10,bt=(H*0.60)|0;
+   const mid=bx+(bw>>1);
+   // boiler (top open at pipe mouth mid-2..mid+2)
+   vline(bx,bt,bb,METAL); vline(bx+bw,bt,bb,METAL); hline(bx,bx+bw,bb,METAL);
+   hline(bx,mid-3,bt,METAL); hline(mid+3,bx+bw,bt,METAL);
+   rect(bx+2,bb-10,bx+bw-2,bb-2,WATER);
+   // firebox under boiler
+   rect(bx+4,bb+1,bx+bw-4,bb+3,LAVA,1250);
+   // riser pipe up to condenser
+   const py=(H*0.28)|0;
+   vline(mid-2,py,bt-1,METAL); vline(mid+2,py,bt-1,METAL);
+   // condenser box at top of riser: ice ceiling, floor with pipe mouth + drip hole
+   const cx0=mid-((W*0.10)|0), cx1=mid+((W*0.10)|0);
+   vline(cx0,py-6,py-1,METAL); vline(cx1,py-6,py-1,METAL);
+   hline(cx0,cx1,py-6,ICE,-30);
+   hline(cx0,mid-3,py-1,METAL); hline(mid+3,cx1,py-1,METAL);
+   setCell(IDX(cx0+2,py-1),EMPTY); setCell(IDX(cx0+3,py-1),EMPTY); // drip hole
+   // catch basin on the ground
+   vline(cx0-4,H-9,H-5,WALL); vline(cx0+10,H-9,H-5,WALL); hline(cx0-4,cx0+10,H-5,WALL);
+ }},
+ {n:'Frozen Lake',f(){
+   P.ambient=-25;
+   rect(0,H-6,W-1,H-1,STONE);
+   rect(0,H-((H*0.45)|0),W-1,H-7,WATER);
+   rect(0,H-((H*0.45)|0)-2,W-1,H-((H*0.45)|0),ICE,-18);
+   // snow dust on top (salt as snow visual? use ICE chunks) — sparse ice pebbles
+   for(let k=0;k<40;k++){const x=ri(W); if(mat[IDX(x,H-((H*0.45)|0)-3)]===EMPTY)setCell(IDX(x,H-((H*0.45)|0)-3),ICE,-25);}
+   // underwater plants + vents
+   for(let k=0;k<8;k++){const x=ri(W); setCell(IDX(x,H-8),PLANT); life[IDX(x,H-8)]=300;}
+   disc((W*0.2)|0,H-7,2,LAVA,1200); // thermal vent
+   disc((W*0.75)|0,H-7,2,LAVA,1200);
+ }},
+ {n:'Plant Ecosystem',f(){
+   rect(0,H-6,W-1,H-1,STONE);
+   rect(0,H-16,W-1,H-7,SAND);
+   // ponds
+   disc((W*0.25)|0,H-14,6,WATER); disc((W*0.7)|0,H-12,5,WATER);
+   rect((W*0.2)|0,H-18,(W*0.3)|0,H-15,WATER);
+   // soil-ish wood logs + plants
+   for(let k=0;k<14;k++){const x=ri(W); setCell(IDX(x,H-17),PLANT); life[IDX(x,H-17)]=400;}
+   for(let k=0;k<5;k++){const x=ri(W); vline(x,H-20-ri(8),H-17,WOOD);}
+ }},
+ {n:'Fireworks',f(){
+   rect(0,H-4,W-1,H-1,STONE);
+   // launch tubes with powder charges
+   for(let k=0;k<5;k++){
+     const x=((W*0.15)+k*(W*0.16))|0;
+     vline(x-4,H-16,H-5,METAL); vline(x+4,H-16,H-5,METAL);
+     rect(x-3,H-14,x+3,H-6,POWD);
+     setCell(IDX(x,H-15),FIRE,700); life[IDX(x,H-15)]=30;
+     // star payload above
+     disc(x,H-20,2,k%2?GAS:POWD);
+   }
+   // powder trails connecting
+   for(let k=0;k<4;k++){ const x0=((W*0.15)+k*(W*0.16))|0, x1=x0+((W*0.16)|0);
+     for(let x=x0;x<x1;x++){ if(mat[IDX(x,H-5)]===EMPTY)setCell(IDX(x,H-5),POWD); } }
+ }},
+ {n:'Stress Test',f(){
+   // layered strata + pockets of everything
+   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+     const i=IDX(x,y);
+     if(y>H-8) setCell(i,STONE);
+     else if(y>H-20&&rand()<0.7) setCell(i,rand()<0.5?SAND:SALT);
+     else if(y>H-45&&rand()<0.6) setCell(i,rand()<0.6?WATER:OIL);
+     else if(y>H-60&&rand()<0.25) setCell(i,rand()<0.5?GAS:SMOKE);
+     else if(rand()<0.06) setCell(i,[WOOD,METAL,PLANT,ICE,POWD][ri(5)]);
+   }
+   for(let k=0;k<8;k++) disc(ri(W),(H*0.7)|0+ri((H*0.25)|0),3,LAVA,1250);
+   for(let k=0;k<6;k++) disc(ri(W),ri((H*0.4)|0),4,ACID);
+   for(let k=0;k<5;k++){const x=ri(W); vline(x,ri(H>>1),ri(H),METAL); setCell(IDX(x,ri(10)),SPARK,300);}
+ }},
+];
+
+function loadPreset(idx,seed){
+  curSeed=seed; srand(seed);
+  P.ambient=22; // presets may override inside f()
+  alloc(W,H); // clear preserving dims
+  off.width=W;off.height=H;img=offCtx.createImageData(W,H);
+  PRESETS[idx].f();
+  for(let i=0;i<N;i++) if(mat[i]===EMPTY) temp[i]=P.ambient; // ambient air follows preset
+  srand(seed); // post-build deterministic sim randomness
+  stamp.fill(0); explQueue.length=0; wakeAll();
+  syncAllUI();
+  toast('Preset: '+PRESETS[idx].n+' (seed '+seed+')');
+}
+
+// ---------- UI ----------
+const $=id=>document.getElementById(id);
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1800); }
+
+// material palette
+const matsEl=$('mats');
+PAINTABLE.forEach(m=>{
+  const b=document.createElement('button');
+  b.className='swatch'; b.dataset.m=m; b.title=MAT[m].n+' ['+m+']';
+  const c=MAT[m].c;
+  b.style.background=`rgb(${c[0]},${c[1]},${c[2]})`;
+  if(m===WALL)b.style.background='repeating-linear-gradient(45deg,#2e333d,#2e333d 4px,#3d4450 4px,#3d4450 8px)';
+  b.innerHTML='<span>'+MAT[m].n.slice(0,5)+'</span>';
+  b.onclick=()=>{selMat=m;tool='paint';syncMatUI();syncToolUI();};
+  matsEl.appendChild(b);
+});
+function syncMatUI(){ document.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('sel',+s.dataset.m===selMat)); }
+
+// tools
+const TOOLS=[['paint','🖌','Paint'],['erase','⌫','Erase'],['pick','💧','Pick'],['heat','🔥','Heat'],
+             ['cool','❄','Cool'],['wind','💨','Wind'],['explode','💥','Boom'],['wall','🧱','Wall'],['fill','🪣','Fill']];
+const toolsEl=$('tools');
+TOOLS.forEach(([id,ic,nm])=>{
+  const b=document.createElement('button'); b.className='tbtn'; b.dataset.t=id;
+  b.innerHTML='<span class="ic">'+ic+'</span>'+nm; b.title=nm;
+  b.onclick=()=>{tool=id;syncToolUI();};
+  toolsEl.appendChild(b);
+});
+function syncToolUI(){ document.querySelectorAll('.tbtn').forEach(b=>b.classList.toggle('sel',b.dataset.t===tool)); }
+
+// sliders factory
+function slider(parent,label,min,max,step,get,set,fmt){
+  const d=document.createElement('div'); d.className='ctl';
+  d.innerHTML='<label>'+label+'<output></output></label>';
+  const r=document.createElement('input'); r.type='range'; r.min=min;r.max=max;r.step=step;
+  const out=d.querySelector('output');
+  const show=()=>out.textContent=(fmt||(v=>v))(get());
+  r.oninput=()=>{set(+r.value);show();};
+  d.appendChild(r); parent.appendChild(d);
+  r.value=get(); show();
+  return {refresh(){r.value=get();show();}};
+}
+function selectCtl(parent,label,opts,get,set){
+  const d=document.createElement('div'); d.className='ctl';
+  d.innerHTML='<label>'+label+'</label>';
+  const s=document.createElement('select');
+  opts.forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;s.appendChild(o);});
+  s.onchange=()=>set(s.value);
+  d.appendChild(s); parent.appendChild(d); s.value=get();
+  return {refresh(){s.value=get();}};
+}
+
+const bc=$('brushCtl');
+const uiBrush=[
+ slider(bc,'Radius',1,40,1,()=>B.size,v=>B.size=v),
+ selectCtl(bc,'Shape',[[0,'Circle'],[1,'Square'],[2,'Diamond']],()=>B.shape,v=>B.shape=+v),
+ slider(bc,'Amount (density)',0.05,1,0.05,()=>B.density,v=>B.density=v, v=>(v*100|0)+'%'),
+ slider(bc,'Spray randomness',0,1,0.05,()=>B.jitter,v=>B.jitter=v, v=>(v*100|0)+'%'),
+ slider(bc,'Paint temp (−1 = ambient)',-1,1500,10,()=>isNaN(B.temp)?-1:B.temp,v=>B.temp=v<0?NaN:v, v=>v<0?'amb':v+'°'),
+ slider(bc,'Initial velocity',0,10,0.5,()=>B.vel,v=>B.vel=v),
+];
+const sc2=$('simCtl');
+const uiSim=[
+ slider(sc2,'Speed',0.25,4,0.25,()=>P.speed,v=>P.speed=v,v=>v+'×'),
+ slider(sc2,'Substeps (thermal)',1,4,1,()=>P.substeps,v=>P.substeps=v),
+ selectCtl(sc2,'Gravity',[['0','Down'],['1','Up'],['2','Left'],['3','Right']],()=>P.gravity,v=>{P.gravity=+v;wakeAll();}),
+ selectCtl(sc2,'Resolution (cell px)',[['2','Fine (2px)'],['3','Medium (3px)'],['4','Coarse (4px)'],['6','Chunky (6px)']],()=>P.cell,v=>{P.cell=+v;resize(true);}),
+ slider(sc2,'Ambient temp',-60,200,1,()=>P.ambient,v=>{P.ambient=v;wakeAll();},v=>v+'°C'),
+ slider(sc2,'Heat transfer',0,3,0.1,()=>P.heatRate,v=>P.heatRate=v,v=>v+'×'),
+ slider(sc2,'Reaction rate',0,3,0.1,()=>P.reactRate,v=>P.reactRate=v),
+ slider(sc2,'Liquid mobility',1,12,1,()=>P.liqMob,v=>P.liqMob=v),
+ slider(sc2,'Gas diffusion',0,3,0.1,()=>P.gasDiff,v=>P.gasDiff=v),
+ slider(sc2,'Fire intensity',0,3,0.1,()=>P.fireInt,v=>P.fireInt=v),
+ slider(sc2,'Explosion strength',0.5,4,0.25,()=>P.explStr,v=>P.explStr=v,v=>v+'×'),
+];
+VIZNAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i;o.textContent=n;$('vizSel').appendChild(o);});
+$('vizSel').value=vizMode;
+$('vizSel').onchange=e=>vizMode=+e.target.value;
+PRESETS.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p.n;$('presetSel').appendChild(o);});
+$('presetBtn').onclick=()=>loadPreset(+$('presetSel').value, +$('seedIn').value||1);
+$('seedIn').value=curSeed; $('seedOut').textContent='';
+$('seedBtn').onclick=()=>{ $('seedIn').value=(Math.random()*1e9)|0; loadPreset(+$('presetSel').value,+$('seedIn').value); };
+
+$('pauseBtn').onclick=togglePause;
+function togglePause(){paused=!paused;$('pauseBtn').textContent=paused?'▶ Resume':'⏸ Pause';$('pauseBtn').classList.toggle('on',paused);}
+$('stepBtn').onclick=()=>{paused=true;$('pauseBtn').textContent='▶ Resume';$('pauseBtn').classList.add('on');step();};
+$('clearBtn').onclick=()=>{for(let i=0;i<N;i++)clearCell(i);explQueue.length=0;wakeAll();toast('Cleared');};
+$('resetBtn').onclick=()=>loadPreset(+$('presetSel').value,curSeed);
+$('pngBtn').onclick=()=>{
+  const a=document.createElement('a');a.download='falling-sand-'+Date.now()+'.png';a.href=cv.toDataURL('image/png');a.click();toast('PNG exported');
+};
+$('saveBtn').onclick=()=>{
+  const blob=new Blob([serialize()],{type:'application/json'});
+  const a=document.createElement('a');a.download='sandbox-'+Date.now()+'.fsa.json';a.href=URL.createObjectURL(blob);a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000); toast('Saved');
+};
+$('loadBtn').onclick=()=>$('fileIn').click();
+$('fileIn').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  f.text().then(t=>{try{deserialize(t);toast('Loaded');}catch(err){toast('Load failed: '+err.message);}});
+  e.target.value='';
+};
+let autosave=true;
+$('autoBtn').onclick=()=>{autosave=!autosave;$('autoBtn').textContent='Auto: '+(autosave?'on':'off');$('autoBtn').classList.toggle('on',autosave);};
+$('autoBtn').classList.add('on');
+$('hideBtn').onclick=()=>$('panel').classList.add('hidden');
+$('burger').onclick=()=>$('panel').classList.toggle('hidden');
+document.querySelectorAll('.sec>h2').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('closed'));
+
+function syncAllUI(){
+  uiBrush.forEach(u=>u.refresh&&u.refresh());
+  uiSim.forEach(u=>u.refresh&&u.refresh());
+  $('vizSel').value=vizMode; $('seedIn').value=curSeed;
+  syncMatUI(); syncToolUI();
+}
+
+// keyboard
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  const k=e.key;
+  if(k===' '){e.preventDefault();togglePause();}
+  else if(k==='.'){$('stepBtn').click();}
+  else if(k==='['){B.size=Math.max(1,B.size-1);uiBrush[0].refresh();}
+  else if(k===']'){B.size=Math.min(40,B.size+1);uiBrush[0].refresh();}
+  else if(k==='v'||k==='V'){vizMode=(vizMode+1)%VIZNAMES.length;$('vizSel').value=vizMode;}
+  else if(k==='h'||k==='H'){$('panel').classList.toggle('hidden');}
+  else if(k==='c'){$('clearBtn').click();}
+  else if(k==='r'){$('resetBtn').click();}
+  else{ const n=parseInt(k,36)-1; if(k.length===1&&/[1-9a-u]/.test(k)){const idx=parseInt(k,36)-1; if(idx>=0&&idx<PAINTABLE.length){selMat=PAINTABLE[idx];tool='paint';syncMatUI();syncToolUI();}} }
+});
+
+// ---------- HUD ----------
+const hud=$('hud');
+let fps=0,frames=0,lastT=performance.now(),hudT=0;
+const matNames=MAT.map(m=>m.n);
+function updateHUD(now){
+  if(now-hudT<300)return; hudT=now;
+  // material counts (sampled every hud tick)
+  const counts=new Uint32Array(NMAT); let tSum=0;
+  for(let i=0;i<N;i++){counts[mat[i]]++; if(mat[i])tSum+=temp[i];}
+  const top=[]; for(let m=1;m<NMAT;m++)if(counts[m])top.push([counts[m],m]);
+  top.sort((a,b)=>b[0]-a[0]);
+  const topS=top.slice(0,5).map(([c,m])=>matNames[m]+' '+c).join(' · ');
+  hud.innerHTML=
+   `<b>${fps.toFixed(0)} fps</b>  ${W}×${H} grid  sim ${simMs.toFixed(1)}ms + gfx ${renderMs.toFixed(1)}ms\n`+
+   `cells <b>${activeCells}</b>/${N}  chunks ${activeList.length}/${CW*CH}\n`+
+   `avgT <b class="${tSum/Math.max(1,activeCells)>80?'hot':tSum/Math.max(1,activeCells)<0?'cold':''}">${(tSum/Math.max(1,activeCells)).toFixed(0)}°C</b>  reactions <b class="warn">${reactions}</b>/step\n`+
+   (topS?topS+'\n':'')+
+   `tool <b>${tool}</b>  mat <b>${MAT[selMat].n}</b>  ${P.speed}× ${paused?'<b class="warn">PAUSED</b>':'running'}`;
+}
+
+// ---------- autosave ----------
+setInterval(()=>{
+  if(!autosave||paused)return;
+  try{ localStorage.setItem('fsa-autosave',serialize()); }catch(e){}
+},8000);
+
+// ---------- main loop ----------
+let acc=0;
+function loop(){
+  requestAnimationFrame(loop);
+  const now=performance.now();
+  frames++;
+  if(now-lastT>=500){fps=frames*1000/(now-lastT);frames=0;lastT=now;}
+  // continuous tools keep applying while pointer held (even when stationary)
+  if(ptrDown&&(tool==='heat'||tool==='cool'||tool==='wind'||tool==='paint'||tool==='wall'||tool==='erase')){
+    applyToolAt(curGX,curGY,lastWindX,lastWindY);
+  }
+  if(!paused){
+    acc+=P.speed;
+    let n=Math.floor(acc); acc-=n; n=Math.min(n,6);
+    const t0=performance.now();
+    for(let s=0;s<n;s++) step();
+    simMs=simMs*0.9+(performance.now()-t0)*0.1;
+  }
+  render();
+  updateHUD(now);
+}
+
+// ---------- boot ----------
+resize(false);
+// try autosave restore
+let restored=false;
+try{
+  const s=localStorage.getItem('fsa-autosave');
+  if(s){ const o=JSON.parse(s); if(o&&o.v===1&&o.w&&o.mat){ deserialize(s); restored=true; } }
+}catch(e){}
+if(!restored){
+  loadPreset(0,1337);
+}
+syncAllUI();
+// debug/validation handle
+window.SIM={get mat(){return mat},get temp(){return temp},get chg(){return chg},get cor(){return cor},get life(){return life},get oc(){return oc},get uord(){return uord},get stamp(){return stamp},get active(){return active},get flg(){return flg},get frame(){return frame},get vx(){return vx},get vy(){return vy},
+  IDX:(x,y)=>y*W+x,get W(){return W},get H(){return H},MAT,
+  counts(){const c=new Uint32Array(NMAT);for(let i=0;i<N;i++)c[mat[i]]++;return Array.from(c)},
+  set(x,y,m,t){if(inB(x,y)){setCell(y*W+x,m,t);wakeCell(x,y);}},
+  stats(){return{W,H,N,fps,simMs,renderMs,activeCells,reactions,chunks:activeList.length}},
+  step,render,serialize,deserialize,explode:(x,y,r)=>queueExplode(x,y,r),wakeAll,P,B};
+loop();
+</script>
+</body>
+</html>

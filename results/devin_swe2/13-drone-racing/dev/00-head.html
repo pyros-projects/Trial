@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>VECTOR//ONE — FPV Drone Racing Sim</title>
+<style>
+:root{--acc:#00e5ff;--warn:#ffb300;--bad:#ff3b5c;--ok:#38ff9c;--bg:#05070c}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:#cfe7ee;
+ font-family:'Segoe UI',system-ui,monospace;font-size:13px;-webkit-user-select:none;user-select:none}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.mono{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace}
+/* ---------- top bar ---------- */
+#topbar{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:8px;
+ padding:6px 10px;background:linear-gradient(180deg,rgba(4,8,14,.85),rgba(4,8,14,0));
+ pointer-events:none;z-index:20}
+#topbar>*{pointer-events:auto}
+#logo{font-weight:800;letter-spacing:2px;color:var(--acc);font-size:14px;text-shadow:0 0 12px #00e5ff88}
+#logo small{color:#7fa7b3;font-weight:400;letter-spacing:1px}
+.btn{background:#0b1620cc;border:1px solid #1e3a4a;color:#bfe6f2;padding:4px 10px;border-radius:4px;
+ cursor:pointer;font-size:12px;font-family:inherit}
+.btn:hover{border-color:var(--acc);color:#fff}
+.btn.on{background:#0a2c38;border-color:var(--acc);color:var(--acc)}
+.btn.warn{border-color:var(--warn);color:var(--warn)}
+select,input[type=number]{background:#0b1620;border:1px solid #1e3a4a;color:#bfe6f2;padding:3px 6px;
+ border-radius:4px;font-family:inherit;font-size:12px}
+/* ---------- stat strip ---------- */
+#stats{position:fixed;top:34px;left:10px;z-index:19;font-size:11px;line-height:1.55;
+ background:#050b12aa;border:1px solid #14303f66;border-radius:6px;padding:6px 9px;pointer-events:none;
+ text-shadow:0 1px 2px #000}
+#stats b{color:var(--acc);font-weight:600}
+#stats .bad{color:var(--bad)} #stats .warn{color:var(--warn)} #stats .ok{color:var(--ok)}
+/* ---------- OSD ---------- */
+#osd{position:fixed;inset:0;pointer-events:none;z-index:15}
+#osd canvas{position:absolute;inset:0;width:100%;height:100%}
+.osd-t{position:absolute;text-shadow:0 0 6px #000,0 1px 2px #000;font-family:ui-monospace,Consolas,monospace}
+#osdTL{top:70px;left:14px;font-size:12px;line-height:1.7}
+#osdTR{top:70px;right:14px;text-align:right;font-size:12px;line-height:1.7}
+#osdBL{bottom:18px;left:14px;font-size:12px;line-height:1.7}
+#osdBR{bottom:18px;right:14px;text-align:right;font-size:12px;line-height:1.7}
+#osdMsg{top:26%;left:50%;transform:translateX(-50%);font-size:26px;font-weight:800;letter-spacing:3px;
+ color:var(--warn);text-align:center}
+#osdMsg.bad{color:var(--bad)} #osdMsg.ok{color:var(--ok)}
+#gateArrow{top:50%;left:50%;width:0;height:0;position:absolute}
+.bar{display:inline-block;width:70px;height:8px;border:1px solid #2a4a5a;border-radius:3px;vertical-align:middle;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--acc);width:50%}
+#thrBar>i{background:linear-gradient(90deg,#0af,#0f6)}
+#battBar>i{background:linear-gradient(90deg,#f60,#ff0)}
+/* ---------- telemetry ---------- */
+#tele{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:16;
+ background:#050b12cc;border:1px solid #14303f;border-radius:6px;padding:4px;display:none}
+#tele canvas{display:block}
+#tele .lbl{font-size:10px;color:#6b96a5;display:flex;gap:14px;padding:1px 4px}
+/* ---------- diagnostics ---------- */
+#diag{position:fixed;top:60px;right:10px;z-index:18;width:250px;background:#050b12d9;
+ border:1px solid #14303f;border-radius:6px;padding:8px;font-size:10.5px;line-height:1.5;
+ display:none;white-space:pre;font-family:ui-monospace,Consolas,monospace;color:#9fd4e2}
+/* ---------- side panel ---------- */
+#panel{position:fixed;top:0;right:0;bottom:0;width:300px;background:#060c13f0;border-left:1px solid #14303f;
+ z-index:30;overflow-y:auto;padding:10px 12px 60px;transform:translateX(100%);transition:transform .2s}
+#panel.open{transform:none}
+#panel h2{font-size:12px;color:var(--acc);letter-spacing:2px;margin:14px 0 6px;border-bottom:1px solid #14303f;padding-bottom:3px}
+#panel .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0;font-size:12px}
+#panel .row label{flex:1;color:#9fc3cf}
+#panel input[type=range]{width:110px;accent-color:var(--acc)}
+#panel input[type=number]{width:64px}
+#panel select{width:120px}
+#panel .val{width:44px;text-align:right;color:var(--acc);font-family:ui-monospace,monospace;font-size:11px}
+.kbd{display:inline-block;border:1px solid #2a4a5a;border-radius:3px;padding:0 5px;background:#0b1620;
+ font-family:ui-monospace,monospace;font-size:11px;color:#fff}
+#padStat{font-size:11px;padding:6px;border:1px dashed #2a4a5a;border-radius:4px;color:#8fb3bf;margin:4px 0}
+#padStat.ok{color:var(--ok);border-color:var(--ok)}
+/* ---------- touch sticks ---------- */
+.stick{position:fixed;bottom:70px;width:110px;height:110px;border:2px solid #1e4a5e;border-radius:50%;
+ background:#0b162066;z-index:25;display:none;touch-action:none}
+.stick .nub{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px;border-radius:50%;
+ background:#0a2c38;border:2px solid var(--acc)}
+#stickL{left:18px}#stickR{right:18px}
+body.touch .stick{display:block}
+/* ---------- misc ---------- */
+#toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#0b1620ee;
+ border:1px solid var(--acc);color:#dff;padding:7px 16px;border-radius:5px;z-index:60;display:none;font-size:13px}
+#fallback{position:fixed;inset:0;display:none;place-items:center;background:#05070c;z-index:100;text-align:center}
+#fallback>div{max-width:420px;border:1px solid var(--bad);border-radius:8px;padding:24px}
+#help{position:fixed;inset:0;display:none;place-items:center;background:#000a;z-index:50}
+#help>div{background:#060c13;border:1px solid #1e4a5e;border-radius:8px;padding:20px 26px;max-width:520px;max-height:80vh;overflow:auto}
+#help h2{color:var(--acc);letter-spacing:2px;font-size:14px;margin-bottom:10px}
+#help td{padding:2px 10px 2px 0;font-size:12px}
+#vign{position:fixed;inset:0;pointer-events:none;z-index:14;
+ background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%)}
+#dmg{position:fixed;inset:0;pointer-events:none;z-index:13;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,30,60,.45) 100%);opacity:0;transition:opacity .3s}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#1e3a4a;border-radius:4px}
+@media (max-width:700px){#stats{display:none}#panel{width:100vw}}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vign"></div><div id="dmg"></div>
+
+<div id="osd">
+ <canvas id="att"></canvas>
+ <div class="osd-t" id="osdTL"></div>
+ <div class="osd-t" id="osdTR"></div>
+ <div class="osd-t" id="osdBL"></div>
+ <div class="osd-t" id="osdBR"></div>
+ <div class="osd-t" id="osdMsg"></div>
+ <div class="osd-t" id="gateArrow">◆</div>
+</div>
+
+<div id="topbar">
+ <span id="logo">VECTOR//ONE <small>fpv racing sim</small></span>
+ <select id="selPreset" title="Environment preset"></select>
+ <select id="selMode" title="Race mode">
+  <option value="time">Time Trial</option><option value="free">Free Flight</option>
+ </select>
+ <input id="inSeed" type="number" title="Course seed" style="width:70px">
+ <button class="btn" id="btnNew">New Course</button>
+ <button class="btn" id="btnRestart">Restart [R]</button>
+ <button class="btn" id="btnCam">Cam: FPV [C]</button>
+ <button class="btn" id="btnShot">Screenshot</button>
+ <button class="btn" id="btnPanel">Settings ⚙</button>
+ <button class="btn" id="btnHelp">Help [H]</button>
+</div>
+
+<div id="stats" class="mono"></div>
+<div id="diag" class="mono"></div>
+<div id="tele"><div class="lbl"><span style="color:#38ff9c">ALT</span><span style="color:#00e5ff">SPD</span><span style="color:#ffb300">THR</span><span style="color:#ff5c8a">PITCH-RATE</span></div><canvas id="teleC" width="520" height="90"></canvas></div>
+
+<div id="panel">
+ <h2>COURSE</h2>
+ <div class="row"><label>Difficulty</label><select id="sDiff"><option>easy</option><option selected>normal</option><option>hard</option></select></div>
+ <div class="row"><label>Laps</label><input type="number" id="sLaps" min="1" max="9" value="2"></div>
+ <h2>FLIGHT</h2>
+ <div class="row"><label>Flight mode</label><select id="sFlight"><option value="angle">Angle (stabilized)</option><option value="horizon">Horizon</option><option value="acro">Acro / Rate</option></select></div>
+ <div class="row"><label>Gravity</label><input type="range" id="sGrav" min="1" max="20" step="0.1"><span class="val"></span></div>
+ <div class="row"><label>Thrust:weight</label><input type="range" id="sTWR" min="1.2" max="8" step="0.1"><span class="val"></span></div>
+ <div class="row"><label>Drag</label><input type="range" id="sDrag" min="0.2" max="3" step="0.05"><span class="val"></span></div>
+ <div class="row"><label>Rates (°/s)</label><input type="range" id="sRates" min="200" max="1200" step="10"><span class="val"></span></div>
+ <div class="row"><label>Expo</label><input type="range" id="sExpo" min="0" max="0.9" step="0.05"><span class="val"></span></div>
+ <div class="row"><label>Level gain</label><input type="range" id="sLevel" min="2" max="16" step="0.5"><span class="val"></span></div>
+ <div class="row"><label>Altitude hold</label><input type="checkbox" id="sAltHold"></div>
+ <div class="row"><label>Anti-crash</label><input type="checkbox" id="sAnti"></div>
+ <div class="row"><label>Collision forgive</label><input type="range" id="sForgive" min="0" max="1" step="0.05"><span class="val"></span></div>
+ <h2>CAMERA</h2>
+ <div class="row"><label>FOV</label><input type="range" id="sFov" min="60" max="140" step="1"><span class="val"></span></div>
+ <div class="row"><label>FPV cam tilt</label><input type="range" id="sTilt" min="0" max="45" step="1"><span class="val"></span></div>
+ <h2>RENDER</h2>
+ <div class="row"><label>Quality preset</label><select id="sQual"><option>low</option><option selected>medium</option><option>high</option><option>ultra</option></select></div>
+ <div class="row"><label>Resolution scale</label><input type="range" id="sRes" min="0.4" max="2" step="0.05"><span class="val"></span></div>
+ <div class="row"><label>Shadows</label><select id="sShadow"><option>off</option><option selected>low</option><option>high</option></select></div>
+ <div class="row"><label>Particle density</label><input type="range" id="sPart" min="0" max="2" step="0.1"><span class="val"></span></div>
+ <h2>AUDIO</h2>
+ <div class="row"><label>Master volume</label><input type="range" id="sVol" min="0" max="1" step="0.05"><span class="val"></span></div>
+ <div class="row"><label>Mute</label><input type="checkbox" id="sMute"></div>
+ <h2>GAMEPAD</h2>
+ <div id="padStat">No gamepad detected — connect a controller and press any button.</div>
+ <div class="row"><label>Dead zone</label><input type="range" id="sDz" min="0" max="0.3" step="0.01"><span class="val"></span></div>
+ <div class="row"><label>Invert roll</label><input type="checkbox" id="sInvR"></div>
+ <div class="row"><label>Invert pitch</label><input type="checkbox" id="sInvP"></div>
+ <div class="row"><label>Invert yaw</label><input type="checkbox" id="sInvY"></div>
+ <div class="row"><label>Invert throttle</label><input type="checkbox" id="sInvT"></div>
+ <div class="row"><button class="btn" id="btnCal">Calibrate center</button><span class="val" id="calStat"></span></div>
+ <h2>DATA</h2>
+ <div class="row"><label>Ghost / replay</label><input type="checkbox" id="sGhost" checked></div>
+ <div class="row"><button class="btn" id="btnExpC">Export course</button><button class="btn" id="btnExpR">Export replay</button></div>
+ <div class="row"><button class="btn" id="btnImp">Import JSON</button><input type="file" id="fileImp" accept=".json" style="display:none"></div>
+ <h2>VIEW</h2>
+ <div class="row"><label>Telemetry graph [T]</label><input type="checkbox" id="sTele"></div>
+ <div class="row"><label>Diagnostics [F3]</label><input type="checkbox" id="sDiag"></div>
+</div>
+
+<div id="help"><div>
+ <h2>VECTOR//ONE — CONTROLS</h2>
+ <table>
+ <tr><td><span class="kbd">W</span>/<span class="kbd">S</span></td><td>Pitch forward / back</td></tr>
+ <tr><td><span class="kbd">A</span>/<span class="kbd">D</span></td><td>Roll left / right</td></tr>
+ <tr><td><span class="kbd">◄</span>/<span class="kbd">►</span></td><td>Yaw left / right</td></tr>
+ <tr><td><span class="kbd">▲</span>/<span class="kbd">▼</span></td><td>Throttle up / down</td></tr>
+ <tr><td><span class="kbd">R</span></td><td>Respawn / restart race</td></tr>
+ <tr><td><span class="kbd">C</span></td><td>Camera: FPV → chase → orbit → trackside</td></tr>
+ <tr><td><span class="kbd">F</span></td><td>Flight mode: angle → horizon → acro</td></tr>
+ <tr><td><span class="kbd">P</span>/<span class="kbd">Esc</span></td><td>Pause</td></tr>
+ <tr><td><span class="kbd">G</span></td><td>Toggle ghost</td></tr>
+ <tr><td><span class="kbd">T</span></td><td>Telemetry graph</td></tr>
+ <tr><td><span class="kbd">F3</span></td><td>Diagnostics overlay</td></tr>
+ <tr><td><span class="kbd">H</span></td><td>This help</td></tr>
+ <tr><td><span class="kbd">M</span></td><td>Mute</td></tr>
+ </table>
+ <p style="margin-top:10px;color:#8fb3bf">Gamepad (mode 2): left stick = throttle/yaw, right stick = pitch/roll. On touch screens two virtual sticks appear.</p>
+ <p style="margin-top:6px;color:#8fb3bf">Fly through every gate in order — the glowing <b style="color:#00e5ff">cyan</b> gate is next. Crossing the start/finish ring begins the lap.</p>
+ <p style="margin-top:10px;text-align:right"><button class="btn" id="btnHelpX">close</button></p>
+</div></div>
+
+<div class="stick" id="stickL"><div class="nub"></div></div>
+<div class="stick" id="stickR"><div class="nub"></div></div>
+<div id="toast"></div>
+<div id="fallback"><div>
+ <h2 style="color:var(--bad);letter-spacing:2px">WEBGL2 UNAVAILABLE</h2>
+ <p style="margin-top:10px">This simulator needs WebGL2. Enable hardware acceleration or use a current Chrome/Firefox/Edge build.</p>
+</div></div>
+
+<script>
+"use strict";
