@@ -1,0 +1,2184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Black Hole Lensing Explorer</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Real-time GPU ray-traced black hole with gravitational lensing, a relativistic accretion disk, and ray-integration diagnostics. Single self-contained file.">
+<style>
+:root{
+  --bg:#040509; --panel:rgba(13,14,20,.86); --panel-solid:#0d0e14; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.16);
+  --text:#ece8e0; --muted:#a09c93; --dim:#6f6c66; --accent:#ffb347; --accent-ink:#1a1204; --accent2:#7fd4ff;
+  --danger:#ff6b5a; --ok:#7ee0a0; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+#app{position:fixed;inset:0;overflow:hidden}
+#gl,#ovl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#gl{touch-action:none;cursor:grab;outline:none}
+#gl.dragging{cursor:grabbing}
+#gl:focus-visible{box-shadow:inset 0 0 0 2px rgba(255,179,71,.55)}
+#ovl{pointer-events:none}
+button,select,input{font:inherit;color:inherit}
+.hidden{display:none!important}
+
+/* HUD */
+#hud{position:absolute;left:12px;top:12px;font:11px/1.5 var(--mono);color:#d9d5cc;background:rgba(4,5,9,.66);border:1px solid var(--line);border-radius:9px;padding:7px 10px;pointer-events:none;white-space:pre;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);min-width:220px}
+#hud b{color:var(--accent);font-weight:600}
+#hud .warn{color:var(--danger)}
+
+/* Legend */
+#legend{position:absolute;left:calc((100% - 354px) / 2);bottom:14px;transform:translateX(-50%);background:rgba(4,5,9,.74);border:1px solid var(--line);border-radius:10px;padding:8px 12px 7px;font-size:11.5px;color:var(--muted);max-width:min(560px,calc(100vw - 390px));width:max-content;pointer-events:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#legend .lt{color:var(--text);font-weight:600;margin-bottom:5px;font-size:12px}
+#legend .bar{height:10px;border-radius:3px;margin:2px 0 3px}
+#legend .ticks{display:flex;justify-content:space-between;font:10.5px var(--mono);color:#cfcac0}
+#legend .sw{display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;color:#d6d1c7}
+#legend .sw i{width:11px;height:11px;border-radius:3px;display:inline-block;border:1px solid rgba(255,255,255,.25)}
+#legend .note{margin-top:4px;font-size:10.5px;color:var(--dim)}
+
+/* Panel */
+#panel{position:absolute;right:12px;top:12px;bottom:12px;width:330px;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:13px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 18px 50px rgba(0,0,0,.45);z-index:5}
+#panel header{padding:12px 14px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+#panel header .logo{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#000 0 36%,#ffcf7a 40%,#ff8a2a 52%,rgba(255,120,30,0) 70%);box-shadow:0 0 14px rgba(255,160,60,.45);flex:none}
+#panel header h1{font-size:14px;margin:0;font-weight:650;letter-spacing:.2px}
+#panel header p{margin:1px 0 0;font-size:11px;color:var(--muted)}
+#panel header .hbtn{margin-left:auto}
+#panelBody{overflow-y:auto;padding:6px 0 10px;flex:1;overscroll-behavior:contain}
+#panelBody::-webkit-scrollbar{width:8px}#panelBody::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:8px}
+details.sec{border-bottom:1px solid var(--line)}
+details.sec>summary{list-style:none;cursor:pointer;padding:9px 14px;font-weight:600;font-size:12px;letter-spacing:.35px;text-transform:uppercase;color:#d8d3c9;display:flex;align-items:center;gap:8px;user-select:none}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;margin-right:2px}
+details.sec[open]>summary::before{transform:rotate(45deg)}
+details.sec>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.secBody{padding:2px 14px 12px}
+.ctl{margin:7px 0 9px}
+.ctl .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.ctl label{color:#d6d1c7;font-size:12.5px}
+.ctl output{font:11.5px var(--mono);color:var(--accent);white-space:nowrap}
+.ctl .hint{font-size:10.5px;color:var(--dim);margin-top:1px}
+input[type=range]{width:100%;margin:5px 0 0;height:18px;background:transparent;-webkit-appearance:none;appearance:none}
+input[type=range]:focus{outline:none}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--accent) var(--p,50%),rgba(255,255,255,.14) var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:#fff3de;border:2px solid var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:rgba(255,255,255,.14)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:4px;background:var(--accent)}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff3de;border:2px solid var(--accent)}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(255,179,71,.45)}
+select{width:100%;background:#16171f;border:1px solid var(--line2);border-radius:7px;padding:6px 8px;margin-top:4px;font-size:12.5px}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.chk{display:flex;align-items:center;gap:8px;margin:6px 0;cursor:pointer;font-size:12.5px;color:#d6d1c7}
+.chk input{width:15px;height:15px;accent-color:var(--accent);margin:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px}
+.btn{background:#1a1b24;border:1px solid var(--line2);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;color:#e6e1d8;transition:background .12s,border-color .12s}
+.btn:hover{background:#23242f;border-color:rgba(255,255,255,.26)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:650}
+.btn.primary:hover{background:#ffc46e}
+.btn.on{border-color:var(--accent);color:var(--accent);background:rgba(255,179,71,.1)}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0 8px}
+.presets .btn{padding:7px 4px;font-size:11.5px}
+.readout{font:11px/1.55 var(--mono);color:var(--muted);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:6px;white-space:pre-wrap}
+.readout b{color:#e6e1d8;font-weight:500}
+.iconbtn{width:30px;height:30px;border-radius:8px;display:inline-grid;place-items:center;padding:0}
+
+/* Ray panel */
+#rayPanel{position:absolute;left:12px;bottom:12px;width:360px;max-height:calc(100% - 175px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:10px 12px 10px;z-index:4;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+#rayPanel h2{margin:0;font-size:12.5px;letter-spacing:.3px;text-transform:uppercase;color:#dcd7cd;display:flex;align-items:center;gap:8px}
+#rayPanel h2 .sp{flex:1}
+#rayPanel .kv{display:grid;grid-template-columns:auto 1fr;gap:1px 10px;font:11.5px/1.5 var(--mono);margin-top:6px}
+#rayPanel .kv span:nth-child(odd){color:var(--muted)}
+#rayPanel .kv span:nth-child(even){color:#eee9df}
+#rayPanel .fate{display:inline-block;padding:1px 7px;border-radius:10px;font:600 11px var(--mono)}
+#rayPanel table{width:100%;border-collapse:collapse;font:10.5px/1.45 var(--mono);margin-top:6px}
+#rayPanel th{color:var(--dim);font-weight:500;text-align:right;padding:1px 3px;border-bottom:1px solid var(--line)}
+#rayPanel td{text-align:right;padding:1px 3px;color:#e2ddd3}
+#rayPanel th:first-child,#rayPanel td:first-child{text-align:left}
+#diag{width:100%;height:auto;aspect-ratio:1.9;display:block;margin-top:8px;border-radius:8px;background:#07080c;border:1px solid var(--line)}
+.match{font:11px var(--mono)}
+.match.ok{color:var(--ok)}.match.bad{color:var(--danger)}
+
+/* Fatal / toast / help */
+#fatal{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at center,#0b0c12 0,#030306 70%);z-index:20;padding:20px}
+#fatal .card{max-width:620px;width:100%;background:var(--panel-solid);border:1px solid var(--line2);border-radius:14px;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+#fatal h2{margin:0 0 8px;font-size:18px;color:#ffd2a0}
+#fatal p{color:#cfcac0;margin:8px 0}
+#fatal ul{color:#bdb8ae;margin:6px 0 10px 18px;padding:0}
+#fatal pre{max-height:240px;overflow:auto;background:#07080c;border:1px solid var(--line);border-radius:8px;padding:10px;font:11px/1.45 var(--mono);color:#ffb4a8;white-space:pre-wrap}
+#fatal summary{cursor:pointer;color:var(--muted);margin-top:6px}
+#toast{position:absolute;left:50%;top:16px;transform:translateX(-50%) translateY(-8px);opacity:0;background:rgba(10,11,16,.9);border:1px solid var(--line2);border-radius:20px;padding:6px 14px;font-size:12.5px;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#help{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);z-index:15}
+#help .card{background:var(--panel-solid);border:1px solid var(--line2);border-radius:14px;padding:18px 22px;max-width:520px;width:calc(100% - 32px);max-height:calc(100% - 32px);overflow:auto}
+#help h2{margin:0 0 10px;font-size:15px}
+#help table{border-collapse:collapse;width:100%;font-size:12.5px}
+#help td{padding:3px 6px;border-bottom:1px solid var(--line);color:#d4cfc5}
+#help td:first-child{font:11.5px var(--mono);color:var(--accent);white-space:nowrap}
+#help p{color:var(--muted);font-size:12px}
+#panelToggle{display:none;position:absolute;right:14px;bottom:14px;z-index:6;border-radius:22px;padding:9px 15px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#hudToggleMobile{display:none}
+
+@media (max-width:760px){
+  #panel{left:0;right:0;bottom:0;top:auto;width:auto;max-height:62%;border-radius:16px 16px 0 0;transform:translateY(105%);transition:transform .25s ease;border-bottom:none}
+  #panel.open{transform:none}
+  #panelToggle{display:inline-flex}
+  #hud{font-size:10px;left:8px;top:8px;padding:5px 7px;min-width:0}
+  #legend{left:8px;right:8px;transform:none;max-width:none;width:auto;bottom:64px;font-size:10.5px}
+  #rayPanel{left:8px;right:8px;width:auto;bottom:64px;max-height:52%}
+  body.ray-open #legend{display:none}
+}
+@media (prefers-reduced-motion:reduce){#panel,#toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl" tabindex="0" role="img" aria-label="Ray-traced black hole view. Drag to orbit, right-drag or shift-drag to pan, scroll or pinch to zoom, click or tap to select a light ray. Press ? for keyboard shortcuts."></canvas>
+  <canvas id="ovl" aria-hidden="true"></canvas>
+  <div id="hud" aria-live="off"></div>
+  <div id="legend" class="hidden" aria-live="polite"></div>
+
+  <section id="rayPanel" class="hidden" aria-label="Selected ray">
+    <h2><span>Selected ray</span><span id="rayMatch" class="match"></span><span class="sp"></span>
+      <button class="btn iconbtn" id="rayClose" title="Clear selection (Esc)" aria-label="Clear ray selection">✕</button></h2>
+    <canvas id="diag" aria-label="Diagram of the selected ray trajectory in its orbital plane"></canvas>
+    <div id="rayBody"></div>
+  </section>
+
+  <aside id="panel" aria-label="Controls">
+    <header>
+      <div class="logo" aria-hidden="true"></div>
+      <div><h1>Black Hole Lensing Explorer</h1><p>GPU geodesic ray tracer · lengths in r<sub>g</sub>=GM₀/c²</p></div>
+      <button class="btn iconbtn hbtn" id="helpBtn" title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">?</button>
+    </header>
+    <div id="panelBody"></div>
+  </aside>
+  <button class="btn primary" id="panelToggle" aria-controls="panel" aria-expanded="false">☰ Controls</button>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="help" class="hidden" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+    <div class="card">
+      <h2>Controls &amp; shortcuts</h2>
+      <table>
+        <tr><td>Drag</td><td>Orbit camera (one finger on touch)</td></tr>
+        <tr><td>Right-drag / Shift+drag</td><td>Pan (two fingers on touch)</td></tr>
+        <tr><td>Wheel / pinch / + −</td><td>Zoom (dolly distance)</td></tr>
+        <tr><td>Click / tap</td><td>Select the light ray through that pixel</td></tr>
+        <tr><td>Double-click</td><td>Re-center pan target on the black hole</td></tr>
+        <tr><td>← → ↑ ↓ / W A S D</td><td>Orbit (hold Shift to pan)</td></tr>
+        <tr><td>Space</td><td>Pause / resume simulation time</td></tr>
+        <tr><td>1 – 6</td><td>Camera presets</td></tr>
+        <tr><td>O</td><td>Toggle auto-orbit</td></tr>
+        <tr><td>C</td><td>Toggle cinematic tour</td></tr>
+        <tr><td>M / Shift+M</td><td>Next / previous visualization mode</td></tr>
+        <tr><td>R</td><td>Reset camera</td></tr>
+        <tr><td>H</td><td>Hide / show interface</td></tr>
+        <tr><td>Esc</td><td>Clear ray selection / close dialogs</td></tr>
+      </table>
+      <p>Physics: null geodesics of a Schwarzschild metric integrated with RK4 (exact orbit equation u″+u=3Mu²), plus a gravitomagnetic frame-dragging term calibrated to Kerr equatorial shadow edges. Disk emission uses a Novikov–Thorne temperature profile, blackbody colour, and the full Kerr circular-orbit redshift g = 1/[uᵗ(1−Ωλ)] with I ∝ g⁴.</p>
+      <div class="btnrow"><button class="btn primary" id="helpClose">Close</button></div>
+    </div>
+  </div>
+  <div id="fatal" class="hidden" role="alertdialog" aria-live="assertive"></div>
+</div>
+<noscript><div style="position:fixed;inset:0;display:grid;place-items:center;color:#eee;font:15px system-ui">This explorer needs JavaScript and WebGL2.</div></noscript>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   Physics core — CPU mirror of the GLSL ray integrator.
+   Used for ray selection, trajectory diagrams, and self-tests.
+   ===================================================================== */
+// <physics-core>
+const Phys = (() => {
+  const FATE = { ESCAPED: 0, CAPTURED: 1, ABSORBED: 2, STEPLIMIT: 3, NUMERR: 4 };
+  const FATE_NAMES = ['Escaped to sky', 'Captured by horizon', 'Absorbed by disk', 'Step limit reached', 'Numerical failure'];
+  const INV32 = 1 / 4294967296;
+  const mix = (a, b, t) => a + (b - a) * t;
+  const smoothstep = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  const gmod = (x, y) => x - y * Math.floor(x / y);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const len = (a) => Math.sqrt(dot(a, a));
+  const norm = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+
+  function pcg3d(x, y, z) {
+    x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+    y = (Math.imul(y, 1664525) + 1013904223) >>> 0;
+    z = (Math.imul(z, 1664525) + 1013904223) >>> 0;
+    x = (x + Math.imul(y, z)) >>> 0; y = (y + Math.imul(z, x)) >>> 0; z = (z + Math.imul(x, y)) >>> 0;
+    x = (x ^ (x >>> 16)) >>> 0; y = (y ^ (y >>> 16)) >>> 0; z = (z ^ (z >>> 16)) >>> 0;
+    x = (x + Math.imul(y, z)) >>> 0; y = (y + Math.imul(z, x)) >>> 0; z = (z + Math.imul(x, y)) >>> 0;
+    return [x, y, z];
+  }
+  const hash31 = (ix, iy, iz) => pcg3d((ix + 65536) >>> 0, (iy + 65536) >>> 0, (iz + 65536) >>> 0)[0] * INV32;
+  function vnoise(px, py, pz) {
+    const fx = Math.floor(px), fy = Math.floor(py), fz = Math.floor(pz);
+    const tx = px - fx, ty = py - fy, tz = pz - fz;
+    const ux = tx * tx * tx * (tx * (tx * 6 - 15) + 10), uy = ty * ty * ty * (ty * (ty * 6 - 15) + 10), uz = tz * tz * tz * (tz * (tz * 6 - 15) + 10);
+    const h = (a, b, c) => hash31(fx + a, fy + b, fz + c);
+    return mix(mix(mix(h(0, 0, 0), h(1, 0, 0), ux), mix(h(0, 1, 0), h(1, 1, 0), ux), uy),
+               mix(mix(h(0, 0, 1), h(1, 0, 1), ux), mix(h(0, 1, 1), h(1, 1, 1), ux), uy), uz);
+  }
+  function fbm(x, y, z, oct) {
+    let s = 0, a = 0.5, n = 0;
+    for (let k = 0; k < 6; k++) {
+      if (k >= oct) break;
+      s += a * vnoise(x, y, z); n += a;
+      x = x * 2.03 + 1.7; y = y * 2.03 + 9.2; z = z * 2.03 + 3.1; a *= 0.5;
+    }
+    return s / n;
+  }
+  function blackbody(T) {
+    T = Math.min(25000, Math.max(1667, T));
+    const it = 1000 / T;
+    const x = T <= 4000 ? (-0.2661239 * it * it * it - 0.2343589 * it * it + 0.8776956 * it + 0.179910)
+                        : (-3.0258469 * it * it * it + 2.1070379 * it * it + 0.2226347 * it + 0.240390);
+    let y;
+    if (T <= 2222) y = -1.1063814 * x * x * x - 1.34811020 * x * x + 2.18555832 * x - 0.20219683;
+    else if (T <= 4000) y = -0.9549476 * x * x * x - 1.37418593 * x * x + 2.09137015 * x - 0.16748867;
+    else y = 3.0817580 * x * x * x - 5.87338670 * x * x + 3.75112997 * x - 0.37001483;
+    const X = x / y, Y = 1, Z = (1 - x - y) / y;
+    return [Math.max(0, 3.2406 * X - 1.5372 * Y - 0.4986 * Z), Math.max(0, -0.9689 * X + 1.8758 * Y + 0.0415 * Z), Math.max(0, 0.0557 * X - 0.2040 * Y + 1.0570 * Z)];
+  }
+  const horizonRadius = (M, chi) => M * (1 + Math.sqrt(Math.max(0, 1 - chi * chi)));
+  function iscoRadius(M, chi) {
+    const z1 = 1 + Math.cbrt(1 - chi * chi) * (Math.cbrt(1 + chi) + Math.cbrt(1 - chi));
+    const z2 = Math.sqrt(3 * chi * chi + z1 * z1);
+    return M * (3 + z2 - Math.sqrt(Math.max(0, (3 - z1) * (3 + z1 + 2 * z2))));
+  }
+  const photonOrbits = (M, chi) => ({ pro: 2 * M * (1 + Math.cos(2 / 3 * Math.acos(-chi))), retro: 2 * M * (1 + Math.cos(2 / 3 * Math.acos(chi))) });
+  const criticalImpact = (M, chi) => ({ pro: M * (6 * Math.cos(Math.acos(-chi) / 3) - chi), retro: M * (6 * Math.cos(Math.acos(chi) / 3) + chi) });
+  const omegaK = (r, P) => { const sq = Math.sqrt(P.M); return sq / (r * Math.sqrt(r) + P.spin * P.M * sq); };
+
+  function diskNoise(phi, r, zh, P) {
+    const Pp = 200;
+    const om = omegaK(r, P);
+    const tA = gmod(P.time, Pp), tB = gmod(P.time + 0.5 * Pp, Pp);
+    const wB = Math.abs(2 * tA / Pp - 1);
+    const lr = Math.log(r);
+    const aA = phi - om * tA, aB = phi - om * tB;
+    const nA = fbm(Math.cos(aA) * 2.6, Math.sin(aA) * 2.6, lr * 11 + zh * 0.6, P.octaves);
+    const nB = fbm(Math.cos(aB) * 2.6 + 31.4, Math.sin(aB) * 2.6 + 17.9, lr * 11 + zh * 0.6 + 5.3, P.octaves);
+    const m = mix(nA, nB, wB) - 0.5;
+    return Math.min(1, Math.max(0, 0.5 + 2.6 * m / Math.sqrt(Math.max(wB * wB + (1 - wB) * (1 - wB), 0.5))));
+  }
+
+  // Returns density (optical depth per unit length); fills `o` with emission data.
+  function diskSample(p, vd, P, o) {
+    o.S = [0, 0, 0]; o.g = 1; o.gk = 1; o.Tobs = 0; o.Te = 0;
+    const n = P.diskN;
+    const z = dot(p, n);
+    const px = dot(p, P.diskX), py = dot(p, P.diskY);
+    const r = Math.hypot(px, py);
+    o.rr = r; o.phi = Math.atan2(py, px); o.zh = 0;
+    if (r < P.diskIn * 0.9 || r > P.diskOut) return 0;
+    const H = Math.max(P.diskH * r, 0.002);
+    const zh = z / H; o.zh = zh;
+    if (Math.abs(zh) > 3.5) return 0;
+    const radial = smoothstep(P.diskIn * 0.9, P.diskIn * 1.08, r) * (1 - smoothstep(P.diskOut * 0.7, P.diskOut, r));
+    const vert = Math.exp(-0.5 * zh * zh) / (2.5066283 * H);
+    const nz = diskNoise(o.phi, r, zh, P);
+    const clump = mix(1, smoothstep(0.15, 0.85, nz) * 1.9 + 0.05, P.turb);
+    const dens = P.density * radial * vert * clump;
+    const q = P.diskIn / r;
+    const Te = q < 1 ? P.temp * Math.pow(q, 0.75) * Math.pow(1 - Math.sqrt(q), 0.25) / 0.48787 : 0;
+    const sq = Math.sqrt(P.M), a = P.spin * P.M, sr = Math.sqrt(r), r15 = r * sr;
+    const Om = sq / (r15 + a * sq);
+    const ut = (r15 + a * sq) / (Math.pow(r, 0.75) * Math.sqrt(Math.max(r15 - 3 * P.M * sr + 2 * a * sq, 1e-3)));
+    const lam = dot(cross(p, [-vd[0], -vd[1], -vd[2]]), n);
+    const gFull = 1 / (ut * Math.max(1 - Om * lam, 0.05));
+    const gGrav = Math.sqrt(Math.max(1 - 2 * P.M / r, 1e-3));
+    const gk = Math.pow(gFull / gGrav, P.doppler);
+    const g = Math.min(Math.pow(gGrav * P.camG, P.redshift) * gk, 4);
+    const Tobs = Te * g;
+    const em = mix(1, 0.25 + 1.5 * nz, P.turb);
+    const tr = Tobs / P.temp;
+    const bb = blackbody(Tobs);
+    const k = tr * tr * tr * tr * P.bright * em;
+    o.S = [bb[0] * k, bb[1] * k, bb[2] * k];
+    o.g = g; o.gk = gk; o.Tobs = Tobs; o.Te = Te;
+    return dens;
+  }
+
+  function accel(x, v, P) {
+    const r2 = dot(x, x), r = Math.sqrt(r2);
+    const h = cross(x, v), h2 = dot(h, h);
+    const k = -3 * P.M * h2 / (r2 * r2 * r);
+    let a = [k * x[0], k * x[1], k * x[2]];
+    if (P.spin !== 0) {
+      const n = P.diskN, rh = [x[0] / r, x[1] / r, x[2] / r];
+      const nd = dot(n, rh), J = P.spin * P.M * P.M, s = J / (r2 * r);
+      const B = [s * (n[0] - 3 * nd * rh[0]), s * (n[1] - 3 * nd * rh[1]), s * (n[2] - 3 * nd * rh[2])];
+      const C = 2 * (1 + 3 * P.M / r);
+      const vb = cross(v, B);
+      a = [a[0] + C * vb[0], a[1] + C * vb[1], a[2] + C * vb[2]];
+    }
+    return a;
+  }
+
+  // Static observer at x looking along local direction d -> coordinate velocity with |v_inf| = 1, |x × v| = b.
+  function initialVelocity(x, d, P) {
+    const r = len(x), rh = [x[0] / r, x[1] / r, x[2] / r];
+    const c = dot(d, rh);
+    const t = [d[0] - c * rh[0], d[1] - c * rh[1], d[2] - c * rh[2]];
+    const s = len(t);
+    if (s < 1e-7) return d.slice();
+    const f = Math.sqrt(Math.max(1 - 2 * P.M / r, 1e-6));
+    const b = r * s / f;
+    const q = 1 + 2 * P.M * b * b / (r * r * r);
+    const sE = Math.min(1, (b / r) / Math.sqrt(q));
+    const cE = Math.sign(c) * Math.sqrt(Math.max(0, 1 - sE * sE));
+    const vm = Math.sqrt(q);
+    return [vm * (cE * rh[0] + sE * t[0] / s), vm * (cE * rh[1] + sE * t[1] / s), vm * (cE * rh[2] + sE * t[2] / s)];
+  }
+
+  function traceRay(ro, d, P, wantPath) {
+    const n = P.diskN;
+    let x = ro.slice();
+    let v = initialVelocity(ro, d, P);
+    const v0 = v.slice();
+    const res = { steps: 0, fate: FATE.STEPLIMIT, rmin: len(x), defl: 0, hitGeo: null, em: null, emW: 0,
+      col: [0, 0, 0], T: 1, crossings: 0, dirOut: null, path: wantPath ? [x.slice()] : null, segs: [],
+      psPoint: null, capture: null, b: len(cross(x, v)), v0, x0: ro.slice(), residual: 0 };
+    let T = 1;
+    let zPrev = dot(x, n);
+    const o = {};
+    const add = (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
+    for (let i = 0; i < 3000; i++) {
+      if (i >= P.maxSteps) break;
+      const r = len(x);
+      if (r < P.rh) { res.fate = FATE.CAPTURED; res.capture = x.slice(); break; }
+      if (r > P.escapeR && dot(x, v) > 0) { res.fate = FATE.ESCAPED; break; }
+      res.steps++;
+      const h = P.step * r / len(v);
+      const k1v = accel(x, v, P);
+      const k2x = add(v, k1v, 0.5 * h);
+      const k2v = accel(add(x, v, 0.5 * h), k2x, P);
+      const k3x = add(v, k2v, 0.5 * h);
+      const k3v = accel(add(x, k2x, 0.5 * h), k3x, P);
+      const k4x = add(v, k3v, h);
+      const k4v = accel(add(x, k3x, h), k4x, P);
+      const xn = [0, 1, 2].map(j => x[j] + (h / 6) * (v[j] + 2 * k2x[j] + 2 * k3x[j] + k4x[j]));
+      const vn = [0, 1, 2].map(j => v[j] + (h / 6) * (k1v[j] + 2 * k2v[j] + 2 * k3v[j] + k4v[j]));
+      if (!(dot(xn, xn) < 1e12) || !(dot(vn, vn) < 1e12)) { res.fate = FATE.NUMERR; break; }
+      // --- disk volume segment ---
+      const vd = [(v[0] + vn[0]) * 0.5, (v[1] + vn[1]) * 0.5, (v[2] + vn[2]) * 0.5];
+      {
+        const za = dot(x, n), zb = dot(xn, n);
+        const ra = len(add(x, n, -za)), rb = len(add(xn, n, -zb));
+        let skip = Math.min(ra, rb) > P.diskOut * 1.1 || Math.max(ra, rb) < P.diskIn * 0.5;
+        const lim = 3 * Math.max(P.diskH * Math.max(ra, rb), 0.002);
+        if (!skip && ((za > lim && zb > lim) || (za < -lim && zb < -lim))) skip = true;
+        let t0 = 0, t1 = 1;
+        const dz = zb - za;
+        if (!skip && Math.abs(dz) > 1e-9) {
+          const ta = (-lim - za) / dz, tb = (lim - za) / dz;
+          t0 = Math.min(1, Math.max(0, Math.min(ta, tb))); t1 = Math.min(1, Math.max(0, Math.max(ta, tb)));
+        }
+        if (!skip && t1 > t0) {
+          const N = P.diskSamples;
+          const dl = len([xn[0] - x[0], xn[1] - x[1], xn[2] - x[2]]) * (t1 - t0) / N;
+          let seg = null;
+          for (let kk = 0; kk < 12; kk++) {
+            if (kk >= N) break;
+            const tt = mix(t0, t1, (kk + 0.5) / N);
+            const p = [mix(x[0], xn[0], tt), mix(x[1], xn[1], tt), mix(x[2], xn[2], tt)];
+            const dens = diskSample(p, vd, P, o);
+            if (dens <= 0) continue;
+            const al = 1 - Math.exp(-dens * dl);
+            const w = T * al;
+            res.col[0] += w * o.S[0]; res.col[1] += w * o.S[1]; res.col[2] += w * o.S[2];
+            if (w > res.emW) { res.emW = w; res.em = { g: o.g, gk: o.gk, Tobs: o.Tobs, r: o.rr }; }
+            if (!seg) seg = { tau: 0, w: 0, best: 0 };
+            seg.tau += dens * dl; seg.w += w;
+            if (w >= seg.best) { seg.best = w; seg.r = o.rr; seg.phi = o.phi; seg.zh = o.zh; seg.g = o.g; seg.gk = o.gk; seg.Tobs = o.Tobs; seg.Te = o.Te; seg.p = p; }
+            T *= 1 - al;
+            if (!res.hitGeo && T < 0.5) res.hitGeo = { r: o.rr, phi: o.phi, order: res.crossings, p };
+            if (T < 0.004) break;
+          }
+          if (seg) { seg.Tafter = T; seg.step = res.steps; res.segs.push(seg); }
+        }
+      }
+      // --- geometric disk-plane crossing ---
+      const zn = dot(xn, n);
+      if ((zPrev < 0) !== (zn < 0)) {
+        const tt = zPrev / (zPrev - zn);
+        const pc = [mix(x[0], xn[0], tt), mix(x[1], xn[1], tt), mix(x[2], xn[2], tt)];
+        const cx = dot(pc, P.diskX), cy = dot(pc, P.diskY);
+        const rr = Math.hypot(cx, cy);
+        if (!res.hitGeo && rr >= P.diskIn && rr <= P.diskOut) res.hitGeo = { r: rr, phi: Math.atan2(cy, cx), order: res.crossings, p: pc };
+        res.crossings++;
+      }
+      res.defl += Math.atan2(len(cross(v, vn)), dot(v, vn));
+      const rn = len(xn);
+      if (!res.psPoint && r >= P.photonR && rn < P.photonR) { const tt = (r - P.photonR) / (r - rn); res.psPoint = [mix(x[0], xn[0], tt), mix(x[1], xn[1], tt), mix(x[2], xn[2], tt)]; }
+      x = xn; v = vn; zPrev = zn;
+      res.rmin = Math.min(res.rmin, rn);
+      if (wantPath) res.path.push(x.slice());
+      if (T < 0.004) { res.fate = FATE.ABSORBED; break; }
+    }
+    let dirOut = norm(v);
+    if (res.fate === FATE.ESCAPED) {
+      const R = len(x), b = len(cross(x, v));
+      const s0 = Math.sqrt(Math.max(R * R - b * b, 0));
+      const dlt = 2 * P.M / Math.max(b, 1e-4) * (1 - s0 / R);
+      const perp = add(x, dirOut, -dot(x, dirOut));
+      const pl = len(perp);
+      if (pl > 1e-6) {
+        dirOut = norm([dirOut[0] * Math.cos(dlt) - perp[0] / pl * Math.sin(dlt), dirOut[1] * Math.cos(dlt) - perp[1] / pl * Math.sin(dlt), dirOut[2] * Math.cos(dlt) - perp[2] / pl * Math.sin(dlt)]);
+        res.defl += dlt; res.residual = dlt;
+      }
+    }
+    res.dirOut = dirOut; res.T = T; res.xEnd = x; res.vEnd = v;
+    return res;
+  }
+
+  return { FATE, FATE_NAMES, pcg3d, hash31, vnoise, fbm, blackbody, horizonRadius, iscoRadius, photonOrbits, criticalImpact,
+           omegaK, diskNoise, diskSample, accel, initialVelocity, traceRay, dot, cross, len, norm };
+})();
+// </physics-core>
+
+/* =====================================================================
+   Shaders
+   ===================================================================== */
+const VS = `#version 300 es
+out vec2 vUv;
+void main(){
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)) * 2.0 - 1.0;
+  vUv = p * 0.5 + 0.5;
+  gl_Position = vec4(p, 0.0, 1.0);
+}`;
+
+const RAY_FS = `#version 300 es
+//__DEFINES__
+precision highp float;
+precision highp int;
+#define PI 3.14159265359
+#define TAU 6.28318530718
+#define FATE_ESCAPED 0
+#define FATE_CAPTURED 1
+#define FATE_ABSORBED 2
+#define FATE_STEPLIMIT 3
+#define FATE_NUMERR 4
+#define STAR_SIGMA 0.0007
+
+uniform vec2 uRes;
+uniform vec2 uJitter;
+uniform int uFrame;
+uniform vec3 uCamPos;
+uniform vec3 uCamRight;
+uniform vec3 uCamUp;
+uniform vec3 uCamFwd;
+uniform float uTanHalfFov;
+uniform float uPixAngle;
+uniform float uCenterX;
+uniform float uMass;
+uniform float uSpin;
+uniform float uHorizonR;
+uniform float uPhotonR;
+uniform float uIsco;
+uniform float uDiskIn;
+uniform float uDiskOut;
+uniform float uDiskH;
+uniform vec3 uDiskN;
+uniform vec3 uDiskX;
+uniform vec3 uDiskY;
+uniform float uDiskTemp;
+uniform float uTurb;
+uniform float uDensity;
+uniform float uDiskBright;
+uniform float uDoppler;
+uniform float uRedshift;
+uniform float uCamG;
+uniform float uTime;
+uniform float uStep;
+uniform int uMaxSteps;
+uniform float uEscapeR;
+uniform int uMode;
+uniform int uOverlay;
+uniform int uDiskSamples;
+uniform int uOctaves;
+uniform sampler2D uHistory;
+uniform float uHistW;
+uniform int uLdr;
+uniform float uAlphaScale;
+#ifdef PROBE
+uniform vec2 uProbePx;
+layout(location = 0) out vec4 o0;
+layout(location = 1) out vec4 o1;
+layout(location = 2) out vec4 o2;
+layout(location = 3) out vec4 o3;
+#else
+out vec4 fragColor;
+#endif
+
+const float INV32 = 1.0 / 4294967296.0;
+const vec3 GAL_C = vec3(0.14762, -0.09841, -0.98413);
+const vec3 GAL_N = vec3(0.49170, -0.85600, 0.15930);
+
+uvec3 pcg3d(uvec3 v) {
+  v = v * 1664525u + 1013904223u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  v ^= v >> 16u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  return v;
+}
+float hash31(ivec3 c) { return float(pcg3d(uvec3(c + 65536)).x) * INV32; }
+float vnoise(vec3 p) {
+  vec3 fl = floor(p);
+  vec3 f = p - fl;
+  ivec3 i = ivec3(fl);
+  vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float n000 = hash31(i), n100 = hash31(i + ivec3(1, 0, 0)), n010 = hash31(i + ivec3(0, 1, 0)), n110 = hash31(i + ivec3(1, 1, 0));
+  float n001 = hash31(i + ivec3(0, 0, 1)), n101 = hash31(i + ivec3(1, 0, 1)), n011 = hash31(i + ivec3(0, 1, 1)), n111 = hash31(i + ivec3(1, 1, 1));
+  return mix(mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y), mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y), u.z);
+}
+float fbm(vec3 p, int oct) {
+  float s = 0.0, a = 0.5, n = 0.0;
+  for (int k = 0; k < 6; k++) {
+    if (k >= oct) break;
+    s += a * vnoise(p); n += a;
+    p = p * 2.03 + vec3(1.7, 9.2, 3.1);
+    a *= 0.5;
+  }
+  return s / n;
+}
+vec3 blackbody(float T) {
+  T = clamp(T, 1667.0, 25000.0);
+  float it = 1000.0 / T;
+  float x = T <= 4000.0 ? (-0.2661239 * it * it * it - 0.2343589 * it * it + 0.8776956 * it + 0.179910)
+                        : (-3.0258469 * it * it * it + 2.1070379 * it * it + 0.2226347 * it + 0.240390);
+  float y;
+  if (T <= 2222.0) y = -1.1063814 * x * x * x - 1.34811020 * x * x + 2.18555832 * x - 0.20219683;
+  else if (T <= 4000.0) y = -0.9549476 * x * x * x - 1.37418593 * x * x + 2.09137015 * x - 0.16748867;
+  else y = 3.0817580 * x * x * x - 5.87338670 * x * x + 3.75112997 * x - 0.37001483;
+  vec3 XYZ = vec3(x / y, 1.0, (1.0 - x - y) / y);
+  vec3 rgb = mat3(3.2406, -0.9689, 0.0557, -1.5372, 1.8758, -0.2040, -0.4986, 0.0415, 1.0570) * XYZ;
+  return max(rgb, 0.0);
+}
+vec3 turbo(float t) {
+  const vec4 kR4 = vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234);
+  const vec4 kG4 = vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333);
+  const vec4 kB4 = vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771);
+  const vec2 kR2 = vec2(-152.94239396, 59.28637943);
+  const vec2 kG2 = vec2(4.27729857, 2.82956604);
+  const vec2 kB2 = vec2(-89.90310912, 27.34824973);
+  t = clamp(t, 0.0, 1.0);
+  vec4 v4 = vec4(1.0, t, t * t, t * t * t);
+  vec2 v2 = v4.zw * v4.z;
+  return clamp(vec3(dot(v4, kR4) + dot(v2, kR2), dot(v4, kG4) + dot(v2, kG2), dot(v4, kB4) + dot(v2, kB2)), 0.0, 1.0);
+}
+vec3 hsv2rgb(vec3 c) {
+  vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+vec3 diverge(float t) {
+  t = clamp(t, -1.0, 1.0);
+  vec3 mid = vec3(0.92, 0.91, 0.87);
+  vec3 c1 = t > 0.0 ? vec3(0.12, 0.42, 0.98) : vec3(0.90, 0.16, 0.10);
+  vec3 c2 = t > 0.0 ? vec3(0.05, 0.10, 0.45) : vec3(0.35, 0.02, 0.03);
+  float a = abs(t);
+  return a < 0.6 ? mix(mid, c1, a / 0.6) : mix(c1, c2, (a - 0.6) / 0.4);
+}
+float omegaK(float r) { float sq = sqrt(uMass); return sq / (r * sqrt(r) + uSpin * uMass * sq); }
+float diskNoise(float phi, float r, float zh) {
+  const float PP = 200.0;
+  float om = omegaK(r);
+  float tA = mod(uTime, PP), tB = mod(uTime + 0.5 * PP, PP);
+  float wB = abs(2.0 * tA / PP - 1.0);
+  float lr = log(r);
+  float aA = phi - om * tA, aB = phi - om * tB;
+  float nA = fbm(vec3(cos(aA) * 2.6, sin(aA) * 2.6, lr * 11.0 + zh * 0.6), uOctaves);
+  float nB = fbm(vec3(cos(aB) * 2.6 + 31.4, sin(aB) * 2.6 + 17.9, lr * 11.0 + zh * 0.6 + 5.3), uOctaves);
+  float m = mix(nA, nB, wB) - 0.5;
+  return clamp(0.5 + 2.6 * m * inversesqrt(max(wB * wB + (1.0 - wB) * (1.0 - wB), 0.5)), 0.0, 1.0);
+}
+float diskSample(vec3 p, vec3 vd, out vec3 S, out float g, out float gk, out float Tobs, out float rr, out float phi) {
+  S = vec3(0.0); g = 1.0; gk = 1.0; Tobs = 0.0;
+  float z = dot(p, uDiskN);
+  float px = dot(p, uDiskX), py = dot(p, uDiskY);
+  float r = length(vec2(px, py));
+  rr = r;
+  phi = atan(py, px);
+  if (r < uDiskIn * 0.9 || r > uDiskOut) return 0.0;
+  float H = max(uDiskH * r, 0.002);
+  float zh = z / H;
+  if (abs(zh) > 3.5) return 0.0;
+  float radial = smoothstep(uDiskIn * 0.9, uDiskIn * 1.08, r) * (1.0 - smoothstep(uDiskOut * 0.7, uDiskOut, r));
+  float vert = exp(-0.5 * zh * zh) / (2.5066283 * H);
+  float nz = diskNoise(phi, r, zh);
+  float clump = mix(1.0, smoothstep(0.15, 0.85, nz) * 1.9 + 0.05, uTurb);
+  float dens = uDensity * radial * vert * clump;
+  float q = uDiskIn / r;
+  float Te = q < 1.0 ? uDiskTemp * pow(q, 0.75) * pow(1.0 - sqrt(q), 0.25) / 0.48787 : 0.0;
+  float sq = sqrt(uMass), a = uSpin * uMass, sr = sqrt(r), r15 = r * sr;
+  float Om = sq / (r15 + a * sq);
+  float ut = (r15 + a * sq) / (pow(r, 0.75) * sqrt(max(r15 - 3.0 * uMass * sr + 2.0 * a * sq, 1e-3)));
+  float lam = dot(cross(p, -vd), uDiskN);
+  float gFull = 1.0 / (ut * max(1.0 - Om * lam, 0.05));
+  float gGrav = sqrt(max(1.0 - 2.0 * uMass / r, 1e-3));
+  gk = pow(gFull / gGrav, uDoppler);
+  g = min(pow(gGrav * uCamG, uRedshift) * gk, 4.0); // clamp: inside the ISCO circular orbits are extrapolated
+  Tobs = Te * g;
+  float em = mix(1.0, 0.25 + 1.5 * nz, uTurb);
+  float tr = Tobs / uDiskTemp;
+  S = blackbody(Tobs) * (tr * tr * tr * tr * uDiskBright * em);
+  return dens;
+}
+void diskSegment(vec3 a, vec3 b, vec3 vd, float sj, int crossings, inout vec3 col, inout float T, inout vec4 em, inout float emW, inout vec4 hitGeo) {
+  float za = dot(a, uDiskN), zb = dot(b, uDiskN);
+  float ra = length(a - za * uDiskN), rb = length(b - zb * uDiskN);
+  if (min(ra, rb) > uDiskOut * 1.1 || max(ra, rb) < uDiskIn * 0.5) return;
+  float lim = 3.0 * max(uDiskH * max(ra, rb), 0.002);
+  if ((za > lim && zb > lim) || (za < -lim && zb < -lim)) return;
+  float dz = zb - za;
+  float t0 = 0.0, t1 = 1.0;
+  if (abs(dz) > 1e-9) {
+    float ta = (-lim - za) / dz, tb = (lim - za) / dz;
+    t0 = clamp(min(ta, tb), 0.0, 1.0); t1 = clamp(max(ta, tb), 0.0, 1.0);
+  }
+  if (t1 <= t0) return;
+  float fN = float(uDiskSamples);
+  float dl = length(b - a) * (t1 - t0) / fN;
+  for (int k = 0; k < 12; k++) {
+    if (k >= uDiskSamples) break;
+    vec3 p = mix(a, b, mix(t0, t1, (float(k) + sj) / fN));
+    vec3 S; float g, gk, To, rr, ph;
+    float dens = diskSample(p, vd, S, g, gk, To, rr, ph);
+    if (dens <= 0.0) continue;
+    float al = 1.0 - exp(-dens * dl);
+    float w = T * al;
+    col += w * S;
+    if (w > emW) { emW = w; em = vec4(g, gk, To, rr); }
+    T *= 1.0 - al;
+    if (hitGeo.x < 0.0 && T < 0.5) hitGeo = vec4(rr, ph, float(crossings), 0.0);
+    if (T < 0.004) break;
+  }
+}
+vec3 accel(vec3 x, vec3 v) {
+  float r2 = dot(x, x);
+  float r = sqrt(r2);
+  vec3 hv = cross(x, v);
+  vec3 a = (-3.0 * uMass * dot(hv, hv) / (r2 * r2 * r)) * x;
+  if (uSpin != 0.0) {
+    // Gravitomagnetic (dipole) frame-dragging force with a strong-field factor (1 + 3M/r)
+    // calibrated against exact Kerr equatorial shadow edges.
+    vec3 rh = x / r;
+    float J = uSpin * uMass * uMass;
+    vec3 B = (J / (r2 * r)) * (uDiskN - 3.0 * dot(uDiskN, rh) * rh);
+    a += (2.0 * (1.0 + 3.0 * uMass / r)) * cross(v, B);
+  }
+  return a;
+}
+vec3 initialVelocity(vec3 x, vec3 d) {
+  float r = length(x);
+  vec3 rh = x / r;
+  float c = dot(d, rh);
+  vec3 t = d - c * rh;
+  float s = length(t);
+  if (s < 1e-7) return d;
+  float f = sqrt(max(1.0 - 2.0 * uMass / r, 1e-6));
+  float b = r * s / f;
+  float q = 1.0 + 2.0 * uMass * b * b / (r * r * r);
+  float sE = min(1.0, (b / r) * inversesqrt(q));
+  float cE = sign(c) * sqrt(max(0.0, 1.0 - sE * sE));
+  return sqrt(q) * (cE * rh + sE * (t / s));
+}
+#ifndef PROBE
+vec3 starLayer(vec3 d, float N, float prob, float amp, uint seed) {
+  vec3 ad = abs(d);
+  int face; vec2 uv;
+  if (ad.x >= ad.y && ad.x >= ad.z) { face = d.x > 0.0 ? 0 : 1; uv = d.yz / ad.x; }
+  else if (ad.y >= ad.z) { face = d.y > 0.0 ? 2 : 3; uv = d.xz / ad.y; }
+  else { face = d.z > 0.0 ? 4 : 5; uv = d.xy / ad.z; }
+  ivec2 cell = ivec2(floor(uv * N));
+  uvec3 h = pcg3d(uvec3(uint(cell.x + 8192), uint(cell.y + 8192), uint(face) * 7919u + seed));
+  vec3 hf = vec3(h) * INV32;
+  if (hf.x > prob) return vec3(0.0);
+  vec3 hf2 = vec3(pcg3d(h ^ uvec3(0x9E3779B9u))) * INV32;
+  vec2 sp = (vec2(cell) + 0.2 + 0.6 * hf.yz) / N;
+  vec3 sd;
+  if (face < 2) sd = vec3(face == 0 ? 1.0 : -1.0, sp.x, sp.y);
+  else if (face < 4) sd = vec3(sp.x, face == 2 ? 1.0 : -1.0, sp.y);
+  else sd = vec3(sp.x, sp.y, face == 4 ? 1.0 : -1.0);
+  sd = normalize(sd);
+  vec3 cr = cross(d, sd);
+  float sig = max(STAR_SIGMA, uPixAngle * 0.75);
+  float fall = exp(-0.5 * dot(cr, cr) / (sig * sig)) * (STAR_SIGMA * STAR_SIGMA) / (sig * sig);
+  float mag = amp * (0.03 + 0.35 * hf2.x * hf2.x * hf2.x + 40.0 * pow(hf2.x, 40.0));
+  float Ts = mix(2800.0, 14000.0, pow(hf2.y, 1.8));
+  return blackbody(Ts) * (mag * fall);
+}
+vec3 background(vec3 d) {
+  float lat = dot(d, GAL_N);
+  float cz = dot(d, GAL_C);
+  float band = exp(-lat * lat / (2.0 * 0.12 * 0.12));
+  float bulge = exp(-(1.0 - cz) * 9.0);
+  float cl = fbm(d * 3.5 + vec3(2.3, 7.1, 4.2), 4);
+  float fine = fbm(d * 12.0 + vec3(5.0, 1.0, 8.0), 3);
+  float dustN = fbm(d * 6.5 + vec3(9.1, 1.3, 3.7), 4);
+  float dust = smoothstep(0.40, 0.66, dustN) * exp(-lat * lat / (2.0 * 0.055 * 0.055));
+  float glow = band * (0.15 + 1.6 * cl * cl * cl) * (0.45 + 0.9 * fine) * (1.0 + 2.2 * bulge);
+  vec3 mw = mix(vec3(0.42, 0.52, 0.85), vec3(1.0, 0.74, 0.48), clamp(bulge * 1.6 + 0.25 * cl, 0.0, 1.0));
+  vec3 c = mw * glow * (1.0 - 0.92 * dust) * 0.07;
+  c += vec3(0.30, 0.10, 0.34) * pow(cl, 4.0) * 0.05;
+  c += starLayer(d, 46.0, 0.16, 1.0, 11u);
+  c += starLayer(d, 110.0, 0.14 + 0.25 * band, 0.35, 23u);
+  c += starLayer(d, 260.0, 0.03 + 0.45 * band * (1.0 - dust), 0.14, 37u);
+  return c;
+}
+#endif
+float gridLine(float v, float spacing, float w) {
+  float d = abs(fract(v / spacing + 0.5) - 0.5) * spacing;
+  return 1.0 - smoothstep(w * 0.5, w, d);
+}
+#ifndef PROBE
+// 15° latitude/longitude grid on a sphere, screen-space line width (call from uniform control flow).
+float sphereGridAA(vec3 dir) {
+  float lat = asin(clamp(dot(dir, uDiskN), -1.0, 1.0));
+  float lon = atan(dot(dir, uDiskY), dot(dir, uDiskX));
+  float fl = fwidth(lat);
+  float fn = min(fwidth(lon), fwidth(mod(lon + TAU, TAU)));
+  const float G = 0.2617994;
+  float dl = abs(fract(lat / G + 0.5) - 0.5) * G;
+  float dn = abs(fract(lon / G + 0.5) - 0.5) * G;
+  // Fade lines out once fewer than ~4 pixels separate them (lensing compresses the far hemisphere near the shadow edge).
+  float a = (1.0 - smoothstep(0.5 * fl, 1.4 * fl + 1e-5, dl)) * (1.0 - smoothstep(0.12 * G, 0.3 * G, fl));
+  float b = (1.0 - smoothstep(0.5 * fn, 1.4 * fn + 1e-5, dn)) * (1.0 - smoothstep(0.12 * G, 0.3 * G, fn * cos(lat)));
+  return max(a, b);
+}
+#endif
+#ifndef PROBE
+// Disk-plane grid with screen-space line widths. Must be called from uniform control flow (uses derivatives).
+void diskGridAA(vec4 pc, inout vec4 ovl) {
+  float fr = fwidth(pc.x);
+  float fa = min(fwidth(pc.y), fwidth(mod(pc.y + TAU, TAU)));
+  if (pc.w < 0.0 || fr > 1.5 || fa > 0.5) return;
+  fr = max(fr, 1e-4); fa = max(fa, 1e-5);
+  float dRing = abs(fract(pc.x / 2.0 + 0.5) - 0.5) * 2.0;
+  float dSpoke = abs(fract(pc.y / 0.5235988 + 0.5) - 0.5) * 0.5235988;
+  float grid = max((1.0 - smoothstep(0.5 * fr, 1.5 * fr, dRing)) * (1.0 - smoothstep(0.25, 0.6, fr)),
+                   (1.0 - smoothstep(0.5 * fa, 1.5 * fa, dSpoke)) * (1.0 - smoothstep(0.065, 0.16, fa)));
+  float dSp = min(min(abs(pc.x - uDiskIn), abs(pc.x - uDiskOut)), abs(pc.x - uIsco));
+  float special = 1.0 - smoothstep(0.8 * fr, 2.0 * fr, dSp);
+  vec4 o = vec4(0.0);
+  float a = special * 0.95 * pc.z; o.rgb += a * vec3(1.0, 0.82, 0.25); o.a += a;
+  float b = grid * 0.65 * pc.z * (1.0 - o.a); o.rgb += b * vec3(0.35, 1.0, 0.62); o.a += b;
+  ovl.rgb += (1.0 - ovl.a) * o.rgb; ovl.a += (1.0 - ovl.a) * o.a;
+}
+#endif
+void addOvl(inout vec4 o, vec3 c, float a) {
+  a = clamp(a, 0.0, 1.0);
+  o.rgb += (1.0 - o.a) * a * c;
+  o.a += (1.0 - o.a) * a;
+}
+
+void main() {
+#ifdef PROBE
+  vec2 fc = uProbePx;
+  vec2 jit = vec2(0.0);
+  float sj = 0.5;
+#else
+  vec2 fc = gl_FragCoord.xy;
+  vec2 jit = uJitter;
+  float sj = hash31(ivec3(ivec2(fc), uFrame & 65535));
+#endif
+  vec2 uv = ((fc + jit) / uRes) * 2.0 - 1.0;
+  uv.x -= uCenterX;
+  uv.x *= uRes.x / uRes.y;
+  vec3 d = normalize(uCamFwd + uTanHalfFov * (uv.x * uCamRight + uv.y * uCamUp));
+  vec3 x = uCamPos;
+  vec3 v = initialVelocity(x, d);
+  vec3 col = vec3(0.0);
+  float T = 1.0;
+  float rmin = length(x);
+  float defl = 0.0;
+  int fate = FATE_STEPLIMIT;
+  int steps = 0;
+  int crossings = 0;
+  vec4 hitGeo = vec4(-1.0, 0.0, 0.0, 0.0);
+  vec4 em = vec4(-1.0, -1.0, 0.0, 0.0);
+  float emW = 0.0;
+  vec4 ovl = vec4(0.0);
+  vec3 psPoint = vec3(0.0);
+  bool psHit = false;
+  float psT = 1.0;
+  float zPrev = dot(x, uDiskN);
+  vec4 pc0 = vec4(-1.0), pc1 = vec4(-1.0);
+  for (int i = 0; i < 3000; i++) {
+    if (i >= uMaxSteps) break;
+    float r = length(x);
+    if (r < uHorizonR) { fate = FATE_CAPTURED; break; }
+    if (r > uEscapeR && dot(x, v) > 0.0) { fate = FATE_ESCAPED; break; }
+    steps++;
+    float h = uStep * r / length(v);
+    vec3 k1v = accel(x, v);
+    vec3 k2x = v + 0.5 * h * k1v;
+    vec3 k2v = accel(x + 0.5 * h * v, k2x);
+    vec3 k3x = v + 0.5 * h * k2v;
+    vec3 k3v = accel(x + 0.5 * h * k2x, k3x);
+    vec3 k4x = v + h * k3v;
+    vec3 k4v = accel(x + h * k3x, k4x);
+    vec3 xn = x + (h / 6.0) * (v + 2.0 * k2x + 2.0 * k3x + k4x);
+    vec3 vn = v + (h / 6.0) * (k1v + 2.0 * k2v + 2.0 * k3v + k4v);
+    if (!(dot(xn, xn) < 1e12) || !(dot(vn, vn) < 1e12)) { fate = FATE_NUMERR; break; }
+    float Tb = T;
+    diskSegment(x, xn, 0.5 * (v + vn), sj, crossings, col, T, em, emW, hitGeo);
+    float zn = dot(xn, uDiskN);
+    if ((zPrev < 0.0) != (zn < 0.0)) {
+      float tt = zPrev / (zPrev - zn);
+      vec3 pc = mix(x, xn, tt);
+      float cx = dot(pc, uDiskX), cy = dot(pc, uDiskY);
+      float rr = length(vec2(cx, cy));
+      float ph = atan(cy, cx);
+      if (hitGeo.x < 0.0 && rr >= uDiskIn && rr <= uDiskOut) hitGeo = vec4(rr, ph, float(crossings), 0.0);
+      if (rr > uHorizonR && rr < uDiskOut * 1.6) {
+        if (pc0.w < 0.0) pc0 = vec4(rr, ph, Tb, 1.0);
+        else if (pc1.w < 0.0) pc1 = vec4(rr, ph, Tb, 1.0);
+      }
+      crossings++;
+    }
+    defl += atan(length(cross(v, vn)), dot(v, vn));
+    float rn = length(xn);
+    if (!psHit && r >= uPhotonR && rn < uPhotonR) { psHit = true; psPoint = mix(x, xn, (r - uPhotonR) / (r - rn)); psT = T; }
+    x = xn; v = vn; zPrev = zn;
+    rmin = min(rmin, rn);
+    if (T < 0.004) { fate = FATE_ABSORBED; break; }
+  }
+  hitGeo.w = float(crossings);
+  vec3 dirOut = normalize(v);
+  if (fate == FATE_ESCAPED) {
+    float R = length(x);
+    float b = length(cross(x, v));
+    float s0 = sqrt(max(R * R - b * b, 0.0));
+    float dlt = 2.0 * uMass / max(b, 1e-4) * (1.0 - s0 / R);
+    vec3 perp = x - dot(x, dirOut) * dirOut;
+    float pl = length(perp);
+    if (pl > 1e-6) { dirOut = normalize(dirOut * cos(dlt) - (perp / pl) * sin(dlt)); defl += dlt; }
+  }
+#ifndef PROBE
+  if ((uOverlay & 1) != 0) {
+    float gh = sphereGridAA(normalize(x));
+    if (fate == FATE_CAPTURED) { addOvl(ovl, vec3(1.0, 0.32, 0.24), gh * 0.85 * T); addOvl(ovl, vec3(0.22, 0.02, 0.03), 0.6 * T); }
+  }
+  if ((uOverlay & 2) != 0) {
+    float gp = sphereGridAA(normalize(psHit ? psPoint : x));
+    if (fate == FATE_ESCAPED && defl > PI) addOvl(ovl, vec3(0.35, 0.9, 1.0), 0.8 * T);
+    if (psHit) addOvl(ovl, vec3(0.3, 0.85, 1.0), gp * 0.75 * psT);
+  }
+#endif
+#ifdef PROBE
+  o0 = vec4(float(steps), float(fate), rmin, defl);
+  o1 = hitGeo;
+  o2 = em;
+  o3 = vec4(col, T);
+#else
+  if ((uOverlay & 4) != 0) { diskGridAA(pc0, ovl); diskGridAA(pc1, ovl); }
+  if ((uOverlay & 8) != 0 && fate == FATE_ESCAPED) {
+    float wg = max(0.004, uPixAngle * 1.5);
+    float lat = asin(clamp(dirOut.y, -1.0, 1.0));
+    float lon = atan(dirOut.z, dirOut.x);
+    float gl = max(gridLine(lat, 0.2617994, wg), gridLine(lon, 0.2617994, wg / max(cos(lat), 0.15)));
+    addOvl(ovl, vec3(0.55, 0.75, 1.0), gl * 0.55 * T);
+  }
+  vec3 outc;
+  if (uMode == 0) {
+    if (fate == FATE_ESCAPED) col += T * background(dirOut);
+    outc = col * (1.0 - ovl.a) + ovl.rgb * 1.6;
+  } else {
+    vec3 dc = vec3(0.0);
+    if (uMode == 1) {
+      dc = turbo(sqrt(float(steps) / float(uMaxSteps)));
+    } else if (uMode == 2) {
+      dc = turbo(log(1.0 + defl * 100.0) / log(1.0 + 400.0 * PI));
+      if (fate == FATE_CAPTURED) dc *= 0.4;
+    } else if (uMode == 3 || uMode == 4) {
+      if (em.x > 0.0) {
+        float gv = uMode == 3 ? em.x : em.y;
+        dc = diverge(log2(gv) / (uMode == 3 ? 1.5 : 1.0)) * (0.5 + 0.5 * clamp(emW * 4.0, 0.0, 1.0));
+      } else dc = fate == FATE_CAPTURED ? vec3(0.0) : vec3(0.06, 0.065, 0.075);
+    } else if (uMode == 5) {
+      if (hitGeo.x > 0.0) {
+        float band = mod(floor(hitGeo.x), 2.0) < 0.5 ? 1.0 : 0.66;
+        dc = hsv2rgb(vec3(hitGeo.y / TAU + 0.5, 0.75, band));
+        if (hitGeo.z > 0.5) dc = mix(dc, vec3(dot(dc, vec3(0.3333))), 0.45) * 0.55;
+      } else dc = fate == FATE_CAPTURED ? vec3(0.0) : vec3(0.05, 0.055, 0.065);
+    } else if (uMode == 6) {
+      if (fate == FATE_CAPTURED) dc = vec3(0.0);
+      else {
+        float t = clamp(log(max(rmin / uMass, 1.0)) / log(100.0), 0.0, 1.0);
+        dc = turbo(1.0 - t);
+        if (abs(rmin - uPhotonR) < 0.03 * uPhotonR) dc = vec3(1.0);
+        if (abs(rmin - uIsco) < 0.02 * uIsco) dc *= 0.25;
+      }
+    } else {
+      if (fate == FATE_ESCAPED) dc = vec3(0.18, 0.42, 0.85);
+      else if (fate == FATE_CAPTURED) dc = vec3(0.30, 0.03, 0.06);
+      else if (fate == FATE_ABSORBED) dc = vec3(0.98, 0.62, 0.16);
+      else if (fate == FATE_STEPLIMIT) dc = vec3(0.95, 0.15, 0.90);
+      else dc = vec3(1.0, 1.0, 0.0);
+      dc *= 1.0 - 0.13 * float(min(crossings, 4));
+    }
+    outc = dc * (1.0 - ovl.a) + ovl.rgb;
+  }
+  if (!(dot(outc, outc) < 1e20)) outc = vec3(0.0);
+  // 8-bit fallback: invertible perceptual encoding keeps precision in the dark sky.
+  vec3 encd = uLdr == 1 ? sqrt(outc / (1.0 + outc)) : outc;
+  vec4 cur = vec4(encd, float(steps) * uAlphaScale);
+  vec4 hist = texelFetch(uHistory, ivec2(gl_FragCoord.xy), 0);
+  fragColor = uHistW > 0.0 ? mix(cur, hist, uHistW) : cur;
+#endif
+}`;
+
+const PREFILTER_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc; uniform vec2 uTexel; uniform float uThreshold; uniform float uKnee; uniform float uScale; uniform float uEncode;
+in vec2 vUv; out vec4 o;
+float luma(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+void main(){
+  vec3 a = texture(uSrc, vUv + uTexel * vec2(-1.0, -1.0)).rgb * uScale;
+  vec3 b = texture(uSrc, vUv + uTexel * vec2( 1.0, -1.0)).rgb * uScale;
+  vec3 c = texture(uSrc, vUv + uTexel * vec2(-1.0,  1.0)).rgb * uScale;
+  vec3 d = texture(uSrc, vUv + uTexel * vec2( 1.0,  1.0)).rgb * uScale;
+  float wa = 1.0 / (1.0 + luma(a)), wb = 1.0 / (1.0 + luma(b)), wc = 1.0 / (1.0 + luma(c)), wd = 1.0 / (1.0 + luma(d));
+  vec3 m = (a * wa + b * wb + c * wc + d * wd) / (wa + wb + wc + wd);
+  float br = max(m.r, max(m.g, m.b));
+  float soft = clamp(br - uThreshold + uKnee, 0.0, 2.0 * uKnee);
+  soft = soft * soft / (4.0 * uKnee + 1e-5);
+  float contrib = max(soft, br - uThreshold) / max(br, 1e-5);
+  o = vec4(m * contrib * uEncode, 1.0);
+}`;
+const DOWN_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc; uniform vec2 uTexel;
+in vec2 vUv; out vec4 o;
+void main(){
+  vec3 s = texture(uSrc, vUv).rgb * 4.0;
+  s += texture(uSrc, vUv - uTexel).rgb;
+  s += texture(uSrc, vUv + uTexel).rgb;
+  s += texture(uSrc, vUv + vec2(uTexel.x, -uTexel.y)).rgb;
+  s += texture(uSrc, vUv - vec2(uTexel.x, -uTexel.y)).rgb;
+  o = vec4(s / 8.0, 1.0);
+}`;
+const UP_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc; uniform vec2 uTexel; uniform float uWeight;
+in vec2 vUv; out vec4 o;
+void main(){
+  vec2 t = uTexel;
+  vec3 s = texture(uSrc, vUv + vec2(-2.0 * t.x, 0.0)).rgb;
+  s += texture(uSrc, vUv + vec2(-t.x, t.y)).rgb * 2.0;
+  s += texture(uSrc, vUv + vec2(0.0, 2.0 * t.y)).rgb;
+  s += texture(uSrc, vUv + vec2(t.x, t.y)).rgb * 2.0;
+  s += texture(uSrc, vUv + vec2(2.0 * t.x, 0.0)).rgb;
+  s += texture(uSrc, vUv + vec2(t.x, -t.y)).rgb * 2.0;
+  s += texture(uSrc, vUv + vec2(0.0, -2.0 * t.y)).rgb;
+  s += texture(uSrc, vUv + vec2(-t.x, -t.y)).rgb * 2.0;
+  o = vec4(s / 12.0 * uWeight, 1.0);
+}`;
+const COMPOSITE_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc; uniform sampler2D uBloom;
+uniform float uExposure; uniform float uContrast; uniform float uBloomStr; uniform int uLdr; uniform int uMode; uniform int uUseBloom;
+uniform vec2 uOutRes;
+in vec2 vUv; out vec4 o;
+vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+vec3 toSRGB(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+void main(){
+  vec3 c = texture(uSrc, vUv).rgb;
+  if (uLdr == 1) { vec3 y = c * c; c = y / max(1.0 - y, 1e-3); }
+  if (uMode == 0) {
+    c *= exp2(uExposure);
+    if (uUseBloom == 1) c += texture(uBloom, vUv).rgb * uBloomStr;
+    c = aces(c * 0.8);
+    c = toSRGB(c);
+    c = clamp(0.5 + (c - 0.5) * uContrast, 0.0, 1.0);
+    vec2 q = vUv - 0.5;
+    c *= 1.0 - 0.28 * dot(q, q) * 1.6;
+  }
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  c += (n - 0.5) / 255.0;
+  o = vec4(c, 1.0);
+}`;
+const STATS_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc; uniform float uInv; uniform float uMax; uniform vec2 uGrid;
+out vec4 o;
+void main(){
+  vec2 cell = floor(gl_FragCoord.xy);
+  float s = 0.0, mx = 0.0;
+  for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+    vec2 uv = (cell + (vec2(float(i), float(j)) + 0.5) / 4.0) / uGrid;
+    float a = texture(uSrc, uv).a * uInv;
+    s += a; mx = max(mx, a);
+  }
+  float v = clamp(s / 16.0 / uMax, 0.0, 0.99999);
+  float m = clamp(mx / uMax, 0.0, 0.99999);
+  o = vec4(floor(v * 255.0) / 255.0, fract(v * 255.0), floor(m * 255.0) / 255.0, fract(m * 255.0));
+}`;
+
+/* =====================================================================
+   Helpers
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const DEG = Math.PI / 180;
+const { dot, cross, len, norm } = Phys;
+const qs = new URLSearchParams(location.search);
+const SIM = new Set((qs.get('simulate') || '').split(',').filter(Boolean));
+const fmt = (v, d = 2) => (Math.abs(v) >= 1e4 ? v.toExponential(2) : v.toFixed(d));
+
+function turboJS(t) {
+  t = clamp(t, 0, 1);
+  const p = (c) => c[0] + t * (c[1] + t * (c[2] + t * (c[3] + t * (c[4] + t * c[5]))));
+  return [p([0.13572138, 4.61539260, -42.66032258, 132.13108234, -152.94239396, 59.28637943]),
+          p([0.09140261, 2.19418839, 4.84296658, -14.18503333, 4.27729857, 2.82956604]),
+          p([0.10667330, 12.64194608, -60.58204836, 110.36276771, -89.90310912, 27.34824973])].map(x => clamp(x, 0, 1));
+}
+function divergeJS(t) {
+  t = clamp(t, -1, 1);
+  const mid = [0.92, 0.91, 0.87], c1 = t > 0 ? [0.12, 0.42, 0.98] : [0.90, 0.16, 0.10], c2 = t > 0 ? [0.05, 0.10, 0.45] : [0.35, 0.02, 0.03];
+  const a = Math.abs(t);
+  return a < 0.6 ? mid.map((m, i) => m + (c1[i] - m) * a / 0.6) : c1.map((m, i) => m + (c2[i] - m) * (a - 0.6) / 0.4);
+}
+const rgbCss = (c) => `rgb(${c.map(x => Math.round(clamp(x, 0, 1) * 255)).join(',')})`;
+function gradientCss(fn, n = 12) { const s = []; for (let i = 0; i <= n; i++) s.push(`${rgbCss(fn(i / n))} ${(i / n * 100).toFixed(1)}%`); return `linear-gradient(90deg,${s.join(',')})`; }
+
+let toastTimer = 0;
+let uiHidden = false;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1600); }
+
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function fatal(title, htmlBody, details) {
+  const f = $('#fatal');
+  f.innerHTML = `<div class="card"><h2>${escapeHtml(title)}</h2>${htmlBody}
+    ${details ? `<details><summary>Technical details</summary><pre>${escapeHtml(details)}</pre></details>` : ''}
+    <div class="btnrow" style="margin-top:12px"><button class="btn primary" id="fatalReload">Reload</button>
+    <button class="btn" id="fatalSafe">Retry in safe mode (Low quality)</button></div></div>`;
+  f.classList.remove('hidden');
+  $('#panel').classList.add('hidden'); $('#hud').classList.add('hidden'); $('#panelToggle').classList.add('hidden');
+  $('#fatalReload').onclick = () => location.reload();
+  $('#fatalSafe').onclick = () => { const u = new URL(location.href); u.searchParams.set('safe', '1'); u.searchParams.delete('simulate'); location.href = u.toString(); };
+  window.__bh && (window.__bh.fatal = { title, details });
+}
+
+/* =====================================================================
+   Parameters & UI schema
+   ===================================================================== */
+const QUALITY = {
+  low:    { label: 'Low',    renderScale: 0.5,  dprCap: 1,   stepSize: 0.11, maxSteps: 220,  diskSamples: 2,  octaves: 2, bloomLevels: 4 },
+  medium: { label: 'Medium', renderScale: 0.75, dprCap: 1.5, stepSize: 0.075, maxSteps: 380, diskSamples: 4,  octaves: 3, bloomLevels: 5 },
+  high:   { label: 'High',   renderScale: 1.0,  dprCap: 2,   stepSize: 0.05, maxSteps: 600,  diskSamples: 6,  octaves: 4, bloomLevels: 6 },
+  ultra:  { label: 'Ultra',  renderScale: 1.0,  dprCap: 3,   stepSize: 0.03, maxSteps: 1200, diskSamples: 10, octaves: 5, bloomLevels: 6 },
+};
+const MODES = [
+  'Cinematic render', 'Ray step count', 'Deflection (total bending)', 'Redshift factor g', 'Doppler factor δ (kinematic)',
+  'Disk hit coordinates', 'Periapsis distance r_min', 'Ray fate classification'];
+const DEFAULTS = {
+  mode: 0, ovlHorizon: false, ovlPhoton: false, ovlDisk: false, ovlSky: false, ovlPath: true, ovlGeom: true, hud: true,
+  autoOrbit: false, orbitSpeed: 6, fov: 50,
+  paused: false, timeSpeed: 6, time: 40,
+  mass: 1, spin: 0.6, horizonScale: 1,
+  diskIn: +Phys.iscoRadius(1, 0.6).toFixed(2), diskOut: 16, diskH: 0.02, diskTilt: 0, diskTemp: 4800, turb: 0.7, density: 2.5,
+  doppler: 1, redshift: 1,
+  exposure: 0, contrast: 1.06, bloom: 0.45,
+  stepSize: 0.05, maxSteps: 600,
+  quality: 'high', renderScale: 1, dprCap: 2, adaptive: true, targetFps: 50, accumulate: true,
+  diskSamples: 6, octaves: 4, bloomLevels: 6,
+};
+const P = Object.assign({}, DEFAULTS);
+if (qs.get('safe') === '1') Object.assign(P, QUALITY.low, { quality: 'low', bloom: 0 });
+
+const SECTIONS = [
+  ['view', 'View & diagnostics', true], ['camera', 'Camera', true], ['sim', 'Simulation', true], ['bh', 'Black hole', false],
+  ['disk', 'Accretion disk', false], ['rel', 'Relativistic shifts', false], ['image', 'Image', false],
+  ['integ', 'Ray integration', false], ['perf', 'Performance & quality', false]];
+const CTRL = [
+  { k: 'mode', sec: 'view', type: 'select', label: 'Visualization mode', options: MODES.map((m, i) => [i, m]) },
+  { k: 'ovlHorizon', sec: 'view', type: 'check', label: 'Event horizon (lensed grid + outline)' },
+  { k: 'ovlPhoton', sec: 'view', type: 'check', label: 'Photon sphere & photon ring' },
+  { k: 'ovlDisk', sec: 'view', type: 'check', label: 'Disk plane grid (lensed)' },
+  { k: 'ovlSky', sec: 'view', type: 'check', label: 'Celestial grid (lensed sky)' },
+  { k: 'ovlPath', sec: 'view', type: 'check', label: 'Selected ray path' },
+  { k: 'ovlGeom', sec: 'view', type: 'check', label: 'Unlensed geometric outlines' },
+  { k: 'hud', sec: 'view', type: 'check', label: 'Performance overlay' },
+
+  { k: 'fov', sec: 'camera', label: 'Field of view (shorter axis)', min: 15, max: 100, step: 1, unit: '°', f: v => v.toFixed(0) + '°' },
+  { k: 'autoOrbit', sec: 'camera', type: 'check', label: 'Auto-orbit' },
+  { k: 'orbitSpeed', sec: 'camera', label: 'Orbit speed', min: -30, max: 30, step: 0.5, f: v => v.toFixed(1) + '°/s' },
+
+  { k: 'timeSpeed', sec: 'sim', label: 'Time rate', min: -40, max: 40, step: 0.5, f: v => v.toFixed(1) + ' t_g/s', hint: 't_g = GM₀/c³; negative runs the disk backwards' },
+  { k: 'time', sec: 'sim', label: 'Simulation time', min: 0, max: 5000, step: 1, f: v => v.toFixed(1) + ' t_g' },
+
+  { k: 'mass', sec: 'bh', label: 'Mass M (lensing strength)', min: 0.3, max: 3, step: 0.01, f: v => v.toFixed(2) + ' M₀' },
+  { k: 'spin', sec: 'bh', label: 'Spin χ = a/M (approximation)', min: 0, max: 0.99, step: 0.01, f: v => v.toFixed(2) },
+  { k: 'horizonScale', sec: 'bh', label: 'Event-horizon size', min: 0.5, max: 2.5, step: 0.01, f: v => '×' + v.toFixed(2), hint: '×1 = Kerr r₊. Other values are deliberately non-physical.' },
+
+  { k: 'diskIn', sec: 'disk', label: 'Inner radius', min: 1.0, max: 30, step: 0.05, f: v => v.toFixed(2) + ' r_g' },
+  { k: 'diskOut', sec: 'disk', label: 'Outer radius', min: 3, max: 80, step: 0.5, f: v => v.toFixed(1) + ' r_g' },
+  { k: 'diskH', sec: 'disk', label: 'Thickness H/r', min: 0.005, max: 0.3, step: 0.005, f: v => v.toFixed(3) },
+  { k: 'diskTilt', sec: 'disk', label: 'Inclination (tilt of disk + spin axis)', min: -90, max: 90, step: 0.5, f: v => v.toFixed(1) + '°' },
+  { k: 'diskTemp', sec: 'disk', label: 'Peak temperature', min: 1500, max: 30000, step: 100, f: v => v.toFixed(0) + ' K' },
+  { k: 'turb', sec: 'disk', label: 'Turbulence', min: 0, max: 1, step: 0.01, f: v => v.toFixed(2) },
+  { k: 'density', sec: 'disk', label: 'Optical depth τ', min: 0.05, max: 10, step: 0.05, f: v => v.toFixed(2) },
+
+  { k: 'doppler', sec: 'rel', label: 'Doppler strength', min: 0, max: 2, step: 0.01, f: v => v.toFixed(2), hint: '1 = physical kinematic shift & beaming (I ∝ g⁴)' },
+  { k: 'redshift', sec: 'rel', label: 'Gravitational redshift strength', min: 0, max: 2, step: 0.01, f: v => v.toFixed(2) },
+
+  { k: 'exposure', sec: 'image', label: 'Exposure', min: -4, max: 4, step: 0.05, f: v => (v >= 0 ? '+' : '') + v.toFixed(2) + ' EV' },
+  { k: 'contrast', sec: 'image', label: 'Contrast', min: 0.5, max: 2, step: 0.01, f: v => v.toFixed(2) },
+  { k: 'bloom', sec: 'image', label: 'Bloom', min: 0, max: 2, step: 0.01, f: v => v.toFixed(2) },
+
+  { k: 'stepSize', sec: 'integ', label: 'Ray step size (Δs / r)', min: 0.01, max: 0.3, step: 0.005, f: v => v.toFixed(3), hint: 'Adaptive RK4 step: Δs = k · r' },
+  { k: 'maxSteps', sec: 'integ', label: 'Max integration steps', min: 16, max: 3000, step: 1, f: v => v.toFixed(0) },
+
+  { k: 'quality', sec: 'perf', type: 'select', label: 'Quality preset', options: [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra'], ['custom', 'Custom']] },
+  { k: 'renderScale', sec: 'perf', label: 'Render resolution', min: 0.25, max: 1, step: 0.05, f: v => (v * 100).toFixed(0) + '%' },
+  { k: 'dprCap', sec: 'perf', type: 'select', label: 'High-DPI pixel ratio cap', options: [[1, '1× (fast)'], [1.5, '1.5×'], [2, '2×'], [3, '3× (native on most)']] },
+  { k: 'adaptive', sec: 'perf', type: 'check', label: 'Adaptive resolution' },
+  { k: 'targetFps', sec: 'perf', type: 'select', label: 'Adaptive target', options: [[30, '30 fps'], [45, '45 fps'], [50, '50 fps'], [60, '60 fps']] },
+  { k: 'accumulate', sec: 'perf', type: 'check', label: 'Temporal accumulation (jittered AA)' },
+];
+const CTRL_BY_KEY = Object.fromEntries(CTRL.map(c => [c.k, c]));
+
+/* =====================================================================
+   Camera
+   ===================================================================== */
+const PRESETS = [
+  { name: 'Gargantua', key: '1', yaw: -8, pitch: 6.5, dist: 30, fov: 48, target: [0, 0, 0] },
+  { name: 'Face-on', key: '2', yaw: 0, pitch: 80, dist: 50, fov: 42, target: [0, 0, 0] },
+  { name: 'Edge-on', key: '3', yaw: 15, pitch: 0.6, dist: 36, fov: 40, target: [0, 0, 0] },
+  { name: 'Doppler', key: '4', yaw: -38, pitch: 17, dist: 21, fov: 62, target: [0, 0, 0] },
+  { name: 'Photon ring', key: '5', yaw: 0, pitch: 3, dist: 20, fov: 23, target: [0, 4.4, 0] },
+  { name: 'Wide lens', key: '6', yaw: 172, pitch: -8, dist: 70, fov: 38, target: [0, 0, 0] },
+];
+const camCur = { yaw: PRESETS[0].yaw, pitch: PRESETS[0].pitch, dist: PRESETS[0].dist, fov: PRESETS[0].fov, tx: 0, ty: 0, tz: 0, cx: 0 };
+const camGoal = Object.assign({}, camCur);
+P.fov = camCur.fov;
+let camRate = 9;
+let tour = { on: false, idx: 0, t: 0 };
+const cam = { pos: [0, 0, 30], fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0], tanHalf: 0.45, r: 30, cx: 0 };
+
+function minCamR() { return Phys.horizonRadius(P.mass, P.spin) * P.horizonScale * 1.35 + 0.6; }
+function computeCamera() {
+  const cp = Math.cos(camCur.pitch * DEG), sp = Math.sin(camCur.pitch * DEG), cy = Math.cos(camCur.yaw * DEG), sy = Math.sin(camCur.yaw * DEG);
+  const off = [cp * sy, sp, cp * cy];
+  const t = [camCur.tx, camCur.ty, camCur.tz];
+  let pos = [t[0] + off[0] * camCur.dist, t[1] + off[1] * camCur.dist, t[2] + off[2] * camCur.dist];
+  const rmin = minCamR();
+  const pr = len(pos);
+  if (pr < rmin) pos = pos.map(c => c * rmin / Math.max(pr, 1e-6));
+  const fwd = norm([t[0] - pos[0], t[1] - pos[1], t[2] - pos[2]]);
+  let right = cross(fwd, [0, 1, 0]);
+  if (len(right) < 1e-5) right = [1, 0, 0];
+  right = norm(right);
+  const up = cross(right, fwd);
+  cam.pos = pos; cam.fwd = fwd; cam.right = right; cam.up = up; // FOV applies to the shorter screen axis, so portrait phones keep the whole disk in frame.
+  const rc = canvas.getBoundingClientRect(), aspect = rc.height > 0 ? rc.width / rc.height : 1;
+  cam.tanHalf = Math.tan(camCur.fov * DEG / 2) * Math.max(1, 1 / aspect); cam.r = len(pos); cam.cx = camCur.cx;
+}
+// Shift the optical centre so the black hole sits in the part of the canvas not covered by the side panel.
+function updateViewShift() {
+  const pr = $('#panel');
+  const W = canvas.getBoundingClientRect().width || window.innerWidth;
+  const side = !pr.classList.contains('hidden') && window.innerWidth > 760;
+  camGoal.cx = side ? clamp(pr.getBoundingClientRect().left / W - 1, -0.6, 0) : 0;
+}
+function applyPreset(i, quiet) {
+  const p = PRESETS[i];
+  let y = p.yaw;
+  while (y - camGoal.yaw > 180) y -= 360;
+  while (y - camGoal.yaw < -180) y += 360;
+  Object.assign(camGoal, { yaw: y, pitch: p.pitch, dist: p.dist, fov: p.fov, tx: p.target[0], ty: p.target[1], tz: p.target[2] });
+  P.fov = p.fov; syncControl('fov');
+  if (!quiet) { camRate = 3.2; toast('Camera preset: ' + p.name); }
+  document.querySelectorAll('.presets .btn').forEach((b, j) => b.classList.toggle('on', j === i));
+}
+function resetCamera() { stopTour(); applyPreset(0, true); camRate = 4; toast('Camera reset'); }
+function startTour() { tour = { on: true, idx: 0, t: 0 }; applyPreset(0, true); camRate = 0.9; updateTourBtn(); toast('Cinematic tour — interact to stop'); }
+function stopTour() { if (!tour.on) return; tour.on = false; camRate = 9; updateTourBtn(); }
+function updateTourBtn() { const b = $('#tourBtn'); if (b) { b.classList.toggle('on', tour.on); b.setAttribute('aria-pressed', tour.on); b.textContent = tour.on ? '■ Stop tour' : '▶ Cinematic tour'; } }
+function updateCamera(dt) {
+  if (tour.on) {
+    tour.t += dt;
+    camGoal.yaw += 2.2 * dt;
+    if (tour.t > 9) { tour.t = 0; tour.idx = (tour.idx + 1) % PRESETS.length; applyPreset(tour.idx, true); camRate = 0.9; }
+  }
+  if (P.autoOrbit) camGoal.yaw += P.orbitSpeed * dt;
+  camGoal.fov = P.fov;
+  const k = 1 - Math.exp(-dt * camRate);
+  for (const key of ['yaw', 'pitch', 'dist', 'fov', 'tx', 'ty', 'tz', 'cx']) {
+    const d = camGoal[key] - camCur[key];
+    camCur[key] = Math.abs(d) < 1e-5 ? camGoal[key] : camCur[key] + d * k;
+  }
+  if (!tour.on && camRate < 9 && Math.abs(camGoal.yaw - camCur.yaw) + Math.abs(camGoal.dist - camCur.dist) + Math.abs(camGoal.pitch - camCur.pitch) < 0.05) camRate = 9;
+  computeCamera();
+}
+function project(p, W, H) {
+  const rel = [p[0] - cam.pos[0], p[1] - cam.pos[1], p[2] - cam.pos[2]];
+  const z = dot(rel, cam.fwd);
+  if (z < 1e-3) return null;
+  const aspect = W / H;
+  const ux = dot(rel, cam.right) / (z * cam.tanHalf), uy = dot(rel, cam.up) / (z * cam.tanHalf);
+  return [(ux / aspect + cam.cx + 1) * 0.5 * W, (1 - uy) * 0.5 * H, z];
+}
+
+/* =====================================================================
+   Derived physics parameters (single source for GPU uniforms + CPU tracer)
+   ===================================================================== */
+function diskBasis() {
+  const i = P.diskTilt * DEG;
+  const n = [0, Math.cos(i), Math.sin(i)];
+  const X = [1, 0, 0];
+  const Y = cross(n, X);
+  return { n, X, Y };
+}
+function physParams() {
+  const M = P.mass, chi = P.spin;
+  const rh = Phys.horizonRadius(M, chi) * P.horizonScale;
+  const { n, X, Y } = diskBasis();
+  const camR = cam.r;
+  return {
+    M, spin: chi, rh, photonR: 3 * M, isco: Phys.iscoRadius(M, chi),
+    diskIn: P.diskIn, diskOut: Math.max(P.diskOut, P.diskIn + 0.5), diskH: P.diskH, diskN: n, diskX: X, diskY: Y,
+    temp: P.diskTemp, turb: P.turb, density: P.density, bright: 1.15, doppler: P.doppler, redshift: P.redshift,
+    camG: 1 / Math.sqrt(Math.max(1 - 2 * M / camR, 0.02)),
+    time: P.time, step: P.stepSize, maxSteps: Math.round(P.maxSteps),
+    escapeR: Math.max(camR * 1.15, P.diskOut * 1.15, 25 * M),
+    diskSamples: P.diskSamples, octaves: P.octaves,
+  };
+}
+
+/* =====================================================================
+   WebGL setup
+   ===================================================================== */
+const canvas = $('#gl');
+const ovlCanvas = $('#ovl');
+const octx = ovlCanvas.getContext('2d');
+let gl = null;
+let caps = { hdr: true, probe: true, renderer: 'unknown' };
+let progs = {};
+let targets = { accum: [], bloom: [], stats: null, probe: null };
+let curAccum = 0;
+let iw = 0, ih = 0, cw = 0, ch = 0, dpr = 1;
+let adaptScale = 1;
+let accumN = 0;
+let frameNo = 0;
+let dirty = true;
+let forceReset = true;   // history invalid: params changed, targets recreated, or context restored
+let contextLost = false;
+let running = false;
+let lastStats = { avg: 0, max: 0, t: 0 };
+let fpsState = { frames: 0, t0: performance.now(), fps: 0, ms: 0, emaMs: 16 };
+let lastAdapt = 0, lastDown = 0, lowCount = 0, maxDtWin = 0, warmupUntil = 0;
+let idle = false;
+let shaderStatus = 'pending';
+const glErrors = [];
+
+class ShaderError extends Error { constructor(name, log, src) { super(`${name}: ${log}`); this.name = 'ShaderError'; this.stage = name; this.log = log; this.src = src; } }
+
+function compileShader(type, src, name) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS) && !gl.isContextLost()) {
+    const log = gl.getShaderInfoLog(sh) || 'unknown compile error';
+    const lines = src.split('\n');
+    const ctx = [];
+    const re = /ERROR:\s*\d+:(\d+)/g; let m; const seen = new Set();
+    while ((m = re.exec(log)) && ctx.length < 20) {
+      const ln = +m[1]; if (seen.has(ln)) continue; seen.add(ln);
+      for (let i = Math.max(1, ln - 2); i <= Math.min(lines.length, ln + 1); i++) ctx.push(`${String(i).padStart(4)}${i === ln ? ' >' : '  '} ${lines[i - 1]}`);
+      ctx.push('');
+    }
+    throw new ShaderError(name, log, ctx.join('\n'));
+  }
+  return sh;
+}
+function makeProgram(fsSrc, name, defines = '') {
+  let src = fsSrc.replace('//__DEFINES__', defines);
+  if (SIM.has('shadererror') && name === 'ray') src = src.replace('float h = uStep * r / length(v);', 'float h = uStep * r / length(v) // simulated missing semicolon');
+  const vs = compileShader(gl.VERTEX_SHADER, VS, name + '.vs');
+  const fs = compileShader(gl.FRAGMENT_SHADER, src, name + '.fs');
+  const p = gl.createProgram();
+  gl.attachShader(p, vs); gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS) && !gl.isContextLost()) throw new ShaderError(name + ' (link)', gl.getProgramInfoLog(p) || 'link failed', '');
+  const cache = {};
+  return { p, u(n) { if (!(n in cache)) cache[n] = gl.getUniformLocation(p, n); return cache[n]; } };
+}
+
+const FMT = {};
+function makeTarget(w, h, fmt, filter) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, fmt.internal, w, h, 0, fmt.format, fmt.type, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fbo, w, h, ok };
+}
+function freeTarget(t) { if (!t) return; gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
+
+function initGL() {
+  if (SIM.has('nowebgl2')) return fatalNoWebGL('simulated via ?simulate=nowebgl2');
+  gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  if (!gl) return fatalNoWebGL(window.WebGLRenderingContext ? 'WebGL1 exists, but WebGL2 could not be created' : 'no WebGL support detected');
+  return setupResources();
+}
+function fatalNoWebGL(reason) {
+  fatal('WebGL2 is not available',
+    `<p>This explorer ray-traces curved spacetime on the GPU and needs <b>WebGL2</b> with floating-point render targets. Your browser did not provide a WebGL2 context (${escapeHtml(reason)}).</p>
+     <ul><li>Enable hardware acceleration (Chrome/Edge: Settings → System; Firefox: about:preferences → Performance).</li>
+     <li>Update your browser or GPU driver, or try a current Chrome, Edge, Firefox or Safari (15+).</li>
+     <li>Check <code>chrome://gpu</code> or <code>about:support</code> for blocklisted graphics features.</li></ul>`, reason);
+  shaderStatus = 'no-webgl2';
+  return false;
+}
+function setupResources() {
+  const extF = SIM.has('nofloat') ? null : gl.getExtension('EXT_color_buffer_float');
+  gl.getExtension('OES_texture_float_linear');
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  caps.renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  FMT.hdr = { internal: gl.RGBA16F, format: gl.RGBA, type: gl.HALF_FLOAT };
+  FMT.ldr = { internal: gl.RGBA8, format: gl.RGBA, type: gl.UNSIGNED_BYTE };
+  FMT.f32 = { internal: gl.RGBA32F, format: gl.RGBA, type: gl.FLOAT };
+  caps.hdr = !!extF;
+  caps.probe = !!extF;
+  if (caps.hdr) { const t = makeTarget(4, 4, FMT.hdr, gl.LINEAR); caps.hdr = t.ok; freeTarget(t); }
+  if (caps.probe) { const t = makeTarget(1, 1, FMT.f32, gl.NEAREST); caps.probe = t.ok; freeTarget(t); }
+  try {
+    progs.ray = makeProgram(RAY_FS, 'ray');
+    progs.prefilter = makeProgram(PREFILTER_FS, 'prefilter');
+    progs.down = makeProgram(DOWN_FS, 'down');
+    progs.up = makeProgram(UP_FS, 'up');
+    progs.composite = makeProgram(COMPOSITE_FS, 'composite');
+    progs.stats = makeProgram(STATS_FS, 'stats');
+    if (caps.probe) {
+      try { progs.probe = makeProgram(RAY_FS, 'probe', '#define PROBE 1'); }
+      catch (e) { console.warn('Probe shader unavailable; CPU tracer only.', e); caps.probe = false; }
+    }
+  } catch (e) {
+    shaderStatus = 'compile-error';
+    console.error(e);
+    if (e instanceof ShaderError) {
+      fatal('Shader compilation failed',
+        `<p>The GPU driver rejected the <b>${escapeHtml(e.stage)}</b> shader, so the relativistic ray tracer cannot run on this device/browser.</p>
+         <ul><li>Update the graphics driver or browser.</li><li>Try another browser (ANGLE/Metal/Vulkan back-ends differ).</li><li>Retry in safe mode below.</li></ul>`,
+        `${e.log}\n${e.src}`);
+    } else fatal('Renderer initialisation failed', `<p>${escapeHtml(e.message)}</p>`, e.stack);
+    return false;
+  }
+  shaderStatus = 'ok';
+  gl.bindVertexArray(gl.createVertexArray());
+  targets.stats = makeTarget(32, 20, FMT.ldr, gl.NEAREST);
+  if (caps.probe) {
+    const fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    const texs = [];
+    for (let i = 0; i < 4; i++) {
+      const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, t, 0);
+      texs.push(t);
+    }
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) caps.probe = false;
+    targets.probe = { fbo, texs };
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  iw = ih = 0;
+  resize(true);
+  warmupUntil = performance.now() + 2500; // first draws include lazy driver shader compilation
+  return true;
+}
+
+function resize(force) {
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, rect.width), cssH = Math.max(1, rect.height);
+  dpr = Math.min(window.devicePixelRatio || 1, P.dprCap);
+  const nw = Math.max(1, Math.round(cssW * dpr)), nh = Math.max(1, Math.round(cssH * dpr));
+  if (nw !== cw || nh !== ch || force) {
+    cw = nw; ch = nh; canvas.width = cw; canvas.height = ch;
+  }
+  const odpr = window.devicePixelRatio || 1;
+  const ow = Math.round(cssW * odpr), oh = Math.round(cssH * odpr);
+  if (ovlCanvas.width !== ow || ovlCanvas.height !== oh) { ovlCanvas.width = ow; ovlCanvas.height = oh; }
+  if (!gl || shaderStatus !== 'ok') return;
+  const s = clamp(P.renderScale * (P.adaptive ? adaptScale : 1), 0.1, 1);
+  const niw = Math.max(16, Math.round(cw * s)), nih = Math.max(16, Math.round(ch * s));
+  if (niw === iw && nih === ih && !force) return;
+  iw = niw; ih = nih;
+  const fmtA = caps.hdr ? FMT.hdr : FMT.ldr;
+  targets.accum.forEach(freeTarget);
+  targets.accum = [makeTarget(iw, ih, fmtA, gl.LINEAR), makeTarget(iw, ih, fmtA, gl.LINEAR)];
+  targets.bloom.forEach(freeTarget);
+  targets.bloom = [];
+  let bw = Math.max(1, iw >> 1), bh = Math.max(1, ih >> 1);
+  for (let i = 0; i < 7 && bw >= 2 && bh >= 2; i++) { targets.bloom.push(makeTarget(bw, bh, fmtA, gl.LINEAR)); bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); }
+  accumN = 0; dirty = true; forceReset = true;
+}
+
+/* =====================================================================
+   Rendering
+   ===================================================================== */
+function halton(i, b) { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; }
+function overlayBits() { return (P.ovlHorizon ? 1 : 0) | (P.ovlPhoton ? 2 : 0) | (P.ovlDisk ? 4 : 0) | (P.ovlSky ? 8 : 0); }
+function setRayUniforms(pr, ph, jx, jy) {
+  const f1 = (n, v) => gl.uniform1f(pr.u(n), v), i1 = (n, v) => gl.uniform1i(pr.u(n), v);
+  const f3 = (n, a) => gl.uniform3f(pr.u(n), a[0], a[1], a[2]);
+  gl.uniform2f(pr.u('uRes'), iw, ih);
+  gl.uniform2f(pr.u('uJitter'), jx, jy);
+  i1('uFrame', P.accumulate ? frameNo : 0);
+  f3('uCamPos', cam.pos); f3('uCamRight', cam.right); f3('uCamUp', cam.up); f3('uCamFwd', cam.fwd);
+  f1('uTanHalfFov', cam.tanHalf); f1('uPixAngle', 2 * cam.tanHalf / ih); f1('uCenterX', cam.cx);
+  f1('uMass', ph.M); f1('uSpin', ph.spin); f1('uHorizonR', ph.rh); f1('uPhotonR', ph.photonR); f1('uIsco', ph.isco);
+  f1('uDiskIn', ph.diskIn); f1('uDiskOut', ph.diskOut); f1('uDiskH', ph.diskH);
+  f3('uDiskN', ph.diskN); f3('uDiskX', ph.diskX); f3('uDiskY', ph.diskY);
+  f1('uDiskTemp', ph.temp); f1('uTurb', ph.turb); f1('uDensity', ph.density); f1('uDiskBright', ph.bright);
+  f1('uDoppler', ph.doppler); f1('uRedshift', ph.redshift); f1('uCamG', ph.camG); f1('uTime', ph.time);
+  f1('uStep', ph.step); i1('uMaxSteps', ph.maxSteps); f1('uEscapeR', ph.escapeR);
+  i1('uMode', P.mode); i1('uOverlay', overlayBits()); i1('uDiskSamples', ph.diskSamples); i1('uOctaves', ph.octaves);
+  i1('uLdr', caps.hdr ? 0 : 1); f1('uAlphaScale', caps.hdr ? 1 : 1 / 3000);
+}
+function drawPass(prog, target, w, h) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fbo : null);
+  gl.viewport(0, 0, w, h);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+function bindTex(prog, name, unit, tex) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(prog.u(name), unit); }
+
+function renderFrame(histW, jx, jy) {
+  const ph = physParams();
+  const src = targets.accum[curAccum], dst = targets.accum[1 - curAccum];
+  const pr = progs.ray;
+  gl.useProgram(pr.p);
+  setRayUniforms(pr, ph, jx, jy);
+  gl.uniform1f(pr.u('uHistW'), histW);
+  bindTex(pr, 'uHistory', 0, src.tex);
+  gl.disable(gl.BLEND);
+  drawPass(pr, dst, iw, ih);
+  curAccum = 1 - curAccum;
+  const resolved = targets.accum[curAccum];
+  const useBloom = caps.hdr && P.mode === 0 && P.bloom > 0.001 && targets.bloom.length > 1;
+  if (useBloom) {
+    const levels = Math.min(P.bloomLevels, targets.bloom.length);
+    let p = progs.prefilter; gl.useProgram(p.p);
+    bindTex(p, 'uSrc', 0, resolved.tex);
+    gl.uniform2f(p.u('uTexel'), 1 / iw, 1 / ih);
+    gl.uniform1f(p.u('uThreshold'), 1.0); gl.uniform1f(p.u('uKnee'), 0.45);
+    gl.uniform1f(p.u('uScale'), Math.pow(2, P.exposure)); gl.uniform1f(p.u('uEncode'), 1);
+    drawPass(p, targets.bloom[0], targets.bloom[0].w, targets.bloom[0].h);
+    p = progs.down; gl.useProgram(p.p);
+    for (let i = 1; i < levels; i++) {
+      const s = targets.bloom[i - 1];
+      bindTex(p, 'uSrc', 0, s.tex); gl.uniform2f(p.u('uTexel'), 1 / s.w, 1 / s.h);
+      drawPass(p, targets.bloom[i], targets.bloom[i].w, targets.bloom[i].h);
+    }
+    p = progs.up; gl.useProgram(p.p);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    for (let i = levels - 1; i > 0; i--) {
+      const s = targets.bloom[i];
+      bindTex(p, 'uSrc', 0, s.tex); gl.uniform2f(p.u('uTexel'), 1 / s.w, 1 / s.h); gl.uniform1f(p.u('uWeight'), 0.6);
+      drawPass(p, targets.bloom[i - 1], targets.bloom[i - 1].w, targets.bloom[i - 1].h);
+    }
+    gl.disable(gl.BLEND);
+  }
+  const c = progs.composite; gl.useProgram(c.p);
+  bindTex(c, 'uSrc', 0, resolved.tex);
+  bindTex(c, 'uBloom', 1, useBloom ? targets.bloom[0].tex : resolved.tex);
+  gl.uniform1f(c.u('uExposure'), P.exposure); gl.uniform1f(c.u('uContrast'), P.contrast);
+  gl.uniform1f(c.u('uBloomStr'), P.bloom * 0.5); gl.uniform1i(c.u('uLdr'), caps.hdr ? 0 : 1);
+  gl.uniform1i(c.u('uMode'), P.mode); gl.uniform1i(c.u('uUseBloom'), useBloom ? 1 : 0);
+  gl.uniform2f(c.u('uOutRes'), cw, ch);
+  drawPass(c, null, cw, ch);
+}
+
+const statsBuf = new Uint8Array(32 * 20 * 4);
+function readStats() {
+  const s = progs.stats; gl.useProgram(s.p);
+  bindTex(s, 'uSrc', 0, targets.accum[curAccum].tex);
+  gl.uniform1f(s.u('uInv'), caps.hdr ? 1 : 3000); gl.uniform1f(s.u('uMax'), 4096); gl.uniform2f(s.u('uGrid'), 32, 20);
+  drawPass(s, targets.stats, 32, 20);
+  gl.readPixels(0, 0, 32, 20, gl.RGBA, gl.UNSIGNED_BYTE, statsBuf);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  let sum = 0, mx = 0;
+  for (let i = 0; i < 640; i++) {
+    const a = (statsBuf[i * 4] + statsBuf[i * 4 + 1] / 255) / 255 * 4096;
+    const m = (statsBuf[i * 4 + 2] + statsBuf[i * 4 + 3] / 255) / 255 * 4096;
+    sum += a; mx = Math.max(mx, m);
+  }
+  lastStats = { avg: sum / 640, max: mx, t: performance.now() };
+}
+
+const probeBuf = new Float32Array(4);
+function gpuProbe(px, py) {
+  if (!caps.probe || !progs.probe || contextLost) return null;
+  const ph = physParams();
+  const pr = progs.probe; gl.useProgram(pr.p);
+  setRayUniforms(pr, ph, 0, 0);
+  gl.uniform2f(pr.u('uProbePx'), px, py);
+  bindTex(pr, 'uHistory', 0, targets.accum[curAccum].tex);
+  gl.disable(gl.BLEND);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, targets.probe.fbo);
+  gl.viewport(0, 0, 1, 1);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const out = [];
+  for (let i = 0; i < 4; i++) { gl.readBuffer(gl.COLOR_ATTACHMENT0 + i); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, probeBuf); out.push(Array.from(probeBuf)); }
+  gl.readBuffer(gl.COLOR_ATTACHMENT0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  const [o0, o1, o2, o3] = out;
+  return { steps: Math.round(o0[0]), fate: Math.round(o0[1]), rmin: o0[2], defl: o0[3],
+    hitGeo: o1[0] > 0 ? { r: o1[0], phi: o1[1], order: Math.round(o1[2]) } : null, crossings: Math.round(o1[3]),
+    em: o2[0] > 0 ? { g: o2[0], gk: o2[1], Tobs: o2[2], r: o2[3] } : null, col: o3.slice(0, 3), T: o3[3] };
+}
+
+/* =====================================================================
+   Ray selection
+   ===================================================================== */
+let sel = null;          // { fx, fy } screen fraction of selected pixel (y from top)
+let selData = null;      // { cpu, gpu, px, py, ... }
+let selDirty = false, selLastTrace = 0;
+function pixelFromFrac(fx, fy) { return [Math.min(iw - 1, Math.floor(fx * iw)) + 0.5, ih - 1 - Math.min(ih - 1, Math.floor(fy * ih)) + 0.5]; }
+function rayDirForPixel(px, py) {
+  const ux = (px / iw * 2 - 1 - cam.cx) * (iw / ih), uy = py / ih * 2 - 1;
+  return norm([cam.fwd[0] + cam.tanHalf * (ux * cam.right[0] + uy * cam.up[0]), cam.fwd[1] + cam.tanHalf * (ux * cam.right[1] + uy * cam.up[1]), cam.fwd[2] + cam.tanHalf * (ux * cam.right[2] + uy * cam.up[2])]);
+}
+function selectRay(fx, fy) {
+  sel = { fx: clamp(fx, 0, 0.9999), fy: clamp(fy, 0, 0.9999) };
+  $('#rayPanel').classList.remove('hidden');
+  document.body.classList.add('ray-open');
+  traceSelected();
+}
+function clearSelection() { sel = null; selData = null; $('#rayPanel').classList.add('hidden'); document.body.classList.remove('ray-open'); }
+function traceSelected() {
+  if (!sel || !iw) return;
+  const [px, py] = pixelFromFrac(sel.fx, sel.fy);
+  const d = rayDirForPixel(px, py);
+  const ph = physParams();
+  const t0 = performance.now();
+  const cpu = Phys.traceRay(cam.pos, d, ph, true);
+  const cpuMs = performance.now() - t0;
+  const gpu = gpuProbe(px, py);
+  selData = { cpu, gpu, px, py, dir: d, ph, cpuMs, camR: cam.r };
+  selDirty = false; selLastTrace = performance.now();
+  renderRayPanel();
+}
+
+/* =====================================================================
+   UI construction
+   ===================================================================== */
+const controlsEls = {};
+function pctOf(c, v) { return ((v - c.min) / (c.max - c.min) * 100).toFixed(1) + '%'; }
+function buildPanel() {
+  const body = $('#panelBody');
+  const secs = {};
+  for (const [id, title, open] of SECTIONS) {
+    const d = document.createElement('details'); d.className = 'sec'; d.open = open && !(window.innerWidth <= 760 && id !== 'view');
+    d.innerHTML = `<summary>${title}</summary><div class="secBody" id="sec-${id}"></div>`;
+    body.appendChild(d); secs[id] = d.querySelector('.secBody');
+  }
+  // Camera extras
+  const cb = secs.camera;
+  const pr = document.createElement('div'); pr.className = 'presets'; pr.setAttribute('role', 'group'); pr.setAttribute('aria-label', 'Camera presets');
+  PRESETS.forEach((p, i) => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = `${p.key} · ${p.name}`; b.title = `Preset ${p.key}: ${p.name}`; b.onclick = () => { stopTour(); applyPreset(i); }; pr.appendChild(b); });
+  cb.appendChild(pr);
+  const row = document.createElement('div'); row.className = 'btnrow';
+  row.innerHTML = `<button class="btn" id="tourBtn" aria-pressed="false">▶ Cinematic tour</button><button class="btn" id="resetCamBtn">Reset camera</button><button class="btn" id="centerBtn" title="Re-center pan target">Center</button>`;
+  cb.appendChild(row);
+  const dist = document.createElement('div'); dist.className = 'ctl';
+  dist.innerHTML = `<div class="top"><label for="c-dist">Camera distance</label><output id="o-dist"></output></div><input type="range" id="c-dist" min="4" max="200" step="0.1">`;
+  cb.appendChild(dist);
+  // Simulation extras
+  const sb = secs.sim;
+  const srow = document.createElement('div'); srow.className = 'btnrow';
+  srow.innerHTML = `<button class="btn primary" id="pauseBtn" aria-pressed="false">❚❚ Pause</button><button class="btn" id="stepBtn" title="Advance 1 t_g">Step +1 t_g</button><button class="btn" id="resetAllBtn">Reset all</button>`;
+  sb.appendChild(srow);
+  for (const c of CTRL) {
+    const host = secs[c.sec];
+    const wrap = document.createElement('div');
+    const id = 'c-' + c.k;
+    if (c.type === 'check') {
+      wrap.innerHTML = `<label class="chk"><input type="checkbox" id="${id}"> <span>${c.label}</span></label>`;
+      host.appendChild(wrap);
+      const el = wrap.querySelector('input');
+      el.checked = !!P[c.k];
+      el.addEventListener('change', () => setParam(c.k, el.checked));
+      controlsEls[c.k] = { el };
+    } else if (c.type === 'select') {
+      wrap.className = 'ctl';
+      wrap.innerHTML = `<label for="${id}">${c.label}</label><select id="${id}">${c.options.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`;
+      host.appendChild(wrap);
+      const el = wrap.querySelector('select');
+      el.value = String(P[c.k]);
+      el.addEventListener('change', () => { const raw = el.value; const num = Number(raw); setParam(c.k, (raw === '' || isNaN(num)) ? raw : num); });
+      controlsEls[c.k] = { el };
+    } else {
+      wrap.className = 'ctl';
+      wrap.innerHTML = `<div class="top"><label for="${id}">${c.label}</label><output id="o-${c.k}" for="${id}"></output></div>
+        <input type="range" id="${id}" min="${c.min}" max="${c.max}" step="${c.step}">${c.hint ? `<div class="hint">${c.hint}</div>` : ''}`;
+      host.appendChild(wrap);
+      const el = wrap.querySelector('input'), out = wrap.querySelector('output');
+      el.value = P[c.k];
+      el.addEventListener('input', () => setParam(c.k, parseFloat(el.value), true));
+      controlsEls[c.k] = { el, out, c };
+    }
+    if (c.k === 'spin') { const r = document.createElement('div'); r.className = 'readout'; r.id = 'bhReadout'; host.appendChild(r); }
+    if (c.k === 'diskIn') { const b = document.createElement('div'); b.className = 'btnrow'; b.innerHTML = `<button class="btn" id="iscoBtn">Snap inner edge to ISCO</button>`; host.appendChild(b); }
+  }
+  const qrow = document.createElement('div'); qrow.className = 'readout'; qrow.id = 'perfReadout'; secs.perf.appendChild(qrow);
+  for (const k of Object.keys(controlsEls)) syncControl(k);
+
+  $('#tourBtn').onclick = () => (tour.on ? stopTour() : startTour());
+  $('#resetCamBtn').onclick = resetCamera;
+  $('#centerBtn').onclick = () => { camGoal.tx = camGoal.ty = camGoal.tz = 0; toast('Target re-centered'); };
+  $('#pauseBtn').onclick = togglePause;
+  $('#stepBtn').onclick = () => { if (!P.paused) togglePause(); P.time += 1; syncControl('time'); markDirty(); };
+  $('#resetAllBtn').onclick = resetAll;
+  $('#iscoBtn').onclick = () => { setParam('diskIn', +Phys.iscoRadius(P.mass, P.spin).toFixed(2)); toast('Inner edge → ISCO ' + P.diskIn.toFixed(2) + ' r_g'); };
+  const dEl = $('#c-dist');
+  dEl.addEventListener('input', () => { stopTour(); camGoal.dist = parseFloat(dEl.value); });
+  updateBhReadout();
+}
+function syncControl(k) {
+  const e = controlsEls[k]; if (!e) return;
+  if (e.el.type === 'checkbox') e.el.checked = !!P[k];
+  else if (e.el.tagName === 'SELECT') e.el.value = String(P[k]);
+  else {
+    if (document.activeElement !== e.el || k === 'time') e.el.value = P[k];
+    e.el.style.setProperty('--p', pctOf(e.c, clamp(P[k], e.c.min, e.c.max)));
+    e.out.textContent = e.c.f ? e.c.f(P[k]) : P[k];
+  }
+}
+function markDirty() { dirty = true; forceReset = true; idle = false; if (sel) selDirty = true; }
+function setParam(k, v, fromSlider) {
+  P[k] = v;
+  syncControl(k);
+  if (k === 'quality' && QUALITY[v]) {
+    const q = QUALITY[v];
+    for (const key of ['renderScale', 'dprCap', 'stepSize', 'maxSteps', 'diskSamples', 'octaves', 'bloomLevels']) { P[key] = q[key]; syncControl(key); }
+    adaptScale = 1; resize(true); updateLegend(); toast('Quality: ' + q.label);
+  }
+  if (['stepSize', 'maxSteps', 'renderScale', 'dprCap'].includes(k) && fromSlider !== 'preset') {
+    if (P.quality !== 'custom' && QUALITY[P.quality] && QUALITY[P.quality][k] !== v) { P.quality = 'custom'; syncControl('quality'); }
+  }
+  if (k === 'renderScale' || k === 'dprCap') { resize(true); }
+  if (k === 'adaptive') { adaptScale = 1; resize(true); }
+  if (k === 'diskOut' && P.diskOut <= P.diskIn + 0.5) { P.diskIn = Math.max(1, P.diskOut - 0.5); syncControl('diskIn'); }
+  if (k === 'diskIn' && P.diskIn >= P.diskOut - 0.5) { P.diskOut = P.diskIn + 0.5; syncControl('diskOut'); }
+  if (k === 'mode') updateLegend();
+  if (k === 'hud') $('#hud').classList.toggle('hidden', !P.hud);
+  if (k === 'paused') syncPauseBtn();
+  if (k === 'fov') camGoal.fov = v;
+  if (k === 'autoOrbit' && v) stopTour();
+  if (['mass', 'spin', 'horizonScale', 'diskIn'].includes(k)) updateBhReadout();
+  if (k === 'mode' || k === 'maxSteps') updateLegend();
+  markDirty();
+}
+function updateBhReadout() {
+  const el = $('#bhReadout'); if (!el) return;
+  const M = P.mass, chi = P.spin;
+  const rp = Phys.horizonRadius(M, chi), po = Phys.photonOrbits(M, chi), bc = Phys.criticalImpact(M, chi), isco = Phys.iscoRadius(M, chi);
+  el.innerHTML = `horizon r₊   <b>${rp.toFixed(3)}</b> r_g${P.horizonScale !== 1 ? ` → used <b>${(rp * P.horizonScale).toFixed(3)}</b>` : ''}
+photon orbit <b>${(3 * M).toFixed(2)}</b> (χ=0) · pro ${po.pro.toFixed(2)} / retro ${po.retro.toFixed(2)}
+shadow edge  b = ${bc.pro.toFixed(2)} … ${bc.retro.toFixed(2)} r_g (Kerr, equatorial)
+ISCO         <b>${isco.toFixed(3)}</b> r_g (prograde)${P.diskIn < isco - 0.01 ? `\n<span style="color:var(--danger)">⚠ disk inner edge ${P.diskIn.toFixed(2)} &lt; ISCO: no stable circular orbits there, the redshift model is extrapolated (g clamped ≤ 4)</span>` : ''}`;
+}
+function syncPauseBtn() { const b = $('#pauseBtn'); if (b) { b.textContent = P.paused ? '▶ Resume' : '❚❚ Pause'; b.setAttribute('aria-pressed', P.paused); } }
+function togglePause() {
+  setParam('paused', !P.paused);
+  toast(P.paused ? 'Paused — time frozen, image refines' : 'Resumed');
+}
+function resetAll() {
+  const keepQ = { quality: P.quality };
+  Object.assign(P, DEFAULTS);
+  if (keepQ.quality !== 'high' && QUALITY[keepQ.quality]) Object.assign(P, QUALITY[keepQ.quality], keepQ);
+  if (qs.get('safe') === '1') P.bloom = 0;
+  for (const k of Object.keys(controlsEls)) syncControl(k);
+  syncPauseBtn();
+  adaptScale = 1; resize(true);
+  resetCamera(); updateBhReadout(); updateLegend(); $('#hud').classList.toggle('hidden', !P.hud);
+  markDirty(); toast('All settings reset');
+}
+
+/* ---------- Legend ---------- */
+function updateLegend() {
+  const L = $('#legend');
+  const m = P.mode;
+  if (m === 0 || uiHidden) { L.classList.add('hidden'); if (m === 0) return; }
+  if (!uiHidden) L.classList.remove('hidden');
+  let h = `<div class="lt">${MODES[m]}</div>`;
+  const ticks = (arr) => `<div class="ticks">${arr.map(t => `<span>${t}</span>`).join('')}</div>`;
+  if (m === 1) {
+    const ms = Math.round(P.maxSteps);
+    h += `<div class="bar" style="background:${gradientCss(turboJS)}"></div><div class="ticks" style="position:relative;height:14px;display:block">` +
+      [0, 0.02, 0.1, 0.25, 0.5, 1].map(f => `<span style="position:absolute;left:${(Math.sqrt(f) * 100).toFixed(1)}%;transform:translateX(${f === 0 ? '0' : f === 1 ? '-100%' : '-50%'})">${Math.round(f * ms)}${f === 1 ? ' max' : ''}</span>`).join('') + `</div>`;
+    h += `<div class="note">RK4 steps actually taken per pixel (sqrt scale) before escape, capture, absorption or the step limit. Photon-ring pixels orbit longest.</div>`;
+  } else if (m === 2) {
+    const tAt = (deg) => Math.log(1 + deg * DEG * 100) / Math.log(1 + 400 * Math.PI);
+    h += `<div class="bar" style="background:${gradientCss(turboJS)}"></div><div class="ticks" style="position:relative;height:14px;display:block">` +
+      [[0.1, '0.1°'], [1, '1°'], [10, '10°'], [90, '90°'], [180, '180°'], [360, '360°'], [720, '720°']].map(([d, l]) => `<span style="position:absolute;left:${(tAt(d) * 100).toFixed(1)}%;transform:translateX(-50%)">${l}</span>`).join('') + `</div>`;
+    h += `<div class="note">Accumulated turning angle of the photon (log scale). &gt;180° = the ray looped the hole. Captured rays dimmed.</div>`;
+  } else if (m === 3 || m === 4) {
+    const span = m === 3 ? 1.5 : 1;
+    h += `<div class="bar" style="background:${gradientCss(t => divergeJS(t * 2 - 1))}"></div>` + ticks([(Math.pow(2, -span)).toFixed(2), (Math.pow(2, -span / 2)).toFixed(2), '1.00', (Math.pow(2, span / 2)).toFixed(2), Math.pow(2, span).toFixed(2)]);
+    h += m === 3 ? `<div class="note">g = ν_obs/ν_emit of the dominant disk emitter (gravitational × kinematic, strength sliders applied). Red = redshift, blue = blueshift. Grey = no disk light.</div>`
+                 : `<div class="note">Kinematic Doppler factor δ of the orbiting gas (incl. time dilation), without gravitational redshift. Blue side approaches the camera.</div>`;
+  } else if (m === 5) {
+    h += `<div class="bar" style="background:linear-gradient(90deg,${[0, 1, 2, 3, 4, 5, 6].map(i => `hsl(${i * 60 + 180},75%,50%)`).join(',')})"></div>` + ticks(['φ −180°', '−90°', '0°', '90°', '180°']);
+    h += `<div class="note">First disk interaction (mid-plane crossing inside the annulus, or where the ray becomes 50% absorbed): hue = azimuth φ, light/dark bands alternate every 1 r_g of radius. Dim desaturated = higher-order image (ray crossed the plane before).</div>`;
+  } else if (m === 6) {
+    const tAt = (r) => 1 - Math.log(r) / Math.log(100);
+    h += `<div class="bar" style="background:${gradientCss(t => turboJS(1 - t))}"></div><div class="ticks" style="position:relative;height:14px;display:block">` +
+      [[1, '1M'], [2, '2'], [3, '3'], [6, '6'], [10, '10'], [30, '30'], [100, '100M']].map(([r, l]) => `<span style="position:absolute;left:${((1 - tAt(r)) * 100).toFixed(1)}%;transform:translateX(-50%)">${l}</span>`).join('') + `</div>`;
+    h += `<div class="note">Closest approach of each ray in units of M (log). White contour = photon sphere 3M; dark contour = ISCO. Black = captured.</div>`;
+  } else if (m === 7) {
+    const sw = (c, t) => `<span class="sw"><i style="background:${c}"></i>${t}</span>`;
+    h += sw('rgb(46,107,217)', 'escaped') + sw('rgb(77,8,15)', 'captured') + sw('rgb(250,158,41)', 'absorbed by disk') + sw('rgb(242,38,230)', 'step limit (failure)') + sw('rgb(255,255,0)', 'NaN / numerical');
+    h += `<div class="note">Darker shades = more disk-plane crossings (higher-order images). Magenta on the shadow edge means “raise max steps”.</div>`;
+  }
+  L.innerHTML = h;
+}
+
+/* ---------- HUD ---------- */
+function updateHud() {
+  if (!P.hud || shaderStatus !== 'ok') return;
+  const selSteps = selData ? (selData.gpu ? selData.gpu.steps : selData.cpu.steps) : '—';
+  const q = QUALITY[P.quality] ? QUALITY[P.quality].label : 'Custom';
+  const st = contextLost ? '<span class="warn">CONTEXT LOST</span>' : P.paused ? '<b>❚❚ PAUSED</b>' : '▶ running';
+  const lines = [
+    `FPS   <b>${fpsState.fps.toFixed(1)}</b>  (${fpsState.emaMs.toFixed(1)} ms)${idle ? '  idle·converged' : ''}`,
+    `Res   <b>${iw}×${ih}</b> → ${cw}×${ch}  ${(iw / cw * 100).toFixed(0)}%${P.adaptive && adaptScale < 0.999 ? ' (adaptive)' : ''} · DPR ${dpr.toFixed(2)}`,
+    `Steps avg <b>${lastStats.avg.toFixed(0)}</b> · max ${lastStats.max.toFixed(0)}/${Math.round(P.maxSteps)} · sel ${selSteps}`,
+    `Mode  <b>${MODES[P.mode]}</b>`,
+    `Qual  ${q}  ${caps.hdr ? 'HDR16F' : '<span class="warn">8-bit fallback (no bloom)</span>'}${caps.probe ? '' : ' · no GPU probe'}`,
+    `Cam   r=<b>${cam.r.toFixed(2)}</b> r_g · fov ${camCur.fov.toFixed(0)}°${P.autoOrbit ? ' · orbit' : ''}${tour.on ? ' · tour' : ''}`,
+    `Sim   ${st}  t=${P.time.toFixed(1)} t_g · accum ${accumN}`,
+  ];
+  $('#hud').innerHTML = lines.join('\n');
+  const dEl = $('#c-dist');
+  if (dEl && document.activeElement !== dEl) { dEl.value = camGoal.dist.toFixed(1); dEl.style.setProperty('--p', ((camGoal.dist - 4) / 196 * 100).toFixed(1) + '%'); }
+  const dOut = $('#o-dist'); if (dOut) dOut.textContent = cam.r.toFixed(1) + ' r_g';
+  const pr = $('#perfReadout');
+  if (pr) pr.innerHTML = `internal <b>${iw}×${ih}</b> · canvas ${cw}×${ch}\nrenderer ${escapeHtml(String(caps.renderer).slice(0, 60))}\ndisk samples ${P.diskSamples} · noise octaves ${P.octaves}`;
+}
+
+/* ---------- Ray panel ---------- */
+const FATE_COL = ['#2e6bd9', '#8a1622', '#fa9e29', '#f226e6', '#ffff00'];
+function renderRayPanel() {
+  if (!selData) return;
+  const { cpu, gpu, ph } = selData;
+  const f = gpu ? gpu.fate : cpu.fate;
+  const bc = Phys.criticalImpact(ph.M, ph.spin);
+  const bAvg = 0.5 * (bc.pro + bc.retro);
+  const hit = cpu.hitGeo;
+  const em = cpu.em;
+  let match = '';
+  if (gpu) {
+    const ok = gpu.fate === cpu.fate && Math.abs(gpu.steps - cpu.steps) <= Math.max(2, cpu.steps * 0.03);
+    match = ok ? '✓ GPU≡CPU' : `≠ GPU ${gpu.steps}/${Phys.FATE_NAMES[gpu.fate].split(' ')[0]}`;
+    $('#rayMatch').className = 'match ' + (ok ? 'ok' : 'bad');
+  } else $('#rayMatch').className = 'match';
+  $('#rayMatch').textContent = match;
+  const lon = Math.atan2(cpu.dirOut[2], cpu.dirOut[0]) / DEG, lat = Math.asin(clamp(cpu.dirOut[1], -1, 1)) / DEG;
+  const rows = [
+    ['pixel', `${selData.px.toFixed(1)}, ${selData.py.toFixed(1)} of ${iw}×${ih}`],
+    ['fate', `<span class="fate" style="background:${FATE_COL[f]}33;color:${FATE_COL[f] === '#8a1622' ? '#ff8a95' : FATE_COL[f]}">${Phys.FATE_NAMES[f]}</span>`],
+    ['steps', `${cpu.steps} CPU${gpu ? ` · ${gpu.steps} GPU` : ''} / ${ph.maxSteps} max`],
+    ['impact b', `${cpu.b.toFixed(3)} r_g  (${(cpu.b / bAvg).toFixed(3)} × b_crit)`],
+    ['periapsis', `${cpu.rmin.toFixed(3)} r_g = ${(cpu.rmin / ph.M).toFixed(2)} M${gpu ? ` (GPU ${gpu.rmin.toFixed(3)})` : ''}`],
+    ['bending', `${(cpu.defl / DEG).toFixed(2)}°  = ${(cpu.defl / (2 * Math.PI)).toFixed(2)} turns${gpu ? ` (GPU ${(gpu.defl / DEG).toFixed(2)}°)` : ''}`],
+    ['disk plane', `${cpu.crossings} crossing${cpu.crossings === 1 ? '' : 's'}${hit ? ` · first hit r=${hit.r.toFixed(2)} φ=${(hit.phi / DEG).toFixed(1)}° (${hit.order === 0 ? 'primary' : 'order ' + hit.order} image)` : ''}`],
+    ['emitter', em ? `g=${em.g.toFixed(3)} · δ=${em.gk.toFixed(3)} · T_obs=${em.Tobs.toFixed(0)} K @ r=${em.r.toFixed(2)}` : '—'],
+    ['transmit', `${cpu.T.toFixed(3)}  (1 = sky fully visible)`],
+    ['sky dir', f === 0 ? `lon ${lon.toFixed(1)}° lat ${lat.toFixed(1)}° · tail correction ${(cpu.residual / DEG * 3600).toFixed(1)}″` : '—'],
+    ['cpu time', `${selData.cpuMs.toFixed(2)} ms`],
+  ];
+  let html = `<div class="kv">${rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('')}</div>`;
+  if (cpu.segs.length) {
+    html += `<table><thead><tr><th>#step</th><th>r</th><th>φ°</th><th>z/H</th><th>g</th><th>T_obs K</th><th>Δτ</th><th>T after</th></tr></thead><tbody>` +
+      cpu.segs.slice(0, 4).map(s => `<tr><td>${s.step}</td><td>${s.r.toFixed(2)}</td><td>${(s.phi / DEG).toFixed(0)}</td><td>${s.zh.toFixed(2)}</td><td>${s.g.toFixed(3)}</td><td>${s.Tobs.toFixed(0)}</td><td>${s.tau.toFixed(3)}</td><td>${s.Tafter.toFixed(3)}</td></tr>`).join('') +
+      `</tbody></table>`;
+  }
+  $('#rayBody').innerHTML = html;
+  drawDiagram();
+}
+
+function drawDiagram() {
+  const cv = $('#diag');
+  if (!selData || cv.offsetParent === null) return;
+  const r = cv.getBoundingClientRect();
+  const s = window.devicePixelRatio || 1;
+  const W = Math.round(r.width * s), H = Math.round(r.height * s);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const c = cv.getContext('2d');
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, W, H);
+  c.scale(s, s);
+  const w = r.width, h = r.height;
+  const { cpu, ph } = selData;
+  const x0 = cpu.x0, v0 = cpu.v0;
+  let nrm = cross(x0, v0);
+  if (len(nrm) < 1e-6) nrm = Math.abs(x0[1]) < 0.9 * len(x0) ? cross(x0, [0, 1, 0]) : cross(x0, [1, 0, 0]);
+  nrm = norm(nrm);
+  const e1 = norm(x0), e2 = norm(cross(nrm, e1));
+  const cx = w * 0.5, cy = h * 0.5;
+  const Rpx = Math.min(w, h) * 0.46;
+  const sc = 3 * ph.M;
+  const Rmax = Math.max(selData.camR * 1.08, 12 * ph.M);
+  const A = Math.asinh(Rmax / sc);
+  const mapR = (rr) => Math.asinh(rr / sc) / A * Rpx;
+  const toXY = (p) => { const a = dot(p, e1), b = dot(p, e2); const rr = Math.hypot(a, b); if (rr < 1e-9) return [cx, cy]; const f = mapR(rr) / rr; return [cx + a * f, cy - b * f]; };
+  // radial reference rings
+  c.lineWidth = 1;
+  c.font = '10px ui-monospace, monospace';
+  for (const rr of [10, 30, 100]) { if (rr * ph.M > Rmax) continue; c.strokeStyle = 'rgba(255,255,255,0.06)'; c.beginPath(); c.arc(cx, cy, mapR(rr * ph.M), 0, 7); c.stroke(); c.fillStyle = 'rgba(255,255,255,0.28)'; c.fillText(rr + 'M', cx + mapR(rr * ph.M) * 0.707 + 2, cy - mapR(rr * ph.M) * 0.707); }
+  // disk trace in orbital plane
+  let dd = cross(nrm, ph.diskN);
+  c.lineCap = 'round';
+  if (len(dd) > 1e-3) {
+    dd = norm(dd);
+    c.strokeStyle = 'rgba(255,160,60,0.75)'; c.lineWidth = 4;
+    for (const sg of [1, -1]) { const a = toXY(dd.map(q => q * sg * ph.diskIn)), b = toXY(dd.map(q => q * sg * ph.diskOut)); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke(); }
+  } else {
+    c.strokeStyle = 'rgba(255,160,60,0.35)'; c.lineWidth = Math.max(2, mapR(ph.diskOut) - mapR(ph.diskIn));
+    c.beginPath(); c.arc(cx, cy, (mapR(ph.diskOut) + mapR(ph.diskIn)) / 2, 0, 7); c.stroke();
+  }
+  // photon sphere, ISCO, horizon
+  c.lineWidth = 1; c.setLineDash([4, 3]); c.strokeStyle = 'rgba(127,212,255,0.85)'; c.beginPath(); c.arc(cx, cy, mapR(ph.photonR), 0, 7); c.stroke();
+  c.strokeStyle = 'rgba(255,200,90,0.55)'; c.setLineDash([2, 3]); c.beginPath(); c.arc(cx, cy, mapR(ph.isco), 0, 7); c.stroke();
+  c.setLineDash([]);
+  c.fillStyle = '#000'; c.strokeStyle = 'rgba(255,90,70,0.9)'; c.beginPath(); c.arc(cx, cy, mapR(ph.rh), 0, 7); c.fill(); c.stroke();
+  // path
+  const pts = cpu.path.map(toXY);
+  const nSeg = pts.length - 1;
+  c.lineWidth = 1.8;
+  for (let i = 0; i < nSeg; i++) {
+    const t = i / Math.max(1, nSeg - 1);
+    const col = turboJS(0.15 + 0.8 * t);
+    c.strokeStyle = rgbCss(col);
+    c.beginPath(); c.moveTo(pts[i][0], pts[i][1]); c.lineTo(pts[i + 1][0], pts[i + 1][1]); c.stroke();
+  }
+  // escape arrow
+  if (cpu.fate === 0 && pts.length > 1) {
+    const e = pts[pts.length - 1], dOut = [dot(cpu.dirOut, e1), -dot(cpu.dirOut, e2)];
+    const L = Math.hypot(dOut[0], dOut[1]) || 1; const ux = dOut[0] / L, uy = dOut[1] / L;
+    c.strokeStyle = '#9fe0ff'; c.fillStyle = '#9fe0ff'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(e[0], e[1]); c.lineTo(e[0] + ux * 14, e[1] + uy * 14); c.stroke();
+    c.beginPath(); c.moveTo(e[0] + ux * 18, e[1] + uy * 18); c.lineTo(e[0] + ux * 11 - uy * 4, e[1] + uy * 11 + ux * 4); c.lineTo(e[0] + ux * 11 + uy * 4, e[1] + uy * 11 - ux * 4); c.fill();
+  }
+  // disk sample hits
+  for (const sg of cpu.segs) { const q = toXY(sg.p); c.fillStyle = '#ffb347'; c.beginPath(); c.arc(q[0], q[1], 3, 0, 7); c.fill(); }
+  // periapsis marker
+  let iMin = 0, rMinP = Infinity;
+  cpu.path.forEach((p, i) => { const rr = len(p); if (rr < rMinP) { rMinP = rr; iMin = i; } });
+  if (pts[iMin]) { c.strokeStyle = '#fff'; c.lineWidth = 1; c.beginPath(); c.arc(pts[iMin][0], pts[iMin][1], 4, 0, 7); c.stroke(); c.fillStyle = '#fff'; c.fillText(`r_min ${cpu.rmin.toFixed(2)}`, pts[iMin][0] + 6, pts[iMin][1] - 5); }
+  // camera
+  const cp = toXY(x0); c.fillStyle = '#fff'; c.beginPath(); c.moveTo(cp[0] + 6, cp[1]); c.lineTo(cp[0] - 4, cp[1] - 5); c.lineTo(cp[0] - 4, cp[1] + 5); c.fill();
+  c.fillStyle = 'rgba(255,255,255,0.55)';
+  c.fillText('camera', cp[0] - 18, cp[1] + 16);
+  c.fillText('orbital plane · asinh radial scale', 8, 14);
+  c.fillStyle = 'rgba(127,212,255,0.9)'; c.fillText('photon sphere', 8, h - 22);
+  c.fillStyle = 'rgba(255,160,60,0.9)'; c.fillText('disk ∩ plane', 8, h - 9);
+  c.fillStyle = 'rgba(255,110,90,0.9)'; c.fillText('horizon', w - 52, h - 9);
+}
+
+/* ---------- 2D overlay (projected, unlensed geometry + selected ray) ---------- */
+function drawOverlay() {
+  const W = ovlCanvas.width, H = ovlCanvas.height;
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.clearRect(0, 0, W, H);
+  if (shaderStatus !== 'ok') return;
+  const s = window.devicePixelRatio || 1;
+  octx.scale(s, s);
+  const w = W / s, h = H / s;
+  const ph = physParams();
+  if (P.ovlGeom && (P.ovlHorizon || P.ovlPhoton)) {
+    const circle = (R, color, label, dash) => {
+      const D = cam.r; if (D <= R * 1.001) return;
+      const toC = norm(cam.pos);
+      const cc = R * R / D, rr = R * Math.sqrt(1 - R * R / (D * D));
+      let a = norm(cross(toC, [0, 1, 0])); if (len(cross(toC, [0, 1, 0])) < 1e-4) a = [1, 0, 0];
+      const b = cross(toC, a);
+      octx.strokeStyle = color; octx.setLineDash(dash); octx.lineWidth = 1.2; octx.beginPath();
+      let first = true, top = null;
+      for (let i = 0; i <= 96; i++) {
+        const t = i / 96 * Math.PI * 2;
+        const p = [toC[0] * cc + (a[0] * Math.cos(t) + b[0] * Math.sin(t)) * rr, toC[1] * cc + (a[1] * Math.cos(t) + b[1] * Math.sin(t)) * rr, toC[2] * cc + (a[2] * Math.cos(t) + b[2] * Math.sin(t)) * rr];
+        const q = project(p, w, h);
+        if (!q) { first = true; continue; }
+        if (first) { octx.moveTo(q[0], q[1]); first = false; } else octx.lineTo(q[0], q[1]);
+        if (!top || q[1] < top[1]) top = q;
+      }
+      octx.stroke(); octx.setLineDash([]);
+      if (top) { octx.font = '11px ui-monospace, monospace'; const tw = octx.measureText(label).width; octx.fillStyle = 'rgba(0,0,0,0.6)'; octx.fillRect(top[0] + 2, top[1] - 16, tw + 6, 15); octx.fillStyle = color; octx.fillText(label, top[0] + 5, top[1] - 5); }
+    };
+    if (P.ovlHorizon) circle(ph.rh, 'rgba(255,110,90,0.95)', `r₊ ${ph.rh.toFixed(2)} (unlensed)`, [5, 4]);
+    if (P.ovlPhoton) circle(ph.photonR, 'rgba(127,212,255,0.95)', `r_ph ${ph.photonR.toFixed(2)} (unlensed)`, [3, 4]);
+  }
+  if (sel) {
+    const px = sel.fx * w, py = sel.fy * h;
+    octx.strokeStyle = 'rgba(255,255,255,0.95)'; octx.lineWidth = 1.2;
+    octx.beginPath(); octx.arc(px, py, 7, 0, 7); octx.moveTo(px - 13, py); octx.lineTo(px - 4, py); octx.moveTo(px + 4, py); octx.lineTo(px + 13, py); octx.moveTo(px, py - 13); octx.lineTo(px, py - 4); octx.moveTo(px, py + 4); octx.lineTo(px, py + 13); octx.stroke();
+    if (P.ovlPath && selData && selData.cpu.path) {
+      const pts = selData.cpu.path;
+      octx.lineWidth = 2;
+      let prev = null;
+      for (let i = 0; i < pts.length; i++) {
+        const q = project(pts[i], w, h);
+        if (q && prev) { octx.strokeStyle = rgbCss(turboJS(0.15 + 0.8 * i / pts.length)); octx.beginPath(); octx.moveTo(prev[0], prev[1]); octx.lineTo(q[0], q[1]); octx.stroke(); }
+        prev = q;
+      }
+      for (const sg of selData.cpu.segs) { const q = project(sg.p, w, h); if (q) { octx.fillStyle = '#ffb347'; octx.beginPath(); octx.arc(q[0], q[1], 3.2, 0, 7); octx.fill(); } }
+    }
+  }
+}
+
+/* =====================================================================
+   Input
+   ===================================================================== */
+const pointers = new Map();
+let drag = null;
+function onPointerDown(e) {
+  canvas.focus({ preventScroll: true });
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* pointer no longer active */ }
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  stopTour();
+  if (pointers.size === 1) {
+    drag = { mode: (e.button === 2 || e.button === 1 || e.shiftKey) ? 'pan' : 'orbit', x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: 0 };
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    drag = { mode: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, moved: 99 };
+  }
+  canvas.classList.add('dragging');
+}
+function panBy(dx, dy) {
+  const hpx = canvas.getBoundingClientRect().height;
+  const k = 2 * camCur.dist * cam.tanHalf / hpx;
+  for (let i = 0; i < 3; i++) { const key = ['tx', 'ty', 'tz'][i]; camGoal[key] += (-cam.right[i] * dx + cam.up[i] * dy) * k; }
+  const t = [camGoal.tx, camGoal.ty, camGoal.tz], L = len(t), lim = 30;
+  if (L > lim) { camGoal.tx *= lim / L; camGoal.ty *= lim / L; camGoal.tz *= lim / L; }
+}
+function onPointerMove(e) {
+  if (!pointers.has(e.pointerId) || !drag) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (drag.mode === 'pinch' && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    if (drag.d > 0) camGoal.dist = clamp(camGoal.dist * drag.d / Math.max(d, 1), minCamR(), 220);
+    panBy(mx - drag.mx, my - drag.my);
+    drag.d = d; drag.mx = mx; drag.my = my;
+    camCur.dist = camGoal.dist;
+    return;
+  }
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  drag.moved = Math.max(drag.moved, Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy));
+  if (drag.moved < 3) return;
+  if (drag.mode === 'orbit') {
+    camGoal.yaw -= dx * 0.25; camGoal.pitch = clamp(camGoal.pitch + dy * 0.25, -88, 88);
+    camCur.yaw += (camGoal.yaw - camCur.yaw) * 0.6; camCur.pitch += (camGoal.pitch - camCur.pitch) * 0.6;
+  } else panBy(dx, dy);
+}
+function onPointerUp(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* already released */ }
+  if (e.type !== 'pointercancel' && drag && drag.mode !== 'pinch' && drag.moved < 5 && performance.now() - drag.t < 600 && e.button !== 2) {
+    const r = canvas.getBoundingClientRect();
+    selectRay((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  }
+  if (pointers.size === 0) { drag = null; canvas.classList.remove('dragging'); }
+  else if (pointers.size === 1) { const [p] = [...pointers.values()]; drag = { mode: 'orbit', x: p.x, y: p.y, sx: p.x, sy: p.y, t: 0, moved: 99 }; }
+}
+function onWheel(e) {
+  e.preventDefault(); stopTour();
+  const dy = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
+  camGoal.dist = clamp(camGoal.dist * Math.exp(dy * 0.0012), minCamR(), 220);
+}
+function onKey(e) {
+  const tag = (e.target && e.target.tagName) || '';
+  if (e.key === 'Escape') { if (!$('#help').classList.contains('hidden')) { toggleHelp(false); return; } clearSelection(); return; }
+  if (!$('#help').classList.contains('hidden') && e.key !== '?') return;
+  if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'SUMMARY'].includes(tag) && e.key !== '?') { if (!((tag === 'BUTTON' || tag === 'SUMMARY') && !['Enter', ' '].includes(e.key))) return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  let handled = true;
+  const step = e.repeat ? 3 : 6;
+  if (k === ' ') togglePause();
+  else if (k >= '1' && k <= '6') { stopTour(); applyPreset(+k - 1); }
+  else if (k === 'o' || k === 'O') { setParam('autoOrbit', !P.autoOrbit); toast('Auto-orbit ' + (P.autoOrbit ? 'on' : 'off')); }
+  else if (k === 'c' || k === 'C') (tour.on ? stopTour() : startTour());
+  else if (k === 'm') { setParam('mode', (P.mode + 1) % MODES.length); toast(MODES[P.mode]); }
+  else if (k === 'M') { setParam('mode', (P.mode + MODES.length - 1) % MODES.length); toast(MODES[P.mode]); }
+  else if (k === 'r' || k === 'R') resetCamera();
+  else if (k === 'h' || k === 'H') { const hid = !$('#panel').classList.contains('hidden'); uiHidden = hid; ['#panel', '#hud', '#legend', '#panelToggle'].forEach(s => $(s).classList.toggle('hidden', hid)); if (!hid) { $('#hud').classList.toggle('hidden', !P.hud); updateLegend(); } updateViewShift(); }
+  else if (k === '?') toggleHelp($('#help').classList.contains('hidden'));
+  else if (k === '+' || k === '=') camGoal.dist = clamp(camGoal.dist / 1.12, minCamR(), 220);
+  else if (k === '-' || k === '_') camGoal.dist = clamp(camGoal.dist * 1.12, minCamR(), 220);
+  else if (['ArrowLeft', 'a', 'A'].includes(k)) { e.shiftKey ? panBy(40, 0) : (camGoal.yaw += step); }
+  else if (['ArrowRight', 'd', 'D'].includes(k)) { e.shiftKey ? panBy(-40, 0) : (camGoal.yaw -= step); }
+  else if (['ArrowUp', 'w', 'W'].includes(k)) { e.shiftKey ? panBy(0, 40) : (camGoal.pitch = clamp(camGoal.pitch + step, -88, 88)); }
+  else if (['ArrowDown', 's', 'S'].includes(k)) { e.shiftKey ? panBy(0, -40) : (camGoal.pitch = clamp(camGoal.pitch - step, -88, 88)); }
+  else handled = false;
+  if (handled) { e.preventDefault(); if (!['c', 'C', ' '].includes(k)) stopTour(); }
+}
+
+function toggleHelp(show) {
+  $('#help').classList.toggle('hidden', !show);
+  if (show) $('#helpClose').focus(); else canvas.focus({ preventScroll: true });
+}
+
+/* =====================================================================
+   Main loop
+   ===================================================================== */
+let lastT = performance.now();
+let prevCamKey = '';
+let lastHud = 0, lastTimeSync = 0;
+function frame(now) {
+  if (!running) return;
+  requestAnimationFrame(frame);
+  const rawDt = Math.max(0, (now - lastT) / 1000);
+  const dt = Math.min(0.1, rawDt);
+  lastT = now;
+  updateCamera(dt);
+  if (!P.paused && P.timeSpeed !== 0) {
+    P.time += P.timeSpeed * dt;
+    if (P.time > 5000) P.time -= 5000; if (P.time < 0) P.time += 5000;
+    if (now - lastTimeSync > 250) { syncControl('time'); lastTimeSync = now; }
+    dirty = true;
+  }
+  const camKey = [...cam.pos, ...cam.fwd, cam.tanHalf, cam.cx].map(v => v.toFixed(6)).join(',');
+  const camMoved = camKey !== prevCamKey;
+  prevCamKey = camKey;
+  if (camMoved) { dirty = true; if (sel) selDirty = true; }
+  if (contextLost || shaderStatus !== 'ok') return;
+  resize(false);
+  const timeRunning = !P.paused && P.timeSpeed !== 0;
+  const reset = camMoved || !P.accumulate || forceReset || (dirty && !timeRunning);
+  if (reset) accumN = 0;
+  // Idle when fully converged and nothing changes
+  if (P.accumulate && !timeRunning && !dirty && !forceReset && accumN >= 256) {
+    if (!idle) { idle = true; updateHud(); }
+    drawOverlayIfNeeded(now);
+    if (now - lastHud > 500) { updateHud(); lastHud = now; }
+    fpsState.t0 = now; fpsState.frames = 0;
+    return;
+  }
+  idle = false;
+  let histW = 0, jx = 0, jy = 0;
+  if (P.accumulate && !reset) {
+    accumN++;
+    histW = timeRunning ? Math.min(accumN / (accumN + 1), 0.72) : accumN / (accumN + 1);
+    jx = halton(accumN % 64 + 1, 2) - 0.5; jy = halton(accumN % 64 + 1, 3) - 0.5;
+  }
+  frameNo = (frameNo + 1) | 0;
+  renderFrame(histW, jx, jy);
+  dirty = false; forceReset = false;
+  if (frameNo % 15 === 0) readStats();
+  if (sel && selDirty && now - selLastTrace > 120) traceSelected();
+  drawOverlayIfNeeded(now, true);
+  // FPS + adaptive resolution
+  fpsState.frames++;
+  fpsState.emaMs = fpsState.emaMs * 0.9 + (dt * 1000) * 0.1;
+  maxDtWin = Math.max(maxDtWin, rawDt);
+  if (now - fpsState.t0 > 500) {
+    fpsState.fps = fpsState.frames * 1000 / (now - fpsState.t0);
+    fpsState.frames = 0; fpsState.t0 = now;
+    // A single long frame (tab switch, GC, screenshot, shader compile) is a hitch, not sustained load: skip adapting.
+    const avgDt = 1 / Math.max(fpsState.fps, 1e-3);
+    const hitch = (maxDtWin > 0.2 && maxDtWin > 4 * avgDt) || document.hidden; // one outlier frame ≠ sustained load
+    maxDtWin = 0;
+    if (P.adaptive && !hitch && now > warmupUntil && now - lastAdapt > 1000) {
+      const tgt = P.targetFps;
+      let ns = adaptScale;
+      lowCount = fpsState.fps < tgt * 0.88 ? lowCount + 1 : 0;
+      const minScale = clamp(160 / Math.max(1, ch * P.renderScale), 0.3, 1); // never below ~160 px on the short side
+      if (lowCount >= 2) ns = Math.max(minScale, adaptScale * clamp(Math.sqrt(fpsState.fps / tgt), 0.6, 0.93));
+      else if (fpsState.fps >= tgt * 0.97 && adaptScale < 1 && now - lastDown > 5000) ns = Math.min(1, adaptScale * 1.07); // meets target (vsync-safe)
+      if (Math.abs(ns - adaptScale) > 0.01) { if (ns < adaptScale) lastDown = now; adaptScale = ns; lastAdapt = now; resize(false); }
+    }
+  }
+  if (now - lastHud > 250) { updateHud(); lastHud = now; }
+}
+let lastOvl = 0;
+function drawOverlayIfNeeded(now, force) { if (force || now - lastOvl > 200) { drawOverlay(); lastOvl = now; } }
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+function boot() {
+  buildPanel();
+  updateViewShift(); camCur.cx = camGoal.cx;
+  computeCamera();
+  updateLegend();
+  window.__bh = {
+    P, Phys, caps, cam, camGoal, get state() {
+      return { shaderStatus, fps: fpsState.fps, frameMs: fpsState.emaMs, internal: [iw, ih], canvas: [cw, ch], dpr, adaptScale, accumN, idle,
+        avgSteps: lastStats.avg, maxSteps: lastStats.max, mode: MODES[P.mode], quality: P.quality, camR: cam.r, paused: P.paused, time: P.time,
+        contextLost, hdr: caps.hdr, probe: caps.probe, renderer: caps.renderer, glErrors: glErrors.slice(), selected: selData ? summarizeSel() : null };
+    },
+    selectAt: (fx, fy) => { selectRay(fx, fy); return summarizeSel(); },
+    physParams, gpuProbe: (fx, fy) => { const [px, py] = pixelFromFrac(fx, fy); return gpuProbe(px, py); },
+    cpuTrace: (fx, fy) => { const [px, py] = pixelFromFrac(fx, fy); return Phys.traceRay(cam.pos, rayDirForPixel(px, py), physParams(), false); },
+    setParam, applyPreset, clearSelection,
+    glError: () => (gl ? gl.getError() : -1),
+  };
+  const ok = initGL();
+  if (!ok) return;
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('dblclick', () => { camGoal.tx = camGoal.ty = camGoal.tz = 0; });
+  window.addEventListener('keydown', onKey);
+  document.addEventListener('visibilitychange', () => { lastT = performance.now(); fpsState.t0 = lastT; fpsState.frames = 0; lowCount = 0; });
+  $('#rayClose').onclick = clearSelection;
+  $('#helpBtn').onclick = () => toggleHelp(true);
+  $('#helpClose').onclick = () => toggleHelp(false);
+  $('#help').addEventListener('click', e => { if (e.target.id === 'help') toggleHelp(false); });
+  const tg = $('#panelToggle');
+  tg.onclick = () => { const o = $('#panel').classList.toggle('open'); tg.setAttribute('aria-expanded', o); tg.textContent = o ? '✕ Close' : '☰ Controls'; };
+  new ResizeObserver(() => { resize(false); updateViewShift(); drawOverlay(); if (selData) drawDiagram(); }).observe($('#app'));
+  window.addEventListener('resize', () => resize(false));
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); contextLost = true; running = false; toast('WebGL context lost — waiting for the GPU to restore it…'); updateHud(); $('#hud').innerHTML += '\n<span class="warn">GPU context lost — rendering suspended</span>'; });
+  let lossCount = 0;
+  canvas.addEventListener('webglcontextrestored', () => {
+    contextLost = false; lossCount++;
+    if (lossCount >= 2 && P.quality !== 'low') { Object.assign(P, QUALITY.low, { quality: 'low' }); for (const k of Object.keys(controlsEls)) syncControl(k); toast('GPU reset twice — switched to Low quality'); }
+    forceReset = true; progs = {}; targets = { accum: [], bloom: [], stats: null, probe: null }; cw = ch = 0;
+    if (setupResources()) { running = true; lastT = performance.now(); requestAnimationFrame(frame); toast('WebGL context restored'); }
+  });
+  if (SIM.has('contextloss')) setTimeout(() => { const ext = gl.getExtension('WEBGL_lose_context'); if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 2500); } }, 2500);
+  const err = gl.getError(); if (err) glErrors.push(err);
+  running = true;
+  requestAnimationFrame(frame);
+}
+function summarizeSel() {
+  if (!selData) return null;
+  const { cpu, gpu } = selData;
+  return { px: selData.px, py: selData.py, fate: Phys.FATE_NAMES[cpu.fate], steps: cpu.steps, gpuSteps: gpu && gpu.steps, gpuFate: gpu && Phys.FATE_NAMES[gpu.fate],
+    rmin: cpu.rmin, gpuRmin: gpu && gpu.rmin, deflDeg: cpu.defl / DEG, gpuDeflDeg: gpu && gpu.defl / DEG, b: cpu.b, crossings: cpu.crossings,
+    hitGeo: cpu.hitGeo && { r: cpu.hitGeo.r, phiDeg: cpu.hitGeo.phi / DEG, order: cpu.hitGeo.order }, gpuHit: gpu && gpu.hitGeo,
+    em: cpu.em, gpuEm: gpu && gpu.em, T: cpu.T, gpuT: gpu && gpu.T, pathPoints: cpu.path.length };
+}
+window.addEventListener('error', (e) => { glErrors.push(String(e.message)); });
+boot();
+})();
+</script>
+</body>
+</html>

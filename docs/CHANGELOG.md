@@ -1,5 +1,12 @@
 # Changelog
 
+## SWE-2's Capstone and Opus 5.5 through prompt 08: 2026-09-29
+
+- Added SWE-2's *Oatworks*, a slime-mould network foundry, completing its 24-prompt collection.
+- Added Opus 5.5's black-hole explorer, wave laboratory, orbital mission planner, and SDF/CSG studio. The showcase now contains 139 builds across eight models; model order and setup are unchanged.
+- Updated supplied screenshot previews and sharing pages while preserving original submissions and excluding raw evidence from the website.
+- Added a slow-start notice for Opus 5.5's SDF/CSG shader compilation.
+
 ## SWE-2 through prompt 23 and Gemini's complete set: 2026-09-29
 
 - Added nine SWE-2 builds for prompts 15–23 and Gemini's spreadsheet, project planner, and Capstone. Gemini now covers all 24 prompts; SWE-2 covers 01–23.

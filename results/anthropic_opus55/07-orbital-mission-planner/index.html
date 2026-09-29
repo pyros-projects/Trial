@@ -1,0 +1,2622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Orbital Mission Planner — N-body sandbox</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#04060b; --panel:rgba(9,13,23,.93); --panel2:#0d1422; --line:#1e2a41; --line2:#2b3b59;
+  --text:#dbe6f5; --dim:#8a9bb6; --faint:#5d6d88; --accent:#5ccfff; --accent2:#a38cff;
+  --warn:#ffb547; --bad:#ff5f7a; --good:#62e3a4; --node:#ffb547;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,Cantarell,sans-serif;
+  --tbh:56px; --sheet:min(60vh,540px);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.35 var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+#view{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none;cursor:grab;outline:none}
+#view.dragging{cursor:grabbing}#view.pointer{cursor:pointer}#view.addnode{cursor:copy}#view.move{cursor:move}
+button,select,input{font:inherit;color:inherit}
+button{background:#132035;border:1px solid var(--line2);border-radius:7px;padding:5px 10px;cursor:pointer;min-height:32px;white-space:nowrap}
+button:hover{border-color:var(--accent)}button:active{transform:translateY(1px)}
+button.primary{background:linear-gradient(#1b5877,#153f58);border-color:#2f86b5}
+button.warnb{border-color:#7a5520;color:#ffd79a}
+button.danger{border-color:#6d2a3a;color:#ffc3cd}
+button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+select,input[type=number],input[type=text]{background:#0a111e;border:1px solid var(--line2);border-radius:6px;padding:4px 6px;min-height:30px;max-width:100%}
+input[type=number],input[type=text]{width:100%}
+input[type=range]{width:100%;accent-color:var(--accent);margin:4px 0}
+input.bad{border-color:var(--bad)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* HUD */
+#hud{position:fixed;left:10px;top:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:12px/1.45 var(--mono);pointer-events:none;min-width:236px;z-index:5;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#hud .hr{display:flex;justify-content:space-between;gap:14px}
+#hud .k{color:var(--dim)}#hud b{font-weight:600}
+#hud .good{color:var(--good)}#hud .warn{color:var(--warn)}#hud .bad{color:var(--bad)}
+#errWrap{margin-top:6px;border-top:1px solid var(--line);padding-top:5px}
+#errWrap .cap{display:flex;justify-content:space-between;color:var(--dim);font-size:10.5px}
+#errPlot{display:block;width:216px;height:64px}
+/* toolbar */
+#toolbar{position:fixed;bottom:10px;left:10px;right:386px;display:flex;justify-content:center;pointer-events:none;z-index:6}
+body.collapsed #toolbar{right:10px}
+body.collapsed #toasts{left:50%}
+#toolbar .bar{pointer-events:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 8px;box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:100%}
+#toolbar .grp{display:flex;align-items:center;gap:5px}
+#warpR{width:130px}
+#warpLbl{font:12px var(--mono);min-width:92px;text-align:center;color:var(--accent)}
+#btnPlay{min-width:44px;font-size:15px}
+#frameSel{max-width:210px}
+/* panel */
+#panel{position:fixed;top:10px;right:10px;bottom:10px;width:366px;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;z-index:7;box-shadow:0 10px 32px rgba(0,0,0,.45)}
+body.collapsed #panel{display:none}
+.tabs{display:flex;gap:2px;padding:6px 6px 0;border-bottom:1px solid var(--line);flex:none;overflow-x:auto}
+.tabs button{border:none;border-bottom:2px solid transparent;border-radius:6px 6px 0 0;background:transparent;color:var(--dim);padding:6px 8px;min-height:30px}
+.tabs button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent);background:#101a2c}
+.tabbody{overflow-y:auto;padding:10px 12px 16px;flex:1}
+.tabbody[hidden]{display:none}
+h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px;font-weight:600}
+h3:first-child{margin-top:2px}
+.fld{display:grid;grid-template-columns:118px 1fr;align-items:center;gap:6px;margin:5px 0}
+.fld>span{color:var(--dim);font-size:12px}
+.fld select{width:100%;min-width:0}
+.fld{min-width:0}
+.fld2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.hint{color:var(--faint);font-size:11.5px;margin:4px 0}
+.chk{display:flex;align-items:center;gap:7px;padding:3px 0;cursor:pointer}
+.chk input{width:16px;height:16px;accent-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+table.tel{width:100%;border-collapse:collapse;font:11.5px/1.35 var(--mono)}
+table.tel td{padding:2px 0;vertical-align:top;border-bottom:1px solid rgba(40,55,85,.35)}
+table.tel td:first-child{color:var(--dim);width:42%;font-family:var(--sans);font-size:11.5px}
+table.tel tr.sec td{color:var(--accent);font-family:var(--sans);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:7px;border-bottom:none}
+.val-good{color:var(--good)}.val-warn{color:var(--warn)}.val-bad{color:var(--bad)}
+details{border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin:8px 0;background:rgba(10,16,28,.6)}
+summary{cursor:pointer;color:var(--dim);padding:3px 0}
+ol.nodes{list-style:none;padding:0;margin:6px 0}
+ol.nodes li{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:5px 6px;margin:4px 0;background:#0b1321}
+ol.nodes li.sel{border-color:var(--node);box-shadow:0 0 0 1px rgba(255,181,71,.35) inset}
+ol.nodes li.done{opacity:.6}
+ol.nodes li .nm{flex:1;font:11.5px var(--mono);cursor:pointer;background:none;border:none;text-align:left;padding:2px;min-height:26px}
+ol.nodes li .x{min-height:26px;padding:2px 8px}
+#nodeEdit{border:1px solid rgba(255,181,71,.45);border-radius:10px;padding:8px;margin:8px 0;background:rgba(40,28,8,.25)}
+#nodeEdit[hidden]{display:none}
+.dvrow{display:grid;grid-template-columns:64px 1fr 84px;gap:6px;align-items:center;margin:4px 0}
+.dvrow span{color:var(--dim);font-size:12px}
+.tbtns{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0}
+.tbtns button{padding:3px 7px;min-height:28px;font-size:12px}
+.readout{font:11.5px/1.5 var(--mono);background:#08101c;border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-top:6px;white-space:pre-wrap}
+ol.log{list-style:none;padding:0;margin:4px 0;font:11px/1.45 var(--mono);color:var(--dim);max-height:180px;overflow:auto}
+ol.log li{border-bottom:1px solid rgba(40,55,85,.35);padding:2px 0}
+ol.log li.burn{color:#ffd08a}ol.log li.impact{color:#ff9aaa}ol.log li.soi{color:#9fe4ff}
+.scn{display:block;width:100%;text-align:left;margin:6px 0;padding:8px 10px;white-space:normal;line-height:1.35}
+.scn b{display:block;margin-bottom:2px}.scn small{color:var(--dim)}
+.scn.cur{border-color:var(--accent);background:#10263a}
+#scnNote{border-left:3px solid var(--accent);padding:4px 8px;color:var(--dim);font-size:12px;margin:6px 0}
+/* toasts, tooltip, banner, help */
+#toasts{position:fixed;bottom:calc(var(--tbh) + 16px);left:calc((100vw - 386px) / 2);transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:20;pointer-events:none;align-items:center;max-width:92vw}
+.toast{background:rgba(14,24,40,.96);border:1px solid var(--line2);border-radius:9px;padding:7px 12px;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.4);animation:tin .2s ease-out}
+.toast.burn{border-color:#8a6420}.toast.bad{border-color:#80303f}
+@keyframes tin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+#tip{position:fixed;pointer-events:none;background:rgba(10,16,28,.95);border:1px solid var(--line2);border-radius:6px;padding:4px 8px;font:11.5px var(--mono);z-index:15;white-space:nowrap}
+#tip[hidden]{display:none}
+#banner{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:#2a0f17;border:1px solid var(--bad);color:#ffd0d8;border-radius:10px;padding:10px 14px;z-index:21;max-width:min(560px,92vw);font-size:13px}
+#banner[hidden]{display:none}
+#banner .row{margin-top:8px}
+#help{position:fixed;inset:0;background:rgba(2,4,8,.72);z-index:30;display:flex;align-items:center;justify-content:center}
+#help[hidden]{display:none}
+#help .card{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:16px 18px;max-width:min(640px,94vw);max-height:88vh;overflow:auto}
+#help kbd{font:11.5px var(--mono);background:#16233a;border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+#help td{padding:3px 10px 3px 0;vertical-align:top}
+@media (max-width:820px){
+  #hud{font-size:10px;line-height:1.3;padding:4px 7px;min-width:0;left:4px;right:4px;top:4px;border-radius:8px;display:grid;grid-template-columns:1fr 1fr;column-gap:12px}
+  #hud .hr{gap:6px}
+  #errWrap{grid-column:1 / span 2;margin-top:3px;padding-top:3px;display:flex;align-items:center;gap:8px}
+  #errWrap .cap{flex-direction:column;font-size:9.5px}
+  #errPlot{width:auto;flex:1;height:26px}
+  body.sheet #errWrap{display:none !important}
+  #toolbar .grp:nth-of-type(1){order:1}#toolbar .grp:nth-of-type(2){order:2}#toolbar .grp:nth-of-type(4){order:3}
+  #toolbar .grp:nth-of-type(3){order:4}#frameSel{order:5}
+  #toolbar{left:4px;right:4px;bottom:4px}
+  body.collapsed #toolbar{right:4px}
+  #toolbar .bar{gap:4px;padding:5px;width:100%}
+  #warpR{width:100%;order:9;flex-basis:100%}
+  #warpLbl{min-width:74px;font-size:11px}
+  button{padding:3px 8px;min-height:30px}
+  #frameSel{max-width:160px;min-height:30px}
+  #panel{top:auto;left:0;right:0;bottom:0;width:auto;height:var(--sheet);border-radius:14px 14px 0 0;transform:translateY(105%);transition:transform .22s ease}
+  body.collapsed #panel{display:flex}
+  body.sheet #panel{transform:none}
+  body.sheet #toolbar{bottom:calc(var(--sheet) + 4px)}
+  #toasts{top:auto;left:50%;bottom:calc(var(--tbh) + 14px)}
+  body.sheet #toasts{display:none}
+  .fld{grid-template-columns:104px 1fr}
+}
+</style>
+</head>
+<body>
+<canvas id="view" tabindex="0" aria-label="Orbital simulation view. Drag to pan, wheel or pinch to zoom, click objects to select, click a predicted path to add a maneuver node."></canvas>
+
+<div id="hud" aria-live="off">
+  <div class="hr"><span class="k">FPS</span><b id="hFps">–</b></div>
+  <div class="hr"><span class="k">Sim time</span><b id="hTime">–</b></div>
+  <div class="hr"><span class="k">Warp</span><b id="hWarp">–</b></div>
+  <div class="hr"><span class="k">Steps/frame</span><b id="hSteps">–</b></div>
+  <div class="hr"><span class="k">Bodies</span><b id="hBodies">–</b></div>
+  <div class="hr"><span class="k">Energy err</span><b id="hErr">–</b></div>
+  <div class="hr"><span class="k">Frame</span><b id="hFrame">–</b></div>
+  <div class="hr"><span class="k">State</span><b id="hState">–</b></div>
+  <div id="errWrap"><div class="cap"><span>log₁₀ rel. error</span><span><span style="color:#ffb547">E</span> <span style="color:#5ccfff">L</span> <span style="color:#62e3a4">p</span></span></div><canvas id="errPlot" aria-label="Integration error history plot"></canvas></div>
+</div>
+
+<div id="toolbar"><div class="bar" role="toolbar" aria-label="Simulation time controls">
+  <div class="grp">
+    <button id="btnPlay" class="primary" aria-label="Pause simulation" title="Play / pause (Space)">⏸</button>
+    <button id="btnStep" aria-label="Single step" title="Single integration step (S)">Step</button>
+  </div>
+  <div class="grp">
+    <button id="btnSlower" aria-label="Decrease time warp" title="Slower (,)">«</button>
+    <span id="warpLbl" aria-live="polite">×36k</span>
+    <button id="btnFaster" aria-label="Increase time warp" title="Faster (.)">»</button>
+  </div>
+  <input id="warpR" type="range" min="-2" max="3.7" step="0.01" value="1" aria-label="Time warp (log scale)">
+  <div class="grp">
+    <button id="btnSave" aria-label="Save checkpoint" title="Save checkpoint (K)">Save</button>
+    <button id="btnRestore" aria-label="Restore checkpoint" title="Rewind to saved checkpoint (L)">Rewind</button>
+    <button id="btnReset" class="warnb" aria-label="Reset scenario" title="Restart scenario (R)">Reset</button>
+  </div>
+  <select id="frameSel" aria-label="Reference frame" title="Reference frame (V cycles)"></select>
+  <div class="grp">
+    <button id="btnPanel" aria-label="Toggle control panel" title="Toggle panel">☰</button>
+    <button id="btnHelp" aria-label="Help and shortcuts" title="Help (?)">?</button>
+  </div>
+</div></div>
+
+<aside id="panel" aria-label="Mission control panel">
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tb-obj" data-tab="obj" aria-selected="true" aria-controls="tab-obj">Object</button>
+    <button role="tab" id="tb-mnv" data-tab="mnv" aria-selected="false" aria-controls="tab-mnv">Maneuvers</button>
+    <button role="tab" id="tb-phys" data-tab="phys" aria-selected="false" aria-controls="tab-phys">Physics</button>
+    <button role="tab" id="tb-view" data-tab="view" aria-selected="false" aria-controls="tab-view">View</button>
+    <button role="tab" id="tb-scn" data-tab="scn" aria-selected="false" aria-controls="tab-scn">Scenarios</button>
+  </div>
+
+  <section class="tabbody" id="tab-obj" role="tabpanel" aria-labelledby="tb-obj">
+    <label class="fld"><span>Selected</span><select id="objSel" aria-label="Selected object"></select></label>
+    <label class="fld"><span>Orbit relative to</span><select id="telRef" aria-label="Telemetry reference body"></select></label>
+    <table class="tel" id="telTable" aria-label="Telemetry"></table>
+    <div class="row">
+      <button id="btnFocus" title="Center and zoom on selection (F)">Focus</button>
+      <button id="btnAddCraft" title="Add a spacecraft in circular orbit around the selected body">+ Craft</button>
+      <button id="btnAddBody" title="Add a massive body in circular orbit around the selected body">+ Body</button>
+      <button id="btnDelete" class="danger" title="Remove selected object">Delete</button>
+    </div>
+    <details id="editBox">
+      <summary>Edit properties &amp; state vector</summary>
+      <p class="hint" id="editHint">Pause to edit. Position/velocity are inertial (barycentric) coordinates. While paused you can also drag a spacecraft or its velocity handle on the canvas.</p>
+      <label class="fld"><span>Name</span><input id="edName" type="text" aria-label="Name"></label>
+      <div class="fld2">
+        <label class="fld" style="grid-template-columns:48px 1fr"><span>Mass</span><input id="edMass" type="number" step="any" min="1e-12" aria-label="Mass (must be > 0)"></label>
+        <label class="fld" style="grid-template-columns:48px 1fr"><span>Radius</span><input id="edRad" type="number" step="any" min="0" aria-label="Radius (Mm)"></label>
+        <label class="fld" style="grid-template-columns:48px 1fr"><span>x</span><input id="edX" type="number" step="any" aria-label="Position x (Mm)"></label>
+        <label class="fld" style="grid-template-columns:48px 1fr"><span>y</span><input id="edY" type="number" step="any" aria-label="Position y (Mm)"></label>
+        <label class="fld" style="grid-template-columns:48px 1fr"><span>vx</span><input id="edVX" type="number" step="any" aria-label="Velocity x (Mm/h)"></label>
+        <label class="fld" style="grid-template-columns:48px 1fr"><span>vy</span><input id="edVY" type="number" step="any" aria-label="Velocity y (Mm/h)"></label>
+      </div>
+      <label class="fld"><span>Display scale</span><input id="edDisp" type="number" step="any" min="0.1" max="100" aria-label="Display scale"></label>
+      <div class="row"><button id="btnApply" class="primary">Apply</button><span class="hint" id="edMsg"></span></div>
+    </details>
+  </section>
+
+  <section class="tabbody" id="tab-mnv" role="tabpanel" aria-labelledby="tb-mnv" hidden>
+    <div class="readout" id="mnvHead">–</div>
+    <div class="row">
+      <button id="btnAddNode" class="primary" title="Add maneuver node (N)">+ Node</button>
+      <button id="btnWarpNode" title="Fast-forward to just before the next burn">Warp to next burn</button>
+    </div>
+    <p class="hint">Click the spacecraft's predicted path to drop a node there. Drag a node to slide it along the path, and drag its arrows (P± prograde, R± radial) to shape the burn. Arrow keys nudge the selected node.</p>
+    <ol class="nodes" id="nodeList" aria-label="Maneuver nodes"></ol>
+    <div id="nodeEdit" hidden>
+      <label class="fld"><span>Burn time t (h)</span><input id="ndT" type="number" step="0.1" aria-label="Burn time (mission hours)"></label>
+      <div class="tbtns" role="group" aria-label="Adjust burn time">
+        <button data-dt="-1">−1 h</button><button data-dt="-0.1">−0.1</button><button data-dt="0.1">+0.1</button><button data-dt="1">+1 h</button>
+        <button id="ndPe" title="Move to next periapsis">Next Pe</button><button id="ndAp" title="Move to next apoapsis">Next Ap</button>
+      </div>
+      <label class="fld"><span>Components</span><select id="ndMode" aria-label="Delta-v components"><option value="orb">Prograde / radial</option><option value="cart">Cartesian x / y</option></select></label>
+      <label class="fld"><span>Reference body</span><select id="ndRef" aria-label="Burn reference body"></select></label>
+      <div id="ndOrb">
+        <div class="dvrow"><span>Prograde</span><input id="ndProR" type="range" min="-1" max="1" step="0.001" aria-label="Prograde delta-v slider"><input id="ndPro" type="number" step="0.001" aria-label="Prograde delta-v (Mm/h)"></div>
+        <div class="dvrow"><span>Radial out</span><input id="ndRadR" type="range" min="-1" max="1" step="0.001" aria-label="Radial delta-v slider"><input id="ndRad" type="number" step="0.001" aria-label="Radial delta-v (Mm/h)"></div>
+        <div class="dvrow"><span>Normal</span><span class="hint" style="grid-column:span 2">n/a — planar (2-D) simulation</span></div>
+      </div>
+      <div id="ndCart" hidden>
+        <div class="dvrow"><span>Δv x</span><input id="ndDxR" type="range" min="-1" max="1" step="0.001" aria-label="Delta-v x slider"><input id="ndDx" type="number" step="0.001" aria-label="Delta-v x (Mm/h)"></div>
+        <div class="dvrow"><span>Δv y</span><input id="ndDyR" type="range" min="-1" max="1" step="0.001" aria-label="Delta-v y slider"><input id="ndDy" type="number" step="0.001" aria-label="Delta-v y (Mm/h)"></div>
+      </div>
+      <div class="readout" id="ndInfo">–</div>
+      <div class="row"><button id="ndDel" class="danger">Delete node</button></div>
+    </div>
+    <h3>Predicted closest approaches</h3>
+    <div class="readout" id="encList">–</div>
+    <h3>Mission log</h3>
+    <ol class="log" id="logList"></ol>
+  </section>
+
+  <section class="tabbody" id="tab-phys" role="tabpanel" aria-labelledby="tb-phys" hidden>
+    <h3>Model</h3>
+    <label class="fld"><span>Gravity model</span><select id="phModel" aria-label="Simulation model"><option value="nbody">Full N-body (all mutual)</option><option value="restricted">Restricted (craft massless)</option></select></label>
+    <label class="fld"><span>Integrator</span><select id="phInt" aria-label="Integrator"><option value="leapfrog">Leapfrog / velocity Verlet (2nd, symplectic)</option><option value="yoshida4">Yoshida (4th, symplectic)</option><option value="rk4">Runge–Kutta 4 (non-symplectic)</option><option value="dopri">Dormand–Prince 5(4) adaptive</option></select></label>
+    <label class="fld"><span>Timestep dt (h)</span><input id="phDt" type="number" step="any" min="0.0005" max="50" aria-label="Integration timestep (hours)"></label>
+    <input id="phDtR" type="range" min="-3.3" max="1.7" step="0.01" aria-label="Integration timestep slider (log)">
+    <label class="fld"><span>Tolerance</span><select id="phTol" aria-label="Adaptive integrator tolerance"><option value="1e-6">1e-6</option><option value="1e-8">1e-8</option><option value="1e-9">1e-9</option><option value="1e-10">1e-10</option><option value="1e-11">1e-11</option><option value="1e-12">1e-12</option></select></label>
+    <p class="hint" id="phTolHint">Tolerance applies to the adaptive Dormand–Prince integrator (sub-steps inside each dt).</p>
+    <label class="fld"><span>G (grav. const.)</span><input id="phG" type="number" step="any" min="0.01" max="100" aria-label="Gravitational constant"></label>
+    <label class="fld"><span>Collisions</span><select id="phCol" aria-label="Collision behavior"><option value="merge">Merge bodies / craft crash</option><option value="bounce">Elastic bounce</option><option value="none">Pass through (point masses)</option></select></label>
+    <h3>Prediction</h3>
+    <label class="fld"><span>Horizon (h)</span><input id="phHor" type="number" step="any" min="1" max="20000" aria-label="Prediction horizon (hours)"></label>
+    <label class="fld"><span>Resolution step (h)</span><input id="phPdt" type="number" step="any" min="0.0005" max="50" aria-label="Prediction step (hours)"></label>
+    <label class="chk"><input id="phPdtLink" type="checkbox" checked> Match simulation dt (bit-identical forecast)</label>
+    <h3>Conservation</h3>
+    <div class="readout" id="phInv">–</div>
+    <div class="row"><button id="phRebase" title="Take the current invariants as the new reference">Rebaseline</button></div>
+    <p class="hint">Units: length Mm (1000 km), time h, G = 1 by default (masses in derived units). Burns, collisions and edits shift the reference energy by exactly the injected amount, so the error shown is integration error only.</p>
+  </section>
+
+  <section class="tabbody" id="tab-view" role="tabpanel" aria-labelledby="tb-view" hidden>
+    <h3>Overlays</h3>
+    <div class="grid2">
+      <label class="chk"><input type="checkbox" id="vTrails" checked> Trails</label>
+      <label class="chk"><input type="checkbox" id="vPred" checked> Predictions</label>
+      <label class="chk"><input type="checkbox" id="vVel" checked> Velocity vectors</label>
+      <label class="chk"><input type="checkbox" id="vAcc"> Accel. vectors (√)</label>
+      <label class="chk"><input type="checkbox" id="vGuides" checked> Orbital guides</label>
+      <label class="chk"><input type="checkbox" id="vSoi"> Spheres of influence</label>
+      <label class="chk"><input type="checkbox" id="vPot"> Grav. potential</label>
+      <label class="chk"><input type="checkbox" id="vEnc" checked> Encounter markers</label>
+      <label class="chk"><input type="checkbox" id="vErr" checked> Integration error</label>
+      <label class="chk"><input type="checkbox" id="vLabels" checked> Labels</label>
+    </div>
+    <h3>Scales</h3>
+    <label class="fld"><span>Trail length (h)</span><input id="vTrail" type="number" min="0" max="20000" step="any" aria-label="Trail length (hours)"></label>
+    <label class="fld"><span>Body scale ×</span><input id="vBody" type="range" min="0" max="2" step="0.01" aria-label="Body display scale (log)"></label>
+    <label class="fld"><span>Vector scale</span><input id="vVec" type="range" min="0.5" max="3.5" step="0.01" aria-label="Vector length scale (log)"></label>
+    <h3>Camera</h3>
+    <label class="chk"><input type="checkbox" id="vTrack"> Track selected object</label>
+    <div class="row"><button id="vFit">Fit all</button><button id="vZin" aria-label="Zoom in">Zoom +</button><button id="vZout" aria-label="Zoom out">Zoom −</button></div>
+    <p class="hint">The potential overlay shows the frame's effective potential: gravity, plus the fictitious force of an accelerating frame origin, plus the centrifugal term in rotating frames (so Lagrange-point saddles appear). In the inertial frame it is plain gravity.</p>
+  </section>
+
+  <section class="tabbody" id="tab-scn" role="tabpanel" aria-labelledby="tb-scn" hidden>
+    <div id="scnNote">–</div>
+    <div id="scnList"></div>
+  </section>
+</aside>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="tip" hidden></div>
+<div id="banner" role="alert" hidden><b>Numerical blow-up detected.</b> <span id="bannerMsg"></span>
+  <div class="row"><button id="bnRestore">Rewind to checkpoint</button><button id="bnDismiss">Dismiss</button></div></div>
+<div id="help" hidden role="dialog" aria-modal="true" aria-label="Help"><div class="card">
+  <h3 style="margin-top:0">Orbital Mission Planner</h3>
+  <p class="hint" style="font-size:12.5px">A planar N-body sandbox. Every body is integrated numerically; the dashed forecast runs the same integrator (and the same burn logic) ahead of time, so what you plan is what executes.</p>
+  <table>
+    <tr><td><kbd>Space</kbd></td><td>Play / pause</td></tr>
+    <tr><td><kbd>S</kbd></td><td>Single integration step</td></tr>
+    <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>Slower / faster time warp (eased)</td></tr>
+    <tr><td><kbd>K</kbd> / <kbd>L</kbd></td><td>Save checkpoint / rewind to checkpoint</td></tr>
+    <tr><td><kbd>R</kbd></td><td>Restart scenario</td></tr>
+    <tr><td><kbd>V</kbd></td><td>Cycle reference frame</td></tr>
+    <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Cycle selected object</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Focus camera on selection</td></tr>
+    <tr><td><kbd>N</kbd></td><td>Add maneuver node for the selected craft</td></tr>
+    <tr><td><kbd>↑</kbd><kbd>↓</kbd> / <kbd>←</kbd><kbd>→</kbd></td><td>Nudge selected node prograde / radial (Shift = fine)</td></tr>
+    <tr><td><kbd>Del</kbd></td><td>Delete selected node</td></tr>
+    <tr><td><kbd>+</kbd> <kbd>−</kbd></td><td>Zoom</td></tr>
+    <tr><td>Mouse / touch</td><td>Drag empty space to pan · wheel or pinch to zoom · click to select · click predicted path to add node · while paused drag a craft (position) or its velocity handle</td></tr>
+  </table>
+  <div class="row" style="justify-content:flex-end"><button id="helpClose" class="primary">Close</button></div>
+</div></div>
+
+<script>
+(() => {
+'use strict';
+// =====================================================================
+// Utilities
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+function fmtN(v, p = 4) {
+  if (v === Infinity) return '∞';
+  if (v === -Infinity) return '−∞';
+  if (v == null || !isFinite(v)) return '—';
+  const a = Math.abs(v);
+  let s;
+  if (a === 0) s = '0';
+  else if (a >= 1e7 || a < 1e-3) s = v.toExponential(p - 1).replace('e+', 'e');
+  else if (a >= 10 ** p) s = Math.round(v).toString();
+  else s = v.toPrecision(p);
+  return s.replace('-', '−');
+}
+const fmtE = (v) => (!isFinite(v) ? '—' : v === 0 ? '0' : v.toExponential(2).replace('e+', 'e').replace('-', '−'));
+function fmtT(h) {
+  const neg = h < 0; h = Math.abs(h);
+  const d = Math.floor(h / 24), hh = Math.floor(h - d * 24), mm = Math.floor((h - d * 24 - hh) * 60);
+  return (neg ? '−' : '') + d + 'd ' + String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+}
+function fmtWarp(rate) { // rate in sim hours per real second
+  const f = rate * 3600;
+  if (f >= 1e6) return '×' + (f / 1e6).toFixed(f >= 1e7 ? 0 : 1) + 'M';
+  if (f >= 1e3) return '×' + (f / 1e3).toFixed(f >= 1e4 ? 0 : 1) + 'k';
+  return '×' + f.toFixed(0);
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// =====================================================================
+// Physics core — state held in typed arrays so the predictor can clone it cheaply
+// =====================================================================
+const ST_ACTIVE = 0, ST_LANDED = 1, ST_GONE = 2;
+class State {
+  constructor(n) {
+    const F = Float64Array;
+    this.n = n; this.t = 0; this.hAd = 0; this.aOk = false;
+    this.x = new F(n); this.y = new F(n); this.vx = new F(n); this.vy = new F(n);
+    this.m = new F(n); this.r = new F(n); this.ax = new F(n); this.ay = new F(n);
+    this.craft = new Uint8Array(n); this.status = new Uint8Array(n);
+    this.land = new Int32Array(n).fill(-1); this.lox = new F(n); this.loy = new F(n);
+  }
+  clone() {
+    const c = new State(this.n);
+    c.t = this.t; c.hAd = this.hAd; c.aOk = this.aOk;
+    for (const k of State.KEYS) c[k].set(this[k]);
+    return c;
+  }
+}
+State.KEYS = ['x', 'y', 'vx', 'vy', 'm', 'r', 'ax', 'ay', 'craft', 'status', 'land', 'lox', 'loy'];
+
+const SC = { n: -1 };
+function scratch(n) {
+  if (SC.n !== n) {
+    const F = () => new Float64Array(n);
+    SC.n = n; SC.ax = F(); SC.ay = F(); SC.px = F(); SC.py = F(); SC.x0 = F(); SC.y0 = F(); SC.vx0 = F(); SC.vy0 = F(); SC.rnn = F(); SC.vnn = F();
+    SC.KX = []; SC.KY = []; SC.KVX = []; SC.KVY = [];
+    for (let k = 0; k < 7; k++) { SC.KX.push(F()); SC.KY.push(F()); SC.KVX.push(F()); SC.KVY.push(F()); }
+  }
+  return SC;
+}
+
+// Pairwise Newtonian gravity. Restricted model: spacecraft feel gravity but exert none.
+function accel(s, P, X, Y, AX, AY) {
+  const n = s.n, m = s.m, st = s.status, cr = s.craft, G = P.G, restr = P.model === 'restricted';
+  for (let i = 0; i < n; i++) { AX[i] = 0; AY[i] = 0; }
+  for (let i = 0; i < n; i++) {
+    if (st[i]) continue;
+    const xi = X[i], yi = Y[i], mi = restr && cr[i] ? 0 : m[i];
+    for (let j = i + 1; j < n; j++) {
+      if (st[j]) continue;
+      const mj = restr && cr[j] ? 0 : m[j];
+      if (mi === 0 && mj === 0) continue;
+      const dx = X[j] - xi, dy = Y[j] - yi, r2 = dx * dx + dy * dy;
+      if (r2 === 0) continue;
+      const inv = G / (r2 * Math.sqrt(r2));
+      const fi = mj * inv, fj = mi * inv;
+      AX[i] += fi * dx; AY[i] += fi * dy; AX[j] -= fj * dx; AY[j] -= fj * dy;
+    }
+  }
+}
+
+// Leapfrog (kick-drift-kick velocity Verlet), with the end-of-step acceleration cached
+function stepLeapfrog(s, P, h) {
+  const n = s.n, st = s.status, x = s.x, y = s.y, vx = s.vx, vy = s.vy, ax = s.ax, ay = s.ay, hh = 0.5 * h;
+  if (!s.aOk) accel(s, P, x, y, ax, ay);
+  for (let i = 0; i < n; i++) { if (st[i]) continue; vx[i] += hh * ax[i]; vy[i] += hh * ay[i]; x[i] += h * vx[i]; y[i] += h * vy[i]; }
+  accel(s, P, x, y, ax, ay);
+  for (let i = 0; i < n; i++) { if (st[i]) continue; vx[i] += hh * ax[i]; vy[i] += hh * ay[i]; }
+  s.aOk = true;
+}
+// Yoshida 4th-order symplectic composition (drift-kick form)
+const CBRT2 = Math.cbrt(2), YW1 = 1 / (2 - CBRT2), YW0 = -CBRT2 / (2 - CBRT2);
+const YC = [YW1 / 2, (YW0 + YW1) / 2, (YW0 + YW1) / 2, YW1 / 2], YD = [YW1, YW0, YW1];
+function stepYoshida(s, P, h) {
+  const S = scratch(s.n), n = s.n, st = s.status, x = s.x, y = s.y, vx = s.vx, vy = s.vy;
+  for (let k = 0; k < 4; k++) {
+    const c = YC[k] * h;
+    for (let i = 0; i < n; i++) { if (st[i]) continue; x[i] += c * vx[i]; y[i] += c * vy[i]; }
+    if (k < 3) {
+      accel(s, P, x, y, S.ax, S.ay);
+      const d = YD[k] * h;
+      for (let i = 0; i < n; i++) { if (st[i]) continue; vx[i] += d * S.ax[i]; vy[i] += d * S.ay[i]; }
+    }
+  }
+  s.aOk = false;
+}
+// Generic explicit Runge–Kutta stage evaluation for y'' = a(y)
+function evalStage(s, P, S, k, h, coef) {
+  const n = s.n, st = s.status;
+  for (let i = 0; i < n; i++) {
+    let X = s.x[i], Y = s.y[i], VX = s.vx[i], VY = s.vy[i];
+    if (!st[i]) for (let j = 0; j < coef.length; j++) {
+      const c = coef[j] * h; if (c === 0) continue;
+      X += c * S.KX[j][i]; Y += c * S.KY[j][i]; VX += c * S.KVX[j][i]; VY += c * S.KVY[j][i];
+    }
+    S.px[i] = X; S.py[i] = Y; S.KX[k][i] = VX; S.KY[k][i] = VY;
+  }
+  accel(s, P, S.px, S.py, S.KVX[k], S.KVY[k]);
+}
+const RK4A = [[], [0.5], [0, 0.5], [0, 0, 1]], RK4B = [1 / 6, 1 / 3, 1 / 3, 1 / 6];
+function stepRK4(s, P, h) {
+  const S = scratch(s.n), n = s.n, st = s.status;
+  for (let k = 0; k < 4; k++) evalStage(s, P, S, k, h, RK4A[k]);
+  for (let i = 0; i < n; i++) {
+    if (st[i]) continue;
+    for (let j = 0; j < 4; j++) {
+      const c = RK4B[j] * h;
+      s.x[i] += c * S.KX[j][i]; s.y[i] += c * S.KY[j][i]; s.vx[i] += c * S.KVX[j][i]; s.vy[i] += c * S.KVY[j][i];
+    }
+  }
+  s.aOk = false;
+}
+// Dormand–Prince 5(4) with embedded error estimate; sub-steps adaptively inside each outer dt
+const DPA = [[], [1 / 5], [3 / 40, 9 / 40], [44 / 45, -56 / 15, 32 / 9],
+  [19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729],
+  [9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656],
+  [35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84]];
+const DPE = [71 / 57600, 0, -71 / 16695, 71 / 1920, -17253 / 339200, 22 / 525, -1 / 40];
+function dopriTry(s, P, S, h) {
+  const n = s.n, st = s.status, tol = P.tol;
+  // local error scales: distance to, and orbital speed about, the nearest massive neighbour
+  for (let i = 0; i < n; i++) {
+    if (st[i]) continue;
+    let rn = Infinity, mn = 0;
+    for (let j = 0; j < n; j++) {
+      if (j === i || st[j] || s.craft[j] || !(s.m[j] > 0)) continue;
+      const d = Math.hypot(s.x[j] - s.x[i], s.y[j] - s.y[i]);
+      if (d < rn) { rn = d; mn = s.m[j]; }
+    }
+    S.rnn[i] = rn; S.vnn[i] = rn < Infinity ? Math.sqrt(P.G * (mn + s.m[i]) / rn) : 0;
+  }
+  for (let k = 0; k < 7; k++) evalStage(s, P, S, k, h, DPA[k]);
+  let err = 0;
+  for (let i = 0; i < n; i++) {
+    if (st[i]) continue;
+    let ex = 0, ey = 0, evx = 0, evy = 0;
+    for (let j = 0; j < 7; j++) {
+      const e = DPE[j]; if (e === 0) continue;
+      ex += e * S.KX[j][i]; ey += e * S.KY[j][i]; evx += e * S.KVX[j][i]; evy += e * S.KVY[j][i];
+    }
+    const sp = tol * Math.min(S.rnn[i], 1 + Math.max(Math.abs(s.x[i]), Math.abs(S.px[i]), Math.abs(s.y[i]), Math.abs(S.py[i])));
+    const sv = tol * Math.max(Math.hypot(s.vx[i], s.vy[i]), Math.hypot(S.KX[6][i], S.KY[6][i]), S.vnn[i], 1e-9);
+    const q = Math.max(Math.abs(h * ex) / sp, Math.abs(h * ey) / sp, Math.abs(h * evx) / sv, Math.abs(h * evy) / sv);
+    if (q > err) err = q;
+  }
+  return err;
+}
+function stepDopri(s, P, H) {
+  const S = scratch(s.n), n = s.n, st = s.status, dir = H < 0 ? -1 : 1, Ha = Math.abs(H);
+  let done = 0, h = s.hAd > 0 ? Math.min(s.hAd, Ha) : Ha, guard = 0;
+  while (done < Ha) {
+    let last = false;
+    if (h >= Ha - done) { h = Ha - done; last = true; }
+    const err = dopriTry(s, P, S, dir * h);
+    if (err <= 1 || h <= Ha * 1e-11) {
+      for (let i = 0; i < n; i++) { if (st[i]) continue; s.x[i] = S.px[i]; s.y[i] = S.py[i]; s.vx[i] = S.KX[6][i]; s.vy[i] = S.KY[6][i]; }
+      done = last ? Ha : done + h;
+      if (P.onSub && !last) P.onSub(s, s.t + dir * done);
+      const f = err > 0 ? Math.min(5, Math.max(0.2, 0.9 * Math.pow(err, -0.2))) : 5;
+      if (!last || f < 1) s.hAd = h * f;
+      h *= f;
+    } else {
+      h *= Math.max(0.1, 0.9 * Math.pow(err, -0.25));
+    }
+    if (++guard > 60000) throw new Error('adaptive integrator needed more than 60 000 sub-steps in one step');
+  }
+  s.aOk = false;
+}
+function syncLanded(s) {
+  for (let i = 0; i < s.n; i++) {
+    if (s.status[i] !== ST_LANDED) continue;
+    const b = s.land[i];
+    if (b < 0 || s.status[b] === ST_GONE) { s.status[i] = ST_ACTIVE; s.land[i] = -1; continue; }
+    s.x[i] = s.x[b] + s.lox[i]; s.y[i] = s.y[b] + s.loy[i]; s.vx[i] = s.vx[b]; s.vy[i] = s.vy[b];
+  }
+}
+function integrate(s, P, h) {
+  switch (P.integrator) {
+    case 'leapfrog': stepLeapfrog(s, P, h); break;
+    case 'rk4': stepRK4(s, P, h); break;
+    case 'dopri': stepDopri(s, P, h); break;
+    default: stepYoshida(s, P, h);
+  }
+  syncLanded(s);
+}
+
+// --- collisions: swept test against linear motion over the step, then resolve
+// Cubic-Hermite interpolation of a body's path over the step from start/end positions and velocities.
+function herm(u, p0, w0, p1, w1) {
+  const u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * w0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * w1;
+}
+function hermD(u, p0, w0, p1, w1) { // derivative w.r.t. u
+  const u2 = u * u;
+  return (6 * u2 - 6 * u) * p0 + (3 * u2 - 4 * u + 1) * w0 + (-6 * u2 + 6 * u) * p1 + (3 * u2 - 2 * u) * w1;
+}
+// Swept collision test: relative path as a Hermite curve (catches curved and near-radial passes inside a step)
+function detectCollisions(s, S, dt) {
+  const n = s.n, st = s.status, cr = s.craft, X0 = S.x0, Y0 = S.y0, VX0 = S.vx0, VY0 = S.vy0;
+  let hits = null;
+  for (let i = 0; i < n; i++) {
+    if (st[i]) continue;
+    for (let j = i + 1; j < n; j++) {
+      if (st[j] || (cr[i] && cr[j])) continue;
+      const R = s.r[i] + s.r[j]; if (R <= 0) continue;
+      const d0x = X0[j] - X0[i], d0y = Y0[j] - Y0[i], d1x = s.x[j] - s.x[i], d1y = s.y[j] - s.y[i];
+      const w0x = (VX0[j] - VX0[i]) * dt, w0y = (VY0[j] - VY0[i]) * dt, w1x = (s.vx[j] - s.vx[i]) * dt, w1y = (s.vy[j] - s.vy[i]) * dt;
+      // conservative reject: chord distance minus the largest possible Hermite bulge
+      const ddx = d1x - d0x, ddy = d1y - d0y, dd = ddx * ddx + ddy * ddy;
+      const uc = dd > 0 ? clamp(-(d0x * ddx + d0y * ddy) / dd, 0, 1) : 1;
+      const chord = Math.hypot(d0x + uc * ddx, d0y + uc * ddy);
+      if (chord - 0.15 * (Math.hypot(w0x, w0y) + Math.hypot(w1x, w1y)) > R) continue;
+      let prev = 0, hitU = -1;
+      const dist = (u) => Math.hypot(herm(u, d0x, w0x, d1x, w1x), herm(u, d0y, w0y, d1y, w1y));
+      if (dist(0) < R) { if (d0x * w0x + d0y * w0y > 0) continue; hitU = 0; } // already touching but separating: no new hit
+      else for (let k = 1; k <= 24; k++) {
+        const u = k / 24;
+        if (dist(u) < R) { let a = prev, b = u; for (let q = 0; q < 12; q++) { const m = 0.5 * (a + b); if (dist(m) < R) b = m; else a = m; } hitU = b; break; }
+        prev = u;
+      }
+      if (hitU >= 0) (hits || (hits = [])).push({ i, j, u: hitU, dt });
+    }
+  }
+  return hits;
+}
+function resolveCollisions(s, P, hits) {
+  const evs = [], mode = P.collide, S = scratch(s.n);
+  for (const hit of hits) {
+    const { i, j, u, dt } = hit;
+    if (s.status[i] || s.status[j]) continue;
+    // contact state of both bodies from their Hermite paths
+    const cst = (k) => [herm(u, S.x0[k], S.vx0[k] * dt, s.x[k], s.vx[k] * dt), herm(u, S.y0[k], S.vy0[k] * dt, s.y[k], s.vy[k] * dt),
+      hermD(u, S.x0[k], S.vx0[k] * dt, s.x[k], s.vx[k] * dt) / dt, hermD(u, S.y0[k], S.vy0[k] * dt, s.y[k], s.vy[k] * dt) / dt];
+    const ci = cst(i), cj = cst(j);
+    let nx = cj[0] - ci[0], ny = cj[1] - ci[1], dn = Math.hypot(nx, ny);
+    if (dn < 1e-12) { nx = s.x[j] - s.x[i]; ny = s.y[j] - s.y[i]; dn = Math.hypot(nx, ny) || 1; }
+    nx /= dn; ny /= dn;
+    const R = s.r[i] + s.r[j];
+    if (!(s.m[i] + s.m[j] > 0)) continue; // two massless objects: nothing physical to resolve
+    if (mode === 'bounce') {
+      const mi = s.m[i], mj = s.m[j], M = mi + mj, mu = mi * mj / M, Rs = R * 1.0005;
+      // pair centre of mass from the integrated end state (smooth); relative motion rebuilt at contact
+      const vcx = (mi * s.vx[i] + mj * s.vx[j]) / M, vcy = (mi * s.vy[i] + mj * s.vy[j]) / M;
+      const pcx = (mi * s.x[i] + mj * s.x[j]) / M, pcy = (mi * s.y[i] + mj * s.y[j]) / M;
+      let rvx = cj[2] - ci[2], rvy = cj[3] - ci[3];
+      // relative speed at contact from the pair's two-body energy at the end of the step
+      const dEnd = Math.hypot(s.x[j] - s.x[i], s.y[j] - s.y[i]) || 1e-12;
+      const eRel = 0.5 * mu * ((s.vx[j] - s.vx[i]) ** 2 + (s.vy[j] - s.vy[i]) ** 2) - P.G * mi * mj / dEnd;
+      const keC = Math.max(0, eRel + P.G * mi * mj / Rs), rv = Math.hypot(rvx, rvy);
+      const sp = mu > 0 ? Math.sqrt(2 * keC / mu) : rv; // a massless partner just reflects
+      if (rv > 1e-12) { rvx *= sp / rv; rvy *= sp / rv; } else { rvx = -nx * sp; rvy = -ny * sp; }
+      const vn = rvx * nx + rvy * ny;
+      if (vn < 0) { rvx -= 2 * vn * nx; rvy -= 2 * vn * ny; } // elastic reflection along the contact normal
+      s.x[i] = pcx - nx * Rs * mj / M; s.y[i] = pcy - ny * Rs * mj / M; s.x[j] = pcx + nx * Rs * mi / M; s.y[j] = pcy + ny * Rs * mi / M;
+      s.vx[i] = vcx - mj / M * rvx; s.vy[i] = vcy - mj / M * rvy; s.vx[j] = vcx + mi / M * rvx; s.vy[j] = vcy + mi / M * rvy;
+      evs.push({ type: 'bounce', a: i, b: j, quiet: vn >= 0 });
+      continue;
+    }
+    // merge / crash
+    if (s.craft[i] || s.craft[j]) {
+      const c = s.craft[i] ? i : j, b = c === i ? j : i, sgn = c === j ? 1 : -1;
+      s.status[c] = ST_LANDED; s.land[c] = b;
+      const rr = (s.r[b] + s.r[c]) * (1 + 1e-6); // resting on the surface, not overlapping it
+      s.lox[c] = sgn * nx * rr; s.loy[c] = sgn * ny * rr;
+      s.x[c] = s.x[b] + s.lox[c]; s.y[c] = s.y[b] + s.loy[c]; s.vx[c] = s.vx[b]; s.vy[c] = s.vy[b];
+      evs.push({ type: 'impact', a: c, b });
+    } else {
+      const k = s.m[i] >= s.m[j] ? i : j, g = k === i ? j : i, M = s.m[k] + s.m[g];
+      s.x[k] = (s.m[k] * s.x[k] + s.m[g] * s.x[g]) / M; s.y[k] = (s.m[k] * s.y[k] + s.m[g] * s.y[g]) / M;
+      s.vx[k] = (s.m[k] * s.vx[k] + s.m[g] * s.vx[g]) / M; s.vy[k] = (s.m[k] * s.vy[k] + s.m[g] * s.vy[g]) / M;
+      s.r[k] = Math.cbrt(s.r[k] ** 3 + s.r[g] ** 3); s.m[k] = M; s.status[g] = ST_GONE;
+      for (let q = 0; q < s.n; q++) {
+        if (s.status[q] !== ST_LANDED || (s.land[q] !== g && s.land[q] !== k)) continue;
+        let ux = s.x[q] - s.x[k], uy = s.y[q] - s.y[k]; const L = Math.hypot(ux, uy) || 1;
+        const rr = (s.r[k] + s.r[q]) * (1 + 1e-6);
+        s.land[q] = k; s.lox[q] = ux / L * rr; s.loy[q] = uy / L * rr;
+      }
+      evs.push({ type: 'merge', a: k, b: g });
+    }
+  }
+  s.aOk = false;
+  syncLanded(s);
+  return evs;
+}
+
+// --- hierarchy (sphere of influence) and burn geometry
+function hierarchy(s) {
+  const n = s.n, par = new Int32Array(n).fill(-1), soi = new Float64Array(n), bodies = [];
+  for (let i = 0; i < n; i++) if (!s.status[i] && !s.craft[i] && s.m[i] > 0) bodies.push(i);
+  bodies.sort((a, b) => s.m[b] - s.m[a]);
+  for (let q = 0; q < bodies.length; q++) {
+    const b = bodies[q];
+    if (q === 0) { soi[b] = Infinity; continue; }
+    let best = -1, bs = Infinity;
+    for (let w = 0; w < q; w++) {
+      const a = bodies[w], d = Math.hypot(s.x[b] - s.x[a], s.y[b] - s.y[a]);
+      if (d < soi[a] && (best < 0 || soi[a] < bs)) { best = a; bs = soi[a]; }
+    }
+    if (best < 0) best = bodies[0];
+    par[b] = best;
+    soi[b] = Math.hypot(s.x[b] - s.x[best], s.y[b] - s.y[best]) * Math.pow(s.m[b] / s.m[best], 0.4);
+  }
+  return { par, soi, bodies };
+}
+function primaryOf(s, H, i) {
+  if (s.status[i] === ST_LANDED) return s.land[i];
+  if (!s.craft[i]) return H.par[i];
+  let best = -1, bs = Infinity;
+  for (const b of H.bodies) {
+    if (b === i) continue;
+    const d = Math.hypot(s.x[i] - s.x[b], s.y[i] - s.y[b]);
+    if (d < H.soi[b] && (best < 0 || H.soi[b] < bs)) { best = b; bs = H.soi[b]; }
+  }
+  return best;
+}
+function burnFrame(s, i, ref) {
+  const rx = s.x[i] - (ref >= 0 ? s.x[ref] : 0), ry = s.y[i] - (ref >= 0 ? s.y[ref] : 0);
+  const rvx = s.vx[i] - (ref >= 0 ? s.vx[ref] : 0), rvy = s.vy[i] - (ref >= 0 ? s.vy[ref] : 0);
+  const v = Math.hypot(rvx, rvy);
+  let px = 1, py = 0;
+  if (v > 1e-12) { px = rvx / v; py = rvy / v; }
+  let qx = -py, qy = px; // radial-out: in-plane normal to prograde, pointing away from the reference body
+  if (qx * rx + qy * ry < 0) { qx = -qx; qy = -qy; }
+  return { px, py, qx, qy, v };
+}
+function resolveRef(s, nd) {
+  let ref = nd.ref;
+  if (ref >= 0 && s.status[ref] === ST_GONE) ref = -1;
+  if (ref < 0) ref = primaryOf(s, hierarchy(s), nd.ci);
+  return ref;
+}
+function burnVector(s, nd, ref) {
+  if (nd.mode === 'cart') return [nd.dvx, nd.dvy];
+  const f = burnFrame(s, nd.ci, ref);
+  return [nd.pro * f.px + nd.rad * f.qx, nd.pro * f.py + nd.rad * f.qy];
+}
+function relElements(s, P, i, ref) {
+  if (ref < 0) return null;
+  const restr = P.model === 'restricted';
+  const mi = restr && s.craft[i] ? 0 : s.m[i];
+  return elements(s.x[i] - s.x[ref], s.y[i] - s.y[ref], s.vx[i] - s.vx[ref], s.vy[i] - s.vy[ref], P.G * (s.m[ref] + mi));
+}
+function elements(rx, ry, vx, vy, mu) {
+  const r = Math.hypot(rx, ry), v2 = vx * vx + vy * vy, h = rx * vy - ry * vx, eps = v2 / 2 - mu / r;
+  const rv = rx * vx + ry * vy, k = v2 - mu / r;
+  const ex = (k * rx - rv * vx) / mu, ey = (k * ry - rv * vy) / mu, e = Math.hypot(ex, ey);
+  const p = h * h / mu, a = Math.abs(eps) > 1e-300 ? -mu / (2 * eps) : Infinity;
+  // a(1∓e) stays well-defined for radial (h = 0) ellipses where p/(1−e) would be 0/0
+  const rp = eps < 0 ? a * (1 - Math.min(e, 1)) : p / (1 + e), ra = eps < 0 ? a * (1 + Math.min(e, 1)) : Infinity;
+  const T = eps < 0 ? TAU * Math.sqrt(a * a * a / mu) : NaN;
+  return { r, v: Math.sqrt(v2), h, eps, e, ex, ey, a, p, rp, ra, T, argp: Math.atan2(ey, ex), mu };
+}
+function invariants(s, P) {
+  const n = s.n, st = s.status, cr = s.craft, G = P.G, restr = P.model === 'restricted';
+  let KE = 0, PE = 0, px = 0, py = 0, L = 0, nm = 0, nL = 0, M = 0, sx = 0, sy = 0, sr = 0;
+  for (let i = 0; i < n; i++) {
+    if (st[i]) continue;
+    const mi = restr && cr[i] ? 0 : s.m[i]; if (!mi) continue;
+    M += mi; sx += mi * s.x[i]; sy += mi * s.y[i]; sr += mi * (s.x[i] * s.x[i] + s.y[i] * s.y[i]);
+    const v2 = s.vx[i] ** 2 + s.vy[i] ** 2, l = mi * (s.x[i] * s.vy[i] - s.y[i] * s.vx[i]);
+    KE += 0.5 * mi * v2; px += mi * s.vx[i]; py += mi * s.vy[i]; L += l; nm += mi * Math.sqrt(v2); nL += Math.abs(l);
+    for (let j = i + 1; j < n; j++) {
+      if (st[j]) continue;
+      const mj = restr && cr[j] ? 0 : s.m[j]; if (!mj) continue;
+      PE -= G * mi * mj / Math.hypot(s.x[j] - s.x[i], s.y[j] - s.y[i]);
+    }
+  }
+  const I = M > 0 ? Math.max(0, sr - (sx * sx + sy * sy) / M) : 0; // moment of inertia about the centre of mass
+  return { E: KE + PE, KE, PE, px, py, L, nm, nL, M, I };
+}
+function finiteState(s) {
+  for (let i = 0; i < s.n; i++) {
+    if (s.status[i] === ST_GONE) continue;
+    if (!Number.isFinite(s.x[i] + s.y[i] + s.vx[i] + s.vy[i])) return false;
+  }
+  return true;
+}
+// One outer step of length dt: impulsive burns split the step exactly at the node time.
+// Used verbatim by both the live simulation and the forecast, so they agree.
+function advance(s, P, dt, plan, hooks) {
+  const S = scratch(s.n);
+  S.x0.set(s.x); S.y0.set(s.y); S.vx0.set(s.vx); S.vy0.set(s.vy);
+  const tEnd = s.t + dt;
+  if (plan) {
+    while (plan.k < plan.list.length) {
+      const nd = plan.list[plan.k];
+      if (nd.t >= tEnd - 1e-9) break;
+      const h1 = nd.t - s.t;
+      if (h1 > 1e-12) { integrate(s, P, h1); s.t = nd.t; }
+      plan.k++;
+      hooks.burn(s, nd);
+    }
+  }
+  const h = tEnd - s.t;
+  if (h > 1e-12) integrate(s, P, h);
+  s.t = tEnd;
+  if (P.collide !== 'none') {
+    const hits = detectCollisions(s, S, dt);
+    if (hits) hooks.collide(s, hits);
+  }
+}
+// true when any free object's velocity direction swung by more than ~5° relative to snapshot d
+function turnedSince(d, n, s) {
+  if (!d || n !== s.n) return false;
+  for (let i = 0; i < n; i++) {
+    if (s.status[i] !== ST_ACTIVE) continue;
+    const ax = d[2 * n + i], ay = d[3 * n + i], bx = s.vx[i], by = s.vy[i];
+    if (ax * bx + ay * by < 0.9962 * Math.hypot(ax, ay) * Math.hypot(bx, by)) return true;
+  }
+  return false;
+}
+function snapD(s) {
+  const n = s.n, d = new Float64Array(5 * n);
+  d.set(s.x, 0); d.set(s.y, n); d.set(s.vx, 2 * n); d.set(s.vy, 3 * n);
+  for (let i = 0; i < n; i++) d[4 * n + i] = s.status[i];
+  return d;
+}
+
+// =====================================================================
+// Simulation manager
+// =====================================================================
+let NEXT_ID = 1, NEXT_NODE = 1;
+const PRED_MAX_STEPS = 80000, PRED_MAX_SAMPLES = 6000;
+class Sim {
+  constructor() {
+    this.objs = []; this.idx = new Map(); this.s = new State(0);
+    this.P = { G: 1, model: 'nbody', integrator: 'yoshida4', dt: 0.05, tol: 1e-9, collide: 'merge' };
+    this.nodes = []; this.hist = []; this.histHead = 0; this.errHist = []; this.log = [];
+    this.epochs = new Uint32Array(0); this.trailLen = 140; this.lastSampleT = -Infinity;
+    this.steps = 0; this.plan = null; this.planDirty = true; this.predDirty = true; this.ckpt = null;
+    this.primaries = new Map(); this.onLog = null;
+    this.hooks = { burn: (s, nd) => this._burn(s, nd), collide: (s, hits) => this._collide(s, hits) };
+  }
+  idByName(name) { const o = this.objs.find((q) => q.name === name); return o ? o.id : -1; }
+  obj(id) { const i = this.idx.get(id); return i === undefined ? null : this.objs[i]; }
+  alive(i) { return i >= 0 && i < this.s.n && this.s.status[i] !== ST_GONE; }
+  loadSpec(spec) {
+    const n = spec.objs.length, s = new State(n);
+    this.objs = []; this.idx = new Map();
+    spec.objs.forEach((o, i) => {
+      const id = NEXT_ID++;
+      this.objs.push({ id, name: o.name, kind: o.kind, color: o.color || '#ccc', disp: o.disp || 1 });
+      this.idx.set(id, i);
+      s.x[i] = o.x; s.y[i] = o.y; s.vx[i] = o.vx; s.vy[i] = o.vy; s.m[i] = o.m; s.r[i] = o.r;
+      s.craft[i] = o.kind === 'craft' ? 1 : 0;
+    });
+    this.s = s;
+    this.P = Object.assign({ G: 1, model: 'nbody', integrator: 'yoshida4', dt: 0.05, tol: 1e-9, collide: 'merge' }, spec.P || {});
+    this.nodes = (spec.nodes || []).map((nd) => ({
+      id: NEXT_NODE++, craft: this.idByName(nd.craft), t: nd.t, mode: nd.mode || 'orb',
+      pro: nd.pro || 0, rad: nd.rad || 0, dvx: nd.dvx || 0, dvy: nd.dvy || 0,
+      ref: nd.ref ? this.idByName(nd.ref) : -1, done: false, exec: null }));
+    this.epochs = new Uint32Array(n);
+    this.hist = []; this.histHead = 0; this.errHist = []; this.log = []; this.steps = 0;
+    this.planDirty = true; this.predDirty = true; this.primaries = new Map();
+    this.rebaseline(); this.lastSampleT = -Infinity; this.pushSample();
+  }
+  rebaseline() { const r = this.ref = invariants(this.s, this.P); r.scale = r.KE + Math.abs(r.PE); r.pscale = r.nm; r.lscale = r.nL; }
+  shiftRef(a, b) { const r = this.ref; r.E += b.E - a.E; r.px += b.px - a.px; r.py += b.py - a.py; r.L += b.L - a.L; }
+  errors() {
+    const c = invariants(this.s, this.P), r = this.ref;
+    // running scales keep the relative errors well-posed when a total tends to zero (e.g. everything merged)
+    r.scale = Math.max(r.scale || 0, c.KE + Math.abs(c.PE)); r.pscale = Math.max(r.pscale || 0, c.nm); r.lscale = Math.max(r.lscale || 0, c.nL);
+    // characteristic momentum √(2·M·E_scale) and size √(I/M): floors that do not depend on how often this is called
+    const pch = Math.sqrt(2 * c.M * r.scale), rch = Math.sqrt(Math.max(c.I, r.I || 0) / (c.M || 1));
+    return {
+      cur: c,
+      // |ΔE/E₀|, but never normalised by less than a third of the system's energy scale (KE+|PE|), so E→0 stays well-posed
+      dE: Math.abs(c.E - r.E) / (Math.max(Math.abs(r.E), r.scale / 3) || 1e-300),
+      dP: Math.hypot(c.px - r.px, c.py - r.py) / (Math.max(r.pscale, pch) || 1e-300),
+      dL: Math.abs(c.L - r.L) / (Math.max(r.lscale, pch * rch) || 1e-300),
+    };
+  }
+  buildPlan(excludeId) {
+    const list = [];
+    for (const nd of this.nodes) {
+      if (nd.done || nd.id === excludeId) continue;
+      const ci = this.idx.get(nd.craft);
+      if (ci === undefined || this.s.status[ci] === ST_GONE) continue;
+      const ref = nd.ref >= 0 ? this.idx.get(nd.ref) : -1;
+      list.push({ id: nd.id, node: nd, t: nd.t, ci, ref: ref === undefined ? -1 : ref, mode: nd.mode, pro: nd.pro, rad: nd.rad, dvx: nd.dvx, dvy: nd.dvy });
+    }
+    list.sort((a, b) => a.t - b.t);
+    return { list, k: 0 };
+  }
+  getPlan() { if (this.planDirty || !this.plan) { this.plan = this.buildPlan(-1); this.planDirty = false; } return this.plan; }
+  invalidate() { this.planDirty = true; this.predDirty = true; }
+  addLog(kind, text) { const e = { t: this.s.t, kind, text }; this.log.push(e); if (this.log.length > 400) this.log.shift(); if (this.onLog) this.onLog(e); }
+  name(i) { return i >= 0 && this.objs[i] ? this.objs[i].name : 'barycentre'; }
+  _burn(s, pn) {
+    const nd = pn.node;
+    if (s.status[pn.ci] !== ST_ACTIVE) { nd.done = true; nd.exec = { t: s.t, failed: true }; this.addLog('impact', `${this.name(pn.ci)}: burn skipped (craft not free)`); return; }
+    this.pushSample();
+    const before = invariants(s, this.P);
+    const ref = resolveRef(s, pn);
+    const [dvx, dvy] = burnVector(s, pn, ref);
+    s.vx[pn.ci] += dvx; s.vy[pn.ci] += dvy;
+    this.shiftRef(before, invariants(s, this.P));
+    const el = relElements(s, this.P, pn.ci, ref);
+    nd.done = true; nd.exec = { t: s.t, dvx, dvy, dv: Math.hypot(dvx, dvy), ref, el };
+    this.pushSample();
+    this.predDirty = true;
+    this.addLog('burn', `${this.name(pn.ci)} burn |Δv| ${fmtN(Math.hypot(dvx, dvy))} Mm/h (ref ${this.name(ref)})` + (el ? ` → Pe ${fmtN(el.rp)} Ap ${fmtN(el.ra)} e ${fmtN(el.e, 3)}` : ''));
+  }
+  _collide(s, hits) {
+    const before = invariants(s, this.P);
+    const evs = resolveCollisions(s, this.P, hits);
+    if (!evs.length) return;
+    this.shiftRef(before, invariants(s, this.P));
+    for (const e of evs) {
+      if (e.type === 'impact') this.addLog('impact', `${this.name(e.a)} impacted ${this.name(e.b)}`);
+      else if (e.type === 'merge') this.addLog('impact', `${this.name(e.b)} merged into ${this.name(e.a)}`);
+      else if (!e.quiet) this.addLog('impact', `${this.name(e.a)} and ${this.name(e.b)} bounced`);
+    }
+    this.pushSample(); this.invalidate();
+  }
+  stepOnce() {
+    // adaptive sub-steps also feed the trail when bodies swing fast (close encounters), so trails stay curved
+    // (extra turn-driven samples are capped so a tight, fast binary cannot flood the trail buffer)
+    this.P.onSub = this._onSub || (this._onSub = (s, t) => { if (this.hist.length - this.histHead < 2500 && this.turned()) this.pushSample(t); });
+    try { advance(this.s, this.P, this.P.dt, this.getPlan(), this.hooks); } finally { this.P.onSub = null; }
+    this.steps++;
+    if (this.s.t - this.lastSampleT >= this.trailLen / 900 || (this.hist.length - this.histHead < 2500 && this.turned())) this.pushSample();
+  }
+  turned() { const last = this.hist[this.hist.length - 1]; return !!last && turnedSince(last.d, last.n, this.s); }
+  pushSample(tAt) {
+    const s = this.s, t = tAt === undefined ? s.t : tAt;
+    this.hist.push({ t, n: s.n, d: snapD(s), ep: this.epochs });
+    this.lastSampleT = t;
+    const tMin = t - Math.max(this.trailLen, 1e-9);
+    while (this.histHead < this.hist.length - 1 && this.hist[this.histHead].t < tMin) this.histHead++;
+    if (this.histHead > 4096) { this.hist = this.hist.slice(this.histHead); this.histHead = 0; }
+  }
+  markEdited(i) {
+    const e = this.epochs.slice(); e[i]++; this.epochs = e;
+    this.s.aOk = false; this.s.hAd = 0; this.rebaseline(); this.invalidate(); this.pushSample();
+  }
+  addObject(o) {
+    const old = this.s, n = old.n + 1, s = new State(n);
+    for (const k of State.KEYS) s[k].set(old[k]);
+    s.t = old.t; s.hAd = old.hAd;
+    const i = n - 1;
+    s.x[i] = o.x; s.y[i] = o.y; s.vx[i] = o.vx; s.vy[i] = o.vy; s.m[i] = o.m; s.r[i] = o.r; s.craft[i] = o.kind === 'craft' ? 1 : 0;
+    const id = NEXT_ID++;
+    this.objs.push({ id, name: o.name, kind: o.kind, color: o.color, disp: 1 });
+    this.idx.set(id, i);
+    const ep = new Uint32Array(n); ep.set(this.epochs); this.epochs = ep;
+    this.s = s; this.rebaseline(); this.invalidate(); this.pushSample();
+    this.addLog('soi', `added ${o.name}`);
+    return id;
+  }
+  removeObject(i) {
+    this.s.status[i] = ST_GONE;
+    for (let q = 0; q < this.s.n; q++) if (this.s.status[q] === ST_LANDED && this.s.land[q] === i) { this.s.status[q] = ST_ACTIVE; this.s.land[q] = -1; }
+    const id = this.objs[i].id;
+    this.nodes = this.nodes.filter((nd) => nd.craft !== id);
+    this.s.aOk = false; this.rebaseline(); this.invalidate(); this.pushSample();
+    this.addLog('impact', `removed ${this.objs[i].name}`);
+  }
+  saveCheckpoint(label) {
+    this.ckpt = { s: this.s.clone(), objs: this.objs.map((o) => ({ ...o })), idx: new Map(this.idx),
+      nodes: this.nodes.map((n) => ({ ...n, exec: n.exec ? { ...n.exec } : null })), ref: { ...this.ref },
+      G: this.P.G, model: this.P.model, epochs: this.epochs, steps: this.steps, logLen: this.log.length, label, t: this.s.t };
+  }
+  restoreCheckpoint() {
+    const c = this.ckpt; if (!c) return false;
+    this.s = c.s.clone(); this.objs = c.objs.map((o) => ({ ...o })); this.idx = new Map(c.idx);
+    this.nodes = c.nodes.map((n) => ({ ...n, exec: n.exec ? { ...n.exec } : null }));
+    this.epochs = c.epochs; this.steps = c.steps;
+    if (c.G === this.P.G && c.model === this.P.model) this.ref = { ...c.ref }; else this.rebaseline();
+    while (this.hist.length > this.histHead && this.hist[this.hist.length - 1].t > c.t + 1e-9) this.hist.pop();
+    while (this.errHist.length && this.errHist[this.errHist.length - 1].t > c.t + 1e-9) this.errHist.pop();
+    this.log.length = Math.min(this.log.length, c.logLen);
+    this.s.aOk = false; this.lastSampleT = -Infinity; this.pushSample();
+    this.primaries = new Map(); this.invalidate();
+    return true;
+  }
+  // Forecast: clone the state and integrate forward with the same stepping + burn code.
+  predict(opts) {
+    const h = opts.dt || this.P.dt, Hz = opts.horizon;
+    const P = { ...this.P, onSub: (st, tt) => { const last = samples[samples.length - 1]; if (samples.length < PRED_MAX_SAMPLES / 3 && turnedSince(last && last.d, n, st)) samples.push({ t: tt, n, d: snapD(st) }); } };
+    const s = this.s.clone(), n = s.n, t0 = s.t;
+    const plan = this.buildPlan(opts.exclude != null ? opts.exclude : -1);
+    const total = Math.ceil(Hz / h), steps = Math.min(total, PRED_MAX_STEPS);
+    const every = Math.max(1, Math.ceil(steps / 1500));
+    const samples = [], nodeInfo = new Map(), events = [];
+    const push = (force) => { if (force || samples.length < PRED_MAX_SAMPLES) samples.push({ t: s.t, n, d: snapD(s) }); };
+    push();
+    const crafts = [], bodies = [];
+    for (let i = 0; i < n; i++) {
+      if (s.status[i] !== ST_ACTIVE) continue;
+      if (s.craft[i]) crafts.push(i); else if (s.m[i] > 0) bodies.push(i);
+    }
+    const ca = new Map();
+    for (const c of crafts) { const m = new Map(); for (const b of bodies) m.set(b, { d: Infinity, t: t0 }); ca.set(c, m); }
+    const H0 = hierarchy(s), prim = crafts.map((c) => primaryOf(s, H0, c));
+    const lvx = crafts.map((c) => s.vx[c]), lvy = crafts.map((c) => s.vy[c]);
+    const hooks = {
+      burn: (st, pn) => {
+        if (st.status[pn.ci] !== ST_ACTIVE) return;
+        const preIdx = samples.length; push(true);
+        const ref = resolveRef(st, pn);
+        const before = relElements(st, P, pn.ci, ref);
+        const [dvx, dvy] = burnVector(st, pn, ref);
+        st.vx[pn.ci] += dvx; st.vy[pn.ci] += dvy;
+        const after = relElements(st, P, pn.ci, ref);
+        const postIdx = samples.length; push(true);
+        nodeInfo.set(pn.id, { preIdx, postIdx, ref, dvx, dvy, t: st.t, before, after, ci: pn.ci });
+      },
+      collide: (st, hits) => {
+        const evs = resolveCollisions(st, P, hits);
+        for (const e of evs) { e.t = st.t; e.idx = samples.length; events.push(e); }
+        push(true);
+      },
+    };
+    let blown = false;
+    const COS4 = Math.cos(4 * Math.PI / 180);
+    for (let k = 1; k <= steps; k++) {
+      try { advance(s, P, h, plan, hooks); } catch (e) { blown = true; break; }
+      let turn = false;
+      for (let q = 0; q < crafts.length; q++) {
+        const c = crafts[q]; if (s.status[c] !== ST_ACTIVE) continue;
+        const m = ca.get(c);
+        for (const b of bodies) {
+          if (s.status[b] === ST_GONE) continue;
+          const d = Math.hypot(s.x[c] - s.x[b], s.y[c] - s.y[b]), rec = m.get(b);
+          if (d < rec.d) { rec.d = d; rec.t = s.t; rec.cx = s.x[c]; rec.cy = s.y[c]; rec.cvx = s.vx[c]; rec.cvy = s.vy[c]; rec.bx = s.x[b]; rec.by = s.y[b]; rec.bvx = s.vx[b]; rec.bvy = s.vy[b]; }
+        }
+        const vx = s.vx[c], vy = s.vy[c], dot = vx * lvx[q] + vy * lvy[q];
+        if (dot < COS4 * Math.hypot(vx, vy) * Math.hypot(lvx[q], lvy[q])) turn = true;
+      }
+      if (k % every === 0 || (turn && samples.length < PRED_MAX_SAMPLES * 0.6) || k === steps) {
+        if (!finiteState(s)) { blown = true; break; }
+        push();
+        for (let q = 0; q < crafts.length; q++) { lvx[q] = s.vx[crafts[q]]; lvy[q] = s.vy[crafts[q]]; }
+        if (k % every === 0 || k === steps) {
+          const Hh = hierarchy(s);
+          for (let q = 0; q < crafts.length; q++) {
+            const c = crafts[q]; if (s.status[c] !== ST_ACTIVE) continue;
+            const p = primaryOf(s, Hh, c);
+            if (p !== prim[q]) { events.push({ type: 'soi', a: c, from: prim[q], to: p, t: s.t, idx: samples.length - 1 }); prim[q] = p; }
+          }
+        }
+      }
+    }
+    return { t0, t1: s.t, h, samples, ca, crafts, bodies, nodeInfo, events, blown, truncated: steps < total, n };
+  }
+}
+
+// =====================================================================
+// Scenarios (normalized units: Mm, h, G = 1)
+// =====================================================================
+const U = { Ms: 10000, Rs: 40, Mp: 10, Rp: 4, Ap: 2000, Mm: 0.12, Rm: 1.2, Am: 45, Mc: 1e-6, Rc: 0.02 };
+const CRAFT_COLORS = ['#ff9f5a', '#b18cff', '#5eead4', '#f472b6', '#facc15', '#a3e635'];
+const BODY_COLORS = ['#e0a36b', '#7dd3fc', '#c4b5fd', '#fda4af', '#86efac'];
+function circ(par, a, ang, m, dir = 1, G = 1) {
+  const v = Math.sqrt(G * (par.m + m) / a);
+  return { x: par.x + a * Math.cos(ang), y: par.y + a * Math.sin(ang), vx: par.vx - dir * v * Math.sin(ang), vy: par.vy + dir * v * Math.cos(ang) };
+}
+function bary(list) {
+  let M = 0, X = 0, Y = 0, VX = 0, VY = 0;
+  for (const o of list) { M += o.m; X += o.m * o.x; Y += o.m * o.y; VX += o.m * o.vx; VY += o.m * o.vy; }
+  for (const o of list) { o.x -= X / M; o.y -= Y / M; o.vx -= VX / M; o.vy -= VY / M; }
+  return list;
+}
+const mkStar = () => ({ name: 'Helios', kind: 'star', m: U.Ms, r: U.Rs, color: '#ffd27a', x: 0, y: 0, vx: 0, vy: 0 });
+const mkPlanetAlone = () => ({ name: 'Gaia', kind: 'planet', m: U.Mp, r: U.Rp, color: '#4fb3ff', x: 0, y: 0, vx: 0, vy: 0 });
+function starPlanetMoon(moonAng) {
+  const S = mkStar();
+  const Pl = { name: 'Gaia', kind: 'planet', m: U.Mp, r: U.Rp, color: '#4fb3ff', ...circ(S, U.Ap, 0, U.Mp + U.Mm) };
+  const Mo = { name: 'Selene', kind: 'moon', m: U.Mm, r: U.Rm, color: '#c9d1dc', ...circ(Pl, U.Am, moonAng, U.Mm) };
+  return [S, Pl, Mo];
+}
+const mkCraft = (name, par, a, ang, color, dir = 1) => ({ name, kind: 'craft', m: U.Mc, r: U.Rc, color, ...circ(par, a, ang, U.Mc, dir) });
+
+const SCENARIOS = [
+  { key: 'system', name: 'Star · planet · moon', desc: 'Default system. Pathfinder in low orbit with one planned prograde burn.',
+    note: 'Pathfinder circles Gaia at 12 Mm. A prograde node at t = 24 h raises its apoapsis; the orange dashed forecast shows the post-burn orbit. Selene and the distant star Helios perturb everything.',
+    build() {
+      const L = starPlanetMoon(2.2); L.push(mkCraft('Pathfinder', L[1], 12, 0, CRAFT_COLORS[0])); bary(L);
+      return { objs: L, nodes: [{ craft: 'Pathfinder', t: 24, pro: 0.15 }], P: { dt: 0.05, integrator: 'yoshida4' },
+        view: { frame: { type: 'center', a: 'Gaia' }, center: 'Gaia', radius: 60 }, ui: { rate: 10, horizon: 220, trail: 140, sel: 'Pathfinder' } };
+    } },
+  { key: 'circular', name: 'Circular orbits', desc: 'Two craft on circular orbits around an isolated planet.',
+    note: 'Pure two-body circular orbits: eccentricity stays ≈ 0 and the energy error stays tiny with the symplectic integrator. Try RK4 at a large dt to see secular drift.',
+    build() {
+      const Pl = mkPlanetAlone();
+      const L = [Pl, mkCraft('Pathfinder', Pl, 12, 0, CRAFT_COLORS[0]), mkCraft('Scout', Pl, 24, Math.PI, CRAFT_COLORS[1])];
+      return { objs: L, P: { dt: 0.05, integrator: 'yoshida4' }, view: { frame: { type: 'center', a: 'Gaia' }, center: 'Gaia', radius: 30 },
+        ui: { rate: 8, horizon: 150, trail: 120, sel: 'Pathfinder' } };
+    } },
+  { key: 'ellipse', name: 'Elliptical orbit', desc: 'e = 0.6 Kepler ellipse integrated with leapfrog.',
+    note: 'Periapsis 10 Mm, apoapsis 40 Mm, period ≈ 248 h. The orbital guide (osculating conic) and the integrated path coincide; watch speed and distance trade off (Kepler’s 2nd law).',
+    build() {
+      const Pl = mkPlanetAlone(), rp = 10, e = 0.6, vp = Math.sqrt(U.Mp * (1 + e) / rp);
+      const c = { name: 'Pathfinder', kind: 'craft', m: U.Mc, r: U.Rc, color: CRAFT_COLORS[0], x: rp, y: 0, vx: 0, vy: vp };
+      return { objs: [Pl, c], P: { dt: 0.05, integrator: 'leapfrog' }, view: { frame: { type: 'center', a: 'Gaia' }, center: 'Gaia', radius: 46 },
+        ui: { rate: 20, horizon: 260, trail: 250, sel: 'Pathfinder' } };
+    } },
+  { key: 'hohmann', name: 'Hohmann transfer', desc: 'Two-burn transfer from 10 Mm to 30 Mm circular orbit.',
+    note: 'Burn 1 (prograde) raises apoapsis to 30 Mm; burn 2 at apoapsis circularises. After both burns the eccentricity should read ≈ 0 and the period ≈ 5.2× the initial one.',
+    build() {
+      const Pl = mkPlanetAlone(), r1 = 10, r2 = 30, mu = U.Mp + U.Mc;
+      const dv1 = Math.sqrt(mu / r1) * (Math.sqrt(2 * r2 / (r1 + r2)) - 1);
+      const dv2 = Math.sqrt(mu / r2) * (1 - Math.sqrt(2 * r1 / (r1 + r2)));
+      const tH = Math.PI * Math.sqrt(((r1 + r2) / 2) ** 3 / mu), t1 = 5;
+      return { objs: [Pl, mkCraft('Pathfinder', Pl, r1, 0, CRAFT_COLORS[0])],
+        nodes: [{ craft: 'Pathfinder', t: t1, pro: dv1 }, { craft: 'Pathfinder', t: t1 + tH, pro: dv2 }],
+        P: { dt: 0.05, integrator: 'yoshida4' }, view: { frame: { type: 'center', a: 'Gaia' }, center: 'Gaia', radius: 36 },
+        ui: { rate: 8, horizon: 160, trail: 200, sel: 'Pathfinder' } };
+    } },
+  { key: 'moon', name: 'Moon transfer', desc: 'Trans-lunar injection plus capture burn into lunar orbit (designed numerically at load).',
+    note: 'Burn 1 sends Pathfinder to Selene; burn 2 (reference: Selene, retrograde) at perilune captures it. Shown in the rotating Gaia–Selene frame, where the Moon stands still. The plan is found by scanning the Moon phase with the real integrator.',
+    build() {
+      const tb = 6, r1 = 12, r2 = U.Am, mu = U.Mp + U.Mc, target = 3.0;
+      const nc = Math.sqrt(mu / r1 ** 3), nm = Math.sqrt((U.Mp + U.Mm) / U.Am ** 3);
+      const tH = Math.PI * Math.sqrt(((r1 + r2) / 2) ** 3 / mu);
+      const dv1 = Math.sqrt(mu / r1) * (Math.sqrt(2 * r2 / (r1 + r2)) - 1);
+      const base = nc * tb + Math.PI - nm * (tb + tH);
+      const mk = (off) => { const L = starPlanetMoon(base + off); L.push(mkCraft('Pathfinder', L[1], r1, 0, CRAFT_COLORS[0])); return bary(L); };
+      const trial = (off, dt) => {
+        const tmp = new Sim();
+        tmp.loadSpec({ objs: mk(off), nodes: [{ craft: 'Pathfinder', t: tb, pro: dv1 }], P: { dt } });
+        const pr = tmp.predict({ horizon: tb + tH * 1.35, dt });
+        const rec = pr.ca.get(3).get(2);
+        return { off, rec, hit: pr.events.some((e) => e.type === 'impact') };
+      };
+      let best = null;
+      const consider = (r) => { if (r.hit || !isFinite(r.rec.d)) return; const sc = Math.abs(r.rec.d - target); if (!best || sc < best.sc) best = { ...r, sc }; };
+      for (let off = -0.3; off <= 0.3001; off += 0.01) consider(trial(off, 0.1));
+      const c0 = best ? best.off : 0; best = null;
+      for (let off = c0 - 0.012; off <= c0 + 0.0121; off += 0.0008) consider(trial(off, 0.05));
+      const fin = trial(best ? best.off : c0, 0.05), rec = fin.rec;
+      const vrel = Math.hypot(rec.cvx - rec.bvx, rec.cvy - rec.bvy), vc = Math.sqrt((U.Mm + U.Mc) / rec.d);
+      return { objs: mk(best ? best.off : c0),
+        nodes: [{ craft: 'Pathfinder', t: tb, pro: dv1 }, { craft: 'Pathfinder', t: rec.t, pro: vc - vrel, ref: 'Selene' }],
+        P: { dt: 0.05, integrator: 'yoshida4' }, view: { frame: { type: 'rot', a: 'Gaia', b: 'Selene' }, center: 'Gaia', radius: 58 },
+        ui: { rate: 10, horizon: 260, trail: 260, sel: 'Pathfinder' } };
+    } },
+  { key: 'sling', name: 'Gravitational slingshot', desc: 'Heliocentric craft steals orbital energy from a planet flyby.',
+    note: 'Voyager passes behind Gaia (relative to its orbital motion). Telemetry is referenced to the star Helios: watch the heliocentric specific energy jump at the flyby. Switch to “Centered · Helios” to see the orbit grow.',
+    build() {
+      const rp = 8, vinf = 0.45, Tb = 300, vp = Math.sqrt(vinf * vinf + 2 * U.Mp / rp);
+      const mkPeri = (phi, dir) => {
+        const S = mkStar(), Pl = { name: 'Gaia', kind: 'planet', m: U.Mp, r: U.Rp, color: '#4fb3ff', ...circ(S, U.Ap, 0, U.Mp) };
+        const L = bary([S, Pl]);
+        L.push({ name: 'Voyager', kind: 'craft', m: U.Mc, r: U.Rc, color: CRAFT_COLORS[0], x: Pl.x + rp * Math.cos(phi), y: Pl.y + rp * Math.sin(phi), vx: Pl.vx - dir * vp * Math.sin(phi), vy: Pl.vy + dir * vp * Math.cos(phi) });
+        return L;
+      };
+      const run = (L, h, T) => { const tmp = new Sim(); tmp.loadSpec({ objs: L, P: { dt: Math.abs(h), collide: 'none' } }); const s = tmp.s; const N = Math.round(T / Math.abs(h)); for (let k = 0; k < N; k++) stepYoshida(s, tmp.P, h); return s; };
+      const eH = (s) => 0.5 * ((s.vx[2] - s.vx[0]) ** 2 + (s.vy[2] - s.vy[0]) ** 2) - U.Ms / Math.hypot(s.x[2] - s.x[0], s.y[2] - s.y[0]);
+      const gain = (phi, dir) => eH(run(mkPeri(phi, dir), 0.25, Tb)) - eH(run(mkPeri(phi, dir), -0.25, Tb));
+      let best = { g: -Infinity, phi: 0, dir: 1 };
+      for (const dir of [1, -1]) for (let k = 0; k < 24; k++) { const phi = k * TAU / 24, g = gain(phi, dir); if (g > best.g) best = { g, phi, dir }; }
+      const c = best.phi;
+      for (let k = -6; k <= 6; k++) { const phi = c + k * TAU / 24 / 6, g = gain(phi, best.dir); if (g > best.g) best = { g, phi, dir: best.dir }; }
+      const s0 = run(mkPeri(best.phi, best.dir), -0.05, Tb), proto = mkPeri(best.phi, best.dir);
+      const objs = proto.map((o, i) => ({ ...o, x: s0.x[i], y: s0.y[i], vx: s0.vx[i], vy: s0.vy[i] }));
+      return { objs, P: { dt: 0.05, integrator: 'yoshida4' }, view: { frame: { type: 'center', a: 'Gaia' }, center: 'Gaia', radius: 150 },
+        ui: { rate: 25, horizon: 650, trail: 700, sel: 'Voyager', telRef: { Voyager: 'Helios' } } };
+    } },
+  { key: 'three', name: 'Unstable three-body', desc: 'Pythagorean problem (masses 3:4:5 at rest) — chaos and ejection.',
+    note: 'Three stars start at rest on a 3-4-5 triangle. Close encounters demand the adaptive Dormand–Prince integrator (tol 1e-10). Switch to a fixed-step integrator with a large dt and watch the energy error explode.',
+    build() {
+      const Ls = 10, Mu = 10;
+      const objs = [
+        { name: 'Alpha', kind: 'star', m: 3 * Mu, r: 0.35, color: '#ffb86b', x: 1 * Ls, y: 3 * Ls, vx: 0, vy: 0 },
+        { name: 'Beta', kind: 'star', m: 4 * Mu, r: 0.4, color: '#7cc4ff', x: -2 * Ls, y: -1 * Ls, vx: 0, vy: 0 },
+        { name: 'Gamma', kind: 'star', m: 5 * Mu, r: 0.45, color: '#ff7ca8', x: 1 * Ls, y: -1 * Ls, vx: 0, vy: 0 }];
+      return { objs, P: { dt: 0.1, integrator: 'dopri', tol: 1e-10, collide: 'none' }, view: { frame: { type: 'inertial' }, center: null, radius: 48 },
+        ui: { rate: 12, horizon: 60, trail: 180, sel: 'Gamma', bodyScale: 1.6 } };
+    } },
+  { key: 'escape', name: 'Escape trajectory', desc: 'Prograde burn beyond escape speed: hyperbolic departure from Gaia.',
+    note: 'After the burn at t = 8 h the orbit relative to Gaia turns hyperbolic (e > 1, energy > 0, period undefined). Pathfinder leaves Gaia’s sphere of influence and ends up orbiting Helios.',
+    build() {
+      const L = starPlanetMoon(4.2); L.push(mkCraft('Pathfinder', L[1], 12, 0, CRAFT_COLORS[0])); bary(L);
+      return { objs: L, nodes: [{ craft: 'Pathfinder', t: 8, pro: 0.45 }], P: { dt: 0.05, integrator: 'yoshida4' },
+        view: { frame: { type: 'center', a: 'Gaia' }, center: 'Gaia', radius: 150 }, ui: { rate: 20, horizon: 420, trail: 420, sel: 'Pathfinder' } };
+    } },
+];
+
+// =====================================================================
+// App state
+// =====================================================================
+const sim = new Sim();
+const ui = {
+  scenario: 'system', note: '', sel: -1, selNode: -1, frame: { type: 'inertial' },
+  cam: { x: 0, y: 0, scale: 5 }, track: false,
+  view: { trails: true, pred: true, vel: true, acc: false, guides: true, soi: false, pot: false, enc: true, err: true, labels: true },
+  bodyScale: 1, vecScale: 60, horizon: 220, predDt: 0.05, predLink: true, telRef: new Map(),
+  rateLog: 1, curLog: 1, paused: false, warpTo: null, tab: 'obj',
+};
+let pred = null, lastPredReal = 0, hier = null;
+let W = 0, H = 0, DPR = 1, tbH = 56, CX = 0, CY = 0, hudRect = null;
+const canvas = $('view'), ctx = canvas.getContext('2d');
+const F_ID = { ox: 0, oy: 0, ovx: 0, ovy: 0, th: 0, c: 1, s: 0, om: 0 };
+const massOf = (id) => { const i = sim.idx.get(id); return i === undefined ? 0 : sim.s.m[i]; };
+
+// ---------- reference frames ----------
+// strict: return null (instead of the inertial fallback) when the frame bodies are absent in this sample
+function frameOf(spec, sm, strict) {
+  if (!spec || spec.type === 'inertial') return F_ID;
+  if (!sm) return strict ? null : F_ID;
+  const n = sm.n, d = sm.d, FB = strict ? null : F_ID;
+  if (spec.type === 'center') {
+    const k = sim.idx.get(spec.a);
+    if (k === undefined || k >= n || d[4 * n + k] === ST_GONE) return FB;
+    return { ox: d[k], oy: d[n + k], ovx: d[2 * n + k], ovy: d[3 * n + k], th: 0, c: 1, s: 0, om: 0 };
+  }
+  const i = sim.idx.get(spec.a), j = sim.idx.get(spec.b);
+  if (i === undefined || j === undefined || i >= n || j >= n || d[4 * n + i] === ST_GONE || d[4 * n + j] === ST_GONE) return FB;
+  const mi = massOf(spec.a), mj = massOf(spec.b), M = mi + mj || 1;
+  const rx = d[j] - d[i], ry = d[n + j] - d[n + i], vx = d[2 * n + j] - d[2 * n + i], vy = d[3 * n + j] - d[3 * n + i];
+  const r2 = rx * rx + ry * ry || 1, th = Math.atan2(ry, rx);
+  return { ox: (mi * d[i] + mj * d[j]) / M, oy: (mi * d[n + i] + mj * d[n + j]) / M,
+    ovx: (mi * d[2 * n + i] + mj * d[2 * n + j]) / M, ovy: (mi * d[3 * n + i] + mj * d[3 * n + j]) / M,
+    th, c: Math.cos(th), s: Math.sin(th), om: (rx * vy - ry * vx) / r2 };
+}
+// position/velocity: inertial -> frame (R(-θ)(r - o), R(-θ)(v - v_o - ω×(r - o)))
+function toFrame(F, x, y) { const dx = x - F.ox, dy = y - F.oy; return [F.c * dx + F.s * dy, -F.s * dx + F.c * dy]; }
+function velToFrame(F, x, y, vx, vy) {
+  const dx = x - F.ox, dy = y - F.oy, ux = vx - F.ovx + F.om * dy, uy = vy - F.ovy - F.om * dx;
+  return [F.c * ux + F.s * uy, -F.s * ux + F.c * uy];
+}
+function fromFrame(F, X, Y) { return [F.ox + F.c * X - F.s * Y, F.oy + F.s * X + F.c * Y]; }
+function velFromFrame(F, x, y, VX, VY) {
+  const ux = F.c * VX - F.s * VY, uy = F.s * VX + F.c * VY;
+  return [ux + F.ovx - F.om * (y - F.oy), uy + F.ovy + F.om * (x - F.ox)];
+}
+function dirToFrame(F, ux, uy) { return [F.c * ux + F.s * uy, -F.s * ux + F.c * uy]; }
+function frameLabel(spec) {
+  if (!spec || spec.type === 'inertial') return 'Inertial (barycentric)';
+  if (spec.type === 'center') { const o = sim.obj(spec.a); return 'Centered · ' + (o ? o.name : '?'); }
+  const a = sim.obj(spec.a), b = sim.obj(spec.b);
+  return 'Rotating · ' + (a ? a.name : '?') + '–' + (b ? b.name : '?');
+}
+const frameKey = (f) => (f.type === 'inertial' ? 'inertial' : f.type === 'center' ? 'center:' + f.a : 'rot:' + f.a + ':' + f.b);
+function parseFrame(v) {
+  const p = v.split(':');
+  if (p[0] === 'center') return { type: 'center', a: +p[1] };
+  if (p[0] === 'rot') return { type: 'rot', a: +p[1], b: +p[2] };
+  return { type: 'inertial' };
+}
+function frameValid(f) {
+  if (f.type === 'inertial') return true;
+  if (!sim.alive(sim.idx.get(f.a) ?? -1)) return false;
+  return f.type === 'center' || sim.alive(sim.idx.get(f.b) ?? -1);
+}
+
+// ---------- current-frame cache ----------
+let nowSnap = null, Fnow = F_ID, FX = new Float64Array(0), FY = FX, FVX = FX, FVY = FX, SXs = FX, SYs = FX, RPX = FX;
+function computeNow() {
+  const s = sim.s, n = s.n;
+  if (!frameValid(ui.frame)) { ui.frame = { type: 'inertial' }; refreshFrameOptions(); }
+  nowSnap = { t: s.t, n, d: snapD(s) };
+  Fnow = frameOf(ui.frame, nowSnap);
+  if (FX.length !== n) { FX = new Float64Array(n); FY = new Float64Array(n); FVX = new Float64Array(n); FVY = new Float64Array(n); SXs = new Float64Array(n); SYs = new Float64Array(n); RPX = new Float64Array(n); }
+  for (let i = 0; i < n; i++) {
+    const p = toFrame(Fnow, s.x[i], s.y[i]), v = velToFrame(Fnow, s.x[i], s.y[i], s.vx[i], s.vy[i]);
+    FX[i] = p[0]; FY[i] = p[1]; FVX[i] = v[0]; FVY[i] = v[1];
+  }
+  hier = hierarchy(s);
+  if (ui.track && sim.alive(ui.sel)) { ui.cam.x = FX[ui.sel]; ui.cam.y = FY[ui.sel]; }
+  const sc = ui.cam.scale;
+  for (let i = 0; i < n; i++) {
+    SXs[i] = CX + (FX[i] - ui.cam.x) * sc; SYs[i] = CY - (FY[i] - ui.cam.y) * sc;
+    RPX[i] = dispRadius(i);
+  }
+}
+function dispRadius(i) {
+  const o = sim.objs[i];
+  if (sim.s.craft[i]) return 6;
+  const minPx = o.kind === 'star' ? 7 : o.kind === 'planet' ? 5 : 3.5;
+  return Math.max(minPx, sim.s.r[i] * ui.cam.scale * ui.bodyScale * (o.disp || 1));
+}
+const sx = (X) => CX + (X - ui.cam.x) * ui.cam.scale;
+const sy = (Y) => CY - (Y - ui.cam.y) * ui.cam.scale;
+const wx = (px) => ui.cam.x + (px - CX) / ui.cam.scale;
+const wy = (py) => ui.cam.y - (py - CY) / ui.cam.scale;
+const viewR = () => Math.max(40, Math.min(2 * CX, H - tbH) / 2);
+
+// =====================================================================
+// Rendering
+// =====================================================================
+let starCanvas = null;
+function makeStars() {
+  starCanvas = document.createElement('canvas');
+  starCanvas.width = Math.max(1, Math.round(W * DPR)); starCanvas.height = Math.max(1, Math.round(H * DPR));
+  const g = starCanvas.getContext('2d');
+  let seed = 1337;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const grd = g.createRadialGradient(starCanvas.width * 0.7, starCanvas.height * 0.3, 0, starCanvas.width * 0.7, starCanvas.height * 0.3, starCanvas.width * 0.9);
+  grd.addColorStop(0, '#0b1224'); grd.addColorStop(1, '#03050a');
+  g.fillStyle = grd; g.fillRect(0, 0, starCanvas.width, starCanvas.height);
+  const N = Math.round(W * H / 1800);
+  for (let k = 0; k < N; k++) {
+    const x = rnd() * starCanvas.width, y = rnd() * starCanvas.height, b = rnd();
+    g.fillStyle = `rgba(${200 + 55 * rnd() | 0},${210 + 45 * rnd() | 0},255,${0.15 + 0.55 * b * b})`;
+    const r = (b > 0.97 ? 1.3 : 0.7) * DPR;
+    g.fillRect(x, y, r, r);
+  }
+}
+function arrow(x0, y0, x1, y1, color, w = 1.6, head = 7) {
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+  if (L < 1) return;
+  const ux = dx / L, uy = dy / L, hh = Math.min(head, L * 0.5);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = w;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - ux * hh * 0.7, y1 - uy * hh * 0.7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - ux * hh - uy * hh * 0.5, y1 - uy * hh + ux * hh * 0.5);
+  ctx.lineTo(x1 - ux * hh + uy * hh * 0.5, y1 - uy * hh - ux * hh * 0.5); ctx.closePath(); ctx.fill();
+}
+// stroke a polyline (with NaN breaks) in chunks of increasing alpha
+// Liang–Barsky clip of one segment to the (padded) canvas. Canvas dashing/rasterising walks the WHOLE path, so
+// far off-screen geometry (an ejected star, a huge orbit at high zoom) must be clipped before stroking.
+function clipLine(x0, y0, x1, y1) {
+  const M = 48, xmin = -M, ymin = -M, xmax = W + M, ymax = H + M, dx = x1 - x0, dy = y1 - y0;
+  let t0 = 0, t1 = 1;
+  const P = [-dx, dx, -dy, dy], Q = [x0 - xmin, xmax - x0, y0 - ymin, ymax - y0];
+  for (let i = 0; i < 4; i++) {
+    if (P[i] === 0) { if (Q[i] < 0) return null; continue; }
+    const r = Q[i] / P[i];
+    if (P[i] < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; }
+  }
+  return [x0 + t0 * dx, y0 + t0 * dy, x0 + t1 * dx, y0 + t1 * dy, t0 > 0, t1 < 1];
+}
+function clipPolyline(pts) {
+  const out = []; let open = false;
+  for (let k = 0; k + 3 < pts.length; k += 2) {
+    const x0 = pts[k], y0 = pts[k + 1], x1 = pts[k + 2], y1 = pts[k + 3];
+    const c = x0 === x0 && x1 === x1 ? clipLine(x0, y0, x1, y1) : null;
+    if (!c) { if (open) { out.push(NaN, NaN); open = false; } continue; }
+    if (!open || c[4]) { if (open) out.push(NaN, NaN); out.push(c[0], c[1]); }
+    out.push(c[2], c[3]); open = true;
+    if (c[5]) { out.push(NaN, NaN); open = false; }
+  }
+  return out;
+}
+function strokeFaded(pts, color, width, a0, a1, chunks) {
+  if (chunks <= 1) pts = clipPolyline(pts); // faded trails are clipped per chunk below
+  const N = pts.length / 2; if (N < 2) return;
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round';
+  for (let c = 0; c < chunks; c++) {
+    const i0 = Math.floor(c * (N - 1) / chunks), i1 = Math.floor((c + 1) * (N - 1) / chunks);
+    ctx.globalAlpha = a0 + (a1 - a0) * (chunks > 1 ? c / (chunks - 1) : 1);
+    const seg = chunks > 1 ? clipPolyline(pts.slice(2 * i0, 2 * i1 + 2)) : pts.slice(2 * i0, 2 * i1 + 2);
+    ctx.beginPath(); let pen = false;
+    for (let k = 0; k + 1 < seg.length; k += 2) {
+      const x = seg[k], y = seg[k + 1];
+      if (x !== x) { pen = false; continue; }
+      if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+function pushPt(arr, x, y) {
+  const L = arr.length;
+  if (L >= 2) { const px = arr[L - 2], py = arr[L - 1]; if (px === px && Math.abs(px - x) < 0.8 && Math.abs(py - y) < 0.8) return; }
+  arr.push(x, y);
+}
+function drawTrails() {
+  const hist = sim.hist, h0 = sim.histHead, N = hist.length, s = sim.s, n = s.n;
+  if (N - h0 < 1) return;
+  const tMin = s.t - sim.trailLen;
+  const fs = new Array(N - h0);
+  for (let k = h0; k < N; k++) fs[k - h0] = frameOf(ui.frame, hist[k], true);
+  const sc = ui.cam.scale, cx = ui.cam.x, cy = ui.cam.y, W2 = CX, H2 = CY;
+  for (let i = 0; i < n; i++) {
+    if (s.status[i] === ST_GONE) continue;
+    const pts = []; let lastEp = -1;
+    for (let k = h0; k < N; k++) {
+      const sm = hist[k]; if (sm.t < tMin) continue;
+      const m = sm.n;
+      if (i >= m || sm.d[4 * m + i] === ST_GONE || !fs[k - h0]) { pts.push(NaN, NaN); continue; }
+      const ep = sm.ep[i] || 0;
+      if (lastEp >= 0 && ep !== lastEp) pts.push(NaN, NaN);
+      lastEp = ep;
+      const F = fs[k - h0], dx = sm.d[i] - F.ox, dy = sm.d[m + i] - F.oy;
+      const X = F.c * dx + F.s * dy, Y = -F.s * dx + F.c * dy;
+      pushPt(pts, W2 + (X - cx) * sc, H2 - (Y - cy) * sc);
+    }
+    if ((sim.epochs[i] || 0) === lastEp || lastEp < 0) pushPt(pts, SXs[i], SYs[i]);
+    const isSel = i === ui.sel;
+    strokeFaded(pts, sim.objs[i].color, isSel ? 2 : 1.3, 0.05, isSel ? 0.95 : 0.75, 8);
+  }
+}
+const SEG_COLORS = ['#ff6bd6', '#7dffb0', '#ffe066', '#6bc5ff'];
+function drawPredictions() {
+  ui.pathScreen = [];
+  if (!pred) return;
+  const S = pred.samples, s = sim.s, now = s.t, n = pred.n;
+  const sc = ui.cam.scale, cx = ui.cam.x, cy = ui.cam.y, W2 = CX, H2 = CY;
+  let k0 = 0; while (k0 < S.length && S[k0].t < now - 1e-9) k0++;
+  if (k0 >= S.length) return;
+  const fs = new Array(S.length - k0);
+  for (let k = k0; k < S.length; k++) fs[k - k0] = frameOf(ui.frame, S[k], true);
+  for (let i = 0; i < n && i < s.n; i++) {
+    if (s.status[i] === ST_GONE) continue;
+    const isCraft = s.craft[i] === 1;
+    if (!isCraft && i !== ui.sel && !(ui.sel >= 0 && s.craft[ui.sel])) continue;
+    // node boundaries for this craft
+    const cuts = [];
+    if (isCraft) for (const [, inf] of pred.nodeInfo) if (inf.ci === i) cuts.push(inf.postIdx);
+    cuts.sort((a, b) => a - b);
+    const segs = [[]]; let ci = 0; const isSel = i === ui.sel;
+    const track = isSel && isCraft ? ui.pathScreen : null;
+    const first = segs[0]; first.push(SXs[i], SYs[i]); if (track) track.push({ x: SXs[i], y: SYs[i], t: now });
+    for (let k = k0; k < S.length; k++) {
+      const sm = S[k], st = sm.d[4 * n + i];
+      if (st === ST_GONE) break;
+      while (ci < cuts.length && k >= cuts[ci]) { ci++; const seg = segs[segs.length - 1]; segs.push(seg.length >= 2 ? [seg[seg.length - 2], seg[seg.length - 1]] : []); }
+      const F = fs[k - k0]; if (!F) continue;
+      const dx = sm.d[i] - F.ox, dy = sm.d[n + i] - F.oy;
+      const X = F.c * dx + F.s * dy, Y = -F.s * dx + F.c * dy;
+      const px = W2 + (X - cx) * sc, py = H2 - (Y - cy) * sc;
+      pushPt(segs[segs.length - 1], px, py);
+      if (track) track.push({ x: px, y: py, t: sm.t });
+      if (st === ST_LANDED && isCraft) break;
+    }
+    if (isCraft) {
+      segs.forEach((pts, q) => {
+        ctx.setLineDash(q === 0 ? [7, 5] : [4, 4]);
+        strokeFaded(pts, q === 0 ? sim.objs[i].color : SEG_COLORS[(q - 1) % SEG_COLORS.length], isSel ? 1.8 : 1.2, isSel ? 0.9 : 0.55, isSel ? 0.9 : 0.55, 1);
+      });
+    } else {
+      ctx.setLineDash([2, 6]);
+      strokeFaded(segs.flat(), sim.objs[i].color, 1, 0.45, 0.45, 1);
+    }
+    ctx.setLineDash([]);
+  }
+}
+function nearestSample(t) {
+  const S = pred.samples; let lo = 0, hi = S.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (S[mid].t < t) lo = mid; else hi = mid; }
+  return Math.abs(S[lo].t - t) < Math.abs(S[hi].t - t) ? S[lo] : S[hi];
+}
+function ancestors(i) { const out = new Set(); let p = i; let g = 0; while (p >= 0 && g++ < 20) { out.add(p); p = hier.par[p]; } return out; }
+function encountersFor(c) {
+  if (!pred || !pred.ca.has(c)) return [];
+  const prim = primaryOf(sim.s, hier, c), anc = prim >= 0 ? ancestors(prim) : new Set();
+  const list = [];
+  for (const [b, rec] of pred.ca.get(c)) {
+    if (!isFinite(rec.d) || anc.has(b) || sim.s.status[b] === ST_GONE || rec.t <= sim.s.t + 1e-9) continue;
+    list.push({ b, ...rec });
+  }
+  list.sort((a, b) => a.d - b.d);
+  return list;
+}
+function drawEncounters() {
+  if (!pred) return;
+  const s = sim.s, c = ui.sel;
+  ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  if (c >= 0 && s.craft[c] && s.status[c] === ST_ACTIVE) {
+    const list = encountersFor(c);
+    list.forEach((e, q) => {
+      const soi = hier.soi[e.b];
+      if (q > 0 && !(e.d < 3 * soi)) return;
+      const F = frameOf(ui.frame, nearestSample(e.t), true); if (!F || !sim.objs[e.b]) return;
+      const [X1, Y1] = toFrame(F, e.cx, e.cy), [X2, Y2] = toFrame(F, e.bx, e.by);
+      const x1 = sx(X1), y1 = sy(Y1), x2 = sx(X2), y2 = sy(Y2);
+      const r = Math.max(3, s.r[e.b] * ui.cam.scale * ui.bodyScale * (sim.objs[e.b].disp || 1));
+      ctx.strokeStyle = sim.objs[e.b].color; ctx.globalAlpha = 0.7; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(x2, y2, r, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 1; ctx.fillStyle = '#ffe9a8';
+      ctx.beginPath(); ctx.moveTo(x1, y1 - 5); ctx.lineTo(x1 + 5, y1); ctx.lineTo(x1, y1 + 5); ctx.lineTo(x1 - 5, y1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffe9a8';
+      ctx.fillText(`CA ${sim.objs[e.b].name} ${fmtN(e.d, 3)} Mm · in ${fmtN(e.t - s.t, 3)} h`, x1 + 8, y1 - 8);
+    });
+  }
+  // impacts and SOI transitions for all craft
+  for (const e of pred.events) {
+    if (e.t < s.t) continue;
+    const sm = pred.samples[Math.min(e.idx, pred.samples.length - 1)]; if (!sm) continue;
+    const F = frameOf(ui.frame, sm, true); if (!F) continue;
+    const n = sm.n, i = e.a;
+    const [X, Y] = toFrame(F, sm.d[i], sm.d[n + i]), x = sx(X), y = sy(Y);
+    if (e.type === 'impact') {
+      ctx.strokeStyle = '#ff5f7a'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6); ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6); ctx.stroke();
+      ctx.fillStyle = '#ff9aaa'; ctx.fillText(`IMPACT ${sim.name(e.b)} in ${fmtN(e.t - s.t, 3)} h`, x + 9, y + 4);
+    } else if (e.type === 'soi' && i === ui.sel) {
+      ctx.strokeStyle = '#9fe4ff'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(x, y, 4.5, 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#9fe4ff'; ctx.fillText(`→ ${e.to >= 0 ? sim.name(e.to) : 'free'} SOI`, x + 7, y + 12);
+    }
+  }
+}
+function drawNodes() {
+  ui.nodeHits = []; ui.handleHits = [];
+  if (!pred) return;
+  const s = sim.s;
+  for (const nd of sim.nodes) {
+    if (nd.done) continue;
+    const info = pred.nodeInfo.get(nd.id); if (!info) continue;
+    const sm = pred.samples[info.preIdx], F = frameOf(ui.frame, sm, true); if (!sm || !F) continue;
+    const n = sm.n, i = info.ci;
+    const [X, Y] = toFrame(F, sm.d[i], sm.d[n + i]), x = sx(X), y = sy(Y);
+    const sel = nd.id === ui.selNode;
+    if (sel) {
+      // handles along prograde/radial (or x/y) directions at the burn point, rotated into the frame
+      const r = info.ref;
+      const vxr = sm.d[2 * n + i] - (r >= 0 ? sm.d[2 * n + r] : 0), vyr = sm.d[3 * n + i] - (r >= 0 ? sm.d[3 * n + r] : 0);
+      const rxr = sm.d[i] - (r >= 0 ? sm.d[r] : 0), ryr = sm.d[n + i] - (r >= 0 ? sm.d[n + r] : 0);
+      const v = Math.hypot(vxr, vyr) || 1;
+      let px = vxr / v, py = vyr / v, qx = -py, qy = px;
+      if (qx * rxr + qy * ryr < 0) { qx = -qx; qy = -qy; }
+      const axes = nd.mode === 'cart'
+        ? [{ u: [1, 0], comp: 'dvx', lab: 'X', col: '#ffd166' }, { u: [0, 1], comp: 'dvy', lab: 'Y', col: '#b388ff' }]
+        : [{ u: [px, py], comp: 'pro', lab: 'P', col: '#7dff9a' }, { u: [qx, qy], comp: 'rad', lab: 'R', col: '#5ccfff' }];
+      for (const ax of axes) {
+        const [fx, fy] = dirToFrame(F, ax.u[0], ax.u[1]);
+        for (const sgn of [1, -1]) {
+          const ux = sgn * fx, uy = -sgn * fy, hx = x + ux * 46, hy = y + uy * 46;
+          ctx.globalAlpha = 0.9; arrow(x + ux * 10, y + uy * 10, hx, hy, ax.col, 1.6, 8); ctx.globalAlpha = 1;
+          ctx.fillStyle = '#0a111e'; ctx.strokeStyle = ax.col; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.arc(hx + ux * 9, hy + uy * 9, 8, 0, TAU); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = ax.col; ctx.font = 'bold 9.5px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(ax.lab + (sgn > 0 ? '+' : '−'), hx + ux * 9, hy + uy * 9);
+          ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+          ui.handleHits.push({ id: nd.id, comp: ax.comp, sign: sgn, x: hx + ux * 9, y: hy + uy * 9, ux, uy, v });
+        }
+      }
+      // actual burn vector
+      const [bx, by] = dirToFrame(F, info.dvx, info.dvy), bl = Math.hypot(bx, by);
+      if (bl > 1e-9) { const L = Math.min(110, 300 * bl); arrow(x, y, x + bx / bl * L, y - by / bl * L, '#ffb547', 2.4, 9); }
+    }
+    ctx.fillStyle = '#1a1206'; ctx.strokeStyle = '#ffb547'; ctx.lineWidth = sel ? 2.6 : 1.8;
+    ctx.beginPath(); ctx.arc(x, y, sel ? 8 : 6.5, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffb547'; ctx.beginPath(); ctx.arc(x, y, 2.3, 0, TAU); ctx.fill();
+    if (ui.view.labels) { ctx.font = '11px sans-serif'; ctx.fillStyle = '#ffd08a'; const lab = `Δv ${fmtN(Math.hypot(info.dvx, info.dvy), 3)}`; ctx.fillText(lab, x - 10 - ctx.measureText(lab).width, y - 9); }
+    ui.nodeHits.push({ id: nd.id, x, y });
+  }
+}
+function drawGuides() {
+  const s = sim.s, n = s.n, G = sim.P.G;
+  for (let i = 0; i < n; i++) {
+    if (s.status[i] !== ST_ACTIVE) continue;
+    const isSel = i === ui.sel;
+    const ref = isSel ? telemetryRef(i) : primaryOf(s, hier, i);
+    if (ref < 0 || s.status[ref] === ST_GONE) continue;
+    if (!isSel && !s.craft[i] && hier.par[i] < 0) continue;
+    const el = relElements(s, sim.P, i, ref); if (!el || !isFinite(el.p) || el.p <= 0) continue;
+    const rMax = Math.min(isFinite(hier.soi[ref]) ? hier.soi[ref] * 1.6 : Infinity, el.rp * 60);
+    const pts = [], N = 240;
+    for (let k = 0; k <= N; k++) {
+      const nu = -Math.PI + TAU * k / N, den = 1 + el.e * Math.cos(nu);
+      if (den <= 1e-3) { pts.push(NaN, NaN); continue; }
+      const r = el.p / den; if (r > rMax) { pts.push(NaN, NaN); continue; }
+      const ang = el.argp + nu, x = s.x[ref] + r * Math.cos(ang), y = s.y[ref] + r * Math.sin(ang);
+      const [X, Y] = toFrame(Fnow, x, y); pts.push(sx(X), sy(Y));
+    }
+    ctx.setLineDash(isSel ? [] : [2, 4]);
+    strokeFaded(pts, sim.objs[i].color, isSel ? 1.4 : 1, isSel ? 0.55 : 0.22, isSel ? 0.55 : 0.22, 1);
+    ctx.setLineDash([]);
+    if (isSel) {
+      const mark = (r, ang, lab) => {
+        const [X, Y] = toFrame(Fnow, s.x[ref] + r * Math.cos(ang), s.y[ref] + r * Math.sin(ang)), px = sx(X), py = sy(Y);
+        ctx.fillStyle = '#e8f4ff'; ctx.beginPath(); ctx.arc(px, py, 3, 0, TAU); ctx.fill();
+        if (ui.view.labels) { ctx.font = '10.5px sans-serif'; ctx.fillStyle = '#b9cbe6'; ctx.fillText(lab, px + 6, py + 14); }
+      };
+      if (el.e > 1e-3) mark(el.rp, el.argp, `Pe ${fmtN(el.rp - s.r[ref], 3)} alt`);
+      if (el.e > 1e-3 && el.eps < 0 && el.ra < rMax) mark(el.ra, el.argp + Math.PI, `Ap ${fmtN(el.ra - s.r[ref], 3)} alt`);
+    }
+  }
+}
+function drawSOI() {
+  const s = sim.s;
+  ctx.setLineDash([5, 6]); ctx.lineWidth = 1;
+  for (const b of hier.bodies) {
+    const r = hier.soi[b]; if (!isFinite(r)) continue;
+    const R = r * ui.cam.scale, cx = SXs[b], cy = SYs[b];
+    const dNear = Math.hypot(Math.max(0 - cx, 0, cx - W), Math.max(0 - cy, 0, cy - H));
+    const dFar = Math.max(Math.hypot(cx, cy), Math.hypot(cx - W, cy), Math.hypot(cx, cy - H), Math.hypot(cx - W, cy - H));
+    if (R < dNear || R > dFar + 2) continue; // circle entirely outside, or it encloses the whole view
+    if (R < 3000) { ctx.strokeStyle = sim.objs[b].color; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); }
+    else { const pts = []; for (let k = 0; k <= 1440; k++) { const a = TAU * k / 1440; pts.push(cx + R * Math.cos(a), cy + R * Math.sin(a)); } strokeFaded(pts, sim.objs[b].color, 1, 0.35, 0.35, 1); }
+    if (ui.view.labels) { ctx.globalAlpha = 0.6; ctx.font = '10px sans-serif'; ctx.fillStyle = sim.objs[b].color; ctx.fillText('SOI ' + sim.objs[b].name, SXs[b] + r * ui.cam.scale * 0.72, SYs[b] - r * ui.cam.scale * 0.72); }
+  }
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+}
+let potCanvas = null, potData = null, potQ = null;
+// Effective potential of the current frame: Φ_grav + a_origin·r (translating frames) − ½ω²r² (rotating frames).
+function frameOriginAccel() {
+  const s = sim.s, f = ui.frame;
+  if (f.type === 'inertial') return [0, 0];
+  const AX = new Float64Array(s.n), AY = new Float64Array(s.n);
+  accel(s, sim.P, s.x, s.y, AX, AY);
+  if (f.type === 'center') { const k = sim.idx.get(f.a); return k === undefined ? [0, 0] : [AX[k], AY[k]]; }
+  const i = sim.idx.get(f.a), j = sim.idx.get(f.b), mi = s.m[i], mj = s.m[j], M = mi + mj || 1;
+  return [(mi * AX[i] + mj * AX[j]) / M, (mi * AY[i] + mj * AY[j]) / M];
+}
+function drawPotential() {
+  const s = sim.s, cell = W * H > 1.1e6 ? 5 : 4, gw = Math.ceil(W / cell), gh = Math.ceil(H / cell);
+  if (!potCanvas || potCanvas.width !== gw || potCanvas.height !== gh) {
+    potCanvas = document.createElement('canvas'); potCanvas.width = gw; potCanvas.height = gh;
+    potData = potCanvas.getContext('2d').createImageData(gw, gh); potQ = new Float32Array(gw * gh);
+  }
+  const bs = []; for (const b of hier.bodies) bs.push([FX[b], FY[b], sim.P.G * s.m[b], Math.max(s.r[b], 1e-9)]);
+  const om2 = ui.frame.type === 'rot' ? Fnow.om * Fnow.om : 0;
+  const [aix, aiy] = frameOriginAccel(), [aox, aoy] = dirToFrame(Fnow, aix, aiy);
+  const phi = new Float64Array(gw * gh);
+  for (let j = 0; j < gh; j++) {
+    const Y = wy((j + 0.5) * cell);
+    for (let i = 0; i < gw; i++) {
+      const X = wx((i + 0.5) * cell);
+      let p = 0;
+      for (const b of bs) { const r = Math.hypot(X - b[0], Y - b[1]); p -= b[2] / Math.max(r, b[3]); }
+      phi[j * gw + i] = p + aox * X + aoy * Y - 0.5 * om2 * (X * X + Y * Y);
+    }
+  }
+  // compress with asinh around the typical magnitude so wells and flat regions both get contours
+  const sub = []; for (let k = 0; k < phi.length; k += 11) sub.push(Math.abs(phi[k]));
+  sub.sort((p, q) => p - q);
+  const p0 = Math.max(sub[Math.floor(sub.length * 0.5)] * 0.25, 1e-30);
+  for (let k = 0; k < phi.length; k++) potQ[k] = Math.asinh(-phi[k] / p0);
+  const sq = []; for (let k = 0; k < potQ.length; k += 7) sq.push(potQ[k]);
+  sq.sort((p, q) => p - q);
+  const lo = sq[Math.floor(sq.length * 0.01)], hi = sq[Math.floor(sq.length * 0.995)];
+  const D = potData.data, span = Math.max(hi - lo, 1e-9), levels = 24;
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const k = j * gw + i, t = clamp((potQ[k] - lo) / span, 0, 1), v = t * levels, fr = v - Math.floor(v);
+    // gradient of the level index per cell → keep contour lines ~1 cell wide, fade where too dense
+    const kx = i + 1 < gw ? k + 1 : k - 1, ky = j + 1 < gh ? k + gw : k - gw;
+    const gx = (clamp((potQ[kx] - lo) / span, 0, 1) - t) * levels, gy = (clamp((potQ[ky] - lo) / span, 0, 1) - t) * levels;
+    const g = Math.hypot(gx, gy) + 1e-9, dist = Math.min(fr, 1 - fr) / g;
+    const t0 = (potQ[k] - lo) / span, line = t0 <= 0 || t0 >= 1 ? 0 : clamp(1 - dist / 0.75, 0, 1) * clamp(1.6 - g * 2.2, 0, 1);
+    const u = Math.pow(t, 0.85);
+    let r = 10 + 60 * u + 180 * u * u * u, gg = 14 + 26 * u + 150 * Math.max(0, u - 0.62) * 2, b = 34 + 110 * u - 50 * u * u;
+    D[4 * k] = r + 110 * line; D[4 * k + 1] = gg + 125 * line; D[4 * k + 2] = b + 130 * line; D[4 * k + 3] = 255;
+  }
+  potCanvas.getContext('2d').putImageData(potData, 0, 0);
+  ctx.globalAlpha = 0.6; ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(potCanvas, 0, 0, gw * cell, gh * cell); ctx.globalAlpha = 1;
+}
+function drawBodies() {
+  const s = sim.s, n = s.n, order = [];
+  for (let i = 0; i < n; i++) if (s.status[i] !== ST_GONE) order.push(i);
+  order.sort((a, b) => (s.craft[a] - s.craft[b]) || (s.m[b] - s.m[a]));
+  for (const i of order) {
+    const x = SXs[i], y = SYs[i], r = RPX[i], o = sim.objs[i];
+    if (x < -r - 60 || x > W + r + 60 || y < -r - 60 || y > H + r + 60) continue;
+    if (s.craft[i]) {
+      const a = Math.atan2(-FVY[i], FVX[i]);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+      ctx.fillStyle = s.status[i] === ST_LANDED ? '#777' : o.color; ctx.strokeStyle = '#0b0f18'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-5, 5); ctx.lineTo(-2.5, 0); ctx.lineTo(-5, -5); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      if (s.status[i] === ST_LANDED) { ctx.strokeStyle = '#ff5f7a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5); ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5); ctx.stroke(); }
+    } else {
+      if (o.kind === 'star') {
+        const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 3.2);
+        g.addColorStop(0, 'rgba(255,220,140,0.55)'); g.addColorStop(1, 'rgba(255,180,80,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 3.2, 0, TAU); ctx.fill();
+      }
+      const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+      g.addColorStop(0, o.kind === 'star' ? '#fffbe8' : '#ffffff'); g.addColorStop(0.25, o.color); g.addColorStop(1, shade(o.color, 0.35));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    }
+    if (i === ui.sel) {
+      ctx.strokeStyle = '#5ccfff'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+}
+function shade(hex, f) {
+  const v = parseInt(hex.slice(1), 16), r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+  return `rgb(${r * f | 0},${g * f | 0},${b * f | 0})`;
+}
+function drawVectors() {
+  const s = sim.s, n = s.n;
+  let AX = null, AY = null;
+  if (ui.view.acc) {
+    AX = new Float64Array(n); AY = new Float64Array(n);
+    accel(s, sim.P, s.x, s.y, AX, AY);
+  }
+  for (let i = 0; i < n; i++) {
+    if (s.status[i] !== ST_ACTIVE) continue;
+    const x = SXs[i], y = SYs[i];
+    if (x < -50 || x > W + 50 || y < -50 || y > H + 50) continue;
+    if (ui.view.vel) {
+      const L = Math.hypot(FVX[i], FVY[i]) * ui.vecScale;
+      if (L > 2) {
+        const c = Math.min(L, 260) / L;
+        arrow(x, y, x + FVX[i] * ui.vecScale * c, y - FVY[i] * ui.vecScale * c, '#8ff0ff', 1.5, 7);
+        if (i === ui.sel && ui.view.labels) { ctx.font = '10.5px sans-serif'; ctx.fillStyle = '#8ff0ff'; ctx.fillText(`${fmtN(Math.hypot(FVX[i], FVY[i]), 3)} Mm/h`, x + FVX[i] * ui.vecScale * c + 6, y - FVY[i] * ui.vecScale * c); }
+      }
+    }
+    if (AX) {
+      const [ax, ay] = dirToFrame(Fnow, AX[i], AY[i]), a = Math.hypot(ax, ay), L = Math.min(240, Math.sqrt(a) * ui.vecScale * 5);
+      if (L > 2) arrow(x, y, x + ax / a * L, y - ay / a * L, '#ff8ad8', 1.4, 6);
+    }
+  }
+}
+function drawEditHandle() {
+  ui.velHandle = null;
+  const i = ui.sel, s = sim.s;
+  if (!ui.paused || i < 0 || !s.craft[i] || s.status[i] === ST_GONE) return;
+  const x = SXs[i], y = SYs[i];
+  const hx = x + FVX[i] * ui.vecScale, hy = y - FVY[i] * ui.vecScale;
+  ctx.setLineDash([3, 3]); ctx.strokeStyle = '#8ff0ff'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hx, hy); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(12,30,44,.9)'; ctx.strokeStyle = '#8ff0ff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(hx, hy, 7, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#8ff0ff'; ctx.font = '10px sans-serif'; ctx.fillText('v', hx - 3, hy + 3.5);
+  ui.velHandle = { x: hx, y: hy };
+}
+function drawLabels() {
+  if (!ui.view.labels) return;
+  const s = sim.s, n = s.n, boxes = [], order = [];
+  for (let i = 0; i < n; i++) if (s.status[i] !== ST_GONE) order.push(i);
+  order.sort((a, b) => (b === ui.sel) - (a === ui.sel) || s.m[b] - s.m[a]);
+  ctx.font = '12px sans-serif';
+  for (const i of order) {
+    const x = SXs[i] + RPX[i] + 6, y = SYs[i] - RPX[i] * 0.5 - 4;
+    if (x < -80 || x > W + 10 || y < -10 || y > H + 10) continue;
+    const txt = sim.objs[i].name + (s.status[i] === ST_LANDED ? ' (landed)' : ''), w = ctx.measureText(txt).width;
+    if (boxes.some((b) => x < b[0] + b[2] && x + w > b[0] && y - 12 < b[1] && y > b[1] - 12)) continue;
+    boxes.push([x, y, w]);
+    ctx.fillStyle = i === ui.sel ? '#e8f7ff' : 'rgba(200,215,235,.8)'; ctx.fillText(txt, x, y);
+  }
+}
+function drawOffscreen() {
+  const L = 12, T = 12, R = 2 * CX - 12, B = H - tbH - 12, hr = hudRect;
+  ctx.font = '11px sans-serif';
+  for (const b of hier.bodies) {
+    const x = SXs[b], y = SYs[b];
+    if (x >= 0 && x <= 2 * CX && y >= 0 && y <= H - tbH) continue;
+    const dx = x - CX, dy = y - CY;
+    const kx = dx > 0 ? (R - CX) / dx : dx < 0 ? (CX - L) / -dx : Infinity;
+    const ky = dy > 0 ? (B - CY) / dy : dy < 0 ? (CY - T) / -dy : Infinity;
+    const k = Math.min(kx, ky), side = kx < ky ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'b' : 't');
+    let ex = CX + dx * k, ey = CY + dy * k;
+    if (hr && ui.view.err !== undefined && ex < hr.right + 8 && ey < hr.bottom + 8) { if (side === 'l') ey = hr.bottom + 16; else ex = hr.right + 18; }
+    const a = Math.atan2(dy, dx);
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(a);
+    ctx.fillStyle = sim.objs[b].color; ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-4, 5); ctx.lineTo(-4, -5); ctx.closePath(); ctx.fill(); ctx.restore();
+    const dist = Math.hypot(FX[b] - ui.cam.x, FY[b] - ui.cam.y);
+    const txt = `${sim.objs[b].name} ${fmtN(dist, 3)} Mm`, w = ctx.measureText(txt).width;
+    let tx = ex - w / 2, ty = ey + 4;
+    if (side === 'l') tx = ex + 12; else if (side === 'r') tx = ex - 12 - w; else if (side === 't') ty = ey + 20; else ty = ey - 12;
+    ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(210,220,240,.85)';
+    ctx.fillText(txt, clamp(tx, 4, 2 * CX - w - 4), clamp(ty, 12, H - tbH - 4));
+  }
+}
+function drawScaleBar() {
+  const target = 110 / ui.cam.scale, p = Math.pow(10, Math.floor(Math.log10(target)));
+  const nice = [1, 2, 5, 10].map((k) => k * p).filter((v) => v <= target).pop() || p;
+  const L = nice * ui.cam.scale, x = 14, y = H - tbH - 18;
+  ctx.strokeStyle = '#9fb3d1'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x, y); ctx.lineTo(x + L, y); ctx.lineTo(x + L, y - 4); ctx.stroke();
+  ctx.font = '11px sans-serif'; ctx.fillStyle = '#9fb3d1';
+  ctx.fillText(`${fmtN(nice, 3)} Mm${nice >= 1000 ? ` (${fmtN(nice * 1000, 3)} km)` : ''}`, x, y - 7);
+}
+function drawHover() {
+  const hv = ui.hover;
+  if (!hv || hv.type !== 'path') return;
+  ctx.strokeStyle = '#ffb547'; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.85; ctx.setLineDash([2, 2]);
+  ctx.beginPath(); ctx.arc(hv.x, hv.y, 7, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+}
+function render() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (starCanvas) ctx.drawImage(starCanvas, 0, 0, W, H); else { ctx.fillStyle = '#04060b'; ctx.fillRect(0, 0, W, H); }
+  if (ui.view.pot) drawPotential();
+  if (ui.view.soi) drawSOI();
+  if (ui.view.guides) drawGuides();
+  if (ui.view.trails) drawTrails();
+  if (ui.view.pred) drawPredictions(); else ui.pathScreen = [];
+  if (ui.view.enc) drawEncounters();
+  drawBodies();
+  if (ui.view.vel || ui.view.acc) drawVectors();
+  drawNodes();
+  drawEditHandle();
+  drawLabels();
+  drawOffscreen();
+  drawScaleBar();
+  drawHover();
+}
+
+// =====================================================================
+// Error plot
+// =====================================================================
+const errCanvas = $('errPlot'), ectx = errCanvas.getContext('2d');
+function drawErrPlot() {
+  const w = errCanvas.clientWidth, h = errCanvas.clientHeight;
+  if (!w) return;
+  if (errCanvas.width !== Math.round(w * DPR)) { errCanvas.width = Math.round(w * DPR); errCanvas.height = Math.round(h * DPR); }
+  ectx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ectx.clearRect(0, 0, w, h);
+  const lo = -16, hi = 0, Y = (v) => h - 2 - (clamp(v, lo, hi) - lo) / (hi - lo) * (h - 4);
+  ectx.strokeStyle = 'rgba(120,140,170,.25)'; ectx.lineWidth = 1; ectx.font = '8.5px sans-serif'; ectx.fillStyle = 'rgba(140,160,190,.7)';
+  for (const g of [-12, -8, -4]) { ectx.beginPath(); ectx.moveTo(0, Y(g)); ectx.lineTo(w, Y(g)); ectx.stroke(); ectx.fillText(String(g), 1, Y(g) - 1); }
+  const E = sim.errHist, N = E.length; if (N < 2) return;
+  const series = [['dE', '#ffb547'], ['dL', '#5ccfff'], ['dP', '#62e3a4']];
+  for (const [k, col] of series) {
+    ectx.strokeStyle = col; ectx.lineWidth = 1.2; ectx.beginPath();
+    for (let q = 0; q < N; q++) {
+      const v = E[q][k], lv = v > 0 ? Math.log10(v) : lo, x = q / (N - 1) * w;
+      if (q === 0) ectx.moveTo(x, Y(lv)); else ectx.lineTo(x, Y(lv));
+    }
+    ectx.stroke();
+  }
+}
+
+// =====================================================================
+// Selection, telemetry and panel
+// =====================================================================
+function telemetryRef(i) {
+  const s = sim.s, id = sim.objs[i].id, ovr = ui.telRef.get(id);
+  if (ovr != null && ovr >= 0) { const k = sim.idx.get(ovr); if (k !== undefined && k !== i && s.status[k] !== ST_GONE) return k; }
+  return primaryOf(s, hier, i);
+}
+function nodeDv(nd) { return nd.mode === 'cart' ? Math.hypot(nd.dvx, nd.dvy) : Math.hypot(nd.pro, nd.rad); }
+function scheduledDv(id) { let t = 0; for (const nd of sim.nodes) if (!nd.done && nd.craft === id) t += nodeDv(nd); return t; }
+function select(i) {
+  if (i === ui.sel) return;
+  ui.sel = i;
+  const id = i >= 0 ? sim.objs[i].id : -1;
+  if (ui.selNode >= 0) { const nd = sim.nodes.find((q) => q.id === ui.selNode); if (!nd || nd.craft !== id) ui.selNode = -1; }
+  if (ui.selNode < 0) { const nd = sim.nodes.find((q) => !q.done && q.craft === id); if (nd) ui.selNode = nd.id; }
+  computeNow();
+  refreshSelect(); syncEditor(); syncNodeEditor(); updatePanel(true);
+}
+function refreshSelect() {
+  const sel = $('objSel'), s = sim.s;
+  sel.innerHTML = sim.objs.map((o, i) => s.status[i] === ST_GONE ? '' : `<option value="${i}">${esc(o.name)} (${o.kind})</option>`).join('');
+  if (ui.sel >= 0) sel.value = String(ui.sel);
+  const tr = $('telRef'), cur = ui.sel >= 0 ? ui.telRef.get(sim.objs[ui.sel].id) : -1;
+  tr.innerHTML = '<option value="-1">Auto (sphere of influence)</option>' + sim.objs.map((o, i) =>
+    (s.status[i] === ST_GONE || s.craft[i] || i === ui.sel) ? '' : `<option value="${o.id}">${esc(o.name)}</option>`).join('');
+  tr.value = String(cur != null && cur >= 0 ? cur : -1);
+  const nr = $('ndRef');
+  nr.innerHTML = '<option value="-1">Auto (primary at burn time)</option>' + sim.objs.map((o, i) =>
+    (s.status[i] === ST_GONE || s.craft[i]) ? '' : `<option value="${o.id}">${esc(o.name)}</option>`).join('');
+}
+function refreshFrameOptions() {
+  const s = sim.s, H0 = hierarchy(s), opts = [['inertial', 'Inertial (barycentric)']];
+  sim.objs.forEach((o, i) => { if (s.status[i] !== ST_GONE) opts.push(['center:' + o.id, 'Centered · ' + o.name]); });
+  for (const b of H0.bodies) { const p = H0.par[b]; if (p >= 0) opts.push([`rot:${sim.objs[p].id}:${sim.objs[b].id}`, `Rotating · ${sim.objs[p].name}–${sim.objs[b].name}`]); }
+  const key = frameKey(ui.frame);
+  if (!opts.some((o) => o[0] === key) && frameValid(ui.frame)) opts.push([key, frameLabel(ui.frame)]);
+  $('frameSel').innerHTML = opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('');
+  $('frameSel').value = key;
+}
+function setFrame(f, keepView) {
+  const i = ui.sel;
+  const hadSel = i >= 0 && sim.alive(i);
+  const offX = hadSel ? ui.cam.x - FX[i] : 0, offY = hadSel ? ui.cam.y - FY[i] : 0;
+  ui.frame = f;
+  refreshFrameOptions();
+  computeNow();
+  if (!keepView && hadSel) { ui.cam.x = FX[i] + offX; ui.cam.y = FY[i] + offY; }
+}
+function row(k, v, cls) { return `<tr><td>${k}</td><td${cls ? ` class="${cls}"` : ''}>${v}</td></tr>`; }
+function sec(t) { return `<tr class="sec"><td colspan="2">${t}</td></tr>`; }
+function updateTelemetry() {
+  const i = ui.sel, s = sim.s, tb = $('telTable');
+  if (i < 0 || !sim.objs[i]) { tb.innerHTML = row('Selection', 'none'); return; }
+  const o = sim.objs[i], st = s.status[i];
+  let h = '';
+  h += row('Status', st === ST_GONE ? 'removed/merged' : st === ST_LANDED ? `landed on ${esc(sim.name(s.land[i]))}` : 'free flight');
+  h += row('Mass · radius', `${fmtN(s.m[i])} · ${fmtN(s.r[i])} Mm`);
+  h += sec('State vector · ' + esc(frameLabel(ui.frame)));
+  h += row('Position', `(${fmtN(FX[i], 5)}, ${fmtN(FY[i], 5)}) Mm`);
+  h += row('Velocity', `(${fmtN(FVX[i], 4)}, ${fmtN(FVY[i], 4)}) Mm/h`);
+  h += row('Speed', `${fmtN(Math.hypot(FVX[i], FVY[i]), 5)} Mm/h`);
+  if (ui.frame.type !== 'inertial') {
+    h += sec('State vector · inertial');
+    h += row('Position', `(${fmtN(s.x[i], 6)}, ${fmtN(s.y[i], 6)})`);
+    h += row('Velocity', `(${fmtN(s.vx[i], 5)}, ${fmtN(s.vy[i], 5)})`);
+  }
+  const ref = telemetryRef(i);
+  const refLbl = ref >= 0 ? sim.objs[ref].name + (ui.telRef.get(o.id) >= 0 ? ' (manual)' : ' (auto)') : 'none';
+  h += sec('Orbit relative to ' + esc(refLbl));
+  if (ref >= 0 && st !== ST_GONE) {
+    const el = relElements(s, sim.P, i, ref);
+    h += row('Distance to primary', `${fmtN(el.r, 5)} Mm (alt ${fmtN(el.r - s.r[ref], 4)})`);
+    h += row('Relative speed', `${fmtN(el.v, 5)} Mm/h`);
+    h += row('Specific energy ε', `${fmtN(el.eps, 5)} Mm²/h²`, el.eps >= 0 ? 'val-warn' : '');
+    h += row('Specific ang. mom. h', `${fmtN(el.h, 5)} Mm²/h`);
+    h += row('Eccentricity e', `${fmtN(el.e, 4)} ${el.e < 1e-3 ? '(circular)' : el.e < 1 ? '(elliptic)' : '(hyperbolic)'}`);
+    h += row('Semi-major axis a', `${fmtN(el.a, 5)} Mm`);
+    h += row('Periapsis', `${fmtN(el.rp, 5)} Mm (alt ${fmtN(el.rp - s.r[ref], 4)})`, el.rp < s.r[ref] ? 'val-bad' : '');
+    h += row('Apoapsis', el.eps < 0 ? `${fmtN(el.ra, 5)} Mm (alt ${fmtN(el.ra - s.r[ref], 4)})` : '∞ (unbound)');
+    h += row('Orbital period', el.eps < 0 ? `${fmtN(el.T, 5)} h (${fmtN(el.T / 24, 3)} d)` : '— (unbound)');
+    if (isFinite(hier.soi[ref])) h += row('Primary SOI radius', `${fmtN(hier.soi[ref], 4)} Mm`);
+  } else h += row('Primary', 'none (root body)');
+  if (s.craft[i]) {
+    h += sec('Mission');
+    const dv = scheduledDv(o.id), cnt = sim.nodes.filter((q) => !q.done && q.craft === o.id).length;
+    h += row('Scheduled Δv', `${fmtN(dv, 4)} Mm/h (${cnt} node${cnt === 1 ? '' : 's'})`);
+    const enc = st === ST_ACTIVE ? encountersFor(i) : [];
+    h += row('Closest encounter', enc.length ? `${esc(sim.objs[enc[0].b].name)} ${fmtN(enc[0].d, 4)} Mm in ${fmtN(enc[0].t - s.t, 4)} h` : 'none within horizon');
+    const imp = pred && pred.events.find((e) => e.type === 'impact' && e.a === i && e.t >= s.t);
+    if (imp) h += row('Predicted impact', `${esc(sim.name(imp.b))} in ${fmtN(imp.t - s.t, 4)} h`, 'val-bad');
+  }
+  tb.innerHTML = h;
+}
+function updatePanel(force) {
+  updateTelemetry();
+  updateManeuverPanel(force);
+  updatePhysicsReadout();
+}
+function updatePhysicsReadout() {
+  const e = sim.errors(), r = sim.ref;
+  $('phInv').textContent =
+    `E now      ${fmtN(e.cur.E, 10)}\nE ref      ${fmtN(r.E, 10)}\n|ΔE/E|     ${fmtE(e.dE)}\n|Δp|/Σ|p|  ${fmtE(e.dP)}\n|ΔL|/Σ|L|  ${fmtE(e.dL)}\nsteps      ${sim.steps}` +
+    (pred ? `\nforecast   ${pred.samples.length} samples, ${Math.round((pred.t1 - pred.t0) / pred.h)} steps${pred.truncated ? ' (TRUNCATED: step cap)' : ''}${pred.blown ? ' (BLEW UP)' : ''}` : '');
+}
+let nodeSig = '';
+function updateManeuverPanel(force) {
+  const i = ui.sel, s = sim.s;
+  const isCraft = i >= 0 && s.craft[i];
+  const id = i >= 0 ? sim.objs[i].id : -1;
+  $('btnAddNode').disabled = !isCraft || s.status[i] !== ST_ACTIVE;
+  if (!isCraft) {
+    $('mnvHead').textContent = 'Select a spacecraft to plan maneuvers.';
+    $('nodeList').innerHTML = ''; $('nodeEdit').hidden = true; $('encList').textContent = '–'; nodeSig = '';
+  } else {
+    const nodes = sim.nodes.filter((q) => q.craft === id).sort((a, b) => a.t - b.t);
+    const pending = nodes.filter((q) => !q.done);
+    $('mnvHead').textContent = `${sim.objs[i].name}: ${pending.length} pending node(s), scheduled Δv ${fmtN(scheduledDv(id), 4)} Mm/h\nNow t = ${fmtN(s.t, 6)} h (${fmtT(s.t)})`;
+    const sig = nodes.map((q) => `${q.id}:${q.done}:${q.t.toFixed(3)}:${nodeDv(q).toFixed(4)}`).join('|') + '#' + ui.selNode;
+    if (force || sig !== nodeSig) {
+      nodeSig = sig;
+      $('nodeList').innerHTML = nodes.map((q, k) => `<li class="${q.id === ui.selNode ? 'sel' : ''} ${q.done ? 'done' : ''}" data-id="${q.id}">
+        <button class="nm" data-act="sel" aria-label="Select node ${k + 1}">${q.done ? '✓' : '◆'} #${k + 1} t=${fmtN(q.t, 5)} h · |Δv| ${fmtN(q.done && q.exec && q.exec.dv != null ? q.exec.dv : nodeDv(q), 3)}${q.done ? ' executed' : ` · in <span data-in="${q.id}"></span>`}</button>
+        <button class="x danger" data-act="del" aria-label="Delete node ${k + 1}">✕</button></li>`).join('') || '<li class="hint" style="border:none;background:none">No nodes. Click the predicted path or press + Node.</li>';
+    }
+    for (const q of pending) { const el = document.querySelector(`[data-in="${q.id}"]`); if (el) el.textContent = fmtN(q.t - s.t, 4) + ' h'; }
+    const enc = s.status[i] === ST_ACTIVE ? encountersFor(i) : [];
+    $('encList').textContent = enc.length ? enc.slice(0, 5).map((e) => `${sim.objs[e.b].name.padEnd(8)} ${fmtN(e.d, 4).padStart(8)} Mm  in ${fmtN(e.t - s.t, 4)} h${e.d < s.r[e.b] ? '  IMPACT' : e.d < hier.soi[e.b] ? '  (inside SOI)' : ''}`).join('\n') : 'No other bodies approached within the horizon.';
+  }
+  updateNodeReadout();
+  const L = sim.log.slice(-40).reverse();
+  const lsig = L.length + ':' + (L[0] ? L[0].t : 0);
+  if (lsig !== ui.logSig) { ui.logSig = lsig; $('logList').innerHTML = L.map((e) => `<li class="${e.kind}">t=${fmtN(e.t, 5)} ${esc(e.text)}</li>`).join('') || '<li>—</li>'; }
+}
+function selectedNode() { return sim.nodes.find((q) => q.id === ui.selNode && !q.done) || null; }
+function syncNodeEditor() {
+  const nd = selectedNode();
+  $('nodeEdit').hidden = !nd;
+  if (!nd) return;
+  const set = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = v; };
+  set('ndT', +nd.t.toFixed(4)); set('ndMode', nd.mode); set('ndRef', String(nd.ref));
+  set('ndPro', +nd.pro.toFixed(5)); set('ndProR', nd.pro); set('ndRad', +nd.rad.toFixed(5)); set('ndRadR', nd.rad);
+  set('ndDx', +nd.dvx.toFixed(5)); set('ndDxR', nd.dvx); set('ndDy', +nd.dvy.toFixed(5)); set('ndDyR', nd.dvy);
+  $('ndOrb').hidden = nd.mode !== 'orb'; $('ndCart').hidden = nd.mode !== 'cart';
+}
+function updateNodeReadout() {
+  const nd = selectedNode(), out = $('ndInfo');
+  if (!nd) return;
+  const info = pred && pred.nodeInfo.get(nd.id), s = sim.s;
+  if (!info) { out.textContent = `Burn in ${fmtN(nd.t - s.t, 4)} h — beyond the prediction horizon (${fmtN(ui.horizon)} h); extend it to preview.`; return; }
+  const b = info.before, a = info.after, rn = info.ref >= 0 ? sim.objs[info.ref].name : '—';
+  const f = (v) => fmtN(v, 5).padStart(10);
+  let t = `Burn at t=${fmtN(info.t, 6)} h (in ${fmtN(info.t - s.t, 4)} h)\n|Δv| = ${fmtN(Math.hypot(info.dvx, info.dvy), 5)} Mm/h  ref ${rn}\nΔv inertial (${fmtN(info.dvx, 4)}, ${fmtN(info.dvy, 4)})\n`;
+  if (b && a) {
+    t += `              before      after\n`;
+    t += `Periapsis  ${f(b.rp)} ${f(a.rp)}\nApoapsis   ${b.eps < 0 ? f(b.ra) : '         ∞'} ${a.eps < 0 ? f(a.ra) : '         ∞'}\n`;
+    t += `Ecc.       ${f(b.e)} ${f(a.e)}\nPeriod h   ${b.eps < 0 ? f(b.T) : '         —'} ${a.eps < 0 ? f(a.T) : '         —'}\nEnergy ε   ${f(b.eps)} ${f(a.eps)}`;
+  }
+  out.textContent = t;
+}
+function syncEditor() {
+  const i = ui.sel, s = sim.s, dis = !ui.paused || i < 0;
+  for (const id of ['edName', 'edMass', 'edRad', 'edX', 'edY', 'edVX', 'edVY', 'edDisp', 'btnApply']) $(id).disabled = dis && id !== 'edDisp' && id !== 'edName' && id !== 'btnApply' ? true : (i < 0);
+  for (const id of ['edMass', 'edRad', 'edX', 'edY', 'edVX', 'edVY']) $(id).disabled = dis;
+  $('editHint').style.color = ui.paused ? '' : 'var(--warn)';
+  if (i < 0) return;
+  const set = (id, v) => { const el = $(id); if (document.activeElement !== el) { el.value = v; el.classList.remove('bad'); } };
+  set('edName', sim.objs[i].name); set('edMass', s.m[i]); set('edRad', s.r[i]);
+  set('edX', +s.x[i].toPrecision(10)); set('edY', +s.y[i].toPrecision(10)); set('edVX', +s.vx[i].toPrecision(10)); set('edVY', +s.vy[i].toPrecision(10));
+  set('edDisp', sim.objs[i].disp || 1);
+}
+function syncPhysics() {
+  $('phModel').value = sim.P.model; $('phInt').value = sim.P.integrator; $('phDt').value = sim.P.dt;
+  $('phDtR').value = Math.log10(sim.P.dt); $('phTol').value = String(sim.P.tol); if (!$('phTol').value) $('phTol').value = '1e-9';
+  $('phTol').disabled = sim.P.integrator !== 'dopri';
+  $('phG').value = sim.P.G; $('phCol').value = sim.P.collide; $('phHor').value = ui.horizon;
+  if (ui.predLink) ui.predDt = sim.P.dt;
+  $('phPdt').value = ui.predDt; $('phPdt').disabled = ui.predLink; $('phPdtLink').checked = ui.predLink;
+}
+function syncView() {
+  for (const [k, id] of [['trails', 'vTrails'], ['pred', 'vPred'], ['vel', 'vVel'], ['acc', 'vAcc'], ['guides', 'vGuides'], ['soi', 'vSoi'], ['pot', 'vPot'], ['enc', 'vEnc'], ['err', 'vErr'], ['labels', 'vLabels']]) $(id).checked = ui.view[k];
+  $('vTrail').value = sim.trailLen; $('vBody').value = Math.log10(ui.bodyScale); $('vVec').value = Math.log10(ui.vecScale); $('vTrack').checked = ui.track;
+  $('errWrap').style.display = ui.view.err ? '' : 'none';
+  const hb = $('hud').getBoundingClientRect(); hudRect = { right: hb.right, bottom: hb.bottom };
+}
+function setTab(t) {
+  ui.tab = t;
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('.tabbody').forEach((sct) => { sct.hidden = sct.id !== 'tab-' + t; });
+  if (t === 'mnv') { nodeSig = ''; syncNodeEditor(); }
+  updatePanel(true);
+}
+function toast(msg, cls) {
+  const el = document.createElement('div'); el.className = 'toast ' + (cls || ''); el.textContent = msg;
+  $('toasts').appendChild(el);
+  while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
+  setTimeout(() => el.remove(), 3800);
+}
+sim.onLog = (e) => { if (e.kind === 'burn' || e.kind === 'impact') toast(e.text, e.kind === 'burn' ? 'burn' : 'bad'); };
+
+// =====================================================================
+// Scenario loading, camera helpers
+// =====================================================================
+function loadScenario(key) {
+  const sc = SCENARIOS.find((q) => q.key === key) || SCENARIOS[0];
+  pred = null;
+  const spec = sc.build();
+  sim.trailLen = spec.ui.trail || 140;
+  sim.loadSpec(spec);
+  ui.scenario = sc.key; ui.note = sc.note;
+  ui.horizon = spec.ui.horizon || 220; ui.predLink = true; ui.predDt = sim.P.dt;
+  ui.rateLog = ui.curLog = Math.log10(spec.ui.rate || 10);
+  ui.bodyScale = spec.ui.bodyScale || 1; ui.telRef = new Map(); ui.warpTo = null;
+  if (spec.ui.telRef) for (const [a, b] of Object.entries(spec.ui.telRef)) ui.telRef.set(sim.idByName(a), sim.idByName(b));
+  const f = spec.view.frame;
+  ui.frame = f.type === 'inertial' ? { type: 'inertial' } : f.type === 'center' ? { type: 'center', a: sim.idByName(f.a) } : { type: 'rot', a: sim.idByName(f.a), b: sim.idByName(f.b) };
+  ui.sel = -1; ui.selNode = -1; ui.track = false;
+  const selId = sim.idByName(spec.ui.sel);
+  select(selId >= 0 ? sim.idx.get(selId) : 0);
+  computeNow();
+  const cId = spec.view.center ? sim.idByName(spec.view.center) : -1, ci = cId >= 0 ? sim.idx.get(cId) : -1;
+  ui.cam.x = ci >= 0 ? FX[ci] : 0; ui.cam.y = ci >= 0 ? FY[ci] : 0;
+  ui.cam.scale = viewR() / spec.view.radius;
+  sim.saveCheckpoint('scenario start');
+  refreshFrameOptions(); refreshSelect(); syncPhysics(); syncView(); syncEditor(); syncNodeEditor();
+  $('scnNote').textContent = sc.note;
+  document.querySelectorAll('.scn').forEach((b) => b.classList.toggle('cur', b.dataset.key === sc.key));
+  recomputePrediction(); recordErr();
+  updatePanel(true); updateWarpLabel(); updateHud(true);
+}
+function focusSelected() {
+  const i = ui.sel; if (i < 0) return;
+  const ref = telemetryRef(i);
+  let R = Math.max(RPX[i] / ui.cam.scale * 4, sim.s.r[i] * 6);
+  if (ref >= 0) R = Math.max(R, 1.25 * Math.hypot(FX[i] - FX[ref], FY[i] - FY[ref]));
+  ui.cam.x = FX[i]; ui.cam.y = FY[i];
+  ui.cam.scale = clamp(viewR() / R, 1e-6, 1e6);
+}
+function fitAll() {
+  const s = sim.s; let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < s.n; i++) { if (s.status[i] === ST_GONE) continue; x0 = Math.min(x0, FX[i]); x1 = Math.max(x1, FX[i]); y0 = Math.min(y0, FY[i]); y1 = Math.max(y1, FY[i]); }
+  if (!isFinite(x0)) return;
+  ui.cam.x = (x0 + x1) / 2; ui.cam.y = (y0 + y1) / 2;
+  const R = Math.max(x1 - x0, y1 - y0, 1) * 0.6;
+  ui.cam.scale = clamp(viewR() / R, 1e-6, 1e6); ui.track = false; $('vTrack').checked = false;
+}
+function zoomAt(px, py, f) {
+  const X = wx(px), Y = wy(py);
+  ui.cam.scale = clamp(ui.cam.scale * f, 1e-6, 1e6);
+  if (!ui.track) { ui.cam.x = X - (px - CX) / ui.cam.scale; ui.cam.y = Y + (py - CY) / ui.cam.scale; }
+}
+function recomputePrediction() {
+  sim.P.tol = sim.P.tol || 1e-9;
+  pred = sim.predict({ horizon: ui.horizon, dt: ui.predLink ? sim.P.dt : ui.predDt });
+  lastPredReal = performance.now();
+  sim.predDirty = false;
+}
+
+// =====================================================================
+// Time control
+// =====================================================================
+function setPaused(p) {
+  ui.paused = p; if (p) ui.warpTo = null;
+  $('btnPlay').textContent = p ? '▶' : '⏸';
+  $('btnPlay').setAttribute('aria-label', p ? 'Play simulation' : 'Pause simulation');
+  syncEditor(); updateHud(true);
+}
+function setRate(log, instant) {
+  ui.rateLog = clamp(log, -2, 3.7);
+  if (instant) ui.curLog = ui.rateLog;
+  $('warpR').value = ui.rateLog; updateWarpLabel();
+}
+function updateWarpLabel() { $('warpLbl').textContent = fmtWarp(10 ** ui.rateLog); }
+function singleStep() {
+  if (!ui.paused) setPaused(true);
+  guardedStep(() => sim.stepOnce(), 1);
+  ui.stepsThisFrame = 1; sim.predDirty = true;
+  recordErr(); updatePanel(); syncEditor();
+}
+function guardedStep(fn) {
+  const backup = sim.s.clone(), t0 = sim.s.t;
+  const bk = { ref: { ...sim.ref }, logLen: sim.log.length, errLen: sim.errHist.length, steps: sim.steps, epochs: sim.epochs, primaries: new Map(sim.primaries) };
+  try {
+    fn();
+    if (!finiteState(sim.s)) throw new Error('non-finite position or velocity');
+    return true;
+  } catch (e) {
+    sim.s = backup;
+    for (const nd of sim.nodes) if (nd.exec && nd.exec.t > t0 - 1e-12) { nd.done = false; nd.exec = null; }
+    // restore every piece of bookkeeping touched during the failed batch
+    sim.ref = bk.ref; sim.steps = bk.steps; sim.epochs = bk.epochs; sim.primaries = bk.primaries;
+    sim.hist = sim.hist.filter((q) => q.t <= t0 + 1e-12);
+    let hh = 0; while (hh < sim.hist.length - 1 && sim.hist[hh].t < t0 - sim.trailLen) hh++;
+    sim.histHead = hh; sim.lastSampleT = sim.hist.length ? sim.hist[sim.hist.length - 1].t : -Infinity;
+    sim.log.length = Math.min(sim.log.length, bk.logLen); sim.errHist.length = Math.min(sim.errHist.length, bk.errLen);
+    sim.invalidate();
+    setPaused(true);
+    const advice = sim.P.integrator === 'dopri' ? 'Loosen the tolerance, enable collisions (point masses are singular), or rewind.' : 'Reduce dt, switch to the adaptive Dormand–Prince integrator, or rewind.';
+    $('bannerMsg').textContent = `${e.message}. The simulation was rolled back to t = ${fmtN(t0, 6)} h, the last state known to be good, and paused. ${advice}`;
+    $('banner').hidden = false;
+    return false;
+  }
+}
+function warpToNextNode() {
+  const id = ui.sel >= 0 ? sim.objs[ui.sel].id : -1;
+  const cand = sim.nodes.filter((q) => !q.done && (id < 0 || q.craft === id)).sort((a, b) => a.t - b.t)[0]
+    || sim.nodes.filter((q) => !q.done).sort((a, b) => a.t - b.t)[0];
+  if (!cand) { toast('No pending burn to warp to.'); return; }
+  const lead = Math.min(3, Math.max(4 * sim.P.dt, 0.02 * (cand.t - sim.s.t)));
+  const until = cand.t - lead;
+  if (until <= sim.s.t) { toast('Burn is imminent.'); return; }
+  ui.warpTo = { until, prev: ui.rateLog };
+  setRate(clamp(Math.log10((until - sim.s.t) / 1.5), ui.rateLog, 3.7), false);
+  if (ui.paused) setPaused(false);
+  toast(`Warping to ${fmtN(lead, 2)} h before the burn…`);
+}
+function recordErr() {
+  const e = sim.errors();
+  sim.errHist.push({ t: sim.s.t, dE: e.dE, dP: e.dP, dL: e.dL });
+  if (sim.errHist.length > 480) sim.errHist.shift();
+  ui.lastErr = e;
+}
+
+// =====================================================================
+// HUD
+// =====================================================================
+let fpsFrames = 0, fpsT0 = performance.now(), fpsVal = 0, hudT = 0, achRate = 0, achAccT = 0, achAccSim = 0;
+function updateHud(force) {
+  const now = performance.now();
+  if (!force && now - hudT < 200) return;
+  hudT = now;
+  const s = sim.s; let nb = 0, nc = 0;
+  for (let i = 0; i < s.n; i++) { if (s.status[i] === ST_GONE) continue; if (s.craft[i]) nc++; else nb++; }
+  $('hFps').textContent = fpsVal.toFixed(0);
+  $('hTime').textContent = `${fmtT(s.t)} (${fmtN(s.t, 5)} h)`;
+  const req = 10 ** ui.curLog;
+  $('hWarp').textContent = ui.paused ? `${fmtWarp(10 ** ui.rateLog)} (paused)` : `${fmtWarp(req)} · ${fmtN(req, 3)} h/s${ui.limited ? ' · CPU-limited ' + fmtWarp(achRate) : ''}`;
+  $('hSteps').textContent = ui.paused ? '0 (paused)' : String(ui.stepsShown || 0);
+  $('hBodies').textContent = `${nb} ${nb === 1 ? 'body' : 'bodies'} + ${nc} craft`;
+  const e = ui.lastErr || sim.errors(), el = $('hErr');
+  el.textContent = fmtE(e.dE); el.className = e.dE < 1e-6 ? 'good' : e.dE < 1e-3 ? 'warn' : 'bad';
+  $('hFrame').textContent = frameLabel(ui.frame);
+  $('hState').textContent = ui.paused ? '❚❚ PAUSED' : ui.warpTo ? '▶▶ WARP TO BURN' : '▶ RUNNING';
+  $('hState').className = ui.paused ? 'warn' : 'good';
+}
+
+// =====================================================================
+// Main loop
+// =====================================================================
+let lastT = performance.now(), panelT = 0, stepsAcc = 0, stepFrames = 0;
+function loop(now) {
+  const rdt = clamp((now - lastT) / 1000, 0, 0.25);
+  lastT = now;
+  fpsFrames++;
+  if (now - fpsT0 >= 1000) { fpsVal = fpsFrames * 1000 / (now - fpsT0); fpsFrames = 0; fpsT0 = now; }
+  let steps = 0; ui.limited = false;
+  if (!ui.paused) {
+    ui.curLog += (ui.rateLog - ui.curLog) * (1 - Math.exp(-rdt / 0.25));
+    if (Math.abs(ui.rateLog - ui.curLog) < 1e-3) ui.curLog = ui.rateLog;
+    const rate = 10 ** ui.curLog, dt = sim.P.dt, t0 = sim.s.t;
+    let debt = (ui.debt || 0) + rate * rdt;
+    if (ui.warpTo) debt = Math.min(debt, ui.warpTo.until - sim.s.t);
+    const w0 = performance.now();
+    guardedStep(() => {
+      while (debt >= dt - 1e-12) {
+        sim.stepOnce(); debt -= dt; steps++;
+        if (performance.now() - w0 > 11) { ui.limited = debt >= dt; debt = 0; break; } // per-step budget check: adaptive steps can be costly
+      }
+    });
+    ui.debt = Math.max(0, debt);
+    achAccT += rdt; achAccSim += sim.s.t - t0;
+    if (achAccT > 0.5) { achRate = achAccSim / achAccT; achAccT = 0; achAccSim = 0; }
+    if (ui.warpTo && sim.s.t > ui.warpTo.until - dt) { // another full step would overshoot the target
+      const prev = ui.warpTo.prev; ui.warpTo = null; setRate(prev, true); ui.debt = 0;
+      toast('Arrived just before the burn — normal warp restored.');
+    }
+    if (steps) recordErr();
+  }
+  stepsAcc += steps || ui.stepsThisFrame || 0; stepFrames++; ui.stepsThisFrame = 0;
+  if (stepFrames >= 10) { const v = stepsAcc / stepFrames; ui.stepsShown = v >= 10 || v === 0 ? String(Math.round(v)) : v.toFixed(1); stepsAcc = 0; stepFrames = 0; }
+  requestAnimationFrame(loop); // schedule first: one bad frame must never stop the app
+  try {
+    computeNow();
+    detectSoiChanges();
+    const remaining = pred ? pred.t1 - sim.s.t : 0;
+    if (sim.predDirty || !pred || (!ui.paused && (now - lastPredReal > 300 || remaining < 0.75 * ui.horizon))) recomputePrediction();
+    render();
+    if (ui.view.err) drawErrPlot();
+    updateHud(false);
+    if (now - panelT > 220) { panelT = now; updatePanel(false); if (!ui.paused) syncEditor(); }
+  } catch (e) {
+    if (!ui.frameErr) { ui.frameErr = true; console.error(e); toast('Display error: ' + e.message, 'bad'); }
+  }
+}
+function detectSoiChanges() {
+  const s = sim.s;
+  for (let i = 0; i < s.n; i++) {
+    if (!s.craft[i] || s.status[i] !== ST_ACTIVE) continue;
+    const p = primaryOf(s, hier, i), id = sim.objs[i].id, last = sim.primaries.get(id);
+    if (last !== undefined && last !== p) sim.addLog('soi', `${sim.objs[i].name} left ${sim.name(last)} SOI → ${sim.name(p)}`);
+    sim.primaries.set(id, p);
+  }
+}
+
+// =====================================================================
+// Pointer / touch / keyboard input
+// =====================================================================
+const pointers = new Map();
+let drag = null, pinch = null;
+function localXY(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+function hitTest(x, y) {
+  for (const h of ui.handleHits || []) if (Math.hypot(x - h.x, y - h.y) < 11) return { type: 'handle', h };
+  for (const h of ui.nodeHits || []) if (Math.hypot(x - h.x, y - h.y) < 11) return { type: 'node', id: h.id };
+  if (ui.velHandle && Math.hypot(x - ui.velHandle.x, y - ui.velHandle.y) < 11) return { type: 'vel' };
+  const s = sim.s; let best = -1, bd = Infinity;
+  for (let i = 0; i < s.n; i++) {
+    if (s.status[i] === ST_GONE) continue;
+    const d = Math.hypot(x - SXs[i], y - SYs[i]), lim = Math.max(RPX[i] + 5, 12);
+    if (d < lim && d - (s.craft[i] ? 6 : 0) < bd) { bd = d - (s.craft[i] ? 6 : 0); best = i; }
+  }
+  if (best >= 0) return { type: 'obj', i: best };
+  const p = pathHit(x, y, ui.pathScreen, 9);
+  if (p) return { type: 'path', ...p };
+  return { type: 'none' };
+}
+function pathHit(x, y, pts, tol) {
+  if (!pts || pts.length < 2) return null;
+  let best = null, bd = tol;
+  for (let k = 1; k < pts.length; k++) {
+    const a = pts[k - 1], b = pts[k], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+    const u = L2 > 0 ? clamp(((x - a.x) * dx + (y - a.y) * dy) / L2, 0, 1) : 0;
+    const px = a.x + u * dx, py = a.y + u * dy, d = Math.hypot(x - px, y - py);
+    if (d < bd) { bd = d; best = { x: px, y: py, t: a.t + u * (b.t - a.t) }; }
+  }
+  return best;
+}
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.focus({ preventScroll: true });
+  const [x, y] = localXY(e);
+  pointers.set(e.pointerId, { x, y });
+  canvas.setPointerCapture(e.pointerId);
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    drag = null; return;
+  }
+  if (pointers.size > 2) return;
+  const hit = hitTest(x, y);
+  drag = { x0: x, y0: y, lx: x, ly: y, moved: false, hit, mode: 'pan', shift: e.shiftKey };
+  const s = sim.s;
+  if (hit.type === 'handle') {
+    const nd = sim.nodes.find((q) => q.id === hit.h.id);
+    drag.mode = 'handle'; drag.nd = nd; drag.start = { pro: nd.pro, rad: nd.rad, dvx: nd.dvx, dvy: nd.dvy };
+  } else if (hit.type === 'node') {
+    ui.selNode = hit.id; syncNodeEditor(); nodeSig = '';
+    drag.mode = 'nodeTime'; drag.nd = sim.nodes.find((q) => q.id === hit.id);
+  } else if (hit.type === 'vel') {
+    drag.mode = 'vel';
+  } else if (hit.type === 'obj' && ui.paused && s.craft[hit.i]) {
+    select(hit.i); drag.mode = 'pos'; drag.i = hit.i;
+    drag.fv = [FVX[hit.i], FVY[hit.i]];
+  }
+});
+canvas.addEventListener('pointermove', (e) => {
+  const [x, y] = localXY(e);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x, y });
+  if (pinch && pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    if (!ui.track) { ui.cam.x -= (mx - pinch.mx) / ui.cam.scale; ui.cam.y += (my - pinch.my) / ui.cam.scale; }
+    zoomAt(mx, my, d / (pinch.d || d));
+    pinch = { d, mx, my }; return;
+  }
+  if (!drag) { updateHover(x, y); return; }
+  const dx = x - drag.x0, dy = y - drag.y0;
+  if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
+  if (!drag.moved) return;
+  const s = sim.s;
+  switch (drag.mode) {
+    case 'pan':
+      if (ui.track) { ui.track = false; $('vTrack').checked = false; }
+      ui.cam.x -= (x - drag.lx) / ui.cam.scale; ui.cam.y += (y - drag.ly) / ui.cam.scale;
+      canvas.className = 'dragging';
+      break;
+    case 'handle': {
+      const h = drag.hit.h, nd = drag.nd; if (!nd) break;
+      const proj = dx * h.ux + dy * h.uy, fine = e.shiftKey ? 0.1 : 1;
+      const sens = Math.max(2e-4, h.v * 0.0025) * fine;
+      nd[h.comp] = +(drag.start[h.comp] + h.sign * proj * sens).toFixed(6);
+      sim.invalidate(); syncNodeEditor();
+      break;
+    }
+    case 'nodeTime': {
+      const nd = drag.nd; if (!nd) break;
+      if (!drag.base) drag.base = buildBasePath(nd);
+      const p = pathHit(x, y, drag.base, 1e9);
+      if (p) { nd.t = p.t; sim.invalidate(); syncNodeEditor(); }
+      canvas.className = 'move';
+      break;
+    }
+    case 'vel': {
+      const i = ui.sel; if (i < 0) break;
+      const VX = (x - SXs[i]) / ui.vecScale, VY = -(y - SYs[i]) / ui.vecScale;
+      const [vx, vy] = velFromFrame(Fnow, s.x[i], s.y[i], VX, VY);
+      s.vx[i] = vx; s.vy[i] = vy; if (s.status[i] === ST_LANDED) { s.status[i] = ST_ACTIVE; s.land[i] = -1; }
+      sim.markEdited(i); syncEditor();
+      break;
+    }
+    case 'pos': {
+      const i = drag.i, [X, Y] = [wx(x), wy(y)], [px, py] = fromFrame(Fnow, X, Y);
+      const [vx, vy] = velFromFrame(Fnow, px, py, drag.fv[0], drag.fv[1]);
+      s.x[i] = px; s.y[i] = py; s.vx[i] = vx; s.vy[i] = vy;
+      if (s.status[i] === ST_LANDED) { s.status[i] = ST_ACTIVE; s.land[i] = -1; }
+      sim.markEdited(i); syncEditor(); canvas.className = 'move';
+      break;
+    }
+  }
+  drag.lx = x; drag.ly = y;
+});
+function buildBasePath(nd) {
+  // forecast without this node → the coast arc the node can slide along
+  const base = sim.predict({ horizon: ui.horizon, dt: ui.predLink ? sim.P.dt : ui.predDt, exclude: nd.id });
+  const ci = sim.idx.get(nd.craft), others = sim.nodes.filter((q) => !q.done && q.craft === nd.craft && q.id !== nd.id);
+  const lo = Math.max(sim.s.t + sim.P.dt, ...others.filter((q) => q.t < nd.t).map((q) => q.t + sim.P.dt));
+  const hi = Math.min(base.t1, ...others.filter((q) => q.t > nd.t).map((q) => q.t - sim.P.dt));
+  const pts = [];
+  for (const sm of base.samples) {
+    if (sm.t < lo || sm.t > hi) continue;
+    if (sm.d[4 * sm.n + ci] !== ST_ACTIVE) break;
+    const F = frameOf(ui.frame, sm), [X, Y] = toFrame(F, sm.d[ci], sm.d[sm.n + ci]);
+    pts.push({ x: sx(X), y: sy(Y), t: sm.t });
+  }
+  return pts;
+}
+function endPointer(e) {
+  const [x, y] = localXY(e);
+  pointers.delete(e.pointerId);
+  if (pinch) { if (pointers.size < 2) pinch = null; drag = null; return; }
+  if (!drag) return;
+  const d = drag; drag = null; canvas.className = '';
+  if (!d.moved && e.type === 'pointerup') {
+    const h = d.hit;
+    if (h.type === 'obj') { select(h.i); if (ui.tab === 'mnv' && !sim.s.craft[h.i]) {} }
+    else if (h.type === 'node') { ui.selNode = h.id; syncNodeEditor(); if (W > 820) setTab('mnv'); }
+    else if (h.type === 'path') { addNodeAt(h.t); $('tip').hidden = true; ui.hover = null; return; }
+  }
+  if (d.mode === 'pos' || d.mode === 'vel') { sim.rebaseline(); updatePanel(true); }
+  updateHover(x, y);
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', () => { if (!drag) { ui.hover = null; $('tip').hidden = true; } });
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const [x, y] = localXY(e);
+  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  zoomAt(x, y, Math.exp(-dy * 0.0015));
+}, { passive: false });
+function updateHover(x, y) {
+  const h = hitTest(x, y), tip = $('tip');
+  ui.hover = h;
+  let txt = '', cls = '';
+  if (h.type === 'handle') { txt = `drag to change ${h.h.comp === 'pro' ? 'prograde' : h.h.comp === 'rad' ? 'radial' : h.h.comp} Δv`; cls = 'pointer'; }
+  else if (h.type === 'node') { const nd = sim.nodes.find((q) => q.id === h.id); txt = nd ? `node t=${fmtN(nd.t, 5)} h · |Δv| ${fmtN(nodeDv(nd), 3)} — drag to slide` : ''; cls = 'move'; }
+  else if (h.type === 'vel') { txt = 'drag to set velocity'; cls = 'pointer'; }
+  else if (h.type === 'obj') { txt = sim.objs[h.i].name + (ui.paused && sim.s.craft[h.i] ? ' — drag to move' : ''); cls = 'pointer'; }
+  else if (h.type === 'path') { txt = `add node at t=${fmtN(h.t, 5)} h (in ${fmtN(h.t - sim.s.t, 4)} h)`; cls = 'addnode'; }
+  canvas.className = cls;
+  if (txt) { tip.textContent = txt; tip.hidden = false; tip.style.left = Math.min(x + 14, W - 250) + 'px'; tip.style.top = (y + 16) + 'px'; }
+  else tip.hidden = true;
+}
+function addNodeAt(t) {
+  const i = ui.sel, s = sim.s;
+  if (i < 0 || !s.craft[i] || s.status[i] !== ST_ACTIVE) { toast('Select a free-flying spacecraft first.'); return; }
+  t = Math.max(t, s.t + sim.P.dt);
+  const nd = { id: NEXT_NODE++, craft: sim.objs[i].id, t, mode: 'orb', pro: 0, rad: 0, dvx: 0, dvy: 0, ref: -1, done: false, exec: null };
+  sim.nodes.push(nd); ui.selNode = nd.id; sim.invalidate();
+  recomputePrediction(); syncNodeEditor();
+  if (W > 820) setTab('mnv'); else updatePanel(true);
+  toast(`Node added at t=${fmtN(t, 5)} h — drag its P/R arrows or edit Δv in the panel.`);
+}
+function addNodeDefault() {
+  const i = ui.sel; if (i < 0 || !sim.s.craft[i]) return;
+  const ref = telemetryRef(i), el = ref >= 0 ? relElements(sim.s, sim.P, i, ref) : null;
+  const pending = sim.nodes.filter((q) => !q.done && q.craft === sim.objs[i].id).map((q) => q.t);
+  const t0 = Math.max(sim.s.t, ...pending);
+  addNodeAt(t0 + (el && el.eps < 0 ? el.T / 4 : ui.horizon / 5));
+}
+function nudgeNode(comp, d) {
+  const nd = selectedNode(); if (!nd) return;
+  if (nd.mode === 'cart') comp = comp === 'pro' ? 'dvy' : 'dvx';
+  nd[comp] = +(nd[comp] + d).toFixed(6); sim.invalidate(); syncNodeEditor();
+}
+function deleteNode(id) {
+  sim.nodes = sim.nodes.filter((q) => q.id !== id);
+  if (ui.selNode === id) ui.selNode = -1;
+  sim.invalidate(); syncNodeEditor(); nodeSig = ''; updatePanel(true);
+}
+window.addEventListener('keydown', (e) => {
+  const tag = e.target && e.target.tagName;
+  if (!$('help').hidden) { if (e.key === 'Escape' || e.key === '?') { $('help').hidden = true; e.preventDefault(); } return; }
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const fine = e.shiftKey ? 0.0005 : 0.005;
+  switch (e.key) {
+    case ' ': setPaused(!ui.paused); break;
+    case 's': case 'S': singleStep(); break;
+    case '.': case '>': setRate(ui.rateLog + 1 / 3); break;
+    case ',': case '<': setRate(ui.rateLog - 1 / 3); break;
+    case 'r': case 'R': loadScenario(ui.scenario); toast('Scenario restarted'); break;
+    case 'k': case 'K': sim.saveCheckpoint('manual'); toast(`Checkpoint saved at t=${fmtN(sim.s.t, 5)} h`); break;
+    case 'l': case 'L': doRestore(); break;
+    case 'f': case 'F': focusSelected(); break;
+    case 'v': case 'V': cycleFrame(); break;
+    case '[': cycleSel(-1); break;
+    case ']': cycleSel(1); break;
+    case 'n': case 'N': addNodeDefault(); break;
+    case 'Delete': case 'Backspace': if (ui.selNode >= 0) deleteNode(ui.selNode); break;
+    case '+': case '=': zoomAt(CX, CY, 1.25); break;
+    case '-': case '_': zoomAt(CX, CY, 0.8); break;
+    case '?': case 'h': case 'H': $('help').hidden = false; break;
+    case 'Escape': ui.selNode = -1; syncNodeEditor(); break;
+    case 'ArrowUp': if (selectedNode()) nudgeNode('pro', fine); else ui.cam.y += 40 / ui.cam.scale; break;
+    case 'ArrowDown': if (selectedNode()) nudgeNode('pro', -fine); else ui.cam.y -= 40 / ui.cam.scale; break;
+    case 'ArrowRight': if (selectedNode()) nudgeNode('rad', fine); else ui.cam.x += 40 / ui.cam.scale; break;
+    case 'ArrowLeft': if (selectedNode()) nudgeNode('rad', -fine); else ui.cam.x -= 40 / ui.cam.scale; break;
+    default: return;
+  }
+  e.preventDefault();
+});
+function cycleSel(d) {
+  const s = sim.s, alive = []; for (let i = 0; i < s.n; i++) if (s.status[i] !== ST_GONE) alive.push(i);
+  if (!alive.length) return;
+  const k = alive.indexOf(ui.sel);
+  select(alive[(k + d + alive.length) % alive.length]);
+}
+function cycleFrame() {
+  const opts = [...$('frameSel').options].map((o) => o.value), k = opts.indexOf(frameKey(ui.frame));
+  setFrame(parseFrame(opts[(k + 1) % opts.length]));
+  toast('Frame: ' + frameLabel(ui.frame));
+}
+function doRestore() {
+  pred = null;
+  if (sim.restoreCheckpoint()) {
+    $('banner').hidden = true;
+    if (!frameValid(ui.frame)) ui.frame = { type: 'inertial' };
+    if (!sim.alive(ui.sel)) ui.sel = 0;
+    ui.warpTo = null; ui.debt = 0;
+    refreshFrameOptions(); refreshSelect(); syncEditor(); recomputePrediction(); syncNodeEditor(); updatePanel(true);
+    toast(`Rewound to checkpoint (${sim.ckpt.label}, t=${fmtN(sim.ckpt.t, 5)} h)`);
+  }
+}
+
+// =====================================================================
+// Panel wiring
+// =====================================================================
+function bindUI() {
+  $('btnPlay').onclick = () => setPaused(!ui.paused);
+  $('btnStep').onclick = singleStep;
+  $('btnFaster').onclick = () => setRate(ui.rateLog + 1 / 3);
+  $('btnSlower').onclick = () => setRate(ui.rateLog - 1 / 3);
+  $('warpR').oninput = (e) => setRate(+e.target.value);
+  $('btnSave').onclick = () => { sim.saveCheckpoint('manual'); toast(`Checkpoint saved at t=${fmtN(sim.s.t, 5)} h`); };
+  $('btnRestore').onclick = doRestore;
+  $('btnReset').onclick = () => { loadScenario(ui.scenario); toast('Scenario restarted'); };
+  $('frameSel').onchange = (e) => setFrame(parseFrame(e.target.value));
+  $('btnPanel').onclick = () => {
+    if (W <= 820) document.body.classList.toggle('sheet'); else document.body.classList.toggle('collapsed');
+    requestAnimationFrame(() => resize());
+  };
+  $('btnHelp').onclick = () => { $('help').hidden = false; $('helpClose').focus(); };
+  $('helpClose').onclick = () => { $('help').hidden = true; };
+  $('help').addEventListener('click', (e) => { if (e.target.id === 'help') $('help').hidden = true; });
+  $('bnRestore').onclick = doRestore;
+  $('bnDismiss').onclick = () => { $('banner').hidden = true; };
+  document.querySelectorAll('.tabs button').forEach((b) => { b.onclick = () => setTab(b.dataset.tab); });
+  // object tab
+  $('objSel').onchange = (e) => select(+e.target.value);
+  $('telRef').onchange = (e) => { if (ui.sel >= 0) ui.telRef.set(sim.objs[ui.sel].id, +e.target.value); updatePanel(true); };
+  $('btnFocus').onclick = focusSelected;
+  $('btnAddCraft').onclick = () => addObject(true);
+  $('btnAddBody').onclick = () => addObject(false);
+  $('btnDelete').onclick = () => {
+    const i = ui.sel; if (i < 0) return;
+    sim.removeObject(i); const s = sim.s; ui.sel = -1;
+    for (let k = 0; k < s.n; k++) if (s.status[k] !== ST_GONE) { select(k); break; }
+    refreshFrameOptions(); refreshSelect(); recomputePrediction();
+  };
+  $('btnApply').onclick = applyEdit;
+  $('edDisp').onchange = () => { const i = ui.sel, v = +$('edDisp').value; if (i >= 0 && v > 0) sim.objs[i].disp = v; };
+  // maneuvers
+  $('btnAddNode').onclick = addNodeDefault;
+  $('btnWarpNode').onclick = warpToNextNode;
+  $('nodeList').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const id = +b.closest('li').dataset.id;
+    if (b.dataset.act === 'del') deleteNode(id);
+    else { ui.selNode = id; syncNodeEditor(); nodeSig = ''; updatePanel(true); }
+  });
+  const numIn = (id, fn) => $(id).addEventListener('input', (e) => { const v = parseFloat(e.target.value); const ok = isFinite(v); e.target.classList.toggle('bad', !ok); if (ok) fn(v); });
+  const nodeSet = (k) => (v) => { const nd = selectedNode(); if (!nd) return; nd[k] = v; sim.invalidate(); syncNodeEditor(); };
+  numIn('ndPro', nodeSet('pro')); numIn('ndProR', nodeSet('pro')); numIn('ndRad', nodeSet('rad')); numIn('ndRadR', nodeSet('rad'));
+  numIn('ndDx', nodeSet('dvx')); numIn('ndDxR', nodeSet('dvx')); numIn('ndDy', nodeSet('dvy')); numIn('ndDyR', nodeSet('dvy'));
+  $('ndT').addEventListener('change', (e) => { const v = parseFloat(e.target.value); const nd = selectedNode(); if (!nd || !isFinite(v)) { e.target.classList.add('bad'); return; } e.target.classList.remove('bad'); setNodeTime(nd, v); });
+  document.querySelectorAll('.tbtns [data-dt]').forEach((b) => { b.onclick = () => { const nd = selectedNode(); if (nd) setNodeTime(nd, nd.t + +b.dataset.dt); }; });
+  $('ndPe').onclick = () => snapApsis(false);
+  $('ndAp').onclick = () => snapApsis(true);
+  $('ndMode').onchange = (e) => {
+    const nd = selectedNode(); if (!nd) return;
+    const mode = e.target.value; if (mode === nd.mode) return;
+    const info = pred && pred.nodeInfo.get(nd.id);
+    if (info) { // convert the current burn so the physical Δv is preserved
+      if (mode === 'cart') { nd.dvx = info.dvx; nd.dvy = info.dvy; }
+      else {
+        const sm = pred.samples[info.preIdx], n = sm.n, i = info.ci, r = info.ref;
+        const vx = sm.d[2 * n + i] - (r >= 0 ? sm.d[2 * n + r] : 0), vy = sm.d[3 * n + i] - (r >= 0 ? sm.d[3 * n + r] : 0);
+        const rx = sm.d[i] - (r >= 0 ? sm.d[r] : 0), ry = sm.d[n + i] - (r >= 0 ? sm.d[n + r] : 0), v = Math.hypot(vx, vy) || 1;
+        let px = vx / v, py = vy / v, qx = -py, qy = px; if (qx * rx + qy * ry < 0) { qx = -qx; qy = -qy; }
+        nd.pro = info.dvx * px + info.dvy * py; nd.rad = info.dvx * qx + info.dvy * qy;
+      }
+    }
+    nd.mode = mode; sim.invalidate(); syncNodeEditor();
+  };
+  $('ndRef').onchange = (e) => { const nd = selectedNode(); if (!nd) return; nd.ref = +e.target.value; sim.invalidate(); };
+  $('ndDel').onclick = () => { if (ui.selNode >= 0) deleteNode(ui.selNode); };
+  // physics
+  $('phModel').onchange = (e) => { sim.P.model = e.target.value; physChanged('model'); };
+  $('phInt').onchange = (e) => { sim.P.integrator = e.target.value; sim.s.hAd = 0; physChanged('integrator'); };
+  const setDt = (v) => { v = clamp(v, 0.0005, 50); sim.P.dt = v; physChanged('dt'); };
+  $('phDt').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) setDt(v); else e.target.classList.add('bad'); });
+  $('phDtR').addEventListener('input', (e) => setDt(+(10 ** +e.target.value).toPrecision(3)));
+  $('phTol').onchange = (e) => { sim.P.tol = +e.target.value; physChanged('tol'); };
+  $('phG').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (!(v > 0)) { e.target.classList.add('bad'); return; } sim.P.G = v; physChanged('G'); toast('G changed: scenarios were set up for G = 1, so orbits will no longer be circular.'); });
+  $('phCol').onchange = (e) => { sim.P.collide = e.target.value; physChanged('collide'); };
+  $('phHor').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (!(v > 0)) { e.target.classList.add('bad'); return; } ui.horizon = clamp(v, 1, 20000); sim.predDirty = true; syncPhysics(); });
+  $('phPdt').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (!(v > 0)) { e.target.classList.add('bad'); return; } ui.predDt = clamp(v, 0.0005, 50); sim.predDirty = true; syncPhysics(); });
+  $('phPdtLink').onchange = (e) => { ui.predLink = e.target.checked; if (ui.predLink) ui.predDt = sim.P.dt; sim.predDirty = true; syncPhysics(); };
+  $('phRebase').onclick = () => { sim.rebaseline(); sim.errHist = []; recordErr(); toast('Invariants rebaselined'); };
+  // view
+  for (const [k, id] of [['trails', 'vTrails'], ['pred', 'vPred'], ['vel', 'vVel'], ['acc', 'vAcc'], ['guides', 'vGuides'], ['soi', 'vSoi'], ['pot', 'vPot'], ['enc', 'vEnc'], ['err', 'vErr'], ['labels', 'vLabels']])
+    $(id).onchange = (e) => { ui.view[k] = e.target.checked; syncView(); };
+  $('vTrail').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (!(v >= 0)) { e.target.classList.add('bad'); return; } sim.trailLen = clamp(v, 0, 20000); });
+  $('vBody').oninput = (e) => { ui.bodyScale = 10 ** +e.target.value; };
+  $('vVec').oninput = (e) => { ui.vecScale = 10 ** +e.target.value; };
+  $('vTrack').onchange = (e) => { ui.track = e.target.checked; };
+  $('vFit').onclick = fitAll;
+  $('vZin').onclick = () => zoomAt(CX, CY, 1.4);
+  $('vZout').onclick = () => zoomAt(CX, CY, 1 / 1.4);
+  // scenarios
+  $('scnList').innerHTML = SCENARIOS.map((q) => `<button class="scn" data-key="${q.key}"><b>${esc(q.name)}</b><small>${esc(q.desc)}</small></button>`).join('');
+  $('scnList').addEventListener('click', (e) => { const b = e.target.closest('.scn'); if (!b) return; loadScenario(b.dataset.key); toast('Loaded: ' + b.querySelector('b').textContent); if (W <= 820) document.body.classList.remove('sheet'); });
+}
+function physChanged(what) {
+  sim.s.aOk = false;
+  if (what === 'G' || what === 'model') { sim.rebaseline(); sim.errHist = []; }
+  if (ui.predLink) ui.predDt = sim.P.dt;
+  sim.invalidate(); syncPhysics(); recomputePrediction();
+}
+function setNodeTime(nd, t) {
+  nd.t = Math.max(t, sim.s.t + sim.P.dt);
+  sim.invalidate(); syncNodeEditor();
+}
+function snapApsis(wantMax) {
+  const nd = selectedNode(); if (!nd) return;
+  const base = sim.predict({ horizon: ui.horizon, dt: ui.predLink ? sim.P.dt : ui.predDt, exclude: nd.id });
+  const ci = sim.idx.get(nd.craft);
+  const prevT = Math.max(sim.s.t, ...sim.nodes.filter((q) => !q.done && q.craft === nd.craft && q.id !== nd.id && q.t < nd.t).map((q) => q.t));
+  const ref = nd.ref >= 0 ? sim.idx.get(nd.ref) : telemetryRef(ci);
+  const S = base.samples; let p2 = null, p1 = null, found = null;
+  for (const sm of S) {
+    if (sm.t <= prevT + 1e-9) continue;
+    const n = sm.n, d = Math.hypot(sm.d[ci] - sm.d[ref], sm.d[n + ci] - sm.d[n + ref]);
+    if (p1 && p2 && (wantMax ? p1.d >= p2.d && p1.d > d : p1.d <= p2.d && p1.d < d)) {
+      const t0 = p2.t, t1 = p1.t, t2 = sm.t, d0 = p2.d, d1 = p1.d, d2 = d;
+      const den = (t0 - t1) * (t0 - t2) * (t1 - t2);
+      const A = (t2 * (d1 - d0) + t1 * (d0 - d2) + t0 * (d2 - d1)) / den, B = (t2 * t2 * (d0 - d1) + t1 * t1 * (d2 - d0) + t0 * t0 * (d1 - d2)) / den;
+      found = A !== 0 ? clamp(-B / (2 * A), t0, t2) : t1; break;
+    }
+    p2 = p1; p1 = { t: sm.t, d };
+  }
+  if (found == null) { toast(`No ${wantMax ? 'apoapsis' : 'periapsis'} found within the horizon.`); return; }
+  setNodeTime(nd, found);
+  toast(`Node moved to ${wantMax ? 'apoapsis' : 'periapsis'} at t=${fmtN(found, 5)} h`);
+}
+function applyEdit() {
+  const i = ui.sel; if (i < 0) return;
+  const name = $('edName').value.trim(); if (name) sim.objs[i].name = name;
+  const disp = parseFloat($('edDisp').value); if (disp > 0) sim.objs[i].disp = disp;
+  if (!ui.paused) { $('edMsg').textContent = 'Name/display saved. Pause to edit physics.'; refreshSelect(); refreshFrameOptions(); return; }
+  const vals = {}; let ok = true;
+  for (const [k, id, min] of [['m', 'edMass', 1e-12], ['r', 'edRad', 0], ['x', 'edX'], ['y', 'edY'], ['vx', 'edVX'], ['vy', 'edVY']]) {
+    const v = parseFloat($(id).value), good = isFinite(v) && (min === undefined || v >= min);
+    $(id).classList.toggle('bad', !good); if (!good) ok = false; vals[k] = v;
+  }
+  if (!ok) { $('edMsg').textContent = 'Invalid values (red): mass must be > 0, radius ≥ 0.'; return; }
+  const s = sim.s;
+  s.m[i] = vals.m; s.r[i] = vals.r; s.x[i] = vals.x; s.y[i] = vals.y; s.vx[i] = vals.vx; s.vy[i] = vals.vy;
+  if (s.status[i] === ST_LANDED) { s.status[i] = ST_ACTIVE; s.land[i] = -1; }
+  sim.markEdited(i); sim.addLog('soi', `${sim.objs[i].name} state edited`);
+  $('edMsg').textContent = 'Applied.';
+  refreshSelect(); refreshFrameOptions(); recomputePrediction(); updatePanel(true);
+}
+function addObject(isCraft) {
+  const s = sim.s; let b = ui.sel;
+  if (b < 0) return;
+  if (s.craft[b]) b = primaryOf(s, hier, b);
+  if (b < 0 || s.status[b] === ST_GONE) { toast('Select a body to orbit.'); return; }
+  const par = { m: s.m[b], x: s.x[b], y: s.y[b], vx: s.vx[b], vy: s.vy[b] };
+  const count = sim.objs.length, ang = (count * 2.39996) % TAU;
+  let o;
+  if (isCraft) {
+    const a = Math.max(2.5 * s.r[b], 3 * s.r[b]);
+    o = { name: `Craft ${count + 1}`, kind: 'craft', m: U.Mc, r: U.Rc, color: CRAFT_COLORS[count % CRAFT_COLORS.length], ...circ(par, a, ang, U.Mc, 1, sim.P.G) };
+  } else {
+    const soi = hier.soi[b];
+    let a = isFinite(soi) ? 0.6 * soi : 0;
+    if (!a) { let dmin = Infinity; for (const q of hier.bodies) if (q !== b && hier.par[q] === b) dmin = Math.min(dmin, Math.hypot(s.x[q] - s.x[b], s.y[q] - s.y[b])); a = isFinite(dmin) ? 0.45 * dmin : 20 * s.r[b]; }
+    o = { name: `Body ${count + 1}`, kind: 'moon', m: 0.02 * s.m[b], r: 0.35 * s.r[b], color: BODY_COLORS[count % BODY_COLORS.length], ...circ(par, a, ang, 0.02 * s.m[b], 1, sim.P.G) };
+  }
+  const id = sim.addObject(o);
+  select(sim.idx.get(id)); refreshFrameOptions(); refreshSelect(); recomputePrediction();
+  toast(`Added ${o.name} in circular orbit around ${sim.objs[b].name}`);
+}
+
+// =====================================================================
+// Resize & boot
+// =====================================================================
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
+  W = canvas.clientWidth || window.innerWidth; H = canvas.clientHeight || window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  const tb = document.querySelector('#toolbar .bar').getBoundingClientRect();
+  tbH = tb.height + 10;
+  document.documentElement.style.setProperty('--tbh', tbH + 'px');
+  const desk = W > 820, panelOpen = desk && !document.body.classList.contains('collapsed');
+  const sheet = !desk && document.body.classList.contains('sheet') ? $('panel').getBoundingClientRect().height : 0;
+  CX = (W - (panelOpen ? 386 : 0)) / 2; CY = Math.max(60, (H - tbH - sheet) / 2 + 4);
+  const hb = $('hud').getBoundingClientRect(); hudRect = { right: hb.right, bottom: hb.bottom };
+  makeStars();
+}
+window.addEventListener('resize', resize);
+if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(document.querySelector('#toolbar .bar'));
+bindUI();
+resize();
+if (W <= 820) document.body.classList.add('collapsed');
+loadScenario('system');
+setTimeout(() => toast('Drag to pan · wheel/pinch to zoom · click the dashed forecast to add a burn · Space pauses · ? for help'), 400);
+requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
+
+// Read-only diagnostics hook for automated validation (no behaviour depends on it).
+window.OrbitLab = {
+  sim, ui, get pred() { return pred; }, SCENARIOS, load: (k) => loadScenario(k), setPaused, frameOf, toFrame, velToFrame, fromFrame, velFromFrame,
+  snapshot() {
+    const s = sim.s, e = sim.errors();
+    return {
+      t: s.t, paused: ui.paused, warp: 10 ** ui.rateLog, frame: frameLabel(ui.frame), steps: sim.steps, dt: sim.P.dt, integrator: sim.P.integrator,
+      energyErr: e.dE, momErr: e.dP, angErr: e.dL, sel: ui.sel >= 0 ? sim.objs[ui.sel].name : null,
+      objects: sim.objs.map((o, i) => ({ name: o.name, kind: o.kind, status: s.status[i], x: s.x[i], y: s.y[i], vx: s.vx[i], vy: s.vy[i],
+        fx: FX[i], fy: FY[i], fvx: FVX[i], fvy: FVY[i], sx: SXs[i], sy: SYs[i] })),
+      nodes: sim.nodes.map((n) => ({ id: n.id, t: n.t, pro: n.pro, rad: n.rad, mode: n.mode, done: n.done, exec: n.exec })),
+      predSamples: pred ? pred.samples.length : 0, histSamples: sim.hist.length - sim.histHead, log: sim.log.map((l) => l.text),
+    };
+  },
+};
+})();
+</script>
+</body>
+</html>

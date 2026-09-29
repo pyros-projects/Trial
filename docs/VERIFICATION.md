@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## SWE-2's Capstone and Opus 5.5 through prompt 08: 2026-09-29
+
+SWE-2's *Oatworks* completes its 24-prompt collection. Opus 5.5 adds prompts 05–08, bringing its collection to eight and the showcase to **139 builds across eight models**. Model order and reported setup are unchanged.
+
+All **328 original files totaling 133,530,652 bytes** are preserved. Five thumbnail aliases exactly copy visually reviewed supplied 1280 × 800 screenshots; no final-HTML capture binding is claimed. The bounded publication review covered **59 text files and 269 PNGs**. No confirmed credentials, private identity linkage, runtime network endpoints, or Netlify Forms were found. The HAR contains one pseudonymous local file load without cookies, authentication, or captured request/response bodies. PNGs have valid chunk checksums, no metadata, and no trailing payload. Selected screenshot pixels were reviewed; remaining evidence pixels were not exhaustively inspected. Evidence remains public in GitHub and is excluded from Netlify. Submitted development scripts were not executed.
+
+All five apps passed **25 bounded local integration checks**: rendered content, native Pause controls, maximized desktop and narrow frames, and iframe removal on close. No uncaught JavaScript errors, console errors, or external HTTP requests appeared. Opus 5.5's SDF/CSG studio exceeded the initial 45-second startup window. One uninterrupted follow-up observed its first rendered frame after **188 seconds**, with 185.5 seconds reported for shader compilation on the test machine's RTX 4090. Its controls worked afterward. A new slow-start notice describes that roughly three-minute observation; submitted code is unchanged. These checks do not establish complete task correctness, scientific validity, sustained performance, or touch-device usability.
+
+Production deployment **`6abc005e1006e2f6b30a8fbe`** publishes **541 files totaling 25,473,250 bytes (24.29 MiB)**: 139 builds with thumbnails/share pages, 24 prompt comparisons, and eight model collections. The exact export inventory and all 139 source HTML hashes passed. Live HTTPS checks matched **37 files** against the export, and **13 representative excluded routes returned 404**. All **21 focused gallery checks passed locally and in production**, covering configured model order, Opus 5.5's eight-card and SWE-2's 24-card collections, canonical copy links, hidden missing entries, and three/two/one-column layouts at 1440/768/390 pixels. Comparisons 05/06/07/08/24 contain eight/eight/seven/seven/four builds. The four faster-starting apps also passed **20 production integration checks** without runtime or console errors or external requests. The README preview was refreshed from the live homepage and visually inspected.
+
+Six additional production checks verified the SDF viewer's new notice, collapse without replacing its iframe/document or changing the viewport, desktop/narrow dimensions, and cleanup. Its multi-minute shader compilation was not repeated in production; published HTML matches the locally observed source byte-for-byte. The collection retains twelve existing notices and adds this thirteenth.
+
 ## SWE-2 through prompt 23 and Gemini's complete set: 2026-09-29
 
 Nine SWE-2 builds (15–23) and three Gemini builds (21, 23, 24) bring the collection to **134 builds across eight models**. Gemini now covers every prompt; SWE-2 covers 01–23. Model order and reported setup are unchanged.

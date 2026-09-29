@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oatworks — a slime-mould network foundry</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#0b0d10; --bg2:#0e1116; --panel:#12151c; --panel2:#171b24;
+    --line:#232936; --line2:#2e3547;
+    --ink:#e8e3d6; --dim:#8b93a7; --faint:#5b6373;
+    --amber:#ffb13d; --amber2:#ffd98a; --mint:#6ee7c8; --red:#ff6b6b;
+    --blue:#7aa2ff; --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);font-family:var(--sans);
+    display:flex;flex-direction:column;overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+  }
+  header{
+    display:flex;align-items:center;gap:10px;padding:8px 14px;
+    background:linear-gradient(180deg,#14181f,#0f1218);
+    border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:baseline;gap:9px;user-select:none}
+  .brand h1{font-size:17px;letter-spacing:.14em;font-weight:800;color:var(--amber2);text-transform:uppercase}
+  .brand .sub{font-size:11px;color:var(--dim);letter-spacing:.04em}
+  .transport{display:flex;align-items:center;gap:6px;margin-left:8px}
+  button{
+    font-family:inherit;color:var(--ink);background:var(--panel2);
+    border:1px solid var(--line2);border-radius:7px;padding:6px 10px;
+    font-size:12px;cursor:pointer;user-select:none;line-height:1.2;
+  }
+  button:hover{border-color:#48536e;background:#1b212e}
+  button:active{transform:translateY(1px)}
+  button.primary{background:#3a2c12;border-color:#8a6420;color:var(--amber2)}
+  button.danger{border-color:#5a2b2b;color:#ff9d9d}
+  button.toggled{background:#22303f;border-color:var(--blue);color:#cfe0ff}
+  button:disabled{opacity:.45;cursor:default;transform:none}
+  .hstat{font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto;display:flex;gap:12px;flex-wrap:wrap}
+  .hstat b{color:var(--ink);font-weight:600}
+  main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 330px;min-height:0}
+  #stage{position:relative;min-width:0;min-height:0;background:
+    radial-gradient(120% 90% at 50% 30%,#10141b 0%,#0a0c10 70%,#07080b 100%);
+    display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #dish{position:relative;border-radius:14px;box-shadow:0 0 0 1px #2a3140,
+    0 0 60px rgba(0,0,0,.7), inset 0 0 80px rgba(0,0,0,.55);touch-action:none;cursor:crosshair}
+  canvas#view{position:absolute;inset:0;width:100%;height:100%;border-radius:14px}
+  #toast{position:absolute;left:14px;bottom:14px;display:flex;flex-direction:column;gap:6px;pointer-events:none;z-index:6}
+  .toast{background:rgba(16,20,28,.94);border:1px solid var(--line2);border-left:3px solid var(--amber);
+    padding:8px 12px;border-radius:8px;font-size:12px;max-width:340px;color:var(--ink);
+    animation:tin .18s ease-out}
+  .toast.bad{border-left-color:var(--red)}
+  .toast.good{border-left-color:var(--mint)}
+  @keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+  #guide{
+    position:absolute;top:12px;left:12px;z-index:5;max-width:330px;
+    background:rgba(14,17,23,.92);border:1px solid var(--line2);border-radius:10px;
+    padding:10px 12px;font-size:12px;line-height:1.45;backdrop-filter:blur(4px);
+  }
+  #guide h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  #guide ol{padding-left:18px;color:#cfd3de}
+  #guide ol li{margin:3px 0}
+  #guide b{color:var(--amber2)}
+  #guide .x{position:absolute;top:6px;right:8px;border:none;background:none;color:var(--dim);font-size:14px;padding:2px 6px}
+  aside{
+    background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;
+    padding:10px;display:flex;flex-direction:column;gap:10px;min-height:0;
+  }
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+  .card h3{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+    margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+  .tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .tools button{padding:7px 4px;font-size:11.5px}
+  .tools button.on{background:#2a2417;border-color:var(--amber);color:var(--amber2)}
+  .row{display:flex;align-items:center;gap:8px;margin:7px 0}
+  .row label{flex:0 0 96px;font-size:11px;color:var(--dim)}
+  .row output{flex:0 0 52px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--amber2)}
+  input[type=range]{flex:1;accent-color:var(--amber);height:18px;min-width:60px}
+  select{background:var(--panel);color:var(--ink);border:1px solid var(--line2);border-radius:6px;
+    padding:5px 7px;font-size:12px;font-family:inherit}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .btnrow button{flex:1;white-space:nowrap}
+  .metrics{font-family:var(--mono);font-size:11.5px;line-height:1.7}
+  .metrics .k{color:var(--dim)}
+  .metrics .v{color:var(--ink);float:right}
+  .metrics .big{font-size:15px;color:var(--amber2)}
+  .metrics .good{color:var(--mint)}
+  .metrics .bad{color:var(--red)}
+  .metrics hr{border:none;border-top:1px dashed var(--line2);margin:6px 0}
+  #strip{width:100%;height:44px;display:block;background:#0c0f14;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+  details.card summary{cursor:pointer;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);list-style:none}
+  details.card summary::-webkit-details-marker{display:none}
+  details.card summary::after{content:"+";float:right;color:var(--faint)}
+  details.card[open] summary::after{content:"–"}
+  details.card summary{margin:0}
+  details.card > *:not(summary){margin-top:8px}
+  .checks label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin:5px 0;cursor:pointer}
+  .checks input{accent-color:var(--amber)}
+  .hint{font-size:10.5px;color:var(--faint);line-height:1.5;margin-top:6px}
+  #modal{
+    position:fixed;inset:0;background:rgba(5,6,9,.78);display:none;z-index:50;
+    align-items:center;justify-content:center;padding:20px;
+  }
+  #modal.open{display:flex}
+  #aboutbox{
+    background:var(--panel);border:1px solid var(--line2);border-radius:14px;
+    max-width:640px;width:100%;max-height:86vh;overflow-y:auto;padding:22px 24px;
+  }
+  #aboutbox h2{color:var(--amber2);font-size:18px;letter-spacing:.06em;margin-bottom:4px}
+  #aboutbox h4{color:var(--amber);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:16px 0 6px}
+  #aboutbox p,#aboutbox li{font-size:13px;line-height:1.6;color:#cfd3de}
+  #aboutbox ul{padding-left:20px}
+  #aboutbox .src{font-family:var(--mono);font-size:11px;word-break:break-all;user-select:text;
+    display:block;background:#0d1016;border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:5px 0;color:#9fb4d8}
+  #aboutbox a{color:var(--blue)}
+  #aboutbox .close{float:right}
+  .modalopen body{overflow:hidden}
+  @media (max-width:900px){
+    main{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow-y:auto}
+    #stage{min-height:52vh}
+    aside{border-left:none;border-top:1px solid var(--line)}
+    .brand .sub{display:none}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><h1>Oatworks</h1><span class="sub">a slime-mould network foundry</span></div>
+  <div class="transport">
+    <button id="bPlay" class="primary" title="Space">⏸ Pause</button>
+    <button id="bStep" title=".">Step</button>
+    <select id="speed" title="simulation speed">
+      <option value="0.5">0.5×</option><option value="1" selected>1×</option>
+      <option value="2">2×</option><option value="4">4×</option>
+    </select>
+  </div>
+  <div class="hstat">
+    <span>dish <b id="stDish">–</b></span>
+    <span>agents <b id="stAgents">–</b></span>
+    <span>t <b id="stTime">0:00</b></span>
+    <span><b id="stFps">–</b> fps</span>
+  </div>
+  <button id="bAbout">About</button>
+  <button id="bResetAll" class="danger" title="R">Reset all</button>
+</header>
+<main>
+  <div id="stage">
+    <div id="dish"><canvas id="view"></canvas></div>
+    <div id="guide">
+      <button class="x" id="bGuideX">✕</button>
+      <h2>First dish</h2>
+      <ol>
+        <li>A stylised <b>Greater Tokyo</b> is seeded. Press <b>⏵</b> and let the mould run ~30 s — it grows a rail-like web between the oats.</li>
+        <li>Open <b>Analysis</b>: it reads the living web — linked cities, length, detour, loops.</li>
+        <li>Try <b>Sever strongest link</b>, then watch the network heal itself.</li>
+        <li>Paint <b>terrain</b> or <b>light</b>, drop more <b>oats</b>, and redesign the problem.</li>
+      </ol>
+    </div>
+    <div id="toast"></div>
+  </div>
+  <aside>
+    <div class="card">
+      <h3>Design the problem <span style="text-transform:none;letter-spacing:0;color:var(--faint)" id="toolHint"></span></h3>
+      <div class="tools" id="tools">
+        <button data-t="oat" class="on">🌾 Oat</button>
+        <button data-t="wall">⛰ Terrain</button>
+        <button data-t="light">💡 Light</button>
+        <button data-t="cut">✂ Sever</button>
+        <button data-t="erase">◌ Erase</button>
+        <button data-t="move">✥ Move</button>
+      </div>
+      <div class="row"><label>brush</label><input type="range" id="brush" min="2" max="20" value="7"><output id="brushV">7</output></div>
+      <div class="hint">Oat: click to place a city, click one to select, drag to move, double-click to delete. Terrain blocks the mould. Light repels it (this is how Tero simulated mountains). Sever cuts veins. Edits are undoable (Ctrl+Z).</div>
+    </div>
+    <div class="card">
+      <h3>Analysis <span id="anaState" style="text-transform:none;letter-spacing:0;color:var(--faint)"></span></h3>
+      <div class="metrics" id="metrics"></div>
+      <canvas id="strip" width="280" height="44"></canvas>
+      <div class="checks">
+        <label><input type="checkbox" id="ovSkel"> show extracted graph</label>
+        <label><input type="checkbox" id="ovMst"> compare with straight-line MST</label>
+        <label><input type="checkbox" id="ovAgents" checked> show agents</label>
+        <label><input type="checkbox" id="ovLabels" checked> city labels</label>
+      </div>
+      <div class="btnrow">
+        <button id="bAnalyze">Analyse now</button>
+        <button id="bSever" class="danger">Sever strongest link</button>
+      </div>
+    </div>
+    <details class="card" open>
+      <summary>Organism</summary>
+      <div class="row"><label>agents</label>
+        <select id="quality">
+          <option value="15000">15k — light</option>
+          <option value="45000" selected>45k — balanced</option>
+          <option value="90000">90k — dense</option>
+          <option value="140000">140k — lush</option>
+        </select>
+      </div>
+      <div class="row"><label>sensor dist</label><input type="range" id="pSO" min="4" max="30" step="0.5" value="11"><output>11</output></div>
+      <div class="row"><label>sensor angle</label><input type="range" id="pSA" min="0.1" max="1.4" step="0.02" value="0.45"><output>0.45</output></div>
+      <div class="row"><label>turn angle</label><input type="range" id="pRA" min="0.05" max="1.2" step="0.02" value="0.5"><output>0.50</output></div>
+      <div class="row"><label>step size</label><input type="range" id="pSS" min="0.4" max="3" step="0.1" value="1"><output>1.0</output></div>
+      <div class="row"><label>deposit</label><input type="range" id="pDEP" min="0.5" max="8" step="0.1" value="4"><output>4.0</output></div>
+      <div class="row"><label>decay</label><input type="range" id="pDEC" min="0.85" max="0.995" step="0.005" value="0.955"><output>0.955</output></div>
+      <div class="row"><label>diffusion</label><input type="range" id="pDIF" min="0.05" max="1" step="0.05" value="0.5"><output>0.50</output></div>
+      <div class="btnrow"><button id="bReseed">Restart organism</button></div>
+      <div class="hint">Restart clears the veins and reseeds the agents — your city layout and terrain are kept.</div>
+    </details>
+    <div class="card">
+      <h3>Dishes</h3>
+      <div class="btnrow">
+        <button data-preset="tokyo">Tokyo</button>
+        <button data-preset="maze">Maze</button>
+        <button data-preset="ring">Ring</button>
+        <button data-preset="pair">Pair</button>
+        <button data-preset="blank">Blank</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Project</h3>
+      <div class="btnrow">
+        <button id="bUndo">Undo</button>
+        <button id="bRedo">Redo</button>
+      </div>
+      <div class="btnrow">
+        <button id="bExpJson">Export JSON</button>
+        <button id="bExpPng">Export PNG</button>
+      </div>
+      <div class="btnrow">
+        <button id="bImport">Import dish…</button>
+      </div>
+      <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
+      <div class="hint">Everything lives in memory only — no storage, no accounts. Reload or Reset all returns to the opening dish.</div>
+    </div>
+  </aside>
+</main>
+
+<div id="modal">
+  <div id="aboutbox">
+    <button class="close" id="bAboutX">Close ✕</button>
+    <h2>Oatworks</h2>
+    <p>A slime-mould network foundry. You never draw a road — you design the <i>problem</i>
+    (cities as oat flakes, terrain, light), and a simulated <i>Physarum polycephalum</i> plasmodium
+    grows the transport network. Then you measure it like an engineer and wound it like a critic.</p>
+    <h4>What you can do</h4>
+    <ul>
+      <li>Place oats (cities), terrain walls, and light fields that the mould avoids.</li>
+      <li>Watch a hundred thousand point-agents with three chemical sensors self-organise into a vein network — no brain, no plan, only sense-and-turn.</li>
+      <li>Analyse the living web: cities linked, network length vs a straight-line minimum spanning tree, average detour, and redundancy (loops vs. bridges).</li>
+      <li>Sever links — by hand or the strongest one automatically — and watch connectivity drop and heal.</li>
+      <li>Tune the organism's sensor geometry, deposit and decay to morph fine mesh into bold arteries.</li>
+    </ul>
+    <h4>How it works</h4>
+    <p>Each agent samples the chemical field at three points ahead of it (left, centre, right), turns
+    toward the strongest scent, steps forward and deposits a little trail. The shared trail map is
+    diffused and evaporated every tick — faint wandering dries up, busy corridors thicken. Oats emit a
+    chemoattractant gradient; light and terrain repel. This is Jeff Jones' 2010 multi-agent model of
+    Physarum, which Tero et al. showed grows networks with cost, efficiency and fault tolerance
+    comparable to the Tokyo rail system. The analysis layer thins the trail field into a skeleton,
+    extracts a graph, and reports real metrics computed live from your dish.</p>
+    <h4>Why this exists</h4>
+    <p>Most Physarum web demos are pattern toys: drop attractant, admire the glow. The actually
+    interesting claim in the literature is that a single cell does <i>network engineering</i> — so this
+    tool treats the organism as a designer you can brief, and the network as infrastructure you can
+    audit and break. Compared to city-building or traffic sims, you never lay the network yourself.</p>
+    <h4>Honest limitations</h4>
+    <ul>
+      <li>This is a 2-D agent approximation, not a biological model. Metrics are estimates read from a rasterised trail field — a research sketchpad, not engineering advice.</li>
+      <li>"Cost vs MST" compares against a straight-line minimum spanning tree that ignores your terrain, so a legitimately terrain-avoiding network can look "expensive".</li>
+      <li>Connectivity tolerates ~4 px gaps; a cut wider than that must be genuinely re-grown, which takes real seconds — that's the organism's repair time, not a bug.</li>
+      <li>Nothing is stored: reloading loses the dish unless you exported JSON first.</li>
+    </ul>
+    <h4>Sources that informed this</h4>
+    <span class="src">Tero et al. (2010) — "Rules for Biologically Inspired Adaptive Network Design", Science 327:439 — https://www.science.org/doi/10.1126/science.1177894</span>
+    <span class="src">Jones, J. (2015) — "Mechanisms Inducing Parallel Computation in a Model of Physarum polycephalum Transport Networks" — https://arxiv.org/abs/1511.05869</span>
+    <span class="src">Jones, J. (2010) — "Characteristics of Pattern Formation and Evolution in Approximations of Physarum Transport Networks", Artificial Life 16(2) — https://uwe-repository.worktribe.com/output/980579</span>
+    <span class="src">Ed Yong, National Geographic (2010) — "Slime mould attacks simulates Tokyo rail network" — https://www.nationalgeographic.com/science/article/slime-mould-attacks-simulates-tokyo-rail-network</span>
+    <span class="src">Amanda Ghassaei — GPU Physarum (gpu-io) — https://apps.amandaghassaei.com/gpu-io/examples/physarum/</span>
+    <span class="src">ABC Tools — "Slime Mould Networks" — https://abc.tools/sim/slime-mold/</span>
+    <span class="src">Kody Wildfeuer — "Physarum Rediscovers the Tokyo Subway Map" — https://kody-w.github.io/learnwithkody/examples/slime-mold/</span>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const GW=480, GH=300, NCELL=GW*GH;
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+
+const trail=new Float32Array(NCELL), tbuf=new Float32Array(NCELL);
+const chem=new Float32Array(NCELL);
+const foodBase=new Float32Array(NCELL), foodDyn=new Float32Array(NCELL);
+const light=new Float32Array(NCELL), cutF=new Float32Array(NCELL);
+const wall=new Uint8Array(NCELL);
+const skel=new Uint8Array(NCELL), skelTmp=new Uint8Array(NCELL);
+const maskD=new Uint8Array(NCELL);
+const label=new Int32Array(NCELL);
+
+const MAXA=140000;
+const ax=new Float32Array(MAXA), ay=new Float32Array(MAXA), ah=new Float32Array(MAXA);
+let N=45000;
+
+const params={so:11,sa:0.45,ra:0.5,ss:1.0,dep:4.0,dec:0.955,dif:0.5,
+  foodW:2.2, repelW:6.0, foodAmp:2.6, foodSig:34, eat:0.012, regen:0.02};
+
+let foods=[];               // {x,y,name}
+let tool="oat", brush=7, selFood=-1;
+let running=true, speed=1, simT=0, tickN=0;
+let undoStack=[], redoStack=[];
+let strokes=[];             // {kind:'wall'|'light', pts:[[x,y]..], r}
+let ana={pending:false, gen:null, last:0, result:null, conn:null, epoch:0, runId:0};
+let hist=[];
+let pointer={down:false,gx:0,gy:0,moving:null,moved:false};
+
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
+const rnd=rng(20260929);
+
+function idx(x,y){return y*GW+x}
+function inb(x,y){return x>=0&&x<GW&&y>=0&&y<GH}
+
+function rebuildFood(){
+  foodBase.fill(0);
+  const s2=2*params.foodSig*params.foodSig, R=Math.ceil(params.foodSig*3);
+  for(const f of foods){
+    const cx=Math.round(f.x),cy=Math.round(f.y);
+    for(let y=Math.max(0,cy-R);y<=Math.min(GH-1,cy+R);y++){
+      for(let x=Math.max(0,cx-R);x<=Math.min(GW-1,cx+R);x++){
+        const dx=x-f.x,dy=y-f.y,d2=dx*dx+dy*dy;
+        if(d2<R*R) foodBase[idx(x,y)]+=params.foodAmp*Math.exp(-d2/s2);
+      }
+    }
+  }
+  foodDyn.set(foodBase);
+}
+
+function seedAgents(){
+  for(let i=0;i<N;i++){
+    if(foods.length&&i%5<2){
+      const f=foods[(rnd()*foods.length)|0];
+      ax[i]=clamp(f.x+(rnd()-0.5)*10,1,GW-2);
+      ay[i]=clamp(f.y+(rnd()-0.5)*10,1,GH-2);
+    }else{ax[i]=1+rnd()*(GW-2);ay[i]=1+rnd()*(GH-2)}
+    ah[i]=rnd()*Math.PI*2;
+  }
+}
+
+function clearField(){
+  trail.fill(0);cutF.fill(0);maskD.fill(0);skel.fill(0);
+  ana.result=null;ana.conn=null;hist=[];ana.epoch++;
+}
+
+function reseed(){clearField();seedAgents();simT=0;tickN=0}
+
+function step(){
+  const SA=params.sa,RA=params.ra,SO=params.so,SS=params.ss;
+  for(let i=0;i<N;i++){
+    const x=ax[i],y=ay[i];let h=ah[i];
+    const cF=sense(x,y,h),cL=sense(x,y,h-SA),cR=sense(x,y,h+SA);
+    if(cF>cL&&cF>cR){}else if(cL>cR)h-=RA;else if(cR>cL)h+=RA;else h+=(rnd()<0.5?-RA:RA);
+    ah[i]=h;
+    const nx=x+Math.cos(h)*SS,ny=y+Math.sin(h)*SS;
+    const ix=nx|0,iy=ny|0;
+    if(!inb(ix,iy)||wall[idx(ix,iy)]){ah[i]=rnd()*Math.PI*2;continue}
+    ax[i]=nx;ay[i]=ny;
+    const j=idx(ix,iy);
+    const nv2=trail[j]+params.dep;
+    trail[j]=nv2>14?14:nv2;
+    if(foodDyn[j]>0.02)foodDyn[j]*=(1-params.eat);
+  }
+  if(foods.length){
+    const resp=(N*0.0012)|0;
+    for(let k=0;k<resp;k++){
+      const i=(rnd()*N)|0,f=foods[(rnd()*foods.length)|0];
+      const x2=clamp(f.x+(rnd()-0.5)*6,1,GW-2),y2=clamp(f.y+(rnd()-0.5)*6,1,GH-2);
+      if(!wall[idx(x2|0,y2|0)]){ax[i]=x2;ay[i]=y2;ah[i]=rnd()*6.283}
+    }
+  }
+  for(let y=0;y<GH;y++){const o=y*GW;
+    tbuf[o]=(trail[o]+trail[o+1])*0.5;
+    for(let x=1;x<GW-1;x++)tbuf[o+x]=(trail[o+x-1]+trail[o+x]+trail[o+x+1])/3;
+    tbuf[o+GW-1]=(trail[o+GW-2]+trail[o+GW-1])*0.5;
+  }
+  const dif=params.dif,dec=params.dec;
+  for(let x=0;x<GW;x++){
+    let acc=tbuf[x];
+    for(let y=0;y<GH;y++){
+      const j=y*GW+x;
+      const nv=tbuf[j];
+      const v=(acc+nv+(y<GH-1?tbuf[j+GW]:nv))/3;
+      acc=nv;
+      const tv=v*dif+trail[j]*(1-dif);
+      trail[j]=tv*dec>255?255:tv*dec;
+      chem[j]=foodDyn[j]*params.foodW-(light[j]+cutF[j])*params.repelW;
+      if(wall[j])chem[j]=-50;
+      foodDyn[j]+=(foodBase[j]-foodDyn[j])*params.regen;
+      cutF[j]*=0.985;
+    }
+  }
+  simT+=1/60;tickN++;
+}
+function sense(x,y,a){
+  const ix=(x+Math.cos(a)*SO_) |0, iy=(y+Math.sin(a)*SO_)|0;
+  if(ix<0||ix>=GW||iy<0||iy>=GH)return -100;
+  const j=iy*GW+ix;
+  return trail[j]+chem[j];
+}
+let SO_=11;
+
+/* ---- analysis ---- */
+
+function threshold(){
+  let mx=0;for(let i=0;i<NCELL;i++)if(trail[i]>mx)mx=trail[i];
+  return clamp(mx*0.09,0.6,3.0);
+}
+
+function* thinGen(mask){
+  const w=GW,h=GH,B=new Uint8Array(NCELL);
+  for(let i=0;i<NCELL;i++)B[i]=mask[i]&&!wall[i]?1:0;
+  let changed=true,iter=0;
+  const n=(x,y)=>inb(x,y)?B[y*GW+x]:0;
+  while(changed&&iter<60){
+    changed=false;iter++;
+    for(let sub=0;sub<2;sub++){
+      const kill=[];
+      for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+        const j=y*GW+x;if(!B[j])continue;
+        const p2=n(x,y-1),p3=n(x+1,y-1),p4=n(x+1,y),p5=n(x+1,y+1),
+              p6=n(x,y+1),p7=n(x-1,y+1),p8=n(x-1,y),p9=n(x-1,y-1);
+        const bp=p2+p3+p4+p5+p6+p7+p8+p9;
+        if(bp<2||bp>6)continue;
+        const seq=[p2,p3,p4,p5,p6,p7,p8,p9,p2];
+        let ap=0;for(let k=0;k<8;k++)if(!seq[k]&&seq[k+1])ap++;
+        if(ap!==1)continue;
+        if(sub===0){if(p2*p4*p6)continue;if(p4*p6*p8)continue}
+        else{if(p2*p4*p8)continue;if(p2*p6*p8)continue}
+        kill.push(j);
+      }
+      for(const j of kill)B[j]=0;
+      if(kill.length)changed=true;
+      yield;
+    }
+  }
+  skel.set(B);
+}
+
+function connectivity(){
+  const T=threshold();
+  maskD.fill(0);
+  for(let i=0;i<NCELL;i++)if(trail[i]>T&&!wall[i])maskD[i]=1;
+  for(let pass=0;pass<2;pass++){
+    skelTmp.set(maskD);
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+      const j=y*GW+x;if(skelTmp[j]||wall[j])continue;
+      if((x>0&&skelTmp[j-1])||(x<GW-1&&skelTmp[j+1])||(y>0&&skelTmp[j-GW])||(y<GH-1&&skelTmp[j+GW]))maskD[j]=1;
+    }
+  }
+  label.fill(-1);let nc=0;
+  const stack=[];
+  for(let i=0;i<NCELL;i++){
+    if(!maskD[i]||label[i]>=0)continue;
+    stack.push(i);label[i]=nc;
+    while(stack.length){
+      const j=stack.pop(),x=j%GW,y=(j/GW)|0;
+      if(x>0&&maskD[j-1]&&label[j-1]<0){label[j-1]=nc;stack.push(j-1)}
+      if(x<GW-1&&maskD[j+1]&&label[j+1]<0){label[j+1]=nc;stack.push(j+1)}
+      if(y>0&&maskD[j-GW]&&label[j-GW]<0){label[j-GW]=nc;stack.push(j-GW)}
+      if(y<GH-1&&maskD[j+GW]&&label[j+GW]<0){label[j+GW]=nc;stack.push(j+GW)}
+    }
+    nc++;
+  }
+  const fLab=foods.map(f=>{
+    const cx=Math.round(f.x),cy=Math.round(f.y);let best=-1,bd=1e9;
+    for(let r=0;r<16;r++){
+      for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
+        if(Math.max(Math.abs(x-cx),Math.abs(y-cy))!==r)continue;
+        if(!inb(x,y))continue;const j=y*GW+x;
+        if(maskD[j]){const d=(x-f.x)*(x-f.x)+(y-f.y)*(y-f.y);if(d<bd){bd=d;best=label[j]}}
+      }
+      if(best>=0)break;
+    }
+    return best;
+  });
+  const groups={};let linked=0,topSize=0;
+  fLab.forEach(l=>{if(l<0)return;groups[l]=(groups[l]||0)+1;linked++});
+  for(const k in groups)topSize=Math.max(topSize,groups[k]);
+  return{nc,fLab,linked,topSize,T,groups:Object.keys(groups).length};
+}
+
+function* skeletonGraphGen(){
+  const deg=new Uint8Array(NCELL),vx=new Uint8Array(NCELL);
+  const nb=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+  let sp=0;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const j=y*GW+x;if(!skel[j])continue;sp++;
+    let d=0;for(const[dx,dy]of nb)if(inb(x+dx,y+dy)&&skel[j+dy*GW+dx])d++;
+    deg[j]=d;if(d!==2)vx[j]=1;
+  }
+  yield;
+  const anchors=[];
+  for(const f of foods){
+    const cx=Math.round(f.x),cy=Math.round(f.y);let best=-1,bd=1e9;
+    for(let r=0;r<18;r++){
+      for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
+        if(Math.max(Math.abs(x-cx),Math.abs(y-cy))!==r)continue;
+        if(!inb(x,y))continue;const j=y*GW+x;
+        if(skel[j]){const d=(x-f.x)*(x-f.x)+(y-f.y)*(y-f.y);if(d<bd){bd=d;best=j}}
+      }
+      if(best>=0)break;
+    }
+    anchors.push(best);if(best>=0)vx[best]=1;
+  }
+  const vid=new Int32Array(NCELL).fill(-1);let nv=0;const stack=[];
+  for(let i=0;i<NCELL;i++){
+    if(!vx[i]||vid[i]>=0)continue;
+    stack.push(i);vid[i]=nv;
+    while(stack.length){
+      const j=stack.pop(),x=j%GW,y=(j/GW)|0;
+      for(const[dx,dy]of nb){const nx=x+dx,ny=y+dy;
+        if(inb(nx,ny)){const k=ny*GW+nx;if(vx[k]&&vid[k]<0){vid[k]=nv;stack.push(k)}}}
+    }
+    nv++;
+  }
+  yield;
+  const edges=[],visited=new Uint8Array(NCELL*8);
+  const dirOf=(dx,dy)=>dx===1?(dy===0?0:dy===1?1:7):dx===-1?(dy===0?4:dy===1?3:5):dy===1?2:6;
+  const traceFrom=(i,dx,dy)=>{
+    const j=i+dy*GW+dx;
+    if(!skel[j]||vid[j]===vid[i])return;
+    const d0=dirOf(dx,dy);
+    if(visited[i*8+d0])return;
+    let len=1,prev=i,cur=j;
+    const path=[i,j];visited[i*8+d0]=1;
+    visited[j*8+((d0+4)&7)]=1;
+    while(vid[cur]<0){
+      const cx2=cur%GW,cy2=(cur/GW)|0;let moved=false;
+      for(const[ddx,ddy]of nb){
+        const qx=cx2+ddx,qy=cy2+ddy;if(!inb(qx,qy))continue;
+        const q=qy*GW+qx;if(!skel[q]||q===prev)continue;
+        const dd=dirOf(ddx,ddy);
+        visited[cur*8+dd]=1;visited[q*8+((dd+4)&7)]=1;
+        prev=cur;cur=q;len+=(ddx&&ddy)?1.414:1;path.push(q);moved=true;break;
+      }
+      if(!moved)break;
+    }
+    const bv=vid[cur];
+    if(bv>=0)edges.push({a:vid[i],b:bv,len,px:path});
+  };
+  for(let i=0;i<NCELL;i++){
+    if(vid[i]<0)continue;
+    const x=i%GW,y=(i/GW)|0;
+    for(const[dx,dy]of nb){
+      const nx=x+dx,ny=y+dy;if(!inb(nx,ny))continue;
+      if(skel[ny*GW+nx])traceFrom(i,dx,dy);
+    }
+    if((i&8191)===8191)yield;
+  }
+  for(let i=0;i<NCELL;i++){
+    if(!skel[i]||deg[i]!==2)continue;
+    let free=false;
+    const x=i%GW,y=(i/GW)|0;
+    for(const[dx,dy]of nb){
+      const nx=x+dx,ny=y+dy;if(!inb(nx,ny))continue;
+      if(skel[ny*GW+nx]&&!visited[i*8+dirOf(dx,dy)])free=true;
+    }
+    if(!free)continue;
+    vid[i]=nv++;vx[i]=1;
+    for(const[dx,dy]of nb){
+      const nx=x+dx,ny=y+dy;if(!inb(nx,ny))continue;
+      if(skel[ny*GW+nx])traceFrom(i,dx,dy);
+    }
+  }
+  yield;
+  const gadj=new Map();
+  edges.forEach((e,ei)=>{(gadj.get(e.a)||gadj.set(e.a,[]).get(e.a)).push({to:e.b,ei});
+    (gadj.get(e.b)||gadj.set(e.b,[]).get(e.b)).push({to:e.a,ei})});
+  const disc=new Int32Array(nv).fill(-1),low=new Int32Array(nv),par=new Int32Array(nv);
+  let tme=0;const bridges=new Set();
+  for(let s=0;s<nv;s++){
+    if(disc[s]>=0)continue;
+    const iterStack=[[s,0,-1]];
+    while(iterStack.length){
+      const top=iterStack[iterStack.length-1];let[v,ci,pe]=top;
+      if(ci===0){disc[v]=low[v]=tme++}
+      const el=gadj.get(v)||[];
+      if(ci<el.length){
+        top[1]++;
+        const{to,ei}=el[ci];
+        if(ei===pe)continue;
+        if(disc[to]>=0){low[v]=Math.min(low[v],disc[to])}
+        else{par[to]=v;iterStack.push([to,0,ei])}
+      }else{
+        iterStack.pop();
+        if(pe>=0){const u=par[v];low[u]=Math.min(low[u],low[v]);
+          if(low[v]>disc[u])bridges.add(pe)}
+      }
+    }
+  }
+  yield;
+  const fAnchorV=anchors.map(a=>a>=0?vid[a]:-1);
+  const dist=new Float64Array(NCELL),prev=new Int32Array(NCELL);
+  const pairDet=[];
+  for(let fi=0;fi<foods.length;fi++){
+    const a0=anchors[fi];if(a0<0)continue;
+    dist.fill(-1);
+    const q=[a0];dist[a0]=0;let qi=0;
+    while(qi<q.length){
+      const j=q[qi++],x=j%GW,y=(j/GW)|0;
+      for(const[dx,dy]of nb){const nx2=x+dx,ny2=y+dy;
+        if(!inb(nx2,ny2))continue;const k=ny2*GW+nx2;
+        if(skel[k]&&dist[k]<0){dist[k]=dist[j]+((dx&&dy)?1.414:1);q.push(k)}}
+    }
+    for(let fj=fi+1;fj<foods.length;fj++){
+      const b0=anchors[fj];if(b0<0||dist[b0]<0)continue;
+      const euclid=Math.hypot(foods[fi].x-foods[fj].x,foods[fi].y-foods[fj].y);
+      if(euclid>0.5)pairDet.push(dist[b0]/euclid);
+    }
+    if(fi%6===5)yield;
+  }
+  let mstLen=0;
+  if(foods.length>1){
+    const inT=new Array(foods.length).fill(false);inT[0]=true;
+    for(let k=1;k<foods.length;k++){
+      let bd=1e18,bj=-1;
+      for(let i=0;i<foods.length;i++)if(inT[i])
+        for(let j=0;j<foods.length;j++)if(!inT[j]){
+          const d=Math.hypot(foods[i].x-foods[j].x,foods[i].y-foods[j].y);
+          if(d<bd){bd=d;bj=j}
+        }
+      if(bj<0)break;inT[bj]=true;mstLen+=bd;
+    }
+  }
+  const detour=pairDet.length?pairDet.reduce((a,b)=>a+b,0)/pairDet.length:null;
+  return{sp,nv,edges,bridges,anchors,fAnchorV,pairDet,detour,mstLen,
+    loopShare:edges.length?1-bridges.size/edges.length:0};
+}
+
+function runAnalysis(full,onDone){
+  if(ana.pending)return;
+  ana.pending=true;$("anaState").textContent="analysing…";
+  const ep=ana.epoch,id=++ana.runId;
+  ana.conn=connectivity();
+  const finish=()=>{
+    ana.pending=false;ana.last=performance.now();
+    ana.result=ana._res;ana._res=null;
+    $("anaState").textContent="";
+    renderMetrics();if(onDone)onDone(ana.result);
+  };
+  if(!full){ana._res=ana.result;finish();return}
+  const thin=thinGen((()=>{const T=ana.conn.T;const m=new Uint8Array(NCELL);
+    for(let i=0;i<NCELL;i++)m[i]=trail[i]>T?1:0;return m})());
+  let g=null;
+  const pump=()=>{
+    if(id!==ana.runId)return;
+    if(ep!==ana.epoch){ana.pending=false;$("anaState").textContent="";return}
+    const t0=performance.now();
+    while(performance.now()-t0<9){
+      if(!g){if(thin.next().done)g=skeletonGraphGen()}
+      else{const r2=g.next();
+        if(r2.done){ana._res=r2.value;finish();return}}
+    }
+    setTimeout(pump,0);
+  };
+  setTimeout(pump,0);
+}
+
+function severStrongest(){
+  runAnalysis(true,res=>{
+    if(!res||!res.edges.length){toast("No network to sever — let the mould grow first","bad");return}
+    let pick=null;
+    const gadj=new Map();
+    res.edges.forEach((e,ei)=>{
+      if(!gadj.has(e.a))gadj.set(e.a,[]);gadj.get(e.a).push({to:e.b,ei});
+      if(!gadj.has(e.b))gadj.set(e.b,[]);gadj.get(e.b).push({to:e.a,ei});
+    });
+    const fv=new Set(res.fAnchorV.filter(v=>v>=0));
+    const scoreEdge=ei=>{
+      const seen=new Set();const st=[res.edges[ei].a];let cnt=0;
+      const seenE=new Set([ei]);
+      while(st.length){
+        const v=st.pop();
+        for(const{to,ei:e2}of gadj.get(v)||[]){
+          if(seenE.has(e2))continue;seenE.add(e2);
+          if(seen.has(to))continue;seen.add(to);st.push(to);
+          if(fv.has(to))cnt++;
+        }
+      }
+      return Math.min(cnt,fv.size-cnt);
+    };
+    let bs=-1;
+    res.bridges.forEach(ei=>{const s=scoreEdge(ei);if(s>bs){bs=s;pick=ei}});
+    if(pick===null){let bl=0;res.edges.forEach((e,ei)=>{if(e.len>bl){bl=e.len;pick=ei}})}
+    const e=res.edges[pick];
+    if(!e.px||e.px.length<3){toast("Could not locate the link on the field","bad");return}
+    const mi=(e.px.length/2)|0;
+    const a=e.px[Math.max(0,mi-4)],b=e.px[Math.min(e.px.length-1,mi+4)];
+    const mx=a%GW,my=(a/GW)|0,nx=b%GW,ny=(b/GW)|0;
+    let dx=nx-mx,dy=ny-my;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
+    const cx=e.px[mi]%GW,cy=(e.px[mi]/GW)|0;
+    const T=ana.conn?ana.conn.T:1;
+    const ends=[0,0];
+    for(let dir=-1;dir<=1;dir+=2){
+      let s=0,dry=0;
+      while(s<90&&dry<16){
+        s+=2;
+        const px=Math.round(cx-dy*dir*s),py=Math.round(cy+dx*dir*s);
+        if(!inb(px,py))break;
+        dry=trail[py*GW+px]>T*0.4?0:dry+2;
+      }
+      ends[(dir+1)/2]=s;
+    }
+    for(let s=-ends[0];s<=ends[1];s+=3){
+      const px=Math.round(cx-dy*s),py=Math.round(cy+dx*s);
+      if(inb(px,py))cutAt(px,py,7);
+    }
+    ana.conn=connectivity();renderMetrics();draw();
+    const after=ana.conn;
+    const lost=foods.length-after.topSize;
+    toast(lost>0
+      ?`Severed — ${lost} cities isolated. Press Grow and watch it heal.`
+      :"Severed, but the web routed around the wound — fault tolerance in action.","good");
+  });
+}
+
+function cutAt(gx,gy,r){
+  const y0=Math.max(0,Math.ceil(gy-r)),y1=Math.min(GH-1,Math.floor(gy+r));
+  const x0=Math.max(0,Math.ceil(gx-r)),x1=Math.min(GW-1,Math.floor(gx+r));
+  for(let y=y0;y<=y1;y++)
+    for(let x=x0;x<=x1;x++){
+      const dx=x-gx,dy=y-gy;if(dx*dx+dy*dy>r*r)continue;
+      const j=y*GW+x;trail[j]*=0.02;cutF[j]=Math.max(cutF[j],2.2);
+    }
+}
+
+function paintAt(gx,gy,kind,r){
+  const y0=Math.max(0,Math.ceil(gy-r)),y1=Math.min(GH-1,Math.floor(gy+r));
+  const x0=Math.max(0,Math.ceil(gx-r)),x1=Math.min(GW-1,Math.floor(gx+r));
+  for(let y=y0;y<=y1;y++)
+    for(let x=x0;x<=x1;x++){
+      const dx=x-gx,dy=y-gy,d2=dx*dx+dy*dy;if(d2>r*r)continue;
+      const j=y*GW+x;
+      if(kind==="wall"){wall[j]=1;trail[j]=0}
+      else if(kind==="light")light[j]=Math.max(light[j],1-d2/(r*r));
+      else if(kind==="erase"){wall[j]=0;light[j]=0;cutF[j]=0;trail[j]=0}
+      else if(kind==="cut"){trail[j]*=0.02;cutF[j]=Math.max(cutF[j],2.2)}
+    }
+}
+
+function snapshot(){
+  return{foods:foods.map(f=>({...f})),wall:wall.slice(),light:light.slice(),
+    strokes:JSON.parse(JSON.stringify(strokes))};
+}
+function restore(s){
+  foods=s.foods.map(f=>({...f}));wall.set(s.wall);light.set(s.light);
+  strokes=JSON.parse(JSON.stringify(s.strokes));selFood=-1;
+  rebuildFood();scheduleAnalysis();renderMetrics();draw();
+}
+function pushUndo(){undoStack.push(snapshot());if(undoStack.length>40)undoStack.shift();redoStack=[]}
+
+/* ---- presets ---- */
+
+function preset(name){
+  pushUndo();
+  foods=[];wall.fill(0);light.fill(0);strokes=[];
+  const P=(x,y,n)=>({x:x*GW,y:y*GH,name:n});
+  if(name==="tokyo"){
+    foods=[P(.50,.52,"Tokyo"),P(.44,.62,"Kawasaki"),P(.40,.70,"Yokohama"),
+      P(.33,.78,"Odawara"),P(.60,.60,"Funabashi"),P(.70,.56,"Chiba"),
+      P(.80,.68,"Kisarazu"),P(.62,.42,"Kashiwa"),P(.58,.30,"Saitama"),
+      P(.46,.34,"Kawagoe"),P(.36,.44,"Hachioji"),P(.52,.18,"Utsunomiya"),
+      P(.36,.16,"Maebashi"),P(.78,.30,"Mito"),P(.70,.44,"Tsukuba")];
+    line([[0,0],[.26,0],[.26,.36],[0,.52]],"wall");
+    blob(.18,.58,.09,"light");blob(.30,.30,.07,"light");blob(.85,.15,.08,"light");
+  }else if(name==="maze"){
+    foods=[P(.08,.5,"Start"),P(.92,.5,"Goal")];
+    const bars=[[.22,.12,.22,.70],[.38,.30,.38,.88],[.54,.10,.54,.66],[.70,.34,.70,.9]];
+    bars.forEach(([x1,y1,x2,y2])=>line([[x1,y1],[x2,y2]],"wall",3));
+    line([[0,0],[1,0]],"wall",3);line([[0,1],[1,1]],"wall",3);
+  }else if(name==="ring"){
+    for(let i=0;i<8;i++){const a=i/8*Math.PI*2-Math.PI/2;
+      foods.push(P(.5+Math.cos(a)*.34,.5+Math.sin(a)*.36,"C"+(i+1)))}
+  }else if(name==="pair"){
+    foods=[P(.25,.5,"A"),P(.75,.5,"B")];
+  }
+  rebuildFood();reseed();
+}
+function line(pts,kind,r=5){
+  const s={kind,pts:[],r};strokes.push(s);
+  for(let i=0;i<pts.length-1;i++){
+    const[x1,y1]=pts[i],[x2,y2]=pts[i+1];
+    const steps=Math.ceil(Math.hypot(x2-x1,y2-y1)*Math.max(GW,GH));
+    for(let k=0;k<=steps;k++){
+      const t=k/steps,x=(x1+(x2-x1)*t)*GW,y=(y1+(y2-y1)*t)*GH;
+      paintAt(x|0,y|0,kind,r);s.pts.push([x,y]);
+    }
+  }
+}
+function blob(cx,cy,rad,kind){
+  const s={kind,pts:[[cx*GW,cy*GH]],r:rad*GW};strokes.push(s);
+  paintAt(cx*GW|0,cy*GH|0,kind,rad*GW);
+}
+
+/* ---- render ---- */
+
+const view=$("view"),ctx=view.getContext("2d");
+const dish=$("dish"),stage=$("stage");
+const field=document.createElement("canvas");field.width=GW;field.height=GH;
+const fctx=field.getContext("2d");
+const img=fctx.createImageData(GW,GH);
+let DPR=1,vw=0,vh=0;
+
+function fit(){
+  const r=stage.getBoundingClientRect();
+  const pad=18;
+  const aw=r.width-pad*2,ahh=r.height-pad*2;
+  const s=Math.min(aw/GW,ahh/GH);
+  vw=Math.max(120,GW*s);vh=Math.max(75,GH*s);
+  dish.style.width=vw+"px";dish.style.height=vh+"px";
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  view.width=Math.round(vw*DPR);view.height=Math.round(vh*DPR);
+  draw();
+}
+
+function draw(){
+  if(!vw)return;
+  const d=img.data;
+  for(let i=0;i<NCELL;i++){
+    const o=i*4;let r=14,g=17,b=22;
+    if(wall[i]){r=44;g=52;b=68}
+    const li=light[i]+cutF[i]*0.8;
+    if(li>0){const t=Math.min(1,li*0.7);r+= (70-r)*t*0.6;g+=(110-g)*t*0.6;b=(b+(190-b)*t)}
+    const tv=trail[i];
+    if(tv>0){
+      const t=tv>6?1:tv/6;
+      const t2=Math.min(1,tv/12);
+      r=r+(255-r)*t*0.25+(255-r)*t2*0.75;
+      g=g+(140-g)*t*0.25+(190-g)*t2*0.75;
+      b=b+(40-b)*t*0.25+(110-b)*t2*0.75;
+    }
+    if(foodDyn[i]>0.15){const t=Math.min(1,foodDyn[i]*0.18);g=Math.min(255,g+t*26);r=Math.min(255,r+t*10)}
+    d[o]=r;d[o+1]=g;d[o+2]=b;d[o+3]=255;
+  }
+  fctx.putImageData(img,0,0);
+  ctx.setTransform(DPR*vw/GW,0,0,DPR*vh/GH,0,0);
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(field,0,0);
+  ctx.setTransform(DPR*vw/GW,0,0,DPR*vh/GH,0,0);
+
+  if($("ovAgents").checked){
+    ctx.fillStyle="rgba(255,240,200,0.5)";
+    const step=Math.max(1,Math.floor(N/12000));
+    for(let i=0;i<N;i+=step)ctx.fillRect(ax[i],ay[i],0.7,0.7);
+  }
+
+  if($("ovSkel").checked&&ana.result){
+    ctx.fillStyle="rgba(110,231,200,0.8)";
+    for(let i=0;i<NCELL;i++)if(skel[i])ctx.fillRect(i%GW,(i/GW)|0,1,1);
+    ctx.fillStyle="rgba(255,107,107,0.95)";
+    ana.result.bridges.forEach(ei=>{
+      const e=ana.result.edges[ei];
+      (e.px||[]).forEach(p=>ctx.fillRect(p%GW,(p/GW)|0,1,1));
+    });
+  }
+  if($("ovMst").checked&&foods.length>1){
+    const inT=new Array(foods.length).fill(false);inT[0]=true;
+    ctx.strokeStyle="rgba(122,162,255,0.75)";ctx.lineWidth=1.2;
+    ctx.setLineDash([4,3]);
+    for(let k=1;k<foods.length;k++){
+      let bd=1e18,bi=-1,bj=-1;
+      for(let i=0;i<foods.length;i++)if(inT[i])
+        for(let j=0;j<foods.length;j++)if(!inT[j]){
+          const dd=Math.hypot(foods[i].x-foods[j].x,foods[i].y-foods[j].y);
+          if(dd<bd){bd=dd;bi=i;bj=j}
+        }
+      if(bj<0)break;inT[bj]=true;
+      ctx.beginPath();ctx.moveTo(foods[bi].x,foods[bi].y);ctx.lineTo(foods[bj].x,foods[bj].y);ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  for(let i=0;i<foods.length;i++){
+    const f=foods[i];
+    const g=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,9);
+    g.addColorStop(0,"rgba(255,233,176,1)");g.addColorStop(0.4,"rgba(255,200,90,0.9)");
+    g.addColorStop(1,"rgba(255,180,60,0)");
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(f.x,f.y,9,0,7);ctx.fill();
+    ctx.fillStyle="#1a1206";ctx.beginPath();ctx.arc(f.x,f.y,2.6,0,7);ctx.fill();
+    if($("ovLabels").checked){
+      ctx.font="600 7.5px "+getComputedStyle(document.body).fontFamily;
+      ctx.fillStyle="rgba(255,230,170,0.95)";ctx.textAlign="center";
+      ctx.fillText(f.name,f.x,f.y-11);
+    }
+    if(i===selFood){
+      ctx.strokeStyle="rgba(255,255,255,0.8)";ctx.lineWidth=0.8;
+      ctx.beginPath();ctx.arc(f.x,f.y,11,0,7);ctx.stroke();
+    }
+  }
+  const grd=ctx.createLinearGradient(0,0,0,GH);
+  ctx.strokeStyle="rgba(255,177,61,0.25)";ctx.lineWidth=1;
+  ctx.strokeRect(0.5,0.5,GW-1,GH-1);
+}
+
+/* ---- metrics UI ---- */
+
+function renderMetrics(){
+  const m=$("metrics");
+  const c=ana.conn,r=ana.result;
+  const n=foods.length;
+  let html="";
+  if(!n){html+=`<div><span class="k">cities</span><span class="v">0 — drop some oats</span></div>`}
+  else{
+    const ok=c&&c.topSize===n;
+    html+=`<div><span class="k">linked cities</span><span class="v big ${ok?"good":(c&&c.topSize>1?"":"bad")}">${c?c.topSize:0}/${n}</span></div>`;
+    if(c&&c.groups>1)html+=`<div><span class="k">isolated groups</span><span class="v">${c.groups}</span></div>`;
+    if(c&&c.linked<n)html+=`<div><span class="k">unreached cities</span><span class="v bad">${n-c.linked}</span></div>`;
+  }
+  let mass=0;for(let i=0;i<NCELL;i+=4)mass+=trail[i];mass*=4;
+  html+=`<hr><div><span class="k">trail mass</span><span class="v">${(mass/1000).toFixed(0)}k</span></div>`;
+  if(r){
+    html+=`<div><span class="k">network length</span><span class="v">${r.sp} px</span></div>`;
+    if(r.mstLen>0)html+=`<div><span class="k">cost vs straight MST</span><span class="v">${(r.sp/r.mstLen).toFixed(2)}×</span></div>`;
+    if(r.detour)html+=`<div><span class="k">avg detour</span><span class="v">${r.detour.toFixed(2)}× straight</span></div>`;
+    html+=`<div><span class="k">links / junctions</span><span class="v">${r.edges.length} / ${r.nv}</span></div>`;
+    html+=`<div><span class="k">loops (fault tolerance)</span><span class="v ${r.loopShare>0.25?"good":""}">${(r.loopShare*100).toFixed(0)}%</span></div>`;
+    html+=`<div><span class="k">bridges (single points of failure)</span><span class="v ${r.bridges.size?"bad":"good"}">${r.bridges.size}</span></div>`;
+  }else{
+    html+=`<div><span class="k">graph</span><span class="v">analysing…</span></div>`;
+  }
+  m.innerHTML=html;
+  drawStrip();
+}
+
+function drawStrip(){
+  const c=$("strip"),x2=c.getContext("2d");
+  x2.clearRect(0,0,c.width,c.height);
+  if(hist.length<2)return;
+  const mx=Math.max(...hist.map(h=>h.mass),1);
+  const L=hist.length-1;
+  const px=i=>4+(i/L)*(c.width-8);
+  x2.strokeStyle="rgba(110,231,200,0.9)";x2.lineWidth=1.4;x2.beginPath();
+  hist.forEach((h,i)=>{const y=c.height-4-(h.conn)*(c.height-10);i?x2.lineTo(px(i),y):x2.moveTo(px(i),y)});
+  x2.stroke();
+  x2.strokeStyle="rgba(255,177,61,0.8)";x2.beginPath();
+  hist.forEach((h,i)=>{const y=c.height-4-(h.mass/mx)*(c.height-10);i?x2.lineTo(px(i),y):x2.moveTo(px(i),y)});
+  x2.stroke();
+  x2.fillStyle="rgba(139,147,167,0.9)";x2.font="8px monospace";
+  x2.fillText("mint: linked%   amber: trail mass",6,10);
+}
+
+function scheduleAnalysis(){
+  if(ana._pend)return;
+  ana._pend=true;
+  setTimeout(()=>{ana._pend=false;runAnalysis(true)},60);
+}
+
+/* ---- export / import ---- */
+
+function exportJSON(){
+  const pack=arr=>{
+    const runs=[];let i=0;
+    while(i<arr.length){let j=i;while(j<arr.length&&arr[j]===arr[i])j++;runs.push([arr[i],j-i]);i=j}
+    return runs;
+  };
+  const w=new Uint8Array(NCELL);wall.forEach((v,i)=>w[i]=v);
+  const l=new Uint8Array(NCELL);light.forEach((v,i)=>l[i]=v>0.05?Math.min(255,v*255|0):0);
+  const data={format:"oatworks-dish",version:1,gw:GW,gh:GH,
+    foods,wallRLE:pack(w),lightRLE:pack(l),params:{...params},agents:N};
+  download("oatworks-dish.json",JSON.stringify(data),"application/json");
+}
+function download(name,text,mime){
+  const blob=new Blob([text],{type:mime});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+function exportPNG(){
+  const c=document.createElement("canvas");c.width=view.width;c.height=view.height;
+  c.getContext("2d").drawImage(view,0,0);
+  c.toBlob(b=>{
+    const a=document.createElement("a");a.href=URL.createObjectURL(b);
+    a.download="oatworks.png";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  });
+}
+function importJSON(file){
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const d=JSON.parse(rd.result);
+      if(d.format!=="oatworks-dish"||d.gw!==GW||d.gh!==GH)throw new Error("not an Oatworks dish for this grid");
+      if(!Array.isArray(d.foods)||d.foods.length>200)throw new Error("bad city list");
+      const nf=d.foods.map(f=>{
+        if(typeof f.x!=="number"||typeof f.y!=="number"||f.x<0||f.x>GW||f.y<0||f.y>GH)throw new Error("city out of bounds");
+        return{x:f.x,y:f.y,name:String(f.name||"city").slice(0,24)};
+      });
+      const unRLE=r=>{const out=new Uint8Array(NCELL);let p=0;
+        for(const[v,c]of r){if(p+c>NCELL)throw new Error("bitmap overrun");out.fill(v,p,p+c);p+=c}
+        if(p!==NCELL)throw new Error("bitmap wrong size");return out};
+      const nw=unRLE(d.wallRLE),nl=unRLE(d.lightRLE);
+      pushUndo();
+      foods=nf;wall.set(nw);
+      for(let i=0;i<NCELL;i++)light[i]=nl[i]/255;
+      if(d.params)for(const k in params)if(typeof d.params[k]==="number")params[k]=clamp(d.params[k],0,10);
+      if(d.agents)setAgentCount(clamp(d.agents,1000,MAXA));
+      strokes=[];selFood=-1;
+      rebuildFood();reseed();syncParamsUI();scheduleAnalysis();draw();
+      toast(`Imported "${file.name}" — ${nf.length} cities`,"good");
+    }catch(err){
+      toast("Import failed: "+err.message+" — dish unchanged","bad");
+    }
+  };
+  rd.onerror=()=>toast("Could not read file","bad");
+  rd.readAsText(file);
+}
+
+/* ---- pointer ---- */
+
+function toGrid(e){
+  const r=dish.getBoundingClientRect();
+  return{x:clamp((e.clientX-r.left)/r.width*GW,0,GW-1),y:clamp((e.clientY-r.top)/r.height*GH,0,GH-1)};
+}
+function foodAt(gx,gy,r){
+  let bi=-1,bd=r*r;
+  foods.forEach((f,i)=>{const d=(f.x-gx)**2+(f.y-gy)**2;if(d<bd){bd=d;bi=i}});
+  return bi;
+}
+let curStroke=null,foodDirty=false;
+dish.addEventListener("pointerdown",e=>{
+  e.preventDefault();dish.setPointerCapture(e.pointerId);
+  const g=toGrid(e);pointer={down:true,gx:g.x,gy:g.y,moving:null,moved:false,undoPushed:false};
+  const fi=foodAt(g.x,g.y,9);
+  if(tool==="oat"){
+    if(fi>=0){selFood=fi;pointer.moving=fi}
+    else if(e.detail<2){pushUndo();foods.push({x:g.x,y:g.y,name:"City "+(foods.length+1)});selFood=foods.length-1;foodDirty=true;scheduleAnalysis();draw()}
+  }else if(tool==="move"){
+    if(fi>=0){selFood=fi;pointer.moving=fi}
+  }else{
+    pushUndo();
+    curStroke={kind:tool==="wall"?"wall":tool==="light"?"light":tool==="cut"?"cut":"erase",pts:[[g.x,g.y]],r:brush};
+    paintAt(g.x|0,g.y|0,curStroke.kind,brush);
+    strokes.push(curStroke);
+    scheduleAnalysis();draw();
+  }
+});
+dish.addEventListener("pointermove",e=>{
+  const g=toGrid(e);
+  if(pointer.down&&Math.hypot(g.x-pointer.gx,g.y-pointer.gy)>0.8)pointer.moved=true;
+  pointer.gx=g.x;pointer.gy=g.y;
+  if(!pointer.down)return;
+  if(pointer.moving!==null){
+    if(!pointer.undoPushed){pushUndo();pointer.undoPushed=true}
+    foods[pointer.moving].x=g.x;foods[pointer.moving].y=g.y;
+    foodDirty=true;scheduleAnalysis();draw();
+  }else if(curStroke){
+    const p=curStroke.pts[curStroke.pts.length-1];
+    const steps=Math.ceil(Math.hypot(g.x-p[0],g.y-p[1]));
+    for(let k=1;k<=steps;k++)paintAt((p[0]+(g.x-p[0])*k/steps)|0,(p[1]+(g.y-p[1])*k/steps)|0,curStroke.kind,curStroke.r);
+    curStroke.pts.push([g.x,g.y]);
+    scheduleAnalysis();draw();
+  }
+});
+const endPointer=()=>{
+  pointer.down=false;pointer.moving=null;curStroke=null;
+  if(foodDirty){rebuildFood();foodDirty=false;draw()}
+};
+dish.addEventListener("pointerup",endPointer);
+dish.addEventListener("pointercancel",endPointer);
+dish.addEventListener("dblclick",e=>{
+  const g=toGrid(e);const fi=foodAt(g.x,g.y,9);
+  if(fi>=0){pushUndo();foods.splice(fi,1);selFood=-1;rebuildFood();scheduleAnalysis();draw();toast("City removed")}
+});
+
+/* ---- UI wiring ---- */
+
+const toolHint={oat:"click to place",wall:"drag to paint",light:"drag to paint",cut:"drag across a vein",erase:"drag to clear",move:"drag a city"};
+document.querySelectorAll("#tools button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    tool=b.dataset.t;
+    document.querySelectorAll("#tools button").forEach(x=>x.classList.toggle("on",x===b));
+    $("toolHint").textContent=toolHint[tool];
+  });
+});
+$("brush").addEventListener("input",e=>{brush=+e.target.value;$("brushV").textContent=brush});
+
+const pmap={pSO:"so",pSA:"sa",pRA:"ra",pSS:"ss",pDEP:"dep",pDEC:"dec",pDIF:"dif"};
+for(const id in pmap){
+  $(id).addEventListener("input",e=>{
+    params[pmap[id]]=+e.target.value;
+    e.target.nextElementSibling.textContent=(+e.target.value).toFixed(id==="pDEC"?3:2);
+    if(id==="pSO")SO_=params.so;
+  });
+}
+function syncParamsUI(){
+  for(const id in pmap){$(id).value=params[pmap[id]];
+    $(id).nextElementSibling.textContent=params[pmap[id]].toFixed(id==="pDEC"?3:2)}
+  SO_=params.so;
+}
+$("quality").addEventListener("change",e=>setAgentCount(+e.target.value));
+function setAgentCount(n){
+  const old=N;N=clamp(n|0,1000,MAXA);
+  for(let i=old;i<N;i++){ax[i]=1+rnd()*(GW-2);ay[i]=1+rnd()*(GH-2);ah[i]=rnd()*Math.PI*2}
+}
+$("bReseed").addEventListener("click",()=>{reseed();toast("Organism restarted — layout kept")});
+$("bPlay").addEventListener("click",togglePlay);
+function togglePlay(){
+  running=!running;
+  $("bPlay").textContent=running?"⏸ Pause":"⏵ Grow";
+  $("bPlay").classList.toggle("primary",!running);
+}
+$("bStep").addEventListener("click",()=>{if(running)togglePlay();step();draw()});
+$("speed").addEventListener("change",e=>speed=+e.target.value);
+document.querySelectorAll("[data-preset]").forEach(b=>
+  b.addEventListener("click",()=>{preset(b.dataset.preset);toast("Dish loaded: "+b.textContent)}));
+$("bUndo").addEventListener("click",undo);
+$("bRedo").addEventListener("click",redo);
+function undo(){if(!undoStack.length){toast("Nothing to undo");return}
+  redoStack.push(snapshot());restore(undoStack.pop())}
+function redo(){if(!redoStack.length){toast("Nothing to redo");return}
+  undoStack.push(snapshot());restore(redoStack.pop())}
+$("bAnalyze").addEventListener("click",()=>runAnalysis(true));
+$("bSever").addEventListener("click",severStrongest);
+$("bExpJson").addEventListener("click",exportJSON);
+$("bExpPng").addEventListener("click",exportPNG);
+$("bImport").addEventListener("click",()=>$("fileIn").click());
+$("fileIn").addEventListener("change",e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value=""});
+$("bAbout").addEventListener("click",()=>$("modal").classList.add("open"));
+$("bAboutX").addEventListener("click",()=>$("modal").classList.remove("open"));
+$("modal").addEventListener("click",e=>{if(e.target.id==="modal")$("modal").classList.remove("open")});
+$("bGuideX").addEventListener("click",()=>$("guide").style.display="none");
+$("bResetAll").addEventListener("click",resetAll);
+function resetAll(){
+  running=true;$("bPlay").textContent="⏸ Pause";$("bPlay").classList.remove("primary");
+  speed=1;$("speed").value="1";
+  Object.assign(params,{so:11,sa:0.45,ra:0.5,ss:1.0,dep:4.0,dec:0.955,dif:0.5,
+    foodW:2.2,repelW:6.0,foodAmp:2.6,foodSig:34,eat:0.012,regen:0.02});
+  setAgentCount(45000);$("quality").value="45000";syncParamsUI();
+  undoStack=[];redoStack=[];selFood=-1;ana.pending=false;ana.gen=null;
+  tool="oat";
+  document.querySelectorAll("#tools button").forEach(x=>x.classList.toggle("on",x.dataset.t==="oat"));
+  $("guide").style.display="";
+  preset("tokyo");
+  undoStack=[];redoStack=[];
+  toast("Reset — back to the opening dish","good");
+}
+
+window.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT")return;
+  if(e.key===" "){e.preventDefault();togglePlay()}
+  else if(e.key==="."){$("bStep").click()}
+  else if(e.key==="r"||e.key==="R")resetAll();
+  else if((e.key==="z"||e.key==="Z")&&(e.ctrlKey||e.metaKey)){e.preventDefault();e.shiftKey?redo():undo()}
+  else if((e.key==="y"||e.key==="Y")&&(e.ctrlKey||e.metaKey)){e.preventDefault();redo()}
+  else if(e.key==="Delete"||e.key==="Backspace"){
+    if(selFood>=0){pushUndo();foods.splice(selFood,1);selFood=-1;rebuildFood();scheduleAnalysis();draw()}
+  }
+  else if("123456".includes(e.key)){const t=["oat","wall","light","cut","erase","move"][+e.key-1];
+    document.querySelector(`#tools button[data-t="${t}"]`).click()}
+});
+
+function toast(msg,kind){
+  const t=document.createElement("div");t.className="toast "+(kind||"");
+  t.textContent=msg;$("toast").appendChild(t);
+  setTimeout(()=>{t.style.opacity="0";t.style.transition="opacity .4s";setTimeout(()=>t.remove(),400)},4200);
+}
+
+/* ---- main loop ---- */
+
+let lastT=performance.now(),fpsA=60,lastConn=0,lastFull=0,lastStrip=0,speedAcc=0;
+function frame(t){
+  requestAnimationFrame(frame);
+  const dt=Math.min(50,t-lastT);lastT=t;
+  const inst=1000/Math.max(dt,1);fpsA=fpsA*0.95+inst*0.05;
+  if(running){
+    speedAcc+=speed;
+    let n=0;
+    while(speedAcc>=1&&n<8){step();speedAcc-=1;n++}
+    if(speedAcc>8)speedAcc=8;
+  }
+  if(foodDirty&&t-(frame._fb||0)>120){frame._fb=t;rebuildFood();foodDirty=false}
+  if(t-lastConn>700){lastConn=t;ana.conn=connectivity();renderMetrics()}
+  if(t-lastFull>3200&&running&&!ana.pending){lastFull=t;runAnalysis(true)}
+  if(t-lastStrip>1000){lastStrip=t;
+    if(ana.conn)hist.push({conn:foods.length?ana.conn.topSize/foods.length:0,
+      mass:(()=>{let m=0;for(let i=0;i<NCELL;i+=16)m+=trail[i];return m})()});
+    if(hist.length>600)hist.shift();drawStrip()}
+  draw();
+  $("stAgents").textContent=N>=1000?(N/1000)+"k":N;
+  $("stDish").textContent=GW+"×"+GH;
+  $("stFps").textContent=fpsA.toFixed(0);
+  $("stTime").textContent=Math.floor(simT/60)+":"+String(Math.floor(simT%60)).padStart(2,"0");
+}
+
+window.addEventListener("resize",fit);
+document.addEventListener("visibilitychange",()=>{lastT=performance.now()});
+
+preset("tokyo");
+undoStack=[];redoStack=[];
+fit();
+requestAnimationFrame(frame);
+setTimeout(()=>runAnalysis(true),800);
+</script>
+</body>
+</html>
