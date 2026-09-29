@@ -1,0 +1,31 @@
+Fresh artifact review — 2026-09-29
+Scope: index.html versus evidence/design.md and evidence/plan.md. No application edits by reviewer. Original line references below; implementer may subsequently change these.
+Validation: existing embedded-core suite passed 10/10. Additional cases executed directly against embedded Physics/validateMission. Isolated browser session orbit-review used for native form validation; orbit-validation untouched.
+
+Critical: none found.
+
+Important:
+1. Settings cannot submit default values (line 68). Browser validity reports stepMismatch for G=1, dt=.12, tolerance=.04 and horizon=900 because their min/step bases exclude these defaults. Open settings and submit/change only one control: other invalid defaults block submit before applySettings. Use compatible steps or step=any plus existing explicit validation.
+2. Loaded mission can gain duplicate maneuver IDs (lines 105,162,174). uid starts at zero, loading never restores/advances it, and addNode blindly allocates node-++uid. Fresh page -> load mission containing node-1 -> add node creates another node-1. Selection finds first, removal deletes both, future import rejects duplicate. Allocate against existing IDs.
+3. Free-flight burns cannot round-trip (lines 162,173,181). Editor explicitly allows no primary; addNode copies undefined primaryId, but validator requires every maneuver primaryId to exist, even Cartesian burns. Embedded validator rejected a legitimate no-primary Cartesian node. Export/load and checkpoint restoration fail for this allowed state.
+4. Merge leaves invalid references (lines 88,130,173). Absorbed bodies remain referenced by maneuver nodes. If surviving body's primary is absorbed, collision sets its primaryId to its own id. Embedded-core case with mass2 big primary=small merging mass1 small produced primaryId=big. Both break subsequent mission validation; reconcile body and node references after merging.
+5. Softening permits collision tunneling (lines 87–89). Embedded-core reproduction: two mass=1e-9,radius=.01 bodies at x=-1,+1 and vx=+10,-10; G=.0001,dt=5,tolerance=.25,softening=20,collision=halt; advance(0,.2) takes ONE step, swaps their positions, and returns halted=false/events=[]. Crossing cap uses softened distance even though contact uses physical radii. Use geometric/swept contact independent of softening.
+6. Planned delta-v magnitude assumes orthogonal prograde/radial axes (lines 134,161,163,168). With relative position=(1,0),velocity=(1,0), components a=.1,b=.1, embedded Physics.burn returns dv=.2 while displayed hypot(a,b)=.141421. Negative components can even cancel. Derive magnitude from burn-time predicted vector/event; use the same result for totals and labels.
+7. Capped velocity handles do not invert their drawing transform (lines 148,194). velocityHandle caps displayed vector length at 140px; pointermove interprets that capped position as uncapped velocity. At camera scale=10,vectorScale=20,relative speed=1.4, rendered handle is140px instead of280px; moving it 4px radially changes speed to .72 rather than1.42. Preserve original velocity and apply pointer delta, or invert the cap consistently.
+
+Minor:
+- Checkpoint history is captured in checkpointData but discarded by applyMission (169,174). Physics restores, trails disappear; either restore validated history for checkpoints or stop promising/capturing unused history.
+- advance emits duplicate halt collision events: collision check inside loop pushes halt, then unconditional final collision check pushes it again (89).
+- computePredictions limits automatic spacecraft predictions to eight, despite supporting up to32 bodies and help claiming all active spacecraft (131).
+- A maneuver retains n.primaryId after editing its spacecraft's orbital primary (86,182); burn prefers stale n.primaryId. Clarify whether nodes intentionally retain the creation-time primary; design currently says spacecraft primary at burn time.
+
+Required regression focus after repairs: actual settings submit; reload/load/add node; no-primary burn export/import/checkpoint; merge export/import; softened head-on contact; combined orbital delta-v; zoomed velocity drag.
+
+Fix verification — 2026-09-29
+Reviewed the updated self-contained artifact, inline Mission module, and evidence/validation.md. No application changes or root browser-session interactions by reviewer.
+Independently reran both suites: Physics 14 passed / 0 failed; Mission 6 passed / 0 failed.
+Independently executed additional source-extracted checks: nodeDV returns .2 for the original nonorthogonal .1/.1 radial-flight case, both with a predicted burn event and via its fallback; a merged body/node state passes the actual Mission validator; all four originally invalid settings controls now declare step=any.
+Important findings 1–7 are addressed in the reviewed code. IDs are allocated against existing nodes; absent primaries round-trip; merge repairs references; geometric encounter stepping fixes the demonstrated tunneling case; UI magnitudes use resolved events; velocity editing applies pointer displacement to captured initial inertial velocity. Root supplied successful actual-browser regression evidence for settings submit, no-primary persistence, imported ID allocation, and capped-handle drag; these interaction flows were not duplicated in this verification pass.
+All four original minor findings are also addressed: restoreCheckpoint explicitly restores its internally captured history, halt events are emitted once, shared system trajectories cover every craft, and body-primary edits update pending maneuver references.
+Remaining Critical/Important findings within this focused review: none.
+Minor limitation: orbital nodes beyond the computed prediction horizon use current-state delta-v geometry as a fallback until an event is predicted. Their displayed magnitude is therefore an estimate. The old same-axis magnitude error within the predicted horizon is fixed.

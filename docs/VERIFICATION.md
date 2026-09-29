@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## GPT-6.1 Sol through prompt 09: 2026-09-29
+
+Sol adds its orbital mission planner, SDF/CSG studio, and falling-sand simulation, covering prompts 01–09. The showcase contains **152 builds across nine models**. Sol's first position, amber tint, and reported **Codex · Max** setup are unchanged.
+
+All **442 original files totaling 72,847,433 bytes** are preserved locally. Three thumbnail aliases exactly copy visually reviewed supplied captures at 1440 × 900, 1280 × 800, and 1440 × 960; no final-HTML capture binding is claimed. The repository's existing ignore rules keep four supplied Python bytecode cache files local. Submitted development scripts were not executed.
+
+The bounded publication review covered **282 text files, 154 PNGs, two WebMs**, and printable strings/headers from the four ignored caches. No confirmed credentials, private identity linkage, runtime network endpoints, or Netlify Forms were found. Reference URLs are documentation, public sources, local tooling, or explicit isolation probes. PNGs have valid checksums, no ancillary metadata, and no trailing payload; WebMs have ordinary encoder/duration metadata without attachments. Selected thumbnail and runtime captures were visually inspected; remaining evidence pixels and video frames were not exhaustively reviewed. Raw evidence published in GitHub is excluded from Netlify.
+
+All three apps passed **15 bounded integration checks in each of Netlify Dev and production**: rendered scenes, native Pause controls in orbit and sand, switching the SDF view to surface normals, maximized **1440 × 957** desktop and **390 × 765** narrow frames, and iframe removal on close. The SDF studio initialized in 9.76 seconds locally and 11.05 seconds in production; the other two were ready within 1.4 seconds. Its guarded saved-scene storage toast is nonblocking. No page/console errors, failed requests, or external HTTP requests were observed. Captures were visually reviewed; orbit and sand retain vertical scrolling at narrow widths without horizontal overflow. No new notice was needed; the thirteen existing notices remain unchanged. These checks do not establish complete task correctness, scientific validity, sustained performance, or physical touch-device usability.
+
+Production deployment **`6abc2652382a4329dc0174a6`** publishes **582 files totaling 27,852,144 bytes (26.56 MiB)**: 152 builds with thumbnails/share pages, 24 prompt comparisons, and nine model collections. The exact export inventory and all 152 original HTML hashes passed. Live HTTPS checks matched **25 files** against the export, and **eight representative excluded routes returned 404**. All **13 focused gallery checks passed locally and in production**, covering Sol's nine-card collection, unchanged order/setup, canonical copy links, hidden missing entries, and three/two/one-column layouts without overflow. Comparisons 07/08/09 contain eight/eight/nine builds. The README homepage preview was refreshed from production and visually inspected.
+
 ## Opus 5.5 through prompt 12: 2026-09-29
 
 Opus 5.5 adds falling sand, stealth heist, factory automation, and rhythm bullet hell, completing prompts 01–12. The showcase now contains **149 builds across nine models**. The configured order and reported **Claude Code · xhigh** setup are unchanged.

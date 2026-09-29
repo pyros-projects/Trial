@@ -1,5 +1,11 @@
 # Changelog
 
+## GPT-6.1 Sol through prompt 09: 2026-09-29
+
+- Added Sol's orbital mission planner, SDF/CSG studio, and falling-sand simulation. It now covers prompts 01–09; the showcase contains 152 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and Sol's model collection. Its first position, amber tint, and Codex at Max setup are unchanged.
+- Preserved original submissions and excluded raw evidence from the website.
+
 ## Opus 5.5 through prompt 12: 2026-09-29
 
 - Added Opus 5.5's falling-sand simulation, stealth heist, factory automation, and rhythm bullet hell. It now covers prompts 01–12; the showcase contains 149 builds across nine models.
