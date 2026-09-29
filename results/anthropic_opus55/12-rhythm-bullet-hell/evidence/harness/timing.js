@@ -1,0 +1,4 @@
+window.__ttb = function(){ const s = SYNCOPATH.sim; const song = SYNCOPATH.songNow(); const b = s.transport.beatAt(song); return (s.transport.secAt(Math.ceil(b)) - song) * 1000; };
+window.__rdy = function(x){ const s = SYNCOPATH.sim; if (!s || s.state !== 'play') return false; const t = __ttb(); return s.player.dashCd <= 0 && t < x && t > x - 30; };
+window.__judgeLog = function(){ const s = SYNCOPATH.sim; const st = s.stats; return JSON.stringify({ perfect: st.perfect, good: st.good, miss: st.miss, combo: st.combo, maxCombo: st.maxCombo, mult: s.mult(), score: Math.round(st.score), meanErrMs: st.errN ? +(st.errSum / st.errN * 1000).toFixed(1) : null, meanAbsErrMs: st.errN ? +(st.errAbs / st.errN * 1000).toFixed(1) : null, lastErrMs: st.lastErr == null ? null : +(st.lastErr * 1000).toFixed(1), meter: s.player.meter, dashCdMax: s.player.dashCdMax, errs: SYNCOPATH.app.errs.map(e => e.kind[0] + Math.round(e.err * 1000)).join(',') }); };
+'ok';

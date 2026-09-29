@@ -1,0 +1,2 @@
+window.__cues = []; (function(){ const A = SYNCOPATH.audio; for (const k of ['riser', 'crash']) { const o = A[k].bind(A); A[k] = function(t, v){ const s = SYNCOPATH.app.sess; const song = t - s.audioStart; window.__cues.push({ k, audioT: +t.toFixed(3), atBeat: +s.transport.beatAt(song).toFixed(3), scheduledAt: +A.now.toFixed(3), leadMs: Math.round((t - A.now) * 1000) }); return o(t, v); }; } })();
+'ok';

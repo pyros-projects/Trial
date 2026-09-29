@@ -1,0 +1,2 @@
+window.__energy = () => new Promise(res => { const A = SYNCOPATH.audio; let n = 0, sum = 0, peak = 0; const t = setInterval(() => { A.analyser.getByteTimeDomainData(A.wave); let s = 0; for (const v of A.wave) { const x = (v - 128) / 128; s += x * x; if (Math.abs(x) > peak) peak = Math.abs(x); } sum += Math.sqrt(s / A.wave.length); n++; if (n >= 30) { clearInterval(t); res('rms=' + (sum / n).toFixed(4) + ' peak=' + peak.toFixed(3)); } }, 50); });
+'ok';

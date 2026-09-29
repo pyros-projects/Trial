@@ -1,0 +1,3 @@
+window.__sync = function(label){ const A=SYNCOPATH; const s=A.sim; const ctxT=A.audio.now; const sess=A.app.sess; const song=A.songNow();
+ return (label||'')+' '+JSON.stringify({ctxT:+ctxT.toFixed(4), audio:A.audio.state, paused:A.app.run.paused, songBeat:+sess.transport.beatAt(song).toFixed(3), simBeat:+s.transport.beatAt(s.sec).toFixed(3), simMinusSongMs:+((s.sec-song)*1000).toFixed(1), tick:s.tick, schedNextPulse:A.scheduler.nextPulse, simNextPulse:s.nextPulse, horizonLeadMs:+((A.scheduler.horizon-ctxT)*1000).toFixed(1), late:A.scheduler.late, bullets:s.bullets.length, voicesPending:A.audio.pendingCount(), dropped:A.app.dropped}); };
+'sync ready';

@@ -1,0 +1,3 @@
+window.__q = function(){ const s=SYNCOPATH.sim; if(!s) return 'nosim '+SYNCOPATH.app.state; const P=s.player; const st=s.stats;
+ return [SYNCOPATH.app.state, s.state, 't'+s.tick, 'beat'+s.transport.beatAt(s.sec).toFixed(2), 'x'+P.x.toFixed(1), 'y'+P.y.toFixed(1), 'focus:'+P.focus, 'inv'+Math.max(0,P.inv).toFixed(2), 'cd'+Math.max(0,P.dashCd).toFixed(2), 'lives'+P.lives, 'hits'+st.hits, 'PGM'+st.perfect+'/'+st.good+'/'+st.miss, 'err'+(st.lastErr==null?'-':(st.lastErr*1000).toFixed(1)+'ms'), 'graze'+st.graze, 'combo'+st.combo, 'score'+Math.round(st.score), 'bul'+s.bullets.length, 'hp'+s.boss.hp.toFixed(0)].join(' '); };
+'probe installed';

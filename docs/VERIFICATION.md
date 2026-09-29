@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## Opus 5.5 through prompt 12: 2026-09-29
+
+Opus 5.5 adds falling sand, stealth heist, factory automation, and rhythm bullet hell, completing prompts 01–12. The showcase now contains **149 builds across nine models**. The configured order and reported **Claude Code · xhigh** setup are unchanged.
+
+All **321 original files totaling 71,891,234 bytes** are preserved. Four thumbnail aliases exactly copy visually reviewed supplied 1280 × 800 captures; no final-HTML capture binding is claimed. The bounded publication review covered **123 text files and 198 PNGs**. No confirmed credentials, private identity linkage, runtime network endpoints, or Netlify Forms were found. Local paths use the existing Pyro pseudonym; PNGs have valid checksums, no metadata, and no trailing payload. Selected image pixels were inspected; remaining evidence pixels were not exhaustively reviewed. Raw evidence remains public in GitHub and is excluded from Netlify. Submitted development scripts were not executed.
+
+All four apps passed **21 bounded integration checks in each of Netlify Dev and production**: rendered scenes, native Pause in sand and factory, starting and moving in both games, user-activated rhythm audio with nonzero output, desktop/narrow frame sizing, and cleanup. No page/console errors or external HTTP requests were observed. Desktop and narrow captures were visually reviewed. No new notice was needed. These checks do not establish full game completion, simulation correctness, sustained performance, musical quality, or physical touch-device usability.
+
+Production deployment **`6abc229cf9209b0ca4d7ea64`** publishes **573 files totaling 27,383,735 bytes (26.12 MiB)**: 149 builds with thumbnails/share pages, 24 prompt comparisons, and nine model collections. The exact export inventory and all 149 original HTML hashes passed. Live HTTPS checks matched **30 files** against the export, and **ten representative excluded routes returned 404**. All **14 focused gallery checks passed locally and in production**, covering unchanged model order, Opus 5.5's twelve-card collection and setup, canonical copy links, hidden missing entries, and three/two/one-column layouts without overflow. Comparisons 09/10/11/12 contain eight/seven/seven/seven builds. The README homepage preview was refreshed from production and visually inspected. The thirteen existing notices are unchanged.
+
 ## GPT-6.1 Sol through prompt 06: 2026-09-29
 
 Sol adds its deformable physics playground, black-hole explorer, and wave laboratory, covering prompts 01–06. The showcase now contains **145 builds across nine models**. Sol's first position, amber tint, and reported **Codex · Max** setup are unchanged.

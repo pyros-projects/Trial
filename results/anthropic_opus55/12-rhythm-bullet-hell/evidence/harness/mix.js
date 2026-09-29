@@ -1,0 +1,3 @@
+window.__mix = function(){ const A = SYNCOPATH.audio; const t = {}; for (const n of ['drums','bass','lead','pad','fx']) t[n] = +A.tracks[n].bus.gain.value.toFixed(2); const s = SYNCOPATH.sim; const b = s.boss;
+  return JSON.stringify({ phase: b.phase + 1, pending: b.pending ? { next: b.pending.phase + 1, applyBeat: b.pending.applyPulse / 12, riserAtBeat: (b.pending.applyPulse - 12) / 12 } : null, simBeat: +s.transport.beatAt(s.sec).toFixed(2), schedBeat: +(SYNCOPATH.scheduler.nextPulse / 12).toFixed(2), arrangement: s.arrangementAt(Math.floor(s.transport.beatAt(s.sec) * 12)), busGains: t, masterLP: Math.round(A.masterFilter.frequency.value) }); };
+'ok';

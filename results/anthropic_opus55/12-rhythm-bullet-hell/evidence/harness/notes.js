@@ -1,0 +1,3 @@
+window.__notes = { lead: [], bass: [] }; (function(){ const A = SYNCOPATH.audio; for (const k of ['lead', 'bass']) { const o = A[k].bind(A); A[k] = function(t, midi, ...r){ window.__notes[k].push(midi); if (window.__notes[k].length > 40) window.__notes[k].shift(); return o(t, midi, ...r); }; } })();
+window.__noteSummary = function(){ const n = window.__notes; const pcs = (a) => [...new Set(a.map(m => ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][m % 12]))].join(' '); const s = SYNCOPATH.app.sess; return JSON.stringify({ preset: SYNCOPATH.settings.preset, bpm: s.transport.bpmAtBeat(0), leadPitchClasses: pcs(n.lead), bassPitchClasses: pcs(n.bass), leadSample: n.lead.slice(-8) }); };
+'ok';

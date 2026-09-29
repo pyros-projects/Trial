@@ -1,0 +1,3 @@
+window.__bstate = function(){ const s = SYNCOPATH.sim; return JSON.stringify({ tick: s.tick, meter: s.player.meter, bullets: s.bullets.length, cancels: s.stats.cancels, score: Math.round(s.stats.score), inv: +Math.max(0, s.player.inv).toFixed(2), burst: s.burst ? Math.round(s.burst.r) + '/' + s.burst.maxR : null, bossHp: +s.boss.hp.toFixed(1), last: SYNCOPATH.app.errs.length ? SYNCOPATH.app.errs[SYNCOPATH.app.errs.length - 1] : null }); };
+window.__brdy = function(x){ const s = SYNCOPATH.sim; if (!s || s.state !== 'play') return false; const t = __ttb(); return s.player.meter >= 100 && !s.burst && t < x && t > x - 30; };
+'ok';

@@ -1,5 +1,11 @@
 # Changelog
 
+## Opus 5.5 through prompt 12: 2026-09-29
+
+- Added Opus 5.5's falling-sand simulation, stealth heist, factory automation, and rhythm bullet hell. It now covers prompts 01–12; the showcase contains 149 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and the model collection. Model order and the reported Claude Code at xhigh setup are unchanged.
+- Preserved original submissions and excluded raw evidence from the website.
+
 ## GPT-6.1 Sol through prompt 06: 2026-09-29
 
 - Added Sol's deformable physics playground, black-hole explorer, and wave laboratory. It now covers prompts 01–06; the showcase contains 145 builds across nine models.
