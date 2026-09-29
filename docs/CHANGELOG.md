@@ -1,5 +1,11 @@
 # Changelog
 
+## Sol and Opus 5.5 through prompt 13: 2026-09-29
+
+- Added Sol's stealth heist, factory automation, rhythm bullet hell, and drone racing, plus Opus 5.5's drone racer. Both models now cover prompts 01–13; the showcase contains 157 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and model collections. Model order, colors, and reported setups are unchanged.
+- Preserved original submissions and excluded raw evidence from the website.
+
 ## GPT-6.1 Sol through prompt 09: 2026-09-29
 
 - Added Sol's orbital mission planner, SDF/CSG studio, and falling-sand simulation. It now covers prompts 01–09; the showcase contains 152 builds across nine models.

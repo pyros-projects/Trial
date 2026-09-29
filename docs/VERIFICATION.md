@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## Sol and Opus 5.5 through prompt 13: 2026-09-29
+
+Sol adds stealth heist, factory automation, rhythm bullet hell, and drone racing; Opus 5.5 adds its drone racer. Both now cover prompts 01–13, bringing the showcase to **157 builds across nine models**. The configured order, colors, and reported **Codex · Max** and **Claude Code · xhigh** setups are unchanged.
+
+All **509 original files totaling 64,063,754 bytes** are preserved. Five thumbnail aliases exactly copy visually inspected supplied captures: four at 1280 × 800 and Sol's factory at 2560 × 1600. No final-HTML capture binding is claimed. The bounded publication review covered **329 text files, 178 PNGs, and two WebMs**. No confirmed credentials, private identity linkage, runtime network endpoints, or Netlify Forms were found; apparent endpoint and email matches are local tooling or documentation examples. PNGs have valid checksums, no ancillary metadata, and no trailing payload. WebMs contain ordinary encoder/duration metadata without attachments. Raw evidence remains public in GitHub and is excluded from Netlify. Submitted scripts and skills were not executed or followed; remaining evidence pixels and video frames were not exhaustively reviewed.
+
+All five apps passed **26 bounded integration checks in each of Netlify Dev and production**: rendered scenes, starting and moving in stealth, pausing the factory, user-activated rhythm audio with nonzero output and movement, and launching and steering both drones. Desktop **1440 × 957** and narrow **390 × 765** frames fill the viewer, and closing removes the iframe. Production startup was observed within 1.4 seconds for each app. No page/console errors, failed requests, or external HTTP requests appeared; no new notice was needed, leaving the thirteen existing notices unchanged. Desktop and narrow captures were visually reviewed. Sol's rhythm and drone apps scroll vertically at narrow widths without horizontal overflow. These checks do not establish full game completion, simulation correctness, sustained performance, musical quality, or physical touch-device usability.
+
+Production deployment **`6abc3109ef32524f9ff2c7ca`** publishes **597 files totaling 28,786,721 bytes (27.45 MiB)**: 157 builds with thumbnails/share pages, 24 prompt comparisons, and nine model collections. The exact export inventory and all 157 original HTML hashes passed. Live HTTPS checks matched **35 files** against the export, and **twelve representative excluded routes returned 404**. All **15 focused gallery checks passed locally and in production**, including both thirteen-build collections, unchanged order/setup, canonical sharing, and Sol's three/two/one-column layouts without overflow. Comparisons 10–13 each contain eight builds. The README homepage preview was refreshed from production and visually inspected.
+
 ## GPT-6.1 Sol through prompt 09: 2026-09-29
 
 Sol adds its orbital mission planner, SDF/CSG studio, and falling-sand simulation, covering prompts 01–09. The showcase contains **152 builds across nine models**. Sol's first position, amber tint, and reported **Codex · Max** setup are unchanged.
