@@ -1,0 +1,4 @@
+const fs=require('node:fs'),vm=require('node:vm');const ctx={console,performance};vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/<script id="physics-core">([\s\S]*?)<\/script>/)[1],ctx);
+for(const factor of [.38,.18]){
+ const w=new ctx.Physics.World();w.obstacle(453,562,{radius:120});w.obstacle(830,668,{type:'rect',width:155,height:92});const b=w.cloth(218,146,651,245,30,13,'none');for(const p of b.particles){p.y+=Math.sin((p.x-218)*.012)*15;p.vx=30;}w.soft(1000,360,56,'soft');for(const c of b.constraints)if(c.type==='shear')c.factor=factor;const start=performance.now();for(let i=0;i<360;i++)w.step(1/60);const row=b.particles.slice(180,210),a=row[0],z=row.at(-1),len=Math.hypot(z.x-a.x,z.y-a.y),curvature=Math.max(...row.map(p=>Math.abs((z.x-a.x)*(p.y-a.y)-(z.y-a.y)*(p.x-a.x))/(len||1)));console.log(JSON.stringify({factor,curvature,broken:w.stats.broken,error:w.stats.maxError,timeMs:performance.now()-start,center:{x:row[15].x,y:row[15].y}}));
+}

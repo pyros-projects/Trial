@@ -1,5 +1,11 @@
 # Changelog
 
+## GPT-6.1 Sol through prompt 06: 2026-09-29
+
+- Added Sol's deformable physics playground, black-hole explorer, and wave laboratory. It now covers prompts 01–06; the showcase contains 145 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and Sol's model collection. Its first position, amber tint, and Codex at Max setup are unchanged.
+- Preserved original submissions and excluded raw evidence from the website.
+
 ## GPT-6.1 Sol joins the showcase: 2026-09-29
 
 - Added GPT-6.1 Sol's fluid simulation, hydraulic erosion laboratory, and modular synthesizer with the reported setup Codex at Max.

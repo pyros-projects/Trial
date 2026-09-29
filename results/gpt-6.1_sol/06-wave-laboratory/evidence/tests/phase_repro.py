@@ -1,0 +1,2 @@
+from browser_checks import *
+ab('set','viewport',1280,800);ab('select','#preset','blank');pause();click('Point source');tap(3,4);resume();wait_sim(.4);pause();tap(3,4);slider('#edit-phase','End');state('phase-creation-before');resume();wait_sim(14);pause();d=state('phase-creation-failure');shot('phase-creation-failure');report('coincident sources at 180 degrees',{'maxAmplitude':d['maxAmplitude'],'fieldSquaredSum':d['fieldSquaredSum'],'starts':[s['start'] for s in d['sources']],'phases':[s['phase'] for s in d['sources']]})

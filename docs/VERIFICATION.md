@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## GPT-6.1 Sol through prompt 06: 2026-09-29
+
+Sol adds its deformable physics playground, black-hole explorer, and wave laboratory, covering prompts 01–06. The showcase now contains **145 builds across nine models**. Sol's first position, amber tint, and reported **Codex · Max** setup are unchanged.
+
+All **471 original files totaling 71,792,312 bytes** are preserved. Three thumbnail aliases exactly copy visually reviewed supplied 1280 × 800 captures; no final-HTML capture binding is claimed. The bounded publication review covered **267 text files, 202 PNGs, and two WebMs**. No confirmed credentials, private identity linkage, runtime network endpoints, or Netlify Forms were found. Apparent email/key matches are documentation examples or placeholders; local paths use the existing Pyro pseudonym. PNGs have valid checksums, no metadata, and no trailing payload; WebMs have video plus encoder/duration tags, without attachments or trailing data. Selected image pixels were inspected; remaining pixels and video frames were not exhaustively reviewed. Raw evidence remains public in GitHub and is excluded from Netlify. Submitted development scripts were not executed.
+
+All three apps passed **15 bounded integration checks in each of Netlify Dev and production**: rendered scenes, native Pause controls, maximized desktop/narrow frames, and cleanup. Production readiness was observed within 1.5 seconds for each, with no page/console errors or external HTTP requests. The black-hole app records unavailable sandbox storage in its internal diagnostics but continues rendering and responding to controls. No new notice was needed. These checks do not establish complete task correctness, scientific validity, sustained performance, or physical touch-device usability.
+
+Production deployment **`6abc1ecdecfed5a86e9dd3f5`** publishes **561 files totaling 26,390,242 bytes (25.17 MiB)**: 145 builds with thumbnails/share pages, 24 prompt comparisons, and nine model collections. The exact export inventory and all 145 original HTML hashes passed. Live HTTPS checks matched **25 files** against the export, and **eight representative excluded routes returned 404**. All **13 focused gallery checks passed locally and in production**, including Sol's six-card collection, its first position and setup, canonical copy links, three/two/one-column layouts without overflow, and nine-model comparisons for prompts 04–06. The README homepage preview was refreshed from production and visually inspected. The thirteen existing notices are unchanged.
+
 ## GPT-6.1 Sol joins the showcase: 2026-09-29
 
 GPT-6.1 Sol adds prompts 01–03 with the reported setup **Codex · Max**. It appears first in the display order with amber tint `#F0C06A`. The collection now contains **142 builds across nine models**.

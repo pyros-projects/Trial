@@ -1,0 +1,2 @@
+from browser_checks import *
+ab('record','start',str(E/'phase-clock-repro.webm'));ab('select','#preset','blank');pause();shot('phase-clock-step-1');click('Point source');tap(3,4);shot('phase-clock-step-2');resume();wait_sim(.4);pause();tap(3,4);slider('#edit-phase','End');shot('phase-clock-step-3');resume();wait_sim(14);pause();state('phase-clock-repeated-failure');shot('phase-clock-result');ab('record','stop')

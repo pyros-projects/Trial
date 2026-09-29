@@ -1,0 +1,8 @@
+// Supplement agent-browser's mouse workflow with trusted native touch input
+// on its existing Chromium session; no runtime code or dependencies.
+const [url,pointsJSON]=process.argv.slice(2),points=JSON.parse(pointsJSON);
+(async()=>{const ws=new WebSocket(url);await new Promise((res,rej)=>{ws.addEventListener('open',res,{once:true});ws.addEventListener('error',rej,{once:true});});let seq=0;const waiting=new Map();ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.id&&waiting.has(m.id)){const {resolve,reject}=waiting.get(m.id);waiting.delete(m.id);m.error?reject(Error(JSON.stringify(m.error))):resolve(m.result);}});
+function call(method,params={},sessionId){return new Promise((resolve,reject)=>{const id=++seq;waiting.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});}
+const {targetInfos}=await call('Target.getTargets');const target=targetInfos.find(t=>t.type==='page'&&t.url.includes('06-wave-laboratory/index.html'));if(!target)throw Error('Wave laboratory target missing');const {sessionId}=await call('Target.attachToTarget',{targetId:target.targetId,flatten:true});await call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:1},sessionId);
+for(let i=0;i<points.length;i++){const [x,y]=points[i];await call('Input.dispatchTouchEvent',{type:i?'touchMove':'touchStart',touchPoints:[{x,y,id:0,radiusX:4,radiusY:4,force:1}]},sessionId);await new Promise(r=>setTimeout(r,30));}
+await call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},sessionId);await call('Target.detachFromTarget',{sessionId});ws.close();console.log('Trusted touch gesture delivered: '+points.length+' points');})().catch(e=>{console.error(e);process.exit(1);});

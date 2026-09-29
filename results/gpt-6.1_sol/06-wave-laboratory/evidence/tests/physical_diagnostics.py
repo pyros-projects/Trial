@@ -1,0 +1,9 @@
+from browser_checks import *
+def mean_energy(x,y):return read(f"(()=>{{const f=waveLab.field();let sum=0,n=0;for(let j=0;j<f.ny;j++)for(let i=0;i<f.nx;i++)if(Math.abs(i*12/f.nx-{x})<.2&&Math.abs(j*8/f.ny-{y})<.2){{sum+=f.meanSquared[j*f.nx+i];n++;}}return sum/n;}})()")
+ab('select','#preset','blank');pause();click('Point source');tap(1,4);ab('select','#boundary','periodic');click('Place probe');tap(11.5,4);resume();wait_sim(2);pause();d=state('periodic-wrap');wrapped=mean_energy(11.5,4);assert wrapped>1e-6;shot('periodic-wrap');report('periodic edge transmission before direct wavefront could arrive',wrapped)
+ab('select','#preset','blank');pause();click('Point source');tap(2.8,4);click('Place probe');tap(9,4);resume();wait_sim(8);pause();baseline=mean_energy(9,4);assert baseline>1e-5
+click('Absorbing barrier');slider('#brush','End');draw((6,.08),(6,7.92));click('Clear field');resume();wait_sim(8);pause();absorbed=mean_energy(9,4);assert absorbed<baseline*.1;shot('absorber-shadow');state('absorber-shadow');report('absorber baseline and shadow',{'before':baseline,'withAbsorber':absorbed})
+# The inspector's delete button is below the initial sidebar viewport. Scroll its real container before clicking.
+ab('scroll','down',300,'--selector','.left');click('Delete structure');assert diag()['structureCount']==0 and diag()['absorberCells']==0
+click('Clear field');resume();wait_sim(8);pause();restored=mean_energy(9,4);report('absorber transmission comparison',{'before':baseline,'withAbsorber':absorbed,'afterRemoval':restored});assert restored>absorbed*10 and restored>1e-5;shot('absorber-removed');state('absorber-removed')
+ab('select','#preset','interference');resume();wait_sim(2);pause();shot('desktop-final-verified');state('desktop-final-verified');ab('set','viewport',390,844,2);ab('scroll','up',10000);shot('mobile-final-verified');ab('set','viewport',1280,800,1);ab('errors');ab('console');report('final additional physical diagnostics','PASS')
