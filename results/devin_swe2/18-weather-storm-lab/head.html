@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Storm Lab 3D — Weather &amp; Storm Laboratory</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#10151dee; --line:#22303f; --txt:#c8d6e5; --dim:#6d8093;
+    --acc:#4fc3f7; --acc2:#ffd54f; --bad:#ef5350; --ok:#81c784;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+    font:12px/1.45 "SF Mono",Consolas,Menlo,monospace;color:var(--txt);
+    -webkit-user-select:none;user-select:none;touch-action:none;}
+  #gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;}
+  #hud{position:absolute;top:8px;left:8px;transition:left .18s ease;background:var(--panel);border:1px solid var(--line);
+    border-radius:6px;padding:6px 9px;font-size:11px;pointer-events:none;white-space:pre;
+    text-shadow:0 1px 2px #000;min-width:230px;}
+  #hud b{color:var(--acc);}
+  #mapwrap{position:absolute;right:8px;top:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:6px;padding:4px;pointer-events:auto;}
+  #mapwrap .mtitle{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);padding:2px 4px;cursor:pointer;}
+  #map{display:block;border-radius:4px;image-rendering:pixelated;}
+  #panel{position:absolute;top:8px;left:8px;bottom:8px;width:296px;overflow-y:auto;overflow-x:hidden;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;
+    transform:translateX(-320px);transition:transform .18s ease;scrollbar-width:thin;}
+  #panel.open{transform:none;}
+  #panelToggle{position:absolute;top:8px;left:8px;z-index:5;background:var(--panel);border:1px solid var(--line);
+    color:var(--txt);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit;}
+  body.panelopen #hud{left:316px;}
+  body:not(.panelopen) #hud{top:46px;}
+  #panel h1{font-size:13px;color:var(--acc);letter-spacing:.5px;margin:2px 0 6px;}
+  #panel details{border:1px solid var(--line);border-radius:6px;margin-bottom:6px;background:#0d121a;}
+  #panel details[open]{background:#0e141d;}
+  #panel summary{cursor:pointer;padding:5px 8px;color:var(--acc);font-size:11px;letter-spacing:.4px;
+    list-style:none;}
+  #panel summary::before{content:"▸ ";color:var(--dim);}
+  #panel details[open] summary::before{content:"▾ ";}
+  #panel .body{padding:4px 8px 8px;}
+  .row{display:flex;align-items:center;gap:6px;margin:3px 0;}
+  .row label{flex:0 0 118px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row input[type=range]{flex:1;min-width:0;accent-color:var(--acc);height:14px;}
+  .row .val{flex:0 0 44px;text-align:right;color:var(--acc2);font-size:10px;}
+  select,input[type=number],input[type=text]{background:#0a0f16;border:1px solid var(--line);color:var(--txt);
+    border-radius:4px;padding:3px 5px;font:inherit;width:100%;}
+  button{background:#14202e;border:1px solid var(--line);color:var(--txt);border-radius:5px;
+    padding:5px 8px;cursor:pointer;font:inherit;}
+  button:hover{border-color:var(--acc);color:#fff;}
+  button.on{background:#1d3a52;border-color:var(--acc);color:#fff;}
+  button.warn{border-color:var(--bad);}
+  .btnrow{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0;}
+  .btnrow button{flex:1 1 auto;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;}
+  .toolgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;}
+  .toolgrid button{padding:5px 2px;font-size:10px;}
+  .hint{color:var(--dim);font-size:10px;margin:3px 0;}
+  #warn{color:var(--bad);font-size:10px;margin:4px 0;white-space:pre-wrap;}
+  #probePanel{position:absolute;right:8px;bottom:8px;width:296px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:8px;display:none;z-index:4;}
+  #probePanel.open{display:block;}
+  #probePanel canvas{display:block;background:#0a0f16;border-radius:4px;margin-top:4px;}
+  #probePanel .cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;font-size:10px;}
+  #msg{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);background:#000a;
+    border:1px solid var(--acc);color:#fff;padding:10px 18px;border-radius:8px;display:none;
+    pointer-events:none;font-size:13px;text-align:center;max-width:80vw;}
+  #fatal{position:absolute;inset:0;background:var(--bg);display:none;place-items:center;z-index:50;}
+  #fatal div{max-width:560px;padding:24px;border:1px solid var(--bad);border-radius:8px;color:#fff;}
+  .kbd{background:#182635;border-radius:3px;padding:0 4px;border:1px solid var(--line);}
+  @media (max-width:640px){
+    #panel{width:86vw;}
+    #probePanel{width:86vw;}
+    #hud{font-size:9px;min-width:0;max-width:60vw;}
+    #mapwrap{transform:scale(.7);transform-origin:top right;}
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<button id="panelToggle">☰ CONTROLS</button>
+<div id="hud"></div>
+<div id="mapwrap"><div class="mtitle"><span id="mapTitle">MAP</span><span id="mapHint">layer ▾</span></div><canvas id="map" width="200" height="200"></canvas></div>
+<div id="panel" class="open"></div>
+<div id="probePanel"></div>
+<div id="msg"></div>
+<div id="fatal"><div id="fatalText"></div></div>
+<script>
+'use strict';
+/* =====================================================================
+   STORM LAB 3D — single-file interactive weather & storm laboratory
+   CPU grid atmosphere + WebGL2 renderer. No external dependencies.
+   ===================================================================== */
+
+// ---------------- utils ----------------
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>x<a?a:(x>b?b:x);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const TAU=Math.PI*2;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+let RNG=mulberry32(1);
+const frand=()=>RNG();
+// value-noise for terrain gen
+function makeNoise(seed){
+  const r=mulberry32(seed),g=new Float32Array(256*256);
+  for(let i=0;i<g.length;i++)g[i]=r();
+  const at=(x,y)=>g[((y&255)<<8)|(x&255)];
+  return function(x,y){
+    const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const sx=xf*xf*(3-2*xf),sy=yf*yf*(3-2*yf);
+    return lerp(lerp(at(xi,yi),at(xi+1,yi),sx),lerp(at(xi,yi+1),at(xi+1,yi+1),sx),sy);
+  };
+}
+function fbm(n,x,y,o){let v=0,a=1,f=1,s=0;for(let i=0;i<o;i++){v+=a*n(x*f,y*f);s+=a;a*=.5;f*=2.03;}return v/s;}
+// f64-safe base64 for typed arrays
+function u8tob64(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return btoa(s);}
+function b64tou8(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
+function f32b64(a){return u8tob64(new Uint8Array(a.buffer,a.byteOffset,a.byteLength));}
+function b64f32(s,n){const u=b64tou8(s);if(u.byteLength<n*4)throw new Error('short array');return new Float32Array(u.buffer,u.byteOffset,n);}
+function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);}
+function toast(t,ms){const m=$('msg');m.textContent=t;m.style.display='block';clearTimeout(m._t);m._t=setTimeout(()=>m.style.display='none',ms||2200);}
+
+// ---------------- parameters ----------------
+const P={
+  seed:1337, nx:64, nz:64, nl:16,
+  dt:0.8, substeps:2, simSpeed:1.0,
+  windBase:5.0, coriolis:0.5, lapseRate:0.55, baseRH:0.66,
+  evap:1.0, condThresh:1.0, precipRate:0.55, buoyancy:1.0,
+  diffusion:0.5, terrainInfluence:1.0, lightningProb:0.5, solar:1.0,
+  renderScale:1.0, cloudQuality:0.55, precipDensity:1.0, exposure:1.05, timeOfDay:13.0,
+  viz:'cinematic', mapLayer:4, sliceAxis:'z', slicePos:0.5, sliceOn:false,
+  arrows:false, streamlines:true, contours:false,
+  brushRadius:5, brushStrength:1.0, tool:'camera', surfPaint:'ocean',
+  adaptive:true, audio:true, camPreset:'overview', flySpeed:8,
+  pause:false, forceBand:-1,
+};
+// unstable-combo warnings recomputed each frame
+function stabilityWarnings(){
+  const w=[];
+  const umax=Math.max(Math.abs(P.windBase),maxWind);
+  if(umax*P.dt>0.85)w.push('CFL risk: max wind*dt ≈ '+(umax*P.dt).toFixed(2)+' cells/step — lower dt or wind.');
+  if(P.lapseRate>1.0)w.push('Absolutely unstable lapse rate — expect violent convection.');
+  if(P.diffusion<=0.02&&P.dt>1.5)w.push('No diffusion + large dt may produce grid noise.');
+  if(P.condThresh<0.4)w.push('Very low condensation threshold — saturation storms likely.');
+  return w;
+}
+
+// ---------------- sim state ----------------
+const WORLD={half:30, top:16, sea:0.55};
+let NX=P.nx,NZ=P.nz,NL=P.nl,N=NX*NZ*NL;
+const IDX=(i,j,k)=>(k*NZ+j)*NX+i;
+const ID2=(i,j)=>j*NX+i;
+let F=null;           // Float32Array fields: u v w tp qv qc qr p (3D), chg not here
+let S=null;           // scratch for advection
+let Ht=null;          // terrain height (world units) NX*NZ
+let Sur=null;         // surface type Uint8: 0 land 1 ocean 2 forest 3 city 4 snow/ice 5 sand
+let Wet=null;         // ground wetness 0..3
+let Chg=null;         // charge proxy
+let KG=null;          // first non-solid k per column (Int16 NX*NZ)
+let Solid=null;       // Uint8 per cell
+let Rain2=null;       // surface precip rate 2D (for map/viz)
+let HeatV=null;       // per-column heating variation (convective organization)
+let simTime=0, precipTotal=0, cloudCoverAvg=0, maxUp=0, maxWind=0, chargeMax=0;
+let probes=[];        // {i,j,id,hist:[{t,T,RH,p,ws,qc,rr,w}]}
+let boltList=[];      // active lightning bolts
+let pendingThunders=[];
+let STRESS=false;
+
+const FIELDS=['u','v','w','tp','qv','qc','qr','p'];
+function allocState(){
+  NX=P.nx;NZ=P.nz;NL=P.nl;N=NX*NZ*NL;
+  F={};S={};
+  for(const f of FIELDS){F[f]=new Float32Array(N);S[f]=new Float32Array(N);}
+  Ht=new Float32Array(NX*NZ);Sur=new Uint8Array(NX*NZ);
+  Wet=new Float32Array(NX*NZ);Chg=new Float32Array(NX*NZ);
+  KG=new Int16Array(NX*NZ);Solid=new Uint8Array(N);
+  Rain2=new Float32Array(NX*NZ);HeatV=new Float32Array(NX*NZ);
+}
+const T0=22, G_AD=0.8;                 // surface temp, adiabatic lapse (units/layer)
+const tbase=k=>T0-P.lapseRate*k;
+const kH=k=>(k+0.5)*WORLD.top/NL;      // layer center height (world)
+const cellZ=()=>WORLD.top/NL;          // vertical cell size (world)
+const cellX=()=>2*WORLD.half/NX;       // horizontal cell size (world)
+const Q0=3.4;                          // saturation vapor scale at surface
+const qsat=(k,tp)=>{const t=tbase(k)+tp;return Q0*Math.exp(-0.10*k)*Math.exp(0.065*(t-10));};
+const RHof=(k,tp,qv)=>qv/Math.max(0.05,qsat(k,tp));
+
+function recomputeKG(){
+  _sol=0;
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const h=Ht[ID2(i,j)];let kg=NL;
+    for(let k=0;k<NL;k++)if(kH(k)>=h){kg=k;break;}
+    KG[ID2(i,j)]=kg;
+    for(let k=0;k<NL;k++){const s=k<kg?1:0;Solid[IDX(i,j,k)]=s;_sol+=s;}
+  }
+}

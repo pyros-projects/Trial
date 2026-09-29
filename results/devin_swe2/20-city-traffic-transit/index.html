@@ -1,0 +1,2480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Metroflux — City Traffic &amp; Transit Simulator</title>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#121826; --bg3:#182032; --panel:#151d2e; --panel2:#1b2740;
+  --line:#26334d; --txt:#d7e1f2; --dim:#8594b0; --acc:#4cc2ff; --acc2:#ffd166;
+  --good:#46d19a; --warn:#ffb454; --bad:#ff5d6c; --bus:#ffa94d; --rail:#c792ea;
+  --mono:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+  font:13px/1.45 -apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  -webkit-user-select:none;user-select:none}
+#app{display:flex;flex-direction:column;height:100%}
+/* ---------- toolbar ---------- */
+#toolbar{display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--bg2);
+  border-bottom:1px solid var(--line);flex-wrap:wrap;min-height:44px}
+#toolbar .brand{font-weight:700;letter-spacing:.5px;color:var(--acc);margin-right:8px;
+  font-size:14px;white-space:nowrap}
+#toolbar .brand small{color:var(--dim);font-weight:400;letter-spacing:0}
+.tbtn{background:var(--bg3);border:1px solid var(--line);color:var(--txt);border-radius:6px;
+  padding:5px 9px;cursor:pointer;font-size:12px;white-space:nowrap;line-height:1.2}
+.tbtn:hover{border-color:var(--acc);color:#fff}
+.tbtn.on{background:#1e3a5f;border-color:var(--acc);color:#fff;box-shadow:0 0 0 1px var(--acc) inset}
+.tbtn.warn.on{background:#4a2d1e;border-color:var(--warn)}
+.tbtn:disabled{opacity:.4;cursor:default}
+.tsep{width:1px;height:22px;background:var(--line);margin:0 4px;flex:0 0 auto}
+.tgroup{display:flex;gap:2px;align-items:center}
+select.tbtn,input.tbtn{padding:4px 6px}
+/* ---------- main ---------- */
+#main{flex:1;position:relative;display:flex;min-height:0}
+#mapwrap{flex:1;position:relative;min-width:0;overflow:hidden;background:#0a0e14}
+#map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+/* ---------- HUD ---------- */
+#hud{position:absolute;top:8px;left:8px;background:rgba(13,17,23,.82);border:1px solid var(--line);
+  border-radius:8px;padding:7px 10px;font-family:var(--mono);font-size:11px;pointer-events:none;
+  backdrop-filter:blur(3px);min-width:210px;z-index:5}
+#hud .r{display:flex;justify-content:space-between;gap:14px}
+#hud .r b{color:var(--txt);font-weight:600}
+#hud .r span{color:var(--dim)}
+#hud .paused b{color:var(--warn)}
+#hudTitle{color:var(--acc);font-weight:700;margin-bottom:3px;font-size:10px;letter-spacing:1px}
+#toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:#1e2b45;
+  border:1px solid var(--acc);padding:7px 14px;border-radius:8px;font-size:12px;z-index:9;
+  opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%;text-align:center}
+/* ---------- side panel ---------- */
+#panel{width:308px;background:var(--panel);border-left:1px solid var(--line);display:flex;
+  flex-direction:column;min-width:308px;transition:margin-right .2s}
+#panel.hidden{margin-right:-308px}
+#ptabs{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--bg2)}
+.ptab{padding:6px 9px;font-size:11px;cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;white-space:nowrap}
+.ptab.on{color:var(--acc);border-bottom-color:var(--acc)}
+#pbody{flex:1;overflow-y:auto;padding:10px;font-size:12px}
+#pbody::-webkit-scrollbar{width:8px}#pbody::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.sec{margin-bottom:14px}
+.sec h4{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:6px}
+.row{display:flex;align-items:center;gap:6px;margin:5px 0}
+.row label{flex:1;color:var(--txt);font-size:12px}
+.row .val{color:var(--acc);font-family:var(--mono);font-size:11px;min-width:42px;text-align:right}
+input[type=range]{flex:2;accent-color:var(--acc)}
+input[type=number],input[type=text]{background:var(--bg3);border:1px solid var(--line);color:var(--txt);
+  border-radius:5px;padding:4px 6px;width:64px;font-size:12px}
+input[type=checkbox]{accent-color:var(--acc)}
+select{background:var(--bg3);border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:4px}
+.btn{background:var(--bg3);border:1px solid var(--line);color:var(--txt);border-radius:6px;
+  padding:5px 10px;cursor:pointer;font-size:12px}
+.btn:hover{border-color:var(--acc)}
+.btn.primary{background:#1e3a5f;border-color:var(--acc)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn.small{padding:2px 7px;font-size:11px}
+.hint{color:var(--dim);font-size:11px;margin:4px 0}
+.kv{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;padding:2px 0}
+.kv span{color:var(--dim)}.kv b{font-weight:600}
+.pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;margin-left:4px}
+.pill.g{background:#123b2c;color:var(--good)}.pill.y{background:#3d3013;color:var(--warn)}.pill.r{background:#431b22;color:var(--bad)}
+.chip{display:inline-block;padding:2px 8px;border-radius:5px;background:var(--bg3);border:1px solid var(--line);
+  margin:2px 3px 2px 0;cursor:pointer;font-size:11px}
+.chip.on{border-color:var(--acc);color:var(--acc)}
+.chip.danger.on{border-color:var(--bad);color:var(--bad)}
+/* signal editor */
+.siggrid{border-collapse:collapse;margin:6px 0;font-size:10px}
+.siggrid td,.siggrid th{border:1px solid var(--line);padding:3px 5px;text-align:center}
+.siggrid th{color:var(--dim);font-weight:600}
+.siggrid td.mv{text-align:left;font-family:var(--mono);white-space:nowrap}
+.sigcell{width:18px;height:16px;border-radius:3px;background:#3a2226;cursor:pointer;display:inline-block}
+.sigcell.on{background:var(--good)}
+.sigcell.conflict{box-shadow:0 0 0 2px var(--bad)}
+/* scenario list */
+.scen{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border:1px solid var(--line);
+  border-radius:6px;margin:4px 0;cursor:pointer}
+.scen:hover{border-color:var(--acc)}
+.scen .d{color:var(--dim);font-size:10px}
+/* charts */
+.chartbox{margin:8px 0}
+.chartbox .t{font-size:11px;color:var(--dim);margin-bottom:2px;display:flex;justify-content:space-between}
+.chartbox .t b{color:var(--txt)}
+canvas.chart{width:100%;height:64px;background:var(--bg);border:1px solid var(--line);border-radius:5px;display:block}
+/* status bar */
+#statusbar{display:flex;align-items:center;gap:12px;padding:3px 10px;background:var(--bg2);
+  border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--dim);min-height:22px}
+#statusbar .r{margin-left:auto}
+#collapseBtn{position:absolute;top:8px;right:8px;z-index:6;background:var(--bg3);border:1px solid var(--line);
+  color:var(--dim);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px}
+/* narrow layout */
+@media (max-width:700px){
+  #panel{position:absolute;right:0;top:0;bottom:0;z-index:8;box-shadow:-8px 0 24px rgba(0,0,0,.5)}
+  #hud{min-width:0;font-size:10px;padding:5px 8px}
+  .tbtn{padding:5px 7px;font-size:11px}
+}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;width:min(560px,92vw);max-height:80vh;overflow:auto}
+.modal h3{margin-bottom:10px;color:var(--acc)}
+.modal textarea{width:100%;height:180px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:6px;font-family:var(--mono);font-size:11px;padding:8px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="toolbar">
+    <span class="brand">METROFLUX <small>traffic &amp; transit lab</small></span>
+    <div class="tgroup" id="toolBtns"></div>
+    <div class="tsep"></div>
+    <div class="tgroup">
+      <button class="tbtn" id="btnPlay" title="Space">⏸</button>
+      <button class="tbtn" id="btnStep" title="Single step (.)">▶|</button>
+      <button class="tbtn" id="btnSlower" title="slower">−</button>
+      <span class="tbtn" id="speedLbl" style="cursor:default">1×</span>
+      <button class="tbtn" id="btnFaster" title="faster">+</button>
+      <button class="tbtn" id="btnReset" title="Reset simulation (keep map)">↺</button>
+    </div>
+    <div class="tsep"></div>
+    <div class="tgroup">
+      <button class="tbtn" id="btnUndo" title="Ctrl+Z">↶</button>
+      <button class="tbtn" id="btnRedo" title="Ctrl+Y">↷</button>
+    </div>
+    <div class="tsep"></div>
+    <select class="tbtn" id="overlaySel" title="Heatmap overlay"></select>
+    <select class="tbtn" id="scenSel" title="Load scenario"></select>
+    <button class="tbtn" id="btnAudio" title="Sound">🔇</button>
+  </header>
+  <div id="main">
+    <div id="mapwrap">
+      <canvas id="map"></canvas>
+      <div id="hud"></div>
+      <div id="toast"></div>
+      <button id="collapseBtn" title="toggle panel">☰</button>
+    </div>
+    <aside id="panel">
+      <div id="ptabs"></div>
+      <div id="pbody"></div>
+    </aside>
+  </div>
+  <footer id="statusbar"><span id="stLeft">ready</span><span class="r" id="stRight"></span></footer>
+</div>
+<script>
+'use strict';
+/* =====================================================================
+   METROFLUX — single-file city traffic & transit simulator
+   Sections: utils · model · graph edit · routing · signals · vehicles ·
+   transit · demand · analytics · render · editor · scenarios · io · audio
+   ===================================================================== */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
+const dist=(x1,y1,x2,y2)=>Math.hypot(x2-x1,y2-y1);
+const fmt=(v,d=1)=>v===undefined||v===null||isNaN(v)?'–':(+v).toFixed(d);
+const fmtT=s=>{s=Math.floor(s);const h=Math.floor(s/3600)%24,m=Math.floor(s/60)%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');};
+const fmtT2=s=>{s=Math.floor(s);const d=Math.floor(s/86400);return (d?'d'+d+' ':'')+fmtT(s);};
+/* deterministic RNG */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+let _uid=1; const nid=()=>'n'+(_uid++), eid=()=>'e'+(_uid++), zid=()=>'z'+(_uid++), sid=()=>'s'+(_uid++), rid=()=>'r'+(_uid++), vid=()=>'v'+(_uid++);
+function segInt(p1,p2,p3,p4){ // segment intersection point or null
+  const d1x=p2.x-p1.x,d1y=p2.y-p1.y,d2x=p4.x-p3.x,d2y=p4.y-p3.y,den=d1x*d2y-d1y*d2x;
+  if(Math.abs(den)<1e-9)return null;
+  const t=((p3.x-p1.x)*d2y-(p3.y-p1.y)*d2x)/den,u=((p3.x-p1.x)*d1y-(p3.y-p1.y)*d1x)/den;
+  if(t<-1e-6||t>1+1e-6||u<-1e-6||u>1+1e-6)return null;
+  return{x:p1.x+t*d1x,y:p1.y+t*d1y,t,u};
+}
+function ptSeg(p,a,b){ // dist & param of point to segment
+  const dx=b.x-a.x,dy=b.y-a.y,L2=dx*dx+dy*dy||1e-9;
+  const t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/L2,0,1);
+  return{d:dist(p.x,p.y,a.x+t*dx,a.y+t*dy),t,x:a.x+t*dx,y:a.y+t*dy};
+}
+/* ===================== GLOBAL STATE ===================== */
+const W={ // world/model state
+  nodes:new Map(), edges:new Map(), zones:new Map(), stops:new Map(), routes:new Map(),
+  vehs:[], pax:[], incidents:[],
+  simTime:6*3600+30*60, seed:12345, rng:mulberry32(12345),
+  nextVehId:1, tripLog:[], busTrips:0, carTrips:0, failedTrips:0, unserved:0,
+};
+const S={ // session/ui state
+  tool:'select', paused:false, speed:1, stepOnce:false, overlay:'none',
+  cam:{x:0,y:0,z:1}, sel:null, // {kind:'edge'|'node'|'zone'|'stop'|'route'|'veh'|'incident',id}
+  draw:null, hover:null, panel:'inspect', editRouteId:null,
+  undo:[], redo:[], charts:{}, audioOn:false,
+  weather:1, eventMode:false,
+};
+const P={ // tunable parameters (persisted with save)
+  demand:1.0, transitShare:0.25, spawnCap:900, headway:1.0, aggr:0.5,
+  reroute:0.5, laneChange:0.5, signalPolicy:'auto', busHeadway:120, busCap:40,
+  dwell:12, incidentRate:0.3, weather:'clear', mapW:2600, mapH:1800,
+  budget:0, sandbox:true, dayNight:false,
+};
+const DT=1/30, MAXSUB=240; // fixed sim dt, substep cap per frame
+const VTYPES={
+  car:{len:4.4,w:2.0,v0:14,acc:2.2,brk:4.2,cap:1.4,color:'#7fb2ff',label:'Car'},
+  truck:{len:8.5,w:2.5,v0:11,acc:1.3,brk:3.0,cap:0,color:'#b98cff',label:'Freight'},
+  bus:{len:11,w:2.6,v0:12.5,acc:1.5,brk:3.2,cap:40,color:'#ffa94d',label:'Bus'},
+};
+const ZTYPES={
+  res:{c:'#3f7d5a',fill:'rgba(63,160,110,.16)',label:'Residential',gen:1.0,att:0.7},
+  com:{c:'#4cc2ff',fill:'rgba(76,194,255,.14)',label:'Commercial',gen:0.6,att:1.4},
+  ind:{c:'#b98cff',fill:'rgba(185,140,255,.13)',label:'Industrial',gen:0.5,att:0.9},
+  sch:{c:'#ffd166',fill:'rgba(255,209,102,.14)',label:'School',gen:0.4,att:1.0},
+  evt:{c:'#ff5d6c',fill:'rgba(255,93,108,.14)',label:'Event venue',gen:0.15,att:0.2},
+};
+
+/* ===================== GRAPH MODEL =====================
+   Nodes = junction points. Edges = straight segments a<->b with per-direction
+   lane counts. pts[] optional shape polyline (rendering + lane geometry).   */
+function newNode(x,y){const n={id:nid(),x,y,edges:[],signal:null,roundabout:false,closed:false};W.nodes.set(n.id,n);return n;}
+function newEdge(a,b,o={}){
+  const na=W.nodes.get(a),nb=W.nodes.get(b);if(!na||!nb)return null;
+  const e={id:eid(),a,b,len:0,pts:null,speed:o.speed||13.9, // 50 km/h default
+    lanesF:o.lanesF??1,lanesB:o.lanesB??1,oneway:o.oneway||null, // null|'f'|'b'
+    name:o.name||'',closed:false,cond:1, // cond: speed multiplier (incident/weather local)
+    emaT:0,emaQ:0,load:0,nTurns:0};
+  e.len=dist(na.x,na.y,nb.x,nb.y);
+  W.edges.set(e.id,e);na.edges.push(e.id);nb.edges.push(e.id);
+  edgeGeom(e);markDirty();return e;
+}
+function edgeGeom(e){ // straight or shaped geometry
+  const a=W.nodes.get(e.a),b=W.nodes.get(e.b);
+  e._a=a;e._b=b;
+  if(!e.pts||e.pts.length<3)e.pts=[{x:a.x,y:a.y},{x:b.x,y:b.y}];
+  e.seglen=[];e.len=0;
+  for(let i=0;i<e.pts.length-1;i++){const l=dist(e.pts[i].x,e.pts[i].y,e.pts[i+1].x,e.pts[i+1].y);e.seglen.push(l);e.len+=l;}
+}
+function edgeLanes(e){return e.oneway==='f'?e.lanesF:e.oneway==='b'?e.lanesB:e.lanesF+e.lanesB;}
+function dirLanes(e,dir){ // dir 'f': a->b, 'b': b->a
+  if(e.oneway)return e.oneway===dir?Math.max(e.lanesF,e.lanesB):0;
+  return dir==='f'?e.lanesF:e.lanesB;
+}
+function laneOffset(e,dir,lane){ // lateral offset (m) of lane center, right-hand traffic
+  const LW=3.2;const nF=e.oneway?(e.oneway==='f'?e.lanesF:e.lanesB):e.lanesF;
+  const nB=e.oneway?0:e.lanesB;
+  if(e.oneway){ // one-way: lanes stacked to right of centerline
+    return (lane-((e.oneway==='f'?e.lanesF:e.lanesB)-1)/2)*LW*(dir==='f'?1:-1);
+  }
+  const k=dir==='f'?lane:nB-1-lane; // outer lanes toward right
+  return (k+0.5)*LW*(dir==='f'?1:-1);
+}
+function edgePoint(e,dir,s,lane){ // position at arclength s in dir, lateral lane
+  const pts=e.pts, sl=e.seglen;
+  if(dir==='b')s=e.len-s;
+  let i=0;while(i<sl.length-1&&s>sl[i]){s-=sl[i];i++;}
+  const l=sl[i]||1,t=clamp(s/l,0,1),p0=pts[i],p1=pts[i+1];
+  const dx=(p1.x-p0.x)/l,dy=(p1.y-p0.y)/l,off=laneOffset(e,dir,lane||0);
+  return{x:p0.x+dx*l*t - dy*off, y:p0.y+dy*l*t + dx*off, dx, dy};
+}
+function nodeEdges(n){return n.edges.map(i=>W.edges.get(i)).filter(Boolean);}
+function otherEnd(e,nid){return e.a===nid?e.b:e.a;}
+function pushUndo(label){
+  S.undo.push({label,snap:modelSnapshot()});
+  if(S.undo.length>60)S.undo.shift();S.redo.length=0;
+}
+function modelSnapshot(){
+  return{nodes:[...W.nodes.values()].map(n=>({id:n.id,x:n.x,y:n.y,signal:n.signal?JSON.parse(JSON.stringify({phases:n.signal.phases,offset:n.signal.offset,mode:n.signal.mode,cycle:n.signal.cycle})):null,roundabout:n.roundabout,closed:n.closed})),
+    edges:[...W.edges.values()].map(e=>({id:e.id,a:e.a,b:e.b,pts:e.pts,speed:e.speed,lanesF:e.lanesF,lanesB:e.lanesB,oneway:e.oneway,name:e.name,closed:e.closed,noTurns:e.noTurns?{...e.noTurns}:undefined})),
+    zones:[...W.zones.values()].map(z=>({...z})),
+    stops:[...W.stops.values()].map(s=>({id:s.id,edge:s.edge,pos:s.pos,dir:s.dir,name:s.name})),
+    routes:[...W.routes.values()].map(r=>({id:r.id,name:r.name,color:r.color,stops:[...r.stops],headway:r.headway,capacity:r.capacity})),
+    seed:W.seed,simTime:W.simTime,nextVehId:W.nextVehId,params:{...P} };
+}
+function modelRestore(snap){
+  W.nodes.clear();W.edges.clear();W.zones.clear();W.stops.clear();W.routes.clear();
+  W.vehs.length=0;W.pax.length=0;W.incidents.length=0;W.tripLog.length=0;
+  W.carTrips=W.busTrips=W.failedTrips=W.unserved=0;
+  for(const n of snap.nodes){const nn={...n,edges:[],signal:null};nn._sig=n.signal||null;W.nodes.set(n.id,nn);}
+  for(const e of snap.edges){const ee={...e,emaT:0,emaQ:0,load:0,nTurns:0};W.edges.set(ee.id,ee);
+    W.nodes.get(ee.a)?.edges.push(ee.id);W.nodes.get(ee.b)?.edges.push(ee.id);edgeGeom(ee);}
+  for(const z of snap.zones)W.zones.set(z.id,{...z});
+  for(const s of snap.stops)W.stops.set(s.id,{...s,routeIds:s.routeIds||[]});
+  for(const r of snap.routes)W.routes.set(r.id,{...r,vehs:[],nextSpawn:W.simTime||0,rid:0});
+  W.seed=snap.seed??W.seed;W.simTime=snap.simTime??0;W.nextVehId=snap.nextVehId||1;
+  W.rng=mulberry32(W.seed);
+  if(snap.params)Object.assign(P,snap.params);
+  rebuildAll();
+  // restore signals after edges rebuilt (autoPhases needs live edges)
+  for(const n of W.nodes.values()){
+    if(n._sig){const d=n._sig;delete n._sig;
+      if(d&&d.phases&&d.phases.length){n.signal={phases:d.phases,idx:0,t:0,offset:d.offset||0,mode:d.mode||'auto',cycle:d.phases.reduce((a,p)=>a+p.dur,0)};}
+      else mkSignal(n);
+    }
+  }
+}
+function undo(){if(!S.undo.length)return;S.redo.push({label:'',snap:modelSnapshot()});const u=S.undo.pop();modelRestore(u.snap);toast('undo: '+u.label);}
+function redo(){if(!S.redo.length)return;S.undo.push({label:'',snap:modelSnapshot()});const u=S.redo.pop();modelRestore(u.snap);toast('redo');}
+
+/* ---- crossing & junction bookkeeping ---- */
+const nodeCache=new Map();
+function rebuildAll(){nodeCache.clear();for(const n of W.nodes.values())buildNodeInfo(n);for(const s of W.stops.values()){s.routeIds=W.routes?[]:s.routeIds;}
+  for(const r of W.routes.values())linkRouteStops(r);
+  for(const e of W.edges.values())e._a=W.nodes.get(e.a),e._b=W.nodes.get(e.b);
+  invalidateRoutes();}
+function markDirty(){nodeCache.clear();invalidateRoutes();}
+function buildNodeInfo(n){ // movements + conflict matrix per node
+  const inc=[],deg={};
+  for(const eid of n.edges){const e=W.edges.get(eid);if(!e)continue;
+    const dirIn=e.a===n.id?'f':'b'; // traffic heading INTO node travels dir toward node
+    if(dirLanes(e,dirIn)>0)inc.push(e);
+  }
+  const moves=[]; // {inE,outE,kind,pts}
+  for(const ei of inc){for(const eo of n.edges.map(i=>W.edges.get(i)).filter(Boolean)){
+    if(eo===ei&&n.edges.length>1)continue; // no u-turn except dead ends
+    const dirOut=eo.a===n.id?'f':'b'; // leaving node along eo: if eo.a==n we go fwd
+    if(dirLanes(eo,dirOut)<=0)continue;
+    const m=mkMove(n,ei,eo);if(m)moves.push(m);
+  }}
+  n._info={moves,conflict:new Map()};
+  // conflict: only genuinely crossing paths block; same approach follows,
+  // same exit merges (serialized by the outgoing-edge room check instead)
+  for(let i=0;i<moves.length;i++)for(let j=i+1;j<moves.length;j++){
+    const a=moves[i],b=moves[j];
+    if(a.inE===b.inE||a.outE===b.outE)continue;
+    if(pathsCross(a.pts,b.pts)){
+      n._info.conflict.set(a.key+'|'+b.key,1);n._info.conflict.set(b.key+'|'+a.key,1);}
+  }
+}
+function moveKey(inE,outE){return inE+'>'+outE;}
+function mkMove(n,ei,eo){
+  const a1=ei.a===n.id?ei._b:ei._a, a2=eo.a===n.id?eo._b:eo._a;
+  // junction-box endpoints: ~15m before node on incoming, ~15m past on outgoing
+  const dIn=Math.min(15+edgeLanes(ei)*1.6,ei.len*0.45),dOut=Math.min(15+edgeLanes(eo)*1.6,eo.len*0.45);
+  const dirIn=ei.a===n.id?'b':'f',dirOut=eo.a===n.id?'f':'b';
+  const pIn=edgePoint(ei,dirIn,ei.len-dIn,0),pOut=edgePoint(eo,dirOut,dOut,0);
+  const ang=Math.atan2(pOut.y-n.y,pOut.x-n.x)-Math.atan2(pIn.y-n.y,pIn.x-n.x);
+  let da=((ang+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+  const kind=da>0.6?'R':da<-0.6?'L':'T';
+  const mid={x:(pIn.x+pOut.x)/2*0.35+n.x*0.65,y:(pIn.y+pOut.y)/2*0.35+n.y*0.65};
+  const pts=[];let len=0,prev=null;
+  for(let t=0;t<=1.001;t+=0.2){const u=1-t;
+    const p={x:u*u*pIn.x+2*u*t*mid.x+t*t*pOut.x,y:u*u*pIn.y+2*u*t*mid.y+t*t*pOut.y};
+    if(prev)len+=dist(prev.x,prev.y,p.x,p.y);prev=p;pts.push(p);}
+  return{inE:ei.id,outE:eo.id,key:moveKey(ei.id,eo.id),kind,pts,len:len+2};
+}
+function pathsCross(A,B){for(let i=0;i<A.length-1;i++)for(let j=0;j<B.length-1;j++){if(segInt(A[i],A[i+1],B[j],B[j+1]))return true;}return false;}
+function movesConflict(n,k1,k2){return n._info&&n._info.conflict.get(k1+'|'+k2);}
+function movementsInto(n,eid){return n._info?n._info.moves.filter(m=>m.inE===eid):[];}
+function movementAt(n,inE,outE){return n._info?n._info.moves.find(m=>m.inE===inE&&m.outE===outE):null;}
+
+/* ---- adding a drawn road polyline ---- */
+const SNAP_R=14;
+function snapPoint(x,y,excludeEdges){
+  let best=null;
+  for(const n of W.nodes.values()){const d=dist(x,y,n.x,n.y);if(d<SNAP_R&&(!best||d<best.d))best={type:'node',id:n.id,d,x:n.x,y:n.y};}
+  for(const e of W.edges.values()){if(excludeEdges&&excludeEdges.has(e.id))continue;
+    for(let i=0;i<e.pts.length-1;i++){const r=ptSeg({x,y},e.pts[i],e.pts[i+1]);
+      if(r.d<SNAP_R&&(!best||r.d<best.d))best={type:'edge',id:e.id,seg:i,t:r.t,d:r.d,x:r.x,y:r.y};}}
+  return best;
+}
+function splitEdgeAt(e,seg,t,x,y){
+  // split edge e at point into two edges sharing new node; returns new node
+  const n=newNode(x,y);
+  const ptsA=e.pts.slice(0,seg+1).concat([{x,y}]);
+  const ptsB=[{x,y}].concat(e.pts.slice(seg+1));
+  const a=e.a,b=e.b;
+  const keepStops=[...W.stops.values()].filter(s=>s.edge===e.id)
+    .map(s=>({s,p:edgePoint(e,'f',s.pos,0)}));
+  const e1={id:eid(),a,b:n.id,pts:ptsA,speed:e.speed,lanesF:e.lanesF,lanesB:e.lanesB,oneway:e.oneway,name:e.name,closed:e.closed,emaT:0,emaQ:0,load:0,nTurns:0};
+  const e2={id:eid(),a:n.id,b,pts:ptsB,speed:e.speed,lanesF:e.lanesF,lanesB:e.lanesB,oneway:e.oneway,name:e.name,closed:e.closed,emaT:0,emaQ:0,load:0,nTurns:0};
+  removeEdge(e.id,true,true);
+  W.edges.set(e1.id,e1);W.nodes.get(e1.a).edges.push(e1.id);W.nodes.get(e1.b).edges.push(e1.id);edgeGeom(e1);
+  W.edges.set(e2.id,e2);W.nodes.get(e2.a).edges.push(e2.id);W.nodes.get(e2.b).edges.push(e2.id);edgeGeom(e2);
+  // reattach stops to whichever piece is closest
+  for(const{s,p}of keepStops){
+    let best=e1,bd=1e9,bestS=0;
+    for(const cand of[e1,e2]){let d=1e9,ss=0,cs=0;
+      for(let i=0;i<cand.pts.length-1;i++){const r=ptSeg(p,cand.pts[i],cand.pts[i+1]);
+        if(r.d<d){d=r.d;cs=ss+r.t*cand.seglen[i];}ss+=cand.seglen[i];}
+      if(d<bd){bd=d;best=cand;bestS=cs;}}
+    W.stops.set(s.id,s);s.edge=best.id;s.pos=clamp(bestS,2,best.len-2);
+  }
+  markDirty();return n;
+}
+function removeEdge(id,skipVeh,keepStops){
+  const e=W.edges.get(id);if(!e)return;
+  W.nodes.get(e.a)?.edges.splice(W.nodes.get(e.a).edges.indexOf(id),1);
+  W.nodes.get(e.b)?.edges.splice(W.nodes.get(e.b).edges.indexOf(id),1);
+  if(!keepStops)for(const s of [...W.stops.values()])if(s.edge===id)removeStop(s.id);
+  W.edges.delete(id);
+  // kill isolated degree-0 nodes
+  for(const nid2 of[e.a,e.b]){const n=W.nodes.get(nid2);if(n&&n.edges.length===0)W.nodes.delete(nid2);}
+  if(!skipVeh)vehiclesOnEdgeGone(id);
+  markDirty();
+}
+function vehiclesOnEdgeGone(id){ // reroute or fail vehicles referencing edge
+  for(const v of W.vehs){
+    if(v.edge===id){v.state='failed';v.stuck=1e9;}
+    else if(v.path&&v.path.some(p=>p.e===id))attemptReroute(v);
+  }
+}
+function removeNode(id){
+  const n=W.nodes.get(id);if(!n)return;
+  for(const eid of[...n.edges])removeEdge(eid,true);
+  W.nodes.delete(id);markDirty();
+}
+function removeStop(id){const s=W.stops.get(id);if(!s)return;
+  for(const r of W.routes.values()){const i=r.stops.indexOf(id);if(i>=0)r.stops.splice(i,1);}
+  for(const p of W.pax)if(p.atStop===id)p.state='failed';
+  W.stops.delete(id);markDirty();
+}
+/* add a polyline road; resolves node snaps, splits crossed edges, merges dupes */
+function addRoad(pts,opts={}){
+  if(pts.length<2)return null;
+  pushUndo('add road');
+  const created=[];
+  let curStart=null;
+  // resolve endpoints to nodes
+  const endSnap=snapPoint(pts[0].x,pts[0].y);
+  curStart=endSnap?resolveSnap(endSnap):newNode(pts[0].x,pts[0].y);
+  let prev=curStart,acc=[{x:curStart.x,y:curStart.y}];
+  const segs=[];
+  for(let i=1;i<pts.length;i++)segs.push([pts[i-1],pts[i]]);
+  // gather crossings along whole polyline
+  const events=[]; // {segIdx,t,type,edge?,x,y}
+  segs.forEach((sg,si)=>{
+    const p0=sg[0],p1=sg[1];
+    // intersections with existing edges
+    for(const e of W.edges.values()){
+      for(let k=0;k<e.pts.length-1;k++){
+        const hit=segInt(p0,p1,e.pts[k],e.pts[k+1]);
+        if(hit&&hit.t>0.02&&hit.t<0.98)events.push({segIdx:si,t:hit.t,type:'cross',edge:e,eseg:k,et:hit.u,x:hit.x,y:hit.y});
+      }}
+    // nearby existing nodes
+    for(const n of W.nodes.values()){
+      const r=ptSeg(n,p0,p1);if(r.d<SNAP_R*0.7&&r.t>0.05&&r.t<0.95)events.push({segIdx:si,t:r.t,type:'node',node:n,x:n.x,y:n.y});
+    }
+  });
+  events.sort((a,b)=>a.segIdx-b.segIdx||a.t-b.t);
+  const endSnap2=snapPoint(pts[pts.length-1].x,pts[pts.length-1].y);
+  // dedupe events closer than 10m
+  const evs=[];let lx=-1e9,ly=-1e9;
+  for(const ev of events){if(dist(ev.x,ev.y,lx,ly)>10){evs.push(ev);lx=ev.x;ly=ev.y;}}
+  let pi=1; // polyline point cursor
+  for(const ev of evs){
+    let n;
+    if(ev.type==='node')n=ev.node;
+    else n=splitEdgeAt(ev.edge,ev.eseg,ev.et,ev.x,ev.y);
+    // finish current road piece at n — trim acc to ev point
+    acc.push({x:ev.x,y:ev.y});
+    commitPiece(prev,n,acc,opts,created);
+    prev=n;acc=[{x:n.x,y:n.y}];
+  }
+  // final piece to endpoint
+  const lastN=endSnap2?resolveSnap(endSnap2):newNode(pts[pts.length-1].x,pts[pts.length-1].y);
+  acc.push({x:lastN.x,y:lastN.y});
+  commitPiece(prev,lastN,acc,opts,created);
+  const cost=created.reduce((a,e)=>a+e.len*120,0);
+  if(!P.sandbox){if(cost>P.budget){
+    for(const e of created)removeEdge(e.id,true);S.undo.pop();
+    toast('Insufficient budget ($'+fmt(P.budget,0)+' — need $'+fmt(cost,0)+')');return null;}
+    P.budget-=cost;}
+  markDirty();
+  return created;
+}
+function resolveSnap(sn){
+  if(sn.type==='node')return W.nodes.get(sn.id);
+  const e=W.edges.get(sn.id);return splitEdgeAt(e,sn.seg,sn.t,sn.x,sn.y);
+}
+function commitPiece(na,nb,pts,opts,created){
+  if(na===nb)return;
+  // merge with existing identical edge
+  for(const eid of na.edges){const e=W.edges.get(eid);if(e&&otherEnd(e,na.id)===nb.id)return;}
+  const e=newEdge(na.id,nb.id,opts);
+  if(e&&pts.length>2){e.pts=pts.map(p=>({x:p.x,y:p.y}));e.pts[0]={x:na.x,y:na.y};e.pts[e.pts.length-1]={x:nb.x,y:nb.y};edgeGeom(e);}
+  if(e)created.push(e);
+}
+
+/* ===================== SIGNALS ===================== */
+function mkSignal(n){
+  const sig={phases:autoPhases(n),idx:0,t:0,offset:0,mode:P.signalPolicy==='fixed'?'fixed':'auto',cycle:0};
+  sig.cycle=sig.phases.reduce((a,p)=>a+p.dur,0);
+  n.signal=sig;return sig;
+}
+function autoPhases(n){
+  // group incoming edges by axis; each phase = one axis group green
+  const inc=[...new Set(n.edges.map(eid=>{const e=W.edges.get(eid);
+    const d=e.a===n.id?'f':'b';return dirLanes(e,d)>0?eid:null;}).filter(Boolean))];
+  if(inc.length<2)return[];
+  // cluster by approach angle
+  const angs=inc.map(eid=>{const e=W.edges.get(eid);const o=e.a===n.id?e._b:e._a;
+    return Math.atan2(n.y-o.y,n.x-o.x);});
+  const groups=[];
+  inc.forEach((eid,i)=>{
+    let g=groups.find(g=>{let d=Math.abs(((angs[i]-g.ang+Math.PI*3)%(Math.PI*2))-Math.PI);return d<0.8;});
+    if(!g){g={ang:angs[i],ins:[]};groups.push(g);}g.ins.push(eid);
+    g.ang=(g.ang*(g.ins.length-1)+angs[i])/g.ins.length;
+  });
+  if(groups.length<2)groups.length=2, groups[1]=groups[1]||{ins:[inc[1]||inc[0]]};
+  const phases=[];
+  const gc=groups.length;
+  for(let i=0;i<gc;i++){
+    // pair opposite-ish groups when 4-way: phase i greens group i + opposite
+    const allow=new Set();
+    if(gc>=3&&gc%2===0){const opp=groups[(i+gc/2)%gc];
+      for(const a of[groups[i],opp])for(const eid of a.ins)allow.add(eid+':*');
+      // permissive right/straight for others off
+    }else{for(const eid of groups[i].ins)allow.add(eid+':*');}
+    phases.push({dur:22,allow:[...allow]});
+  }
+  return phases.length?phases:[{dur:22,allow:[inc[0]+':*']}];
+}
+function signalState(n,inEid){ // 'g'|'r'|'y' for approach inEid
+  const sig=n.signal;if(!sig||!sig.phases.length)return'g';
+  const ph=sig.phases[sig.idx%sig.phases.length];
+  const yel=ph.dur-(sig.t)<2.2&&sig.t>1; // last 2.2s = amber
+  const ok=ph.allow.some(a=>{const[ie,oe]=a.split(':');return ie===inEid&&(oe==='*'||oe===undefined);});
+  return ok?(yel?'y':'g'):'r';
+}
+function stepSignals(dt){
+  for(const n of W.nodes.values()){const sig=n.signal;if(!sig||!sig.phases.length)continue;
+    sig.t+=dt;
+    const ph=sig.phases[sig.idx%sig.phases.length];
+    if(sig.t>=ph.dur){sig.t=0;sig.idx=(sig.idx+1)%sig.phases.length;
+      if(sig.mode==='auto')autoRetune(n);}
+  }
+}
+function autoRetune(n){ // adaptive: lengthen phase serving longest queue
+  const sig=n.signal;if(!sig||sig.mode!=='auto'||sig.phases.length<2)return;
+  const ph=sig.phases[sig.idx%sig.phases.length];
+  let q=0;for(const a of ph.allow){const ie=a.split(':')[0];q+=queueOn(ie);}
+  ph.dur=clamp(14+q*1.2,12,40);
+  sig.cycle=sig.phases.reduce((a,p)=>a+p.dur,0);
+  if(sig.cycle>100){const k=100/sig.cycle;for(const p of sig.phases)p.dur=Math.max(8,p.dur*k);sig.cycle=sig.phases.reduce((a,p)=>a+p.dur,0);}
+}
+function queueOn(eid){ // vehicles queued (v<0.5) on edge both dirs
+  const e=W.edges.get(eid);if(!e)return 0;let q=0;
+  for(const v of W.vehs)if(v.edge===eid&&v.v<0.6)q++;
+  return q;
+}
+function signalDiag(n){ // conflicts & unreachable phases
+  const sig=n.signal,out={conflicts:[],unreachable:[]};
+  if(!sig)return out;
+  const inE=new Set(n._info?n._info.moves.map(m=>m.inE):[]);
+  sig.phases.forEach((ph,i)=>{
+    let any=false;
+    for(const a of ph.allow){const[ie,oe]=a.split(':');
+      if(!W.edges.has(ie))continue;
+      if(oe==='*'){if(movementsInto(n,ie).length)any=true;}
+      else if(movementAt(n,ie,oe))any=true;}
+    if(!any)out.unreachable.push(i);
+    // conflicting greens within phase
+    const keys=[];
+    for(const a of ph.allow){const[ie,oe]=a.split(':');
+      const mv=oe==='*'?movementsInto(n,ie):[movementAt(n,ie,oe)].filter(Boolean);
+      mv.forEach(m=>keys.push(m.key));}
+    for(let x=0;x<keys.length;x++)for(let y=x+1;y<keys.length;y++)
+      if(movesConflict(n,keys[x],keys[y]))out.conflicts.push({phase:i,a:keys[x],b:keys[y]});
+  });
+  return out;
+}
+
+/* ===================== ROUTING ===================== */
+/* directed Dijkstra over (edge,dir) — vehicles travel edge a->b ('f') or b->a ('b') */
+const routeCache={stamp:0,map:new Map()};
+function invalidateRoutes(){routeCache.stamp++;}
+function edgeCost(e,dir,veh){
+  if(e.closed||e.oneway&&e.oneway!==dir)return Infinity;
+  if(dirLanes(e,dir)<=0)return Infinity;
+  const sp=e.speed*(e.cond||1)*weatherMult();
+  let t=e.len/Math.max(sp,0.5);
+  if(P.reroute>0.01&&e.emaT>0)t=lerp(t,e.emaT,P.reroute);
+  t+=e.load*0.8*P.reroute;
+  return t;
+}
+function routeEdges(fromKey,toKey,veh){ // keys 'edgeId:dir'; returns [{e,dir}] or null
+  const toE=toKey.split(':')[0];
+  const distM=new Map(),prev=new Map(),pq=[[0,fromKey]];
+  const nodeOf=(eid,dir)=>dir==='f'?W.edges.get(eid).b:W.edges.get(eid).a;
+  distM.set(fromKey,0);
+  const goal=[];
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);const[d,key]=pq.shift();
+    if(d>(distM.get(key)??Infinity))continue;
+    const[eid,dir]=key.split(':'),e=W.edges.get(eid);if(!e)continue;
+    const node=W.nodes.get(nodeOf(eid,dir));if(!node||node.closed)continue;
+    if(eid===toE){goal.push({key,d});continue;}
+    for(const eid2 of node.edges){const e2=W.edges.get(eid2);if(!e2)continue;
+      const dir2=e2.a===node.id?'f':'b';
+      // turn restriction
+      if(e.noTurns&&e.noTurns[eid2])continue;
+      const c=edgeCost(e2,dir2,veh);if(!isFinite(c))continue;
+      const k2=eid2+':'+dir2,nd=d+c+turnPenalty(e,e2,node);
+      if(nd<(distM.get(k2)??Infinity)){distM.set(k2,nd);prev.set(k2,key);pq.push([nd,k2]);}
+    }
+  }
+  if(!goal.length)return null;
+  goal.sort((a,b)=>a.d-b.d);
+  let k=goal[0].key,path=[];
+  while(k&&k!==fromKey){const[eid,dir]=k.split(':');path.unshift({e:eid,dir});k=prev.get(k);}
+  return path;
+}
+function turnPenalty(e1,e2,node){
+  if(e1.id===e2.id)return 30; // u-turn
+  const m=movementAt(node,e1.id,e2.id);
+  let p=node.signal?9:node.roundabout?5:3.5;
+  if(m&&m.kind==='L')p+=4;
+  return p;
+}
+function nearestEdgePoint(x,y){
+  let best=null;
+  for(const e of W.edges.values()){
+    for(let i=0;i<e.pts.length-1;i++){const r=ptSeg({x,y},e.pts[i],e.pts[i+1]);
+      if(!best||r.d<best.d)best={e,d:r.d,x:r.x,y:r.y,t:r.t,seg:i};}}
+  if(!best)return null;
+  // arclength along edge
+  let s=0;for(let i=0;i<best.seg;i++)s+=best.e.seglen[i];s+=(best.e.seglen[best.seg]||0)*best.t;
+  best.s=s;return best;
+}
+function zoneAnchor(z){ // edge + s where zone attaches
+  if(z._edge&&W.edges.has(z._edge))return{edge:W.edges.get(z._edge),s:z._s||0};
+  const c={x:z.x+z.w/2,y:z.y+z.h/2};
+  const b=nearestEdgePoint(c.x,c.y);
+  if(b){z._edge=b.e.id;z._s=b.s;return{edge:b.e,s:b.s};}
+  return null;
+}
+function weatherMult(){return S.weather;}
+
+/* ===================== VEHICLES ===================== */
+function spawnVehicle(o,d,type,route){
+  const a=zoneAnchor(o),b=zoneAnchor(d);if(!a||!b)return null;
+  let path=null,dirO=null;
+  const odirs=a.edge.oneway?[a.edge.oneway]:['f','b'];
+  for(const od of odirs){for(const dd of['f','b']){
+    const p=routeEdges(a.edge.id+':'+od,b.edge.id+':'+dd,null);
+    if(p&&p.length){path=p;dirO=od;break;}}if(path)break;}
+  // also allow zero-hop case: origin==dest edge
+  if(!path&&a.edge===b.edge){path=[];dirO=odirs[0];}
+  if(!path){W.failedTrips++;W.tripLog.push({t:W.simTime,ok:0,why:'unreachable'});return null;}
+  const T=VTYPES[type];
+  const v={id:'v'+(W.nextVehId++),type,edge:a.edge.id,dir:dirO,lane:0,laneF:0,
+    s:clamp(a.s,2,a.edge.len-2),v:T.v0*0.6,path:[{e:a.edge.id,dir:dirO},...path],pi:0,state:'drive',
+    t0:W.simTime,dist:0,wait:0,o:o.id,d:d.id,mv:null,jt:0,lcCd:2+W.rng()*4,
+    doneS:0,hway:T.cap||0};
+  // dest stop position on final edge
+  const fe=W.edges.get(v.path[v.path.length-1].e);
+  v.doneS=(b.edge===fe)?clamp(b.s,1,fe.len-5):fe.len-5;
+  if(v.path.length===1&&v.doneS<v.s+25)v.doneS=fe.len-5;
+  const nl=dirLanes(a.edge,dirO);v.lane=Math.min(nl-1,0);v.laneF=v.lane;
+  if(gapAhead(v)<T.len+2)return null; // no room — skip this spawn
+  W.vehs.push(v);return v;
+}
+function laneVehMap(){ // rebuild per substep: edgeId:dir -> sorted arrays per lane
+  const m=new Map();
+  for(const v of W.vehs){
+    if(v.state!=='drive')continue;
+    const e=W.edges.get(v.edge);if(!e)continue;
+    const k=v.edge+':'+v.dir;
+    let L=m.get(k);if(!L){L=[];m.set(k,L);}
+    L.push(v);
+  }
+  for(const L of m.values())L.sort((a,b)=>a.s-b.s);
+  return m;
+}
+function gapAhead(v){ // distance to leader in same lane (via scan)
+  let g=1e9;
+  for(const u of W.vehs){if(u===v||u.edge!==v.edge||u.dir!==v.dir||u.lane!==v.lane)continue;
+    if(u.state!=='drive')continue;
+    const T=VTYPES[u.type];const d=u.s-v.s-T.len;
+    if(d>-T.len&&d<g)g=d;}
+  return g;
+}
+function leaderOf(v,lanes){
+  const L=lanes.get(v.edge+':'+v.dir);if(!L)return{g:1e9};
+  let g=1e9,lead=null;
+  for(const u of L){if(u===v)continue;if(u.lane!==v.lane)continue;
+    const T=VTYPES[u.type];const d=u.s-v.s-T.len;
+    if(d>-T.len&&d<g){g=d;lead=u;}}
+  // incident blocking this lane acts as stopped vehicle
+  for(const ic of W.incidents){if(ic.edge===v.edge&&ic.dir===v.dir&&ic.lane===v.lane){
+    const d=ic.s-v.s-4;if(d>-4&&d<g){g=d;lead=null;}}}
+  return{g,lead};
+}
+function junctionGate(v,e){ // can v leave edge into next edge? returns {stop:bool}
+  if(!v.path||v.pi>=v.path.length-1)return{stop:false,last:true};
+  const nxt=v.path[v.pi+1],node=W.nodes.get(v.dir==='f'?e.b:e.a);
+  if(!node)return{stop:true};
+  const outE=W.edges.get(nxt.e);
+  if(!outE||outE.closed){return{stop:true,reroute:true};}
+  if(dirLanes(outE,nxt.dir)<=0)return{stop:true,reroute:true};
+  if(e.noTurns&&e.noTurns[nxt.e])return{stop:true,reroute:true};
+  if(node.closed)return{stop:true};
+  const m=movementAt(node,v.edge,nxt.e);
+  if(!m)return{stop:true,reroute:true};
+  if(node.signal){const st=signalState(node,v.edge);
+    if(st==='r')return{stop:true};if(st==='y'&&e.len-v.s>7)return{stop:true};}
+  // conflict check vs occupants
+  const occ=node._occ||(node._occ=[]);
+  if(node.roundabout){
+    let inside=0;for(const o2 of occ){if(W.simTime-o2.t<14)inside++;}
+    if(inside>=Math.max(2,node.edges.length))return{stop:true};
+  }
+  const win=node.signal?1.6:node.roundabout?2.2:3;
+  for(const o2 of occ)if(movesConflict(node,m.key,o2.key)&&W.simTime-o2.t<win)return{stop:true};
+  if(!node.signal&&!node.roundabout){
+    // priority yield: lower-class approach yields to faster-class approaching vehs
+    const cls=x=>W.edges.get(x)?W.edges.get(x).speed*edgeLanes(W.edges.get(x)):0;
+    if(cls(v.edge)<cls2max(node,v.edge)){
+      for(const u of W.vehs){if(u===v||u.state!=='drive'||u.edge===v.edge)continue;
+        const eu=W.edges.get(u.edge);if(!eu)continue;
+        const un=W.nodes.get(u.dir==='f'?eu.b:eu.a);
+        if(un!==node)continue;
+        const mu=movementAt(node,u.edge,nextOf(u));
+        if(!mu||!movesConflict(node,m.key,mu.key))continue;
+        if(cls(u.edge)>cls(v.edge)&&eu.len-u.s<26&&u.v>3)return{stop:true};
+      }
+    }
+  }
+  // room on outgoing edge
+  const nl=dirLanes(outE,nxt.dir),lane=Math.min(v.lane,nl-1);
+  let tail=1e9;for(const u of W.vehs){if(u.edge===nxt.e&&u.dir===nxt.dir&&u.lane===lane&&u.state==='drive'){
+    const d=u.s+ (u.jt||0);if(d<tail)tail=u.s;}}
+  if(tail<VTYPES[v.type].len+3.5)return{stop:true};
+  return{stop:false,move:m,node,outE,nxt};
+}
+function nextOf(v){return v.path&&v.path[v.pi+1]?v.path[v.pi+1].e:v.edge;}
+function cls2max(node,except){let c=0;for(const eid of node.edges){if(eid===except)continue;const e=W.edges.get(eid);if(e)c=Math.max(c,e.speed*edgeLanes(e));}return c;}
+function attemptReroute(v){
+  if(v.bus){busLeg(v);return;}
+  rerouteVehicle(v,true);
+}
+function rerouteVehicle(v,force){
+  const d=W.zones.get(v.d);const b=d?zoneAnchor(d):null;
+  const e=W.edges.get(v.edge);if(!e||!b){v.state='failed';return;}
+  let path=null;
+  for(const dd of[b.edge.oneway||'f',(b.edge.oneway||'f')==='f'?'b':'f']){
+    path=routeEdges(v.edge+':'+v.dir,b.edge.id+':'+dd,v);if(path&&path.length)break;path=null;}
+  if(!path){v.state='failed';W.failedTrips++;W.tripLog.push({t:W.simTime,ok:0,why:'reroute-fail'});return;}
+  v.path=[{e:v.edge,dir:v.dir},...path];v.pi=0;
+  const fe=W.edges.get(v.path[v.path.length-1].e);
+  v.doneS=(b.edge===fe)?clamp(b.s,1,fe.len-5):fe.len-5;
+  if(v.path.length===1&&v.doneS<v.s+25)v.doneS=fe.len-5;
+  e.nTurns=(e.nTurns||0)+1;
+}
+function stepVehicles(dt){
+  const lanes=laneVehMap();
+  for(const v of W.vehs){
+    const T=VTYPES[v.type];
+    if(v.state==='cross'){stepCross(v,dt);continue;}
+    if(v.state==='dwell'){v.dwellT-=dt;if(v.dwellT<=0){v.state='drive';v.holdT=0;}continue;}
+    if(v.state!=='drive')continue;
+    const e=W.edges.get(v.edge);if(!e){v.state='failed';continue;}
+    const{g,lead}=leaderOf(v,lanes);
+    const v0=T.v0*(0.85+0.3*P.aggr)*Math.min(1,e.speed/14)*weatherMult()*(e.cond||1);
+    const hw=P.headway*(v.type==='bus'?1.4:v.type==='truck'?1.6:1);
+    // junction gate lookahead
+    let gap=g,stopAt=-1;
+    const distEnd=e.len-v.s;
+    const gate=distEnd<60?junctionGate(v,e):{stop:false};
+    if(gate.stop&&distEnd<40){const dStop=Math.max(0,distEnd-3.5);
+      if(dStop<gap){gap=dStop;stopAt=dStop;}
+      if(gate.reroute&&distEnd<6){v.wait+=dt;if(v.wait>3){attemptReroute(v);v.wait=0;}}
+      else if(gate.stop)v.wait+=dt*0;
+    }
+    const sstar=(2.2+hw*1.5)+Math.max(0,v.v*hw+ v.v*(v.v-(lead?lead.v:0))/(2*Math.sqrt(T.acc*T.brk)));
+    const acc=T.acc*(1-Math.pow(v.v/Math.max(v0,0.5),4)-Math.pow(sstar/Math.max(gap,0.5),2));
+    v.v=clamp(v.v+acc*dt,0,v0*1.05);
+    const ds=v.v*dt;v.s+=ds;v.dist+=ds;
+    if(v.v<0.3)v.wait+=dt;else v.wait=Math.max(0,v.wait-dt);
+    // reached destination?
+    if(!v.bus&&v.pi===v.path.length-1&&(v.s>=v.doneS||v.s>=e.len-0.5)){finishVehicle(v,true);continue;}
+    // reached edge end → cross junction
+    if(v.s>=e.len-0.01){
+      if(gate.stop){
+        v.s=e.len-0.01;
+        if(v.v<0.4&&gate.reroute){v.wait+=dt;if(v.wait>2){attemptReroute(v);v.wait=0;}}
+        if(v.wait>240&&W.rng()<0.002){attemptReroute(v);}
+      }else if(gate.move){
+        v.state='cross';v.mv=gate.move;v.jt=0;v.node=gate.node.id;v.nxt=gate.nxt;
+        gate.node._occ=gate.node._occ||[];gate.node._occ.push({key:gate.move.key,t:W.simTime,v:v.id});
+        if(gate.node._occ.length>40)gate.node._occ.splice(0,10);
+        e.emaQ=lerp(e.emaQ||0,v.wait>3?1:0,0.15);
+      }
+    }
+    // lane change (simple gap-seeking)
+    if(P.laneChange>0.01){v.lcCd-=dt;
+      if(v.lcCd<=0&&v.state==='drive')tryLaneChange(v,e,lanes);}
+    if(v.laneF!==v.lane)v.laneF+=clamp(v.lane-v.laneF,-dt*2.2,dt*2.2);
+    // stuck-fail
+    if(v.wait>400&&v.state==='drive'){if(W.rng()<0.005){v.state='failed';W.failedTrips++;W.tripLog.push({t:W.simTime,ok:0,why:'stuck'});}}
+  }
+  // cull done/failed
+  for(let i=W.vehs.length-1;i>=0;i--){const v=W.vehs[i];
+    if(v.state==='done'||v.state==='failed')W.vehs.splice(i,1);}
+}
+function stepCross(v,dt){
+  const m=v.mv,n=W.nodes.get(v.node);
+  const spd=Math.max(v.v,3);
+  v.jt+=spd*dt;
+  const need=m.len+VTYPES[v.type].len*0.5;
+  if(v.jt>=need){
+    const ne=W.edges.get(v.nxt.e);
+    if(!ne){v.state='failed';return;}
+    v.edge=ne.id;v.dir=v.nxt.dir;v.s=1.5;v.pi++;v.state='drive';v.wait=0;
+    const nl=dirLanes(ne,v.dir);v.lane=Math.min(v.lane,Math.max(0,nl-1));
+    ne.load+=1;
+    const prevE=n?null:null;
+    if(v.bus)busArriveCheck(v);
+  }
+}
+function tryLaneChange(v,e,lanes){
+  const nl=dirLanes(e,v.dir);if(nl<2)return;
+  const{g}=leaderOf(v,lanes);
+  let best=v.lane,bestG=g;
+  for(const dl of[-1,1]){const l=v.lane+dl;if(l<0||l>=nl)continue;
+    let ga=1e9,gb=1e9;
+    for(const u of W.vehs){if(u===v||u.edge!==v.edge||u.dir!==v.dir||u.lane!==l||u.state!=='drive')continue;
+      const d=u.s-v.s-VTYPES[u.type].len;
+      if(d>-VTYPES[u.type].len&&d<ga)ga=d;
+      const db=v.s-u.s-VTYPES[v.type].len;
+      if(db>-VTYPES[v.type].len&&db<gb)gb=d;}
+    for(const ic of W.incidents)if(ic.edge===v.edge&&ic.dir===v.dir&&ic.lane===l){
+      const d=ic.s-v.s-4;if(d>-4&&d<ga)ga=d;}
+    if(gb<5)continue;
+    if(ga>bestG+3+P.laneChange*8){bestG=ga;best=l;}
+  }
+  if(best!==v.lane){v.lane=best;v.lcCd=2.5+W.rng()*5;}
+}
+function finishVehicle(v,ok){
+  v.state=ok?'done':'failed';
+  const tt=W.simTime-v.t0;
+  const ff=v.dist/ (VTYPES[v.type].v0*weatherMult());
+  W.tripLog.push({t:W.simTime,ok:ok?1:0,tt,dist:v.dist,delay:Math.max(0,tt-ff),type:v.type,why:ok?'':'failed'});
+  if(W.tripLog.length>4000)W.tripLog.splice(0,1000);
+  if(ok)W.carTrips++;else W.failedTrips++;
+}
+
+/* ===================== TRANSIT ===================== */
+function linkRouteStops(r){for(const sid2 of r.stops){const s=W.stops.get(sid2);if(s)s.routeIds=s.routeIds||[],s.routeIds.includes(r.id)||s.routeIds.push(r.id);}}
+function stopPos(s){const e=W.edges.get(s.edge);if(!e)return null;return edgePoint(e,s.dir||'f',s.pos,0);}
+function transitPath(fromStop,toStopId){ // BFS legs over routes; returns [{route,board,alight}]
+  const q=[{s:fromStop,legs:[]}],seen=new Set([fromStop]);
+  while(q.length){const cur=q.shift();
+    if(cur.s===toStopId)return cur.legs;
+    const st=W.stops.get(cur.s);if(!st)continue;
+    for(const rid2 of st.routeIds||[]){const r=W.routes.get(rid2);if(!r)continue;
+      const idx=r.stops.indexOf(cur.s);if(idx<0)continue;
+      for(let j=0;j<r.stops.length;j++){if(j===idx)continue;
+        const ts=r.stops[j],key=ts;
+        if(seen.has(key))continue;
+        const legs=cur.legs.concat([{route:rid2,board:cur.s,alight:ts}]);
+        if(ts===toStopId)return legs;
+        seen.add(key);q.push({s:ts,legs});}
+    }
+  }
+  return null;
+}
+function spawnPax(o,d){
+  // find nearest stop to origin zone and destination zone
+  const so=nearestStopTo(o),sd=nearestStopTo(d);
+  if(!so||!sd||so===sd)return false;
+  const legs=transitPath(so,sd);if(!legs)return false;
+  W.pax.push({id:'p'+(W.nextVehId++),o:o.id,d:d.id,atStop:so,legs,leg:0,
+    state:'wait',t0:W.simTime,waitT:0,rideT:0,stop:sd});
+  return true;
+}
+function nearestStopTo(z){
+  let best=null;
+  for(const s of W.stops.values()){const p=stopPos(s);if(!p)continue;
+    const dx=Math.max(z.x-p.x,0,p.x-(z.x+z.w)),dy=Math.max(z.y-p.y,0,p.y-(z.y+z.h));
+    const d=Math.hypot(dx,dy);
+    if(d<520&&(!best||d<best.d))best={id:s.id,d};}
+  return best?best.id:null;
+}
+function spawnBus(r){
+  if(!r.stops.length)return;
+  const s0=W.stops.get(r.stops[0]);if(!s0)return;
+  const e=W.edges.get(s0.edge);if(!e)return;
+  const dir=s0.dir||'f';
+  for(const u of W.vehs)if(u.edge===e.id&&Math.abs(u.s-s0.pos)<14){r.nextSpawn=20;return;} // occupied
+  const si0=Math.floor(W.rng()*r.stops.length);
+  const st0=W.stops.get(r.stops[si0]);const e0=st0&&W.edges.get(st0.edge);
+  const v={id:'v'+(W.nextVehId++),type:'bus',bus:true,route:r.id,edge:(e0||e).id,dir:(st0||s0).dir||'f',
+    lane:0,laneF:0,s:clamp((st0||s0).pos,2,(e0||e).len-2),v:5,path:null,pi:0,state:'drive',
+    t0:W.simTime,dist:0,wait:0,si:si0,hway:0,board:0,holdT:0,mv:null,jt:0,lcCd:5,doneS:0};
+  if(!busLeg(v)){return;}
+  W.vehs.push(v);r.vehs.push(v.id);
+}
+function busLeg(v){ // route to next stop on its route
+  const r=W.routes.get(v.route);if(!r||r.stops.length<2)return false;
+  const nextIdx=(v.si+1)%r.stops.length;
+  const st=W.stops.get(r.stops[nextIdx]);if(!st)return false;
+  const e2=W.edges.get(st.edge);if(!e2)return false;
+  const from=v.edge+':'+v.dir;
+  const path=routeEdges(from,st.edge+':'+ (st.dir||'f'),v)
+          ||routeEdges(from,st.edge+':'+((st.dir||'f')==='f'?'b':'f'),v);
+  if(!path||!path.length){ // give up this leg — try skipping
+    v.si=nextIdx;if(v.si===0)return false;return busLeg(v);
+  }
+  v.path=[{e:v.edge,dir:v.dir},...path];v.pi=0;v.nextStop=st.id;
+  const fe=W.edges.get(v.path[v.path.length-1].e);
+  v.doneS=(fe.id===st.edge)?clamp(st.pos,1,fe.len-5):fe.len-5;
+  return true;
+}
+function busArriveCheck(v){}
+function stepBuses(dt){
+  for(const r of W.routes.values()){
+    if(r.stops.length<1)continue;
+    r.nextSpawn-=dt;
+    if(r.nextSpawn<=0){r.nextSpawn=(r.headway||P.busHeadway);spawnBus(r);}
+    r.vehs=r.vehs.filter(id=>W.vehs.some(v=>v.id===id));
+  }
+  for(const v of W.vehs){
+    if(!v.bus||v.state!=='drive')continue;
+    const st=W.stops.get(v.nextStop);if(!st)continue;
+    const e=W.edges.get(v.edge);if(!e||v.edge!==st.edge||v.pi!==v.path.length-1)continue;
+    const fpos=v.dir==='b'?e.len-v.s:v.s;
+    if(Math.abs(fpos-st.pos)<3){
+      W._dwells=(W._dwells||0)+1;
+      v.state='dwell';v.dwellT=P.dwell*(0.8+W.rng()*0.4);v.v=0;
+      busExchange(v,st);
+    }
+  }
+}
+function busExchange(v,st){
+  const r=W.routes.get(v.route);
+  // alight
+  for(const p of W.pax){
+    if(p.state!=='ride'||p.veh!==v.id)continue;
+    const leg=p.legs[p.leg];
+    if(leg&&leg.alight===st.id){p.leg++;
+      if(p.leg>=p.legs.length){p.state='done';p.waitT2=W.simTime-p.t0;W.busTrips++;
+        W.tripLog.push({t:W.simTime,ok:1,tt:W.simTime-p.t0,type:'pax',wait:p.waitT});}
+      else{p.state='wait';p.atStop=st.id;p.waitT=0;}
+    }
+  }
+  // board
+  let cap=(r.capacity||P.busCap)-v.board;
+  for(const p of W.pax){
+    if(cap<=0)break;
+    if(p.state==='wait'&&p.atStop===st.id){
+      const leg=p.legs[p.leg];
+      if(leg&&leg.board===st.id&&leg.route===v.route){
+        p.state='ride';p.veh=v.id;p.waitEnd=W.simTime;p.waitT+=W.simTime-p.t0-p.rideT;
+        v.board++;cap--;r.rid=(r.rid||0)+1;
+      }
+    }
+  }
+  // advance to next stop after dwell (handled when leaving dwell)
+  const r2=W.routes.get(v.route);
+  v.si=r2.stops.indexOf(st.id);
+  if(v.si<0)v.si=0;
+  if(!busLeg(v)){v.state='failed';r2.vehs=r2.vehs.filter(i=>i!==v.id);}
+}
+function stepPax(dt){
+  for(const p of W.pax){
+    if(p.state==='wait'){p.waitT+=dt;
+      if(p.waitT>900){p.state='failed';W.unserved++;W.tripLog.push({t:W.simTime,ok:0,why:'pax-abandon'});}}
+    else if(p.state==='ride'){
+      const b=W.vehs.find(v=>v.id===p.veh);
+      if(!b){p.state='failed';W.unserved++;W.tripLog.push({t:W.simTime,ok:0,why:'bus-lost'});}
+    }
+  }
+  for(let i=W.pax.length-1;i>=0;i--){if(W.pax[i].state==='done'||W.pax[i].state==='failed')W.pax.splice(i,1);}
+}
+function waitingAt(sid2){let n=0;for(const p of W.pax)if(p.state==='wait'&&p.atStop===sid2)n++;return n;}
+
+/* ===================== DEMAND ===================== */
+function todMult(){ // time-of-day demand shape
+  const h=(W.simTime/3600)%24;
+  let m=0.35;
+  m+=1.5*Math.exp(-Math.pow(h-8.2,2)/1.8);   // AM peak
+  m+=1.15*Math.exp(-Math.pow(h-17.6,2)/2.6); // PM peak
+  m+=0.35*Math.exp(-Math.pow(h-12.5,2)/4);
+  if(S.eventMode)m+=1.6*Math.exp(-Math.pow(h-20,2)/1.5);
+  return m;
+}
+let demandAcc=0;
+function stepDemand(dt){
+  const zones=[...W.zones.values()];
+  if(zones.length<2||!W.edges.size)return;
+  let rate=0;
+  for(const z of zones)rate+=(ZTYPES[z.type]?.gen||0.5)*z.w*z.h/22000;
+  rate*=P.demand*todMult()*dt/90; // trips/sec accumulator
+  demandAcc+=rate;
+  const rng=W.rng;
+  while(demandAcc>1){
+    demandAcc-=1;
+    if(W.vehs.filter(v=>!v.bus).length>P.spawnCap)break;
+    const o=pickZone(zones,'gen'),d=pickZone(zones,'att',o);
+    if(!o||!d||o===d){demandAcc+=0;continue;}
+    const goTransit=W.stops.size>=2&&rng()<P.transitShare;
+    if(goTransit&&spawnPax(o,d))continue;
+    // vehicle type: freight to/from industrial
+    let type='car';
+    if(o.type==='ind'||d.type==='ind')type=rng()<0.7?'truck':'car';
+    else if(rng()<0.06)type='truck';
+    const v=spawnVehicle(o,d,type);
+    if(!v&&!goTransit)demandAcc+=0.0; // failed spawn counted inside
+  }
+}
+function pickZone(zones,mode,avoid){
+  let tot=0;const w=[];
+  const h=(W.simTime/3600)%24;const am=h>6&&h<10,pm=h>15.5&&h<19.5;
+  for(const z of zones){const Z=ZTYPES[z.type];if(!Z)continue;
+    let wt=z.w*z.h/10000*(mode==='gen'?Z.gen:Z.att)*(z.boost||1);
+    if(mode==='att'&&am&&z.type==='com')wt*=2.4;
+    if(mode==='gen'&&am&&z.type==='res')wt*=1.9;
+    if(mode==='att'&&pm&&z.type==='res')wt*=2.1;
+    if(mode==='gen'&&pm&&z.type==='com')wt*=1.6;
+    if(S.eventMode&&z.type==='evt')wt*=(mode==='att'?26:8);
+    if(z===avoid)wt*=0.15;
+    w.push(wt);tot+=wt;}
+  if(!tot)return null;
+  let r=W.rng()*tot;
+  for(let i=0;i<zones.length;i++){r-=w[i];if(r<=0)return zones[i];}
+  return zones[zones.length-1];
+}
+/* ===================== INCIDENTS ===================== */
+function addIncident(edge,dir,lane,s,kind,dur){
+  const ic={id:'i'+(_uid++),edge,dir,lane,s,kind:kind||'crash',t:W.simTime+(dur||240)};
+  W.incidents.push(ic);
+  const e=W.edges.get(edge);if(e)e.cond=Math.min(e.cond,kind==='roadwork'?0.45:0.3);
+  rerouteAffected(edge);
+  toast((kind==='roadwork'?'Roadworks':'Incident')+' on '+ (e?.name||edge));
+  return ic;
+}
+function rerouteAffected(eid){
+  for(const v of W.vehs)if(v.path&&v.path.some(p=>p.e===eid)&&W.rng()<P.reroute)attemptReroute(v);
+}
+function stepIncidents(dt){
+  for(let i=W.incidents.length-1;i>=0;i--){const ic=W.incidents[i];
+    if(W.simTime>ic.t){const e=W.edges.get(ic.edge);if(e)e.cond=1;W.incidents.splice(i,1);}}
+  // random incidents
+  if(P.incidentRate>0&&W.edges.size&&W.rng()<P.incidentRate*dt/900){
+    const es=[...W.edges.values()].filter(e=>!e.closed);
+    if(es.length){const e=es[Math.floor(W.rng()*es.length)];
+      const dir=e.oneway||(W.rng()<0.5?'f':'b');
+      if(dirLanes(e,dir)>0)addIncident(e.id,dir,Math.floor(W.rng()*dirLanes(e,dir)),e.len*(0.3+W.rng()*0.5),'crash',180+W.rng()*240);}
+  }
+}
+
+/* ===================== ANALYTICS ===================== */
+const AN={hist:[],t:0,series:{throughput:[],travel:[],delay:[],queue:[],speed:[],pax:[],wait:[],occ:[],emis:[]},
+  edgeT:new Map()};
+function pct(arr,p){if(!arr.length)return 0;const a=[...arr].sort((x,y)=>x-y);return a[Math.min(a.length-1,Math.floor(p*a.length))];}
+function metrics(){
+  const recent=W.tripLog.filter(l=>l.ok&&W.simTime-l.t<600);
+  const failed=W.tripLog.filter(l=>!l.ok&&W.simTime-l.t<600).length;
+  const tts=recent.map(l=>l.tt),dels=recent.map(l=>l.delay||0);
+  let queue=0,vsum=0,vn=0,emis=0;
+  for(const v of W.vehs){if(v.v<0.6)queue++;vsum+=v.v;vn++;emis+=v.v*v.v*0.001+ (v.v<0.6?0.8:0.15);}
+  const through=W.tripLog.filter(l=>W.simTime-l.t<300&&l.ok).length*12;
+  const waitP=W.pax.filter(p=>p.state==='wait');
+  const doneP=W.tripLog.filter(l=>l.type==='pax'&&l.ok&&W.simTime-l.t<600);
+  let occ=0,bn=0;for(const v of W.vehs)if(v.bus){occ+=v.board;bn++;}
+  return{throughput:through,avgT:tts.length?tts.reduce((a,b)=>a+b,0)/tts.length:0,
+    p50:pct(tts,0.5),p95:pct(tts,0.95),
+    delay:dels.length?dels.reduce((a,b)=>a+b,0)/dels.length:0,
+    queue,netSpeed:vn?vsum/vn*3.6:0,active:W.vehs.length,
+    completed:W.carTrips+W.busTrips,failed:W.failedTrips,unserved:W.unserved,
+    paxWait:waitP.length,ridership:W.busTrips,occ:bn?occ/bn:0,
+    avgWait:doneP.length?doneP.reduce((a,l)=>a+(l.wait||0),0)/doneP.length:0,
+    emis};
+}
+function stepAnalytics(dt){
+  AN.t+=dt;
+  for(const e of W.edges.values())e.load*=Math.pow(0.5,dt/45); // decay route-choice load
+  if(AN.t>=2){
+    AN.t=0;const m=metrics();
+    const S2=AN.series;
+    (S2.throughput.push(m.throughput),S2.travel.push(m.avgT),S2.delay.push(m.delay),
+     S2.queue.push(m.queue),S2.speed.push(m.netSpeed),S2.pax.push(m.paxWait),
+     S2.wait.push(m.avgWait),S2.occ.push(m.occ),S2.emis.push(m.emis));
+    for(const k in S2)if(S2[k].length>300)S2[k].shift();
+    AN.hist.push({t:W.simTime,...m});
+    if(AN.hist.length>300)AN.hist.shift();
+  }
+}
+function updateEdgeEMA(){ // called on vehicle completion region — cheap approx: per-edge mean speed
+  const agg=new Map();
+  for(const v of W.vehs){if(v.state!=='drive')continue;
+    const e=W.edges.get(v.edge);if(!e)continue;
+    let a=agg.get(v.edge);if(!a)a={n:0,s:0};a.n++;a.s+=v.v;agg.set(v.edge,a);}
+  for(const e of W.edges.values()){
+    const a=agg.get(e.id);
+    const sp=a?a.s/a.n:e.speed;
+    const t=e.len/Math.max(sp,0.5);
+    e.emaT=lerp(e.emaT||t,t,0.05);
+  }
+}
+function congestedEdges(){
+  return[...W.edges.values()].map(e=>{const a={e,ratio:0};
+    const sp=e.len/Math.max(e.emaT||e.len/e.speed,0.01);
+    a.ratio=sp/e.speed;a.q=queueOn(e.id);return a;})
+    .sort((a,b)=>a.ratio-b.ratio).slice(0,6);
+}
+/* ===================== MAIN STEP ===================== */
+function stepSim(dt){
+  W.simTime+=dt;
+  stepSignals(dt);stepVehicles(dt);stepBuses(dt);stepDemand(dt);stepPax(dt);
+  stepIncidents(dt);stepAnalytics(dt);
+  updateEdgeEMA();
+}
+function resetSim(keepMap=true){
+  const snap=keepMap?modelSnapshot():null;
+  W.vehs.length=0;W.pax.length=0;W.incidents.length=0;W.tripLog.length=0;
+  W.carTrips=W.busTrips=W.failedTrips=W.unserved=0;demandAcc=0;
+  W.simTime=W.startT??6*3600+30*60;W.rng=mulberry32(W.seed);
+  AN.hist.length=0;for(const k in AN.series)AN.series[k].length=0;
+  for(const e of W.edges.values()){e.emaT=0;e.load=0;e.cond=1;e.emaQ=0;}
+  for(const r of W.routes.values()){r.vehs=[];r.nextSpawn=5+W.rng()*20;r.rid=0;}
+  for(const n of W.nodes.values()){if(n.signal){n.signal.idx=0;n.signal.t=0;}n._occ=[];}
+}
+
+/* ===================== RENDER ===================== */
+const cv=$('#map'),ctx=cv.getContext('2d');
+let DPR=1;
+function resize(){
+  const w=$('#mapwrap');DPR=Math.min(devicePixelRatio||1,2);
+  cv.width=Math.round(w.clientWidth*DPR);cv.height=Math.round(w.clientHeight*DPR);
+}
+addEventListener('resize',resize);
+const cam=S.cam;
+function w2s(x,y){return{x:(x-cam.x)*cam.z+cv.width/2/DPR,y:(y-cam.y)*cam.z+cv.height/2/DPR};}
+function s2w(x,y){return{x:(x-cv.width/2/DPR)/cam.z+cam.x,y:(y-cv.height/2/DPR)/cam.z+cam.y};}
+function heatCol(t){ // 0 green → 1 red
+  t=clamp(t,0,1);const h=(1-t)*0.36;
+  return`hsl(${h*360},85%,${45+t*10}%)`;
+}
+const OV_OPTIONS=[['none','No overlay'],['speed','Speed'],['density','Density'],['queue','Queue length'],
+  ['travel','Travel time'],['route','Route choice'],['signal','Signal phase'],['turn','Turn movements'],
+  ['coverage','Transit coverage'],['pax','Waiting passengers'],['emis','Emissions'],['od','O-D demand'],
+  ['valid','Network validation']];
+function overlayColor(e){
+  const o=S.overlay;if(o==='none')return null;
+  if(o==='speed'){const sp=e.len/Math.max(e.emaT||e.len/e.speed,.01);return heatCol(1-sp/e.speed);}
+  if(o==='density'){let n=0;for(const v of W.vehs)if(v.edge===e.id)n++;return heatCol(n/(e.len/9*edgeLanes(e)));}
+  if(o==='queue'){let n=0;for(const v of W.vehs)if(v.edge===e.id&&v.v<0.6)n++;return heatCol(n/10);}
+  if(o==='travel'){const t=(e.emaT||e.len/e.speed)/(e.len/e.speed);return heatCol((t-1)/2);}
+  if(o==='route')return heatCol(e.load/8);
+  if(o==='coverage'){let cov=0;for(const s of W.stops.values())if(s.edge===e.id)cov=1;
+    if(cov)return'rgba(76,194,255,.75)';for(const s of W.stops.values()){const p=stopPos(s);
+      if(p&&ptSeg(p,e.pts[0],e.pts[e.pts.length-1]).d<200)return'rgba(76,194,255,.35)';}
+    return'rgba(70,80,100,.5)';}
+  if(o==='emis'){let q=0;for(const v of W.vehs)if(v.edge===e.id)q+=v.v<0.6?1:0.3;return heatCol(q/8);}
+  if(o==='valid'){const c=componentOf(e);return c===0?'#46d19a':c===1?'#ffb454':'#ff5d6c';}
+  return null;
+}
+let compCache={stamp:-1,map:new Map()};
+function componentOf(e){ // weak connectivity components
+  if(compCache.stamp!==routeCache.stamp){
+    compCache.stamp=routeCache.stamp;compCache.map=new Map();
+    const adj=new Map();
+    for(const ed of W.edges.values()){if(ed.closed)continue;
+      if(!adj.has(ed.a))adj.set(ed.a,new Set());if(!adj.has(ed.b))adj.set(ed.b,new Set());
+      if(dirLanes(ed,'f')>0)adj.get(ed.a).add(ed.b);if(dirLanes(ed,'b')>0)adj.get(ed.b).add(ed.a);}
+    let ci=0;const nc=new Map();
+    for(const n of W.nodes.keys()){if(nc.has(n))continue;
+      const q=[n];nc.set(n,ci);while(q.length){const c=q.pop();
+        for(const m of adj.get(c)||[])if(!nc.has(m)){nc.set(m,ci);q.push(m);}}
+      ci++;}
+    for(const ed of W.edges.values()){const a=nc.get(ed.a),b=nc.get(ed.b);
+      compCache.map.set(ed.id,(a===b)?(a===0?0:1):2);}
+  }
+  return compCache.map.get(e.id);
+}
+function draw(){
+  const cw=cv.width/DPR,ch=cv.height/DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // background
+  const g=ctx.createLinearGradient(0,0,0,ch);g.addColorStop(0,'#0b1017');g.addColorStop(1,'#0a0d13');
+  ctx.fillStyle=g;ctx.fillRect(0,0,cw,ch);
+  // night tint
+  const h=(W.simTime/3600)%24;const night=P.dayNight?Math.max(0,Math.sin((h-18)/24*Math.PI*2)*0.5+ (h<6||h>19?0.28:0)):0;
+  ctx.save();
+  ctx.translate(cw/2,ch/2);ctx.scale(cam.z,cam.z);ctx.translate(-cam.x,-cam.y);
+  // world bounds
+  ctx.strokeStyle='rgba(90,110,150,.12)';ctx.lineWidth=2/cam.z;
+  ctx.strokeRect(0,0,P.mapW,P.mapH);
+  drawZones();
+  drawOD();
+  drawEdges();
+  if(S.overlay==='turn')drawTurnOverlay();
+  drawStops();
+  drawRoutes();
+  drawSignals();
+  drawVehicles();
+  drawIncidents();
+  drawSelection();
+  drawPreview();
+  ctx.restore();
+  if(night>0){ctx.fillStyle=`rgba(8,10,30,${night*0.55})`;ctx.fillRect(0,0,cw,ch);}
+  drawMinimap(cw,ch);
+}
+function drawZones(){
+  for(const z of W.zones.values()){
+    const Z=ZTYPES[z.type]||ZTYPES.res;
+    ctx.fillStyle=Z.fill;ctx.fillRect(z.x,z.y,z.w,z.h);
+    ctx.strokeStyle=Z.c+'55';ctx.lineWidth=1.2/cam.z;ctx.strokeRect(z.x,z.y,z.w,z.h);
+    // procedural buildings
+    if(cam.z>0.34){ctx.fillStyle=Z.c+'30';
+      const n=Math.floor(z.w*z.h/9000);
+      for(let i=0;i<Math.min(n,40);i++){
+        const r=mulberry32(hash(z.id)*7+i);
+        const bw=14+r()*22,bh=12+r()*20;
+        const bx=z.x+8+r()*Math.max(1,z.w-bw-16),by=z.y+8+r()*Math.max(1,z.h-bh-16);
+        ctx.fillRect(bx,by,bw,bh);}
+    }
+    if(cam.z>0.3){ctx.fillStyle=Z.c;ctx.font=`${12/cam.z}px sans-serif`;
+      ctx.globalAlpha=0.85;ctx.fillText(Z.label+' '+(z.name||''),z.x+8,z.y+14/cam.z);ctx.globalAlpha=1;}
+  }
+}
+function hash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return Math.abs(h);}
+function drawOD(){
+  if(S.overlay!=='od')return;
+  ctx.lineWidth=1.5/cam.z;
+  const zl=[...W.zones.values()];
+  for(let i=0;i<zl.length;i++)for(let j=i+1;j<zl.length;j++){
+    const a=zl[i],b=zl[j];
+    const w=((ZTYPES[a.type]?.gen||0)*(ZTYPES[b.type]?.att||0)+(ZTYPES[b.type]?.gen||0)*(ZTYPES[a.type]?.att||0));
+    if(w<0.5)continue;
+    ctx.strokeStyle=`rgba(255,209,102,${clamp(w/6,0.05,0.8)})`;
+    ctx.beginPath();ctx.moveTo(a.x+a.w/2,a.y+a.h/2);ctx.lineTo(b.x+b.w/2,b.y+b.h/2);ctx.stroke();
+  }
+}
+function drawEdges(){
+  const LW=3.2;
+  for(const e of W.edges.values()){
+    const w=edgeLanes(e)*LW+2.4;
+    const ov=overlayColor(e);
+    // casing
+    ctx.strokeStyle=e.closed?'#33262a':'#1a1f2a';ctx.lineWidth=w+2.6;ctx.lineCap='round';
+    pathEdge(e);ctx.stroke();
+    // asphalt or overlay
+    ctx.strokeStyle=ov||(e.closed?'#3d2c30':'#272d3a');ctx.lineWidth=w;
+    pathEdge(e);ctx.stroke();
+    if(e.closed){ctx.strokeStyle='#ff5d6c';ctx.lineWidth=1.4/cam.z;
+      ctx.setLineDash([6,6]);pathEdge(e);ctx.stroke();ctx.setLineDash([]);}
+    else{
+      // center line
+      ctx.strokeStyle=e.oneway?'rgba(255,255,255,.25)':'rgba(255,209,102,.5)';
+      ctx.lineWidth=0.7;ctx.setLineDash([]);pathEdge(e);ctx.stroke();
+      // lane dashes
+      if(cam.z>0.5){ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=0.5;
+        ctx.setLineDash([4,5]);
+        const nL=e.oneway?(e.oneway==='f'?e.lanesF:e.lanesB):e.lanesF+e.lanesB;
+        for(let l=1;l<nL;l++){pathEdgeOff(e,(l-nL/2)*LW);ctx.stroke();}
+        ctx.setLineDash([]);}
+      // one-way arrows
+      if(e.oneway&&cam.z>0.35){const mid=edgePoint(e,e.oneway,e.len/2,0);
+        drawArrow(mid.x,mid.y,Math.atan2(mid.dy,mid.dx),'#8fd3ff');}
+    }
+    // road name
+    if(e.name&&cam.z>0.6){const mid=edgePoint(e,'f',e.len/2,0);
+      ctx.fillStyle='rgba(200,215,240,.6)';ctx.font='11px sans-serif';ctx.textAlign='center';
+      ctx.fillText(e.name,mid.x,mid.y-edgeLanes(e)*LW/2-6);ctx.textAlign='left';}
+  }
+}
+function pathEdge(e){ctx.beginPath();ctx.moveTo(e.pts[0].x,e.pts[0].y);
+  for(let i=1;i<e.pts.length;i++)ctx.lineTo(e.pts[i].x,e.pts[i].y);}
+function pathEdgeOff(e,off){ // offset polyline for lane marking
+  ctx.beginPath();
+  for(let i=0;i<e.pts.length-1;i++){const p0=e.pts[i],p1=e.pts[i+1];
+    const l=dist(p0.x,p0.y,p1.x,p1.y)||1,dx=(p1.x-p0.x)/l,dy=(p1.y-p0.y)/l;
+    const ox=-dy*off,oy=dx*off;
+    if(i===0)ctx.moveTo(p0.x+ox,p0.y+oy);else ctx.lineTo(p0.x+ox,p0.y+oy);
+    if(i===e.pts.length-2)ctx.lineTo(p1.x+ox,p1.y+oy);}
+}
+function drawArrow(x,y,ang,c){
+  ctx.save();ctx.translate(x,y);ctx.rotate(ang);
+  ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(-4,-4);ctx.lineTo(-4,4);ctx.closePath();ctx.fill();ctx.restore();
+}
+function drawTurnOverlay(){
+  // count planned movements per node
+  const cnt=new Map();
+  for(const v of W.vehs){
+    if(!v.path||v.pi>=v.path.length-1)continue;
+    const e=W.edges.get(v.edge);if(!e)continue;
+    const nid2=v.dir==='f'?e.b:e.a;
+    const m=movementAt(W.nodes.get(nid2),v.edge,v.path[v.pi+1].e);
+    if(m)cnt.set(nid2+'|'+m.key,(cnt.get(nid2+'|'+m.key)||0)+1);
+  }
+  const kc={L:'#ff5d6c',T:'#46d19a',R:'#4cc2ff'};
+  for(const n of W.nodes.values()){
+    if(!n._info)continue;
+    for(const m of n._info.moves){
+      const c=cnt.get(n.id+'|'+m.key)||0;
+      if(c<1)continue;
+      ctx.strokeStyle=kc[m.kind];ctx.lineWidth=Math.min(6,1+c*0.8);ctx.globalAlpha=0.75;
+      ctx.beginPath();ctx.moveTo(m.pts[0].x,m.pts[0].y);
+      for(let i=1;i<m.pts.length;i++)ctx.lineTo(m.pts[i].x,m.pts[i].y);
+      ctx.stroke();ctx.globalAlpha=1;
+    }
+  }
+}
+function drawSignals(){
+  for(const n of W.nodes.values()){
+    if(n.edges.length<2)continue;
+    if(S.overlay==='signal'&&n.signal){const ph=n.signal.phases[n.signal.idx];
+      ctx.fillStyle='rgba(76,194,255,.12)';ctx.beginPath();ctx.arc(n.x,n.y,26,0,7);ctx.fill();
+    }
+    if(n.roundabout){ctx.strokeStyle='#39435a';ctx.lineWidth=10;
+      ctx.beginPath();ctx.arc(n.x,n.y,11,0,7);ctx.stroke();
+      ctx.fillStyle='#1c2536';ctx.beginPath();ctx.arc(n.x,n.y,5,0,7);ctx.fill();continue;}
+    if(n.signal){ // signal heads on each approach
+      for(const eid of n.edges){const e=W.edges.get(eid);if(!e)continue;
+        const dIn=e.a===n.id?'f':'b';if(dirLanes(e,dIn)<=0)continue;
+        const o=e.a===n.id?e._b:e._a;
+        const ang=Math.atan2(n.y-o.y,n.x-o.x);
+        const hx=n.x-Math.cos(ang)*9,hy=n.y-Math.sin(ang)*9;
+        const st=signalState(n,eid);
+        ctx.fillStyle=st==='g'?'#2ee08a':st==='y'?'#ffb454':'#ff5d6c';
+        ctx.beginPath();ctx.arc(hx,hy,Math.max(2.6,2.2/cam.z),0,7);ctx.fill();
+        ctx.strokeStyle='#0009';ctx.lineWidth=0.8;ctx.stroke();
+      }
+    }else{ctx.fillStyle='rgba(120,140,180,.25)';
+      ctx.beginPath();ctx.arc(n.x,n.y,2.2,0,7);ctx.fill();}
+  }
+}
+function drawStops(){
+  for(const s of W.stops.values()){
+    const p=stopPos(s);if(!p)continue;
+    const sr=Math.max(4.4,3.6/cam.z);
+    ctx.fillStyle='#2c3d5c';ctx.strokeStyle='#4cc2ff';ctx.lineWidth=1.2/cam.z*Math.min(cam.z,1)+0.6;
+    ctx.beginPath();ctx.arc(p.x,p.y,sr,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#4cc2ff';ctx.font='bold '+Math.max(6,4.4/cam.z)+'px sans-serif';ctx.textAlign='center';
+    ctx.fillText('B',p.x,p.y+sr*0.4);ctx.textAlign='left';
+    const w=waitingAt(s.id);
+    if(w>0){ctx.fillStyle='#ffd166';ctx.font=Math.max(9,6/cam.z)+'px sans-serif';
+      ctx.fillText(w+' waiting',p.x+sr+2,p.y-sr);
+      if(S.overlay==='pax'){ctx.fillStyle=`rgba(255,209,102,${clamp(w/15,.15,.7)})`;
+        ctx.beginPath();ctx.arc(p.x,p.y,7+w*1.5,0,7);ctx.fill();}}
+  }
+}
+function drawRoutes(){
+  for(const r of W.routes.values()){
+    const sel=S.sel&&S.sel.kind==='route'&&S.sel.id===r.id;
+    const editing=S.editRouteId===r.id;
+    if(!sel&&!editing&&cam.z<0.25)continue;
+    ctx.strokeStyle=r.color;ctx.lineWidth=sel||editing?3:1.8;ctx.globalAlpha=sel||editing?0.95:0.45;
+    ctx.setLineDash(sel||editing?[]:[7,5]);ctx.beginPath();
+    let started=false;
+    for(const sid2 of r.stops){const s=W.stops.get(sid2);const p=s&&stopPos(s);if(!p)continue;
+      if(!started){ctx.moveTo(p.x,p.y);started=true;}else ctx.lineTo(p.x,p.y);}
+    ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+    // stop order labels
+    if(sel||editing){r.stops.forEach((sid2,i)=>{const s=W.stops.get(sid2);const p=s&&stopPos(s);if(!p)return;
+      ctx.fillStyle=r.color;ctx.font='bold 10px sans-serif';ctx.fillText(''+(i+1),p.x+7,p.y+9);});}
+  }
+}
+function drawVehicles(){
+  const night=(W.simTime/3600)%24;const hl=P.dayNight&&(night<6.5||night>19);
+  for(const v of W.vehs){
+    let pos;
+    if(v.state==='cross'&&v.mv){
+      const t=clamp(v.jt/Math.max(v.mv.len,1),0,1);const pts=v.mv.pts;
+      const i=Math.min(pts.length-2,Math.floor(t*(pts.length-1)));
+      const u=t*(pts.length-1)-i;
+      pos={x:lerp(pts[i].x,pts[i+1].x,u),y:lerp(pts[i].y,pts[i+1].y,u),
+        dx:pts[i+1].x-pts[i].x,dy:pts[i+1].y-pts[i].y};
+      const l=Math.hypot(pos.dx,pos.dy)||1;pos.dx/=l;pos.dy/=l;
+    }else{
+      const e=W.edges.get(v.edge);if(!e)continue;
+      pos=edgePoint(e,v.dir,v.s,v.laneF);
+      if(v.dir==='b'){pos.dx=-pos.dx;pos.dy=-pos.dy;}
+    }
+    const T=VTYPES[v.type];
+    ctx.save();ctx.translate(pos.x,pos.y);ctx.rotate(Math.atan2(pos.dy,pos.dx));
+    const k=Math.max(1,9/(T.len*cam.z));ctx.scale(k,k);
+    const sel=S.sel&&S.sel.kind==='veh'&&S.sel.id===v.id;
+    if(sel){ctx.strokeStyle='#fff';ctx.lineWidth=1.4;ctx.strokeRect(-T.len/2-1.5,-T.w/2-1.5,T.len+3,T.w+3);}
+    ctx.fillStyle=v.state==='failed'?'#ff5d6c':T.color;
+    rrect(-T.len/2,-T.w/2,T.len,T.w,1.1);ctx.fill();
+    ctx.fillStyle='rgba(10,14,22,.85)';
+    ctx.fillRect(-T.len*0.1,-T.w/2+0.3,T.len*0.28,T.w-0.6); // windshield
+    if(v.bus){ctx.fillStyle='#2b2b10';for(let i=0;i<5;i++)ctx.fillRect(-T.len/2+1.6+i*2,-T.w/2+0.4,1.2,T.w-0.8);}
+    if(hl){ctx.fillStyle='rgba(255,240,180,.9)';ctx.fillRect(T.len/2-0.4,-T.w/2+0.2,0.5,0.5);ctx.fillRect(T.len/2-0.4,T.w/2-0.7,0.5,0.5);
+      ctx.fillStyle='rgba(255,230,150,.08)';ctx.beginPath();ctx.moveTo(T.len/2,0);ctx.lineTo(T.len/2+9,-4);ctx.lineTo(T.len/2+9,4);ctx.fill();}
+    ctx.restore();
+    if(sel&&v.path){ // show path
+      ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();
+      ctx.moveTo(pos.x,pos.y);
+      for(let i=v.pi+1;i<v.path.length;i++){const pe=W.edges.get(v.path[i].e);if(!pe)continue;
+        const mp=edgePoint(pe,'f',pe.len/2,0);ctx.lineTo(mp.x,mp.y);}
+      ctx.stroke();ctx.setLineDash([]);}
+  }
+}
+function rrect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function drawIncidents(){
+  for(const ic of W.incidents){
+    const e=W.edges.get(ic.edge);if(!e)continue;
+    const p=edgePoint(e,ic.dir,ic.s,ic.lane);
+    ctx.save();ctx.translate(p.x,p.y);
+    const ik=Math.max(1,10/(7*cam.z));ctx.scale(ik,ik);
+    ctx.fillStyle=ic.kind==='roadwork'?'#ff9d3d':'#ff5d6c';
+    ctx.beginPath();ctx.moveTo(0,-6);ctx.lineTo(6,5);ctx.lineTo(-6,5);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#0d1117';ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText('!',0,3.5);
+    ctx.restore();
+    if(ic.kind==='roadwork'){ctx.strokeStyle='rgba(255,157,61,.5)';ctx.setLineDash([4,4]);
+      ctx.lineWidth=6;ctx.beginPath();ctx.arc(p.x,p.y,16,0,7);ctx.stroke();ctx.setLineDash([]);}
+  }
+}
+function drawSelection(){
+  if(!S.sel)return;
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.6/cam.z;ctx.setLineDash([6,4]);
+  const k=S.sel.kind,id=S.sel.id;
+  if(k==='node'){const n=W.nodes.get(id);if(n){ctx.beginPath();ctx.arc(n.x,n.y,16,0,7);ctx.stroke();}}
+  else if(k==='edge'){const e=W.edges.get(id);if(e){pathEdge(e);ctx.lineWidth=edgeLanes(e)*3.2+5;ctx.stroke();}}
+  else if(k==='zone'){const z=W.zones.get(id);if(z)ctx.strokeRect(z.x-3,z.y-3,z.w+6,z.h+6);}
+  else if(k==='stop'){const s=W.stops.get(id);const p=s&&stopPos(s);if(p){ctx.beginPath();ctx.arc(p.x,p.y,9,0,7);ctx.stroke();}}
+  else if(k==='veh'){}
+  ctx.setLineDash([]);
+}
+function drawPreview(){
+  const d=S.draw;if(!d)return;
+  if(d.kind==='road'&&d.pts.length){
+    ctx.strokeStyle='rgba(76,194,255,.8)';ctx.lineWidth=edgeLanesPreview()*3.2+2;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(d.pts[0].x,d.pts[0].y);
+    for(const p of d.pts.slice(1))ctx.lineTo(p.x,p.y);
+    if(d.hover)ctx.lineTo(d.hover.x,d.hover.y);
+    ctx.stroke();
+    if(d.hover){const sn=snapPoint(d.hover.x,d.hover.y);
+      ctx.fillStyle=sn?'#46d19a':'#4cc2ff';ctx.beginPath();
+      ctx.arc(d.hover.x,d.hover.y,4,0,7);ctx.fill();}
+  }
+  if(d.kind==='zone'&&d.p0&&d.hover){
+    ctx.strokeStyle='#46d19a';ctx.setLineDash([5,4]);ctx.lineWidth=1.5;
+    ctx.strokeRect(Math.min(d.p0.x,d.hover.x),Math.min(d.p0.y,d.hover.y),
+      Math.abs(d.hover.x-d.p0.x),Math.abs(d.hover.y-d.p0.y));ctx.setLineDash([]);
+  }
+}
+function edgeLanesPreview(){return(S.toolOpt&&S.toolOpt.lanes||1);}
+function drawMinimap(cw,ch){
+  if(cw<700)return;
+  const mw=150,mh=mw*P.mapH/P.mapW,x0=cw-mw-12,y0=ch-mh-12;
+  ctx.fillStyle='rgba(13,17,23,.75)';ctx.fillRect(x0-4,y0-4,mw+8,mh+8);
+  ctx.strokeStyle='var(--line)';ctx.strokeStyle='#26334d';ctx.strokeRect(x0-4,y0-4,mw+8,mh+8);
+  const sx=mw/P.mapW,sy=mh/P.mapH;
+  ctx.strokeStyle='#3d4d70';ctx.lineWidth=1;
+  for(const e of W.edges.values()){ctx.beginPath();
+    ctx.moveTo(x0+e.pts[0].x*sx,y0+e.pts[0].y*sy);
+    for(let i=1;i<e.pts.length;i++)ctx.lineTo(x0+e.pts[i].x*sx,y0+e.pts[i].y*sy);ctx.stroke();}
+  // viewport rect
+  const tl=s2w(0,0),br=s2w(cw,ch);
+  ctx.strokeStyle='#4cc2ff';ctx.strokeRect(x0+tl.x*sx,y0+tl.y*sy,(br.x-tl.x)*sx,(br.y-tl.y)*sy);
+}
+
+/* ===================== EDITOR / INPUT ===================== */
+const TOOLS=[
+  ['select','⭢ Select'],['pan','✋ Pan'],['road','🛣 Road'],['zone','▦ Zone'],
+  ['stop','🚏 Bus stop'],['route','🚌 Route'],['signal','🚦 Signal'],['circle','⭕ Roundabout'],
+  ['incident','⚠ Incident'],['erase','✖ Eraser']];
+S.toolOpt={lanes:1,speed:13.9,oneway:false,zoneType:'res'};
+const ptr={down:false,moved:false,x:0,y:0,wx:0,wy:0,button:0,panning:false,pinch:0,pts:{}};
+cv.addEventListener('pointerdown',e=>{
+  cv.setPointerCapture(e.pointerId);
+  const w=s2w(e.offsetX,e.offsetY);
+  ptr.down=true;ptr.moved=false;ptr.x=e.offsetX;ptr.y=e.offsetY;ptr.wx=w.x;ptr.wy=w.y;ptr.button=e.button;
+  ptr.pts[e.pointerId]={x:e.offsetX,y:e.offsetY};
+  if(e.button===1||S.tool==='pan'||(e.button===0&&e.shiftKey)){ptr.panning=true;return;}
+  if(Object.keys(ptr.pts).length===2){ptr.pinch=dist(ptr.pts[Object.keys(ptr.pts)[0]].x,ptr.pts[Object.keys(ptr.pts)[0]].y,ptr.pts[Object.keys(ptr.pts)[1]].x,ptr.pts[Object.keys(ptr.pts)[1]].y);return;}
+  toolDown(w,e);
+});
+cv.addEventListener('pointermove',e=>{
+  const w=s2w(e.offsetX,e.offsetY);
+  if(ptr.pts[e.pointerId])ptr.pts[e.pointerId]={x:e.offsetX,y:e.offsetY};
+  const keys=Object.keys(ptr.pts);
+  if(keys.length===2&&ptr.pinch){ // pinch zoom
+    const a=ptr.pts[keys[0]],b=ptr.pts[keys[1]];
+    const d=dist(a.x,a.y,b.x,b.y);
+    if(ptr.pinch>0){const z=clamp(cam.z*d/ptr.pinch,0.08,6);
+      const mid=s2w((a.x+b.x)/2,(a.y+b.y)/2);
+      cam.z=z;cam.x=mid.x;cam.y=mid.y;}
+    ptr.pinch=d;return;
+  }
+  if(ptr.panning&&ptr.down){
+    cam.x-=(e.offsetX-ptr.x)/cam.z;cam.y-=(e.offsetY-ptr.y)/cam.z;
+    ptr.x=e.offsetX;ptr.y=e.offsetY;return;
+  }
+  if(Math.hypot(e.offsetX-ptr.x,e.offsetY-ptr.y)>4)ptr.moved=true;
+  toolMove(w,e);
+});
+cv.addEventListener('pointerup',e=>{
+  const w=s2w(e.offsetX,e.offsetY);
+  delete ptr.pts[e.pointerId];
+  if(ptr.panning){ptr.panning=false;ptr.down=false;return;}
+  if(ptr.down&&!ptr.moved&&e.button===0)toolClick(w,e);
+  else if(ptr.down)toolUp(w,e);
+  ptr.down=false;ptr.pinch=0;
+});
+cv.addEventListener('pointercancel',e=>{delete ptr.pts[e.pointerId];ptr.down=false;ptr.panning=false;});
+cv.addEventListener('dblclick',e=>{ // finish road drawing
+  if(S.draw&&S.draw.kind==='road')finishRoad();
+});
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const z=clamp(cam.z*(e.deltaY<0?1.12:0.89),0.08,6);
+  const w=s2w(e.offsetX,e.offsetY);
+  cam.z=z;
+  const w2=s2w(e.offsetX,e.offsetY);
+  cam.x+=w.x-w2.x;cam.y+=w.y-w2.y;
+},{passive:false});
+cv.addEventListener('contextmenu',e=>{e.preventDefault();
+  if(S.draw&&S.draw.kind==='road'&&S.draw.pts.length>1)finishRoad();
+  else{S.draw=null;S.editRouteId=null;renderPanel();}
+});
+function toolDown(w,e){
+  if(S.tool==='zone'){S.draw={kind:'zone',p0:w};}
+}
+function toolMove(w,e){
+  if(S.draw){S.draw.hover=w;
+    if(S.tool==='zone')return;}
+  if(S.tool==='road'&&(!S.draw||S.draw.kind!=='road'))S.draw={kind:'road',pts:[],hover:w};
+  if(S.draw)S.draw.hover=w;
+}
+function toolClick(w,e){
+  switch(S.tool){
+    case 'select':pickAt(w);break;
+    case 'road':roadClick(w);break;
+    case 'stop':placeStop(w);break;
+    case 'route':routeClick(w);break;
+    case 'signal':toggleSignal(w);break;
+    case 'circle':toggleRoundabout(w);break;
+    case 'incident':placeIncident(w);break;
+    case 'erase':eraseAt(w);break;
+  }
+}
+function toolUp(w,e){
+  if(S.tool==='zone'&&S.draw&&S.draw.kind==='zone'){
+    const p0=S.draw.p0;
+    const z={id:zid(),type:S.toolOpt.zoneType,
+      x:Math.min(p0.x,w.x),y:Math.min(p0.y,w.y),
+      w:Math.abs(w.x-p0.x),h:Math.abs(w.y-p0.y),boost:1};
+    if(z.w>20&&z.h>20){pushUndo('add zone');W.zones.set(z.id,z);toast(ZTYPES[z.type].label+' zone added');}
+    S.draw=null;
+  }
+}
+function roadClick(w){
+  if(!S.draw||S.draw.kind!=='road')S.draw={kind:'road',pts:[]};
+  const sn=snapPoint(w.x,w.y);
+  const p=sn?{x:sn.x,y:sn.y}:w;
+  const d=S.draw;
+  if(d.pts.length>1&&dist(p.x,p.y,d.pts[0].x,d.pts[0].y)<SNAP_R){ // close loop
+    d.pts.push({x:d.pts[0].x,y:d.pts[0].y});finishRoad();return;}
+  if(d.pts.length&&dist(p.x,p.y,d.pts[d.pts.length-1].x,d.pts[d.pts.length-1].y)<2)return; // dup click
+  d.pts.push(p);
+  if(d.pts.length>=24)finishRoad();
+}
+function finishRoad(){
+  const d=S.draw;S.draw=null;
+  if(!d||d.pts.length<2)return;
+  const created=addRoad(d.pts,{lanesF:S.toolOpt.lanes,lanesB:S.toolOpt.lanes,
+    oneway:S.toolOpt.oneway?'f':null,speed:S.toolOpt.speed});
+  toast(created&&created.length?created.length+' road segment(s) added':'Nothing added');
+  refreshAll();
+}
+function pickAt(w){
+  // vehicles first (topmost), then stops, nodes, edges, zones
+  let best=null,bd=14/cam.z;
+  for(const v of W.vehs){const e=W.edges.get(v.edge);if(!e)continue;
+    const p=edgePoint(e,v.dir,v.s,v.laneF);const d=dist(w.x,w.y,p.x,p.y);
+    if(d<bd){bd=d;best={kind:'veh',id:v.id};}}
+  for(const s of W.stops.values()){const p=stopPos(s);if(p&&dist(w.x,w.y,p.x,p.y)<bd+2){best={kind:'stop',id:s.id};bd=dist(w.x,w.y,p.x,p.y);}}
+  for(const ic of W.incidents){const e=W.edges.get(ic.edge);if(!e)continue;
+    const p=edgePoint(e,ic.dir,ic.s,ic.lane);
+    if(dist(w.x,w.y,p.x,p.y)<bd+4){best={kind:'incident',id:ic.id};break;}}
+  for(const n of W.nodes.values()){const d=dist(w.x,w.y,n.x,n.y);
+    if(d<bd+3){bd=d;best={kind:'node',id:n.id};}}
+  if(!best){let bd2=10/cam.z;
+    for(const e of W.edges.values()){for(let i=0;i<e.pts.length-1;i++){
+      const r=ptSeg(w,e.pts[i],e.pts[i+1]);
+      if(r.d<bd2+edgeLanes(e)*1.6){bd2=r.d;best={kind:'edge',id:e.id};}}}}
+  if(!best)for(const z of W.zones.values()){
+    if(w.x>=z.x&&w.x<=z.x+z.w&&w.y>=z.y&&w.y<=z.y+z.h){best={kind:'zone',id:z.id};}}
+  if(!best)for(const r of W.routes.values()){
+    for(const sid2 of r.stops){const s=W.stops.get(sid2);const p=s&&stopPos(s);
+      if(p&&dist(w.x,w.y,p.x,p.y)<12){best={kind:'route',id:r.id};break;}}}
+  S.sel=best;
+  if(best&&best.kind==='veh')S.panel='inspect';
+  renderPanel();
+}
+function placeStop(w){
+  const b=nearestEdgePoint(w.x,w.y);
+  if(!b||b.d>30){toast('Click near a road to place a stop');return;}
+  pushUndo('add stop');
+  const dir=b.e.oneway||(b.s<b.e.len/2?'f':'f'); // attach to forward dir unless oneway b
+  const s={id:sid(),edge:b.e.id,pos:clamp(b.s,3,b.e.len-3),dir:b.e.oneway==='b'?'b':'f',
+    name:'Stop '+W.stops.size,routeIds:[]};
+  W.stops.set(s.id,s);markDirty();
+  if(S.editRouteId){const r=W.routes.get(S.editRouteId);if(r&&!r.stops.includes(s.id)){r.stops.push(s.id);linkRouteStops(r);}}
+  toast('Bus stop placed');renderPanel();
+}
+function routeClick(w){
+  if(!S.editRouteId){toast('Pick or create a route in the Transit tab first');return;}
+  const r=W.routes.get(S.editRouteId);if(!r)return;
+  // click a stop to append/remove
+  let hit=null;
+  for(const s of W.stops.values()){const p=stopPos(s);if(p&&dist(w.x,w.y,p.x,p.y)<14){hit=s;break;}}
+  if(hit){
+    pushUndo('edit route');
+    const i=r.stops.indexOf(hit.id);
+    if(i>=0&&i===r.stops.length-1)r.stops.pop();
+    else if(i<0)r.stops.push(hit.id);
+    linkRouteStops(r);renderPanel();return;
+  }
+  const b=nearestEdgePoint(w.x,w.y);
+  if(b&&b.d<30){ // create stop and append
+    pushUndo('add stop');
+    const s={id:sid(),edge:b.e.id,pos:clamp(b.s,3,b.e.len-3),dir:b.e.oneway==='b'?'b':'f',name:'Stop '+W.stops.size,routeIds:[]};
+    W.stops.set(s.id,s);r.stops.push(s.id);linkRouteStops(r);markDirty();renderPanel();
+  }
+}
+function toggleSignal(w){
+  const n=nearNode(w);if(!n){toast('Click an intersection');return;}
+  pushUndo('signal');
+  if(n.signal){n.signal=null;n.roundabout=false;toast('Signal removed');}
+  else{if(!P.sandbox){if(P.budget<15000){S.undo.pop();toast('Insufficient budget for signal ($15k)');return;}P.budget-=15000;}
+    n.roundabout=false;mkSignal(n);toast('Signal added');}
+  markDirty();renderPanel();
+}
+function toggleRoundabout(w){
+  const n=nearNode(w);if(!n){toast('Click an intersection');return;}
+  pushUndo('roundabout');
+  n.roundabout=!n.roundabout;if(n.roundabout)n.signal=null;
+  toast(n.roundabout?'Roundabout':'Roundabout removed');markDirty();renderPanel();
+}
+function nearNode(w){let best=null,bd=18/cam.z;
+  for(const n of W.nodes.values()){if(n.edges.length<2)continue;const d=dist(w.x,w.y,n.x,n.y);if(d<bd){bd=d;best=n;}}
+  return best;}
+function placeIncident(w){
+  const b=nearestEdgePoint(w.x,w.y);
+  if(!b||b.d>30){toast('Click a road');return;}
+  pushUndo('incident');
+  const dir=b.e.oneway||'f';
+  addIncident(b.e.id,dir,0,clamp(b.s,5,b.e.len-5),S.toolOpt.incKind||'crash',S.toolOpt.incDur||300);
+}
+function eraseAt(w){
+  pushUndo('erase');
+  for(const ic of [...W.incidents]){const e=W.edges.get(ic.edge);if(!e)continue;
+    const p=edgePoint(e,ic.dir,ic.s,ic.lane);
+    if(dist(w.x,w.y,p.x,p.y)<14){W.incidents.splice(W.incidents.indexOf(ic),1);e.cond=1;toast('Incident cleared');return;}}
+  for(const s of [...W.stops.values()]){const p=stopPos(s);if(p&&dist(w.x,w.y,p.x,p.y)<12){removeStop(s.id);toast('Stop removed');return;}}
+  const n=nearNode(w);if(n){removeNode(n.id);toast('Junction removed');return;}
+  let bd=10/cam.z+4,be=null;
+  for(const e of W.edges.values()){for(let i=0;i<e.pts.length-1;i++){const r=ptSeg(w,e.pts[i],e.pts[i+1]);
+    if(r.d<bd+edgeLanes(e)*1.6){bd=r.d;be=e;}}}
+  if(be){removeEdge(be.id);toast('Road removed');return;}
+  for(const z of [...W.zones.values()])if(w.x>=z.x&&w.x<=z.x+z.w&&w.y>=z.y&&w.y<=z.y+z.h){
+    W.zones.delete(z.id);toast('Zone removed');return;}
+  S.undo.pop();toast('Nothing to erase');
+}
+
+/* ===================== UI ===================== */
+const TABS=[['inspect','Inspect'],['build','Build'],['transit','Transit'],['demand','Demand'],
+  ['signals','Signals'],['analytics','Analytics'],['layers','Overlays'],['scen','Scenarios'],['io','Save/Load']];
+function buildToolbar(){
+  const tb=$('#toolBtns');tb.innerHTML='';
+  for(const[k,label]of TOOLS){
+    const b=document.createElement('button');b.className='tbtn'+(S.tool===k?' on':'');
+    b.textContent=label;b.onclick=()=>{S.tool=k;if(k!=='road')S.draw=null;renderPanel();};
+    tb.appendChild(b);}
+  const ov=$('#overlaySel');ov.innerHTML='';
+  for(const[k,l]of OV_OPTIONS){const o=document.createElement('option');o.value=k;o.textContent='◧ '+l;ov.appendChild(o);}
+  ov.value=S.overlay;ov.onchange=()=>{S.overlay=ov.value;};
+}
+function renderTabs(){
+  const t=$('#ptabs');t.innerHTML='';
+  for(const[k,l]of TABS){const d=document.createElement('div');
+    d.className='ptab'+(S.panel===k?' on':'');d.textContent=l;
+    d.onclick=()=>{S.panel=k;renderPanel();};t.appendChild(d);}
+}
+function renderPanel(){buildToolbar();renderTabs();
+  const b=$('#pbody');b.innerHTML='';
+  ({inspect:panelInspect,build:panelBuild,transit:panelTransit,demand:panelDemand,
+    signals:panelSignals,analytics:panelAnalytics,layers:panelLayers,scen:panelScen,io:panelIO}
+    [S.panel]||panelInspect)(b);
+  requestAnimationFrame(drawCharts);
+}
+function el(tag,cls,html){const d=document.createElement(tag);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d;}
+function row(label,val){return el('div','kv',`<span>${label}</span><b>${val}</b>`);}
+function slider(label,key,min,max,step,fmt2){
+  const r=el('div','row');r.innerHTML=`<label>${label}</label>`;
+  const i=document.createElement('input');i.type='range';i.min=min;i.max=max;i.step=step;i.value=P[key];
+  const v=el('span','val',fmt2?fmt2(P[key]):P[key]);
+  i.oninput=()=>{P[key]=+i.value;v.textContent=fmt2?fmt2(P[key]):i.value;};
+  r.appendChild(i);r.appendChild(v);return r;
+}
+/* ---- Inspect ---- */
+function panelInspect(b){
+  const sel=S.sel;
+  if(!sel){b.appendChild(el('div','hint','Click anything on the map — roads, junctions, vehicles, stops, zones.'));
+    b.appendChild(el('div','sec','<h4>Network</h4>'+netSummary()));return;}
+  const h=el('div','sec');
+  if(sel.kind==='edge'){const e=W.edges.get(sel.id);if(!e){S.sel=null;return;}
+    h.innerHTML=`<h4>Road ${e.name||e.id} ${e.closed?'<span class="pill r">closed</span>':''} ${e.oneway?'<span class="pill y">one-way '+(e.oneway==='f'?'→':'←')+'</span>':''}</h4>`;
+    h.appendChild(row('Length',fmt(e.len,0)+' m'));
+    h.appendChild(row('Speed limit',fmt(e.speed*3.6,0)+' km/h'));
+    h.appendChild(row('Lanes (→/←)',e.oneway?String(e.lanesF):e.lanesF+' / '+e.lanesB));
+    h.appendChild(row('Avg traversal',fmt(e.emaT,1)+' s'));
+    h.appendChild(row('Queue',queueOn(e.id)));
+    h.appendChild(row('Load (route choice)',fmt(e.load,1)));
+    const r1=el('div','row');
+    r1.innerHTML='<label>Lanes each dir</label>';
+    const inp=document.createElement('input');inp.type='number';inp.min=1;inp.max=4;inp.value=e.lanesF;
+    inp.onchange=()=>{pushUndo('lanes');e.lanesF=e.lanesB=clamp(+inp.value,1,4);markDirty();};
+    r1.appendChild(inp);
+    const ow=el('div','row');ow.innerHTML='<label>One-way</label>';
+    const sel2=document.createElement('select');
+    sel2.innerHTML='<option value="">two-way</option><option value="f">a→b</option><option value="b">b→a</option>';
+    sel2.value=e.oneway||'';sel2.onchange=()=>{pushUndo('oneway');e.oneway=sel2.value||null;markDirty();renderPanel();};
+    ow.appendChild(sel2);
+    const cl=el('div','row');
+    const cb=document.createElement('button');cb.className='btn small '+(e.closed?'danger':'');
+    cb.textContent=e.closed?'Reopen road':'Close road';
+    cb.onclick=()=>{pushUndo('closure');e.closed=!e.closed;rerouteAffected(e.id);markDirty();renderPanel();};
+    cl.appendChild(cb);
+    const sp=el('div','row');sp.innerHTML='<label>Speed km/h</label>';
+    const si=document.createElement('input');si.type='number';si.min=10;si.max=130;si.value=Math.round(e.speed*3.6);
+    si.onchange=()=>{pushUndo('speed');e.speed=clamp(+si.value,10,130)/3.6;markDirty();};
+    sp.appendChild(si);
+    const nm=el('div','row');nm.innerHTML='<label>Name</label>';
+    const ni=document.createElement('input');ni.type='text';ni.value=e.name||'';ni.style.width='110px';
+    ni.onchange=()=>{e.name=ni.value;};nm.appendChild(ni);
+    h.append(nm,ow,sp,r1,cl);
+    // turn restrictions
+    h.appendChild(el('div','hint','Turn restrictions: select the junction node to edit.'));
+  }
+  else if(sel.kind==='node'){const n=W.nodes.get(sel.id);if(!n){S.sel=null;return;}
+    h.innerHTML=`<h4>Junction ${n.id} ${n.signal?'<span class="pill g">signal</span>':''} ${n.roundabout?'<span class="pill y">roundabout</span>':''}</h4>`;
+    h.appendChild(row('Legs',n.edges.length));
+    h.appendChild(row('Movements',(n._info?.moves||[]).length));
+    if(n.signal){const st=n.signal.phases[n.signal.idx];
+      h.appendChild(row('Phase',`${n.signal.idx+1}/${n.signal.phases.length} — ${fmt(st.dur-n.signal.t,0)}s left`));}
+    const btns=el('div','row');
+    const b1=el('button','btn small',n.signal?'Remove signal':'Add signal');
+    b1.onclick=()=>{pushUndo('sig');if(n.signal)n.signal=null;else{n.roundabout=false;mkSignal(n);}markDirty();renderPanel();};
+    const b2=el('button','btn small',n.roundabout?'Remove roundabout':'Roundabout');
+    b2.onclick=()=>{pushUndo('rbt');n.roundabout=!n.roundabout;if(n.roundabout)n.signal=null;markDirty();renderPanel();};
+    btns.append(b1,b2);h.appendChild(btns);
+    if(n.signal)h.appendChild(el('div','hint','Edit phases in the Signals tab.'));
+    // turn restrictions
+    const incs=nodeEdges(n).filter(e=>dirLanes(e,e.a===n.id?'f':'b')>0);
+    if(incs.length>1){
+      h.appendChild(el('div','hint','Banned turns (in → out):'));
+      for(const ei of incs){const line=el('div','row');
+        line.appendChild(el('span','',(W.edges.get(ei.id).name||ei.id)+' →'));
+        for(const eo of nodeEdges(n)){if(eo===ei)continue;
+          const dirOut=eo.a===n.id?'f':'b';if(dirLanes(eo,dirOut)<=0)continue;
+          const banned=ei.noTurns&&ei.noTurns[eo.id];
+          const c=el('span','chip'+(banned?' danger on':''),(eo.name||eo.id));
+          c.onclick=()=>{pushUndo('turn');ei.noTurns=ei.noTurns||{};
+            if(ei.noTurns[eo.id])delete ei.noTurns[eo.id];else ei.noTurns[eo.id]=1;
+            invalidateRoutes();renderPanel();};
+          line.appendChild(c);}
+        h.appendChild(line);}
+    }
+  }
+  else if(sel.kind==='veh'){const v=W.vehs.find(x=>x.id===sel.id);if(!v){S.sel=null;return;}
+    h.innerHTML=`<h4>${v.bus?'🚌':'🚗'} ${VTYPES[v.type].label} ${v.id} <span class="pill ${v.state==='drive'?'g':'y'}">${v.state}</span></h4>`;
+    h.appendChild(row('Speed',fmt(v.v*3.6,0)+' km/h'));
+    h.appendChild(row('Trip time',fmt(W.simTime-v.t0,0)+' s'));
+    h.appendChild(row('Distance',fmt(v.dist,0)+' m'));
+    h.appendChild(row('Path',v.path?v.path.length+' edges':'—'));
+    h.appendChild(row('On edge',v.edge+' · s='+fmt(v.s,0)));
+    if(v.bus){h.appendChild(row('Route',v.route));h.appendChild(row('On board',v.board));
+      h.appendChild(row('Next stop',v.nextStop||'—'));}
+    h.appendChild(row('O → D',v.o+' → '+v.d));
+    const rb=el('button','btn small danger','Remove vehicle');
+    rb.onclick=()=>{v.state='failed';S.sel=null;renderPanel();};
+    h.appendChild(rb);
+  }
+  else if(sel.kind==='stop'){const s=W.stops.get(sel.id);if(!s){S.sel=null;return;}
+    h.innerHTML=`<h4>🚏 ${s.name||s.id}</h4>`;
+    h.appendChild(row('Edge',s.edge+' @ '+fmt(s.pos,0)+'m'));
+    h.appendChild(row('Waiting',waitingAt(s.id)));
+    h.appendChild(row('Routes',(s.routeIds||[]).map(i=>W.routes.get(i)?.name||i).join(', ')||'none'));
+    const db=el('button','btn small danger','Delete stop');db.onclick=()=>{pushUndo('del stop');removeStop(s.id);S.sel=null;renderPanel();};
+    h.appendChild(db);
+  }
+  else if(sel.kind==='route'){const r=W.routes.get(sel.id);if(!r){S.sel=null;return;}
+    h.innerHTML=`<h4 style="color:${r.color}">Route ${r.name}</h4>`;
+    h.appendChild(row('Stops',r.stops.length));
+    h.appendChild(row('Headway',fmt(r.headway||P.busHeadway,0)+' s'));
+    h.appendChild(row('Vehicles',r.vehs.length));
+    h.appendChild(row('Boardings',r.rid||0));
+    const eb=el('button','btn small primary','Edit route (click stops)');
+    eb.onclick=()=>{S.editRouteId=r.id;S.tool='route';renderPanel();};
+    const db=el('button','btn small danger','Delete route');
+    db.onclick=()=>{pushUndo('del route');W.routes.delete(r.id);S.sel=null;renderPanel();};
+    h.append(eb,document.createTextNode(' '),db);
+  }
+  else if(sel.kind==='zone'){const z=W.zones.get(sel.id);if(!z){S.sel=null;return;}
+    h.innerHTML=`<h4 style="color:${ZTYPES[z.type].c}">${ZTYPES[z.type].label} zone</h4>`;
+    h.appendChild(row('Area',fmt(z.w*z.h/10000,1)+' ha'));
+    h.appendChild(row('Anchor edge',z._edge||'—'));
+    const ts=el('div','row');ts.innerHTML='<label>Type</label>';
+    const tsel=document.createElement('select');
+    for(const k in ZTYPES)tsel.innerHTML+=`<option ${k===z.type?'selected':''} value="${k}">${ZTYPES[k].label}</option>`;
+    tsel.onchange=()=>{z.type=k;renderPanel();};ts.appendChild(tsel);
+    const bs=slider('Demand boost','__zboost',0,4,0.1,x=>fmt(x,1)+'×');
+    bs.querySelector('input').value=z.boost||1;
+    bs.querySelector('input').oninput=e2=>{z.boost=+e2.target.value;bs.querySelector('.val').textContent=fmt(z.boost,1)+'×';};
+    h.append(ts,bs);
+    const db=el('button','btn small danger','Delete zone');
+    db.onclick=()=>{pushUndo('del zone');W.zones.delete(z.id);S.sel=null;renderPanel();};h.appendChild(db);
+  }
+  else if(sel.kind==='incident'){const ic=W.incidents.find(i=>i.id===sel.id);
+    if(!ic){S.sel=null;return;}
+    h.innerHTML='<h4>⚠ '+(ic.kind==='roadwork'?'Roadworks':'Crash')+'</h4>';
+    h.appendChild(row('Edge',ic.edge));h.appendChild(row('Clears in',fmt(ic.t-W.simTime,0)+' s'));
+    const cb=el('button','btn small','Clear now');cb.onclick=()=>{const e=W.edges.get(ic.edge);if(e)e.cond=1;
+      W.incidents.splice(W.incidents.indexOf(ic),1);S.sel=null;renderPanel();};h.appendChild(cb);
+  }
+  b.appendChild(h);
+  b.appendChild(el('div','sec','<h4>Network</h4>'+netSummary()));
+}
+function netSummary(){
+  const kv=(l,v)=>`<div class="kv"><span>${l}</span><b>${v}</b></div>`;
+  return kv('Roads',W.edges.size)+kv('Junctions',[...W.nodes.values()].filter(n=>n.edges.length>1).length)
+   +kv('Zones',W.zones.size)+kv('Stops',W.stops.size)+kv('Routes',W.routes.size)
+   +kv('Vehicles',W.vehs.length)+kv('Waiting pax',W.pax.filter(p=>p.state==='wait').length);
+}
+/* ---- Build ---- */
+function panelBuild(b){
+  const s1=el('div','sec','<h4>Road tool options</h4>');
+  const lanes=el('div','row');lanes.innerHTML='<label>Lanes / direction</label>';
+  const li=document.createElement('input');li.type='number';li.min=1;li.max=4;li.value=S.toolOpt.lanes;
+  li.onchange=()=>S.toolOpt.lanes=clamp(+li.value,1,4);lanes.appendChild(li);
+  const ow=el('div','row');ow.innerHTML='<label>One-way</label>';
+  const oc=document.createElement('input');oc.type='checkbox';oc.checked=S.toolOpt.oneway;
+  oc.onchange=()=>S.toolOpt.oneway=oc.checked;ow.appendChild(oc);
+  const sp=el('div','row');sp.innerHTML='<label>Speed km/h</label>';
+  const si=document.createElement('input');si.type='number';si.min=10;si.max=130;si.value=Math.round(S.toolOpt.speed*3.6);
+  si.onchange=()=>S.toolOpt.speed=clamp(+si.value,10,130)/3.6;sp.appendChild(si);
+  s1.append(lanes,ow,sp,el('div','hint','Click to add points · double-click or right-click to finish · click near existing road/junction to snap & split.'));
+  const s2=el('div','sec','<h4>Zone type (draw with Zone tool)</h4>');
+  const chips=el('div','row');
+  for(const k in ZTYPES){const c=el('span','chip'+(S.toolOpt.zoneType===k?' on':''),ZTYPES[k].label);
+    c.style.borderColor=S.toolOpt.zoneType===k?ZTYPES[k].c:'';c.onclick=()=>{S.toolOpt.zoneType=k;renderPanel();};chips.appendChild(c);}
+  s2.appendChild(chips);
+  const s3=el('div','sec','<h4>Incident options</h4>');
+  const ik=el('div','row');ik.innerHTML='<label>Kind</label>';
+  const isel=document.createElement('select');
+  isel.innerHTML='<option value="crash">Crash (lane block)</option><option value="roadwork">Roadworks (slow)</option>';
+  isel.value=S.toolOpt.incKind||'crash';isel.onchange=()=>S.toolOpt.incKind=isel.value;ik.appendChild(isel);
+  const id2=el('div','row');id2.innerHTML='<label>Duration s</label>';
+  const ii=document.createElement('input');ii.type='number';ii.min=30;ii.max=3600;ii.value=S.toolOpt.incDur||300;
+  ii.onchange=()=>S.toolOpt.incDur=+ii.value;id2.appendChild(ii);
+  s3.append(ik,id2);
+  const s4=el('div','sec','<h4>Map size</h4>');
+  const mw=el('div','row');mw.innerHTML='<label>Width m</label>';
+  const mi=document.createElement('input');mi.type='number';mi.min=800;mi.max=8000;mi.value=P.mapW;
+  mi.onchange=()=>{P.mapW=clamp(+mi.value,800,8000);};mw.appendChild(mi);
+  const mh=el('div','row');mh.innerHTML='<label>Height m</label>';
+  const mi2=document.createElement('input');mi2.type='number';mi2.min=600;mi2.max=8000;mi2.value=P.mapH;
+  mi2.onchange=()=>{P.mapH=clamp(+mi2.value,600,8000);};mh.appendChild(mi2);
+  s4.append(mw,mi2,el('div','hint','Map bounds apply to new scenarios.'));
+  const s5=el('div','sec','<h4>Economy</h4>');
+  const sb=el('div','row');sb.innerHTML='<label>Sandbox (free build)</label>';
+  const scb=document.createElement('input');scb.type='checkbox';scb.checked=P.sandbox;
+  scb.onchange=()=>{P.sandbox=scb.checked;renderPanel();};sb.appendChild(scb);
+  const bd=el('div','row');bd.innerHTML='<label>Budget $</label>';
+  const bi=document.createElement('input');bi.type='number';bi.min=0;bi.max=9999999;bi.value=P.budget;
+  bi.onchange=()=>P.budget=+bi.value;bd.appendChild(bi);
+  s5.append(sb,bd,el('div','hint','Roads cost $120/m · signals $15k · zones free. Turn sandbox off to spend.'));
+  b.append(s1,s2,s3,s4,s5);
+}
+/* ---- Transit ---- */
+function panelTransit(b){
+  const s1=el('div','sec','<h4>Routes</h4>');
+  const nb=el('button','btn primary','＋ New route');
+  nb.onclick=()=>{pushUndo('new route');
+    const cols=['#ff6b6b','#4cc2ff','#46d19a','#ffd166','#c792ea','#ff9d3d'];
+    const r={id:rid(),name:'Line '+(W.routes.size+1),color:cols[W.routes.size%cols.length],
+      stops:[],headway:P.busHeadway,capacity:P.busCap,vehs:[],nextSpawn:2,rid:0};
+    W.routes.set(r.id,r);S.editRouteId=r.id;S.tool='route';
+    toast('Route created — click stops/roads on the map to add stops');renderPanel();};
+  s1.appendChild(nb);
+  for(const r of W.routes.values()){
+    const d=el('div','scen');
+    d.innerHTML=`<span><b style="color:${r.color}">■</b> ${r.name} <span class="d">${r.stops.length} stops · ${r.vehs.length} veh · ${r.rid||0} pax</span></span>`;
+    const ed=el('button','btn small',S.editRouteId===r.id?'Editing…':'Edit');
+    ed.onclick=e2=>{e2.stopPropagation();S.editRouteId=S.editRouteId===r.id?null:r.id;S.tool='route';renderPanel();};
+    d.appendChild(ed);
+    d.onclick=()=>{S.sel={kind:'route',id:r.id};S.panel='inspect';renderPanel();};
+    s1.appendChild(d);
+    if(S.editRouteId===r.id){
+      const hw=el('div','row');hw.innerHTML='<label>Headway s</label>';
+      const hi=document.createElement('input');hi.type='number';hi.min=20;hi.max=1800;hi.value=r.headway;
+      hi.onchange=()=>r.headway=clamp(+hi.value,20,1800);hw.appendChild(hi);
+      const cp=el('div','row');cp.innerHTML='<label>Capacity</label>';
+      const ci=document.createElement('input');ci.type='number';ci.min=5;ci.max=200;ci.value=r.capacity;
+      ci.onchange=()=>r.capacity=clamp(+ci.value,5,200);cp.appendChild(ci);
+      const stoplist=el('div','hint','Stops: '+r.stops.map((x,i)=>(i+1)+'.'+(W.stops.get(x)?.name||x)).join(' → ')||'none — click roads on map');
+      const rev=el('button','btn small','Reverse');rev.onclick=()=>{r.stops.reverse();renderPanel();};
+      const clr=el('button','btn small danger','Clear stops');clr.onclick=()=>{r.stops.length=0;renderPanel();};
+      s1.append(hw,cp,stoplist,rev,document.createTextNode(' '),clr);
+    }
+  }
+  const s2=el('div','sec','<h4>Transit settings</h4>');
+  s2.appendChild(slider('Default headway s','busHeadway',30,600,10,x=>x+'s'));
+  s2.appendChild(slider('Bus capacity','busCap',10,120,5,x=>x));
+  s2.appendChild(slider('Dwell time s','dwell',3,45,1,x=>x+'s'));
+  s2.appendChild(slider('Transit mode share','transitShare',0,0.9,0.05,x=>Math.round(x*100)+'%'));
+  b.append(s1,s2);
+}
+/* ---- Demand ---- */
+function panelDemand(b){
+  const s1=el('div','sec','<h4>Demand & drivers</h4>');
+  s1.appendChild(slider('Demand scale','demand',0,4,0.05,x=>fmt(x,2)+'×'));
+  s1.appendChild(slider('Vehicle cap','spawnCap',50,3000,50,x=>x));
+  s1.appendChild(slider('Headway (gap)','headway',0.4,3,0.1,x=>fmt(x,1)+'s'));
+  s1.appendChild(slider('Aggressiveness','aggr',0,1,0.05,x=>fmt(x,2)));
+  s1.appendChild(slider('Lane-change propensity','laneChange',0,1,0.05,x=>fmt(x,2)));
+  s1.appendChild(slider('Reroute sensitivity','reroute',0,1,0.05,x=>fmt(x,2)));
+  const s2=el('div','sec','<h4>Conditions</h4>');
+  const wr=el('div','row');wr.innerHTML='<label>Weather</label>';
+  const wsel=document.createElement('select');
+  wsel.innerHTML='<option value="clear">Clear</option><option value="rain">Rain (−25%)</option><option value="snow">Snow (−45%)</option>';
+  wsel.value=P.weather;wsel.onchange=()=>{P.weather=wsel.value;S.weather={clear:1,rain:0.75,snow:0.55}[wsel.value];};
+  wr.appendChild(wsel);
+  const ev=el('div','row');ev.innerHTML='<label>Event mode</label>';
+  const ec=document.createElement('input');ec.type='checkbox';ec.checked=S.eventMode;
+  ec.onchange=()=>{S.eventMode=ec.checked;};ev.appendChild(ec);
+  const dn=el('div','row');dn.innerHTML='<label>Day/night cycle</label>';
+  const dc=document.createElement('input');dc.type='checkbox';dc.checked=P.dayNight;
+  dc.onchange=()=>{P.dayNight=dc.checked;};dn.appendChild(dc);
+  const ir=slider('Random incident rate','incidentRate',0,2,0.05,x=>fmt(x,2));
+  s2.append(wr,ev,dn,ir);
+  const s3=el('div','sec','<h4>Clock</h4>');
+  s3.appendChild(row('Sim time',fmtT2(W.simTime)));
+  const day=el('div','row');day.innerHTML='<label>Jump to</label>';
+  const dsel=document.createElement('select');
+  dsel.innerHTML='<option value="25200">07:00</option><option value="28800">08:00</option><option value="43200">12:00</option><option value="63000">17:30</option><option value="72000">20:00</option><option value="300">00:05</option>';
+  dsel.onchange=()=>{W.simTime=(Math.floor(W.simTime/86400))*86400+ +dsel.value;};day.appendChild(dsel);
+  s3.appendChild(day);
+  b.append(s1,s2,s3);
+}
+/* ---- Signals ---- */
+function panelSignals(b){
+  const s0=el('div','sec','<h4>Policy</h4>');
+  const pr=el('div','row');pr.innerHTML='<label>Global policy</label>';
+  const psel=document.createElement('select');
+  psel.innerHTML='<option value="auto">Adaptive (queue-aware)</option><option value="fixed">Fixed time</option>';
+  psel.value=P.signalPolicy;psel.onchange=()=>{P.signalPolicy=psel.value;
+    for(const n of W.nodes.values())if(n.signal)n.signal.mode=psel.value;};
+  pr.appendChild(psel);s0.appendChild(pr);
+  b.appendChild(s0);
+  // find signalized nodes
+  const sigs=[...W.nodes.values()].filter(n=>n.signal);
+  if(!sigs.length){b.appendChild(el('div','hint','No signals yet — use the Signal tool on a junction.'));return;}
+  const n=(S.sel&&S.sel.kind==='node'&&W.nodes.get(S.sel.id)?.signal)?W.nodes.get(S.sel.id):sigs[0];
+  const picker=el('div','row');picker.innerHTML='<label>Junction</label>';
+  const pk=document.createElement('select');
+  for(const sn of sigs)pk.innerHTML+=`<option ${sn===n?'selected':''} value="${sn.id}">${sn.id} (${sn.edges.length} legs)</option>`;
+  pk.onchange=()=>{S.sel={kind:'node',id:pk.value};renderPanel();};picker.appendChild(pk);
+  b.appendChild(picker);
+  const sig=n.signal;
+  const s1=el('div','sec',`<h4>Phases — junction ${n.id}</h4>`);
+  s1.appendChild(row('Current phase',(sig.idx+1)+'/'+sig.phases.length));
+  s1.appendChild(row('Cycle',fmt(sig.phases.reduce((a,p)=>a+p.dur,0),0)+' s'));
+  const mr=el('div','row');mr.innerHTML='<label>Mode</label>';
+  const msel=document.createElement('select');
+  msel.innerHTML='<option value="auto">adaptive</option><option value="fixed">fixed</option>';
+  msel.value=sig.mode;msel.onchange=()=>sig.mode=msel.value;mr.appendChild(msel);s1.appendChild(mr);
+  // phase editor: movements × phases
+  const moves=n._info?n._info.moves:[];
+  const tbl=document.createElement('table');tbl.className='siggrid';
+  let thead='<tr><th>movement</th>';sig.phases.forEach((p,i)=>thead+=`<th>P${i+1}${i===sig.idx?'●':''}<br>${p.dur}s</th>`);thead+='</tr>';
+  tbl.innerHTML=thead;
+  for(const m of moves){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="mv">${shortE(m.inE)}→${shortE(m.outE)} ${m.kind}</td>`;
+    sig.phases.forEach((p,pi)=>{
+      const td=document.createElement('td');
+      const key=m.inE+':'+m.outE;
+      const on=p.allow.includes(m.inE+':*')||p.allow.includes(key);
+      const c=document.createElement('span');c.className='sigcell'+(on?' on':'');
+      c.onclick=()=>{pushUndo('phase');
+        const star=m.inE+':*';
+        if(p.allow.includes(star)){p.allow=p.allow.filter(a=>a!==star);
+          // add individual moves except this one
+          for(const mm of movementsInto(n,m.inE))if(mm.key!==m.key)p.allow.push(mm.inE+':'+mm.outE);
+        }else if(p.allow.includes(key)){p.allow=p.allow.filter(a=>a!==key);}
+        else{
+          const siblings=movementsInto(n,m.inE).filter(mm=>mm.key!==m.key);
+          if(siblings.every(mm=>p.allow.includes(mm.inE+':'+mm.outE))){
+            p.allow=p.allow.filter(a=>!(a.startsWith(m.inE+':')&&a!==star));p.allow.push(star);
+          }else p.allow.push(key);
+        }
+        renderPanel();};
+      td.appendChild(c);tr.appendChild(td);});
+    tbl.appendChild(tr);
+  }
+  s1.appendChild(tbl);
+  // duration editors
+  sig.phases.forEach((p,i)=>{
+    const r=el('div','row');r.innerHTML=`<label>P${i+1} duration</label>`;
+    const inp=document.createElement('input');inp.type='number';inp.min=4;inp.max=120;inp.value=p.dur;
+    inp.onchange=()=>{p.dur=clamp(+inp.value,4,120);sig.cycle=sig.phases.reduce((a,x)=>a+x.dur,0);renderPanel();};
+    r.appendChild(inp);s1.appendChild(r);});
+  const ab=el('div','row');
+  const addp=el('button','btn small','＋ phase');addp.onclick=()=>{pushUndo('phase+');sig.phases.push({dur:15,allow:[]});renderPanel();};
+  const delp=el('button','btn small danger','− last');delp.onclick=()=>{if(sig.phases.length>1){pushUndo('phase-');sig.phases.pop();sig.idx%=sig.phases.length;renderPanel();}};
+  const au=el('button','btn small','Auto-design');au.onclick=()=>{pushUndo('auto');sig.phases=autoPhases(n);sig.idx=0;sig.t=0;renderPanel();};
+  ab.append(addp,delp,au);s1.appendChild(ab);
+  // diagnostics
+  const dg=signalDiag(n);
+  const dd=el('div','sec','<h4>Diagnostics</h4>');
+  if(!dg.conflicts.length&&!dg.unreachable.length)dd.appendChild(el('div','hint','✓ no conflicts, all phases reachable'));
+  for(const c of dg.conflicts)dd.appendChild(el('div','hint',`⚠ P${c.phase+1}: conflicting greens ${shortE(c.a)} / ${shortE(c.b)}`));
+  for(const u of dg.unreachable)dd.appendChild(el('div','hint',`⚠ P${u+1}: serves no movement`));
+  s1.appendChild(dd);b.appendChild(s1);
+}
+function shortE(k){const[eid2]=k.split('>');return k.replace(/[enszrvip]/g,'').replace('>','→')||k;}
+/* ---- Analytics ---- */
+const CHARTS=[['throughput','Throughput (veh/h)','#4cc2ff'],['travel','Avg travel time (s)','#46d19a'],
+  ['delay','Avg delay (s)','#ffb454'],['queue','Total queue (veh)','#ff5d6c'],
+  ['speed','Network speed (km/h)','#b98cff'],['pax','Waiting passengers','#ffd166'],
+  ['occ','Bus occupancy','#ffa94d'],['emis','Emissions proxy','#8be9fd']];
+function panelAnalytics(b){
+  const m=metrics();
+  const s0=el('div','sec','<h4>Live</h4>');
+  s0.appendChild(row('Active vehicles',m.active));
+  s0.appendChild(row('Completed trips',m.completed+` (car ${W.carTrips} · transit ${W.busTrips})`));
+  s0.appendChild(row('Failed/unserved',m.failed+' / '+m.unserved));
+  s0.appendChild(row('Travel p50 / p95',fmt(m.p50,0)+'s / '+fmt(m.p95,0)+'s'));
+  s0.appendChild(row('Avg delay',fmt(m.delay,1)+' s'));
+  s0.appendChild(row('Transit wait avg',fmt(m.avgWait,0)+' s'));
+  b.appendChild(s0);
+  for(const[k,label,col]of CHARTS){
+    const box=el('div','chartbox');
+    const cur=AN.series[k].length?AN.series[k][AN.series[k].length-1]:0;
+    box.innerHTML=`<div class="t"><span>${label}</span><b>${fmt(cur,1)}</b></div>`;
+    const c=document.createElement('canvas');c.className='chart';c.dataset.k=k;c.dataset.col=col;
+    box.appendChild(c);b.appendChild(box);
+  }
+  const s2=el('div','sec','<h4>Worst corridors</h4>');
+  for(const c of congestedEdges()){
+    s2.appendChild(row(c.e.name||c.e.id,fmt(c.ratio*100,0)+'% flow · q='+c.q));
+  }
+  b.appendChild(s2);
+}
+function drawCharts(){
+  for(const c of $$('canvas.chart')){
+    const k=c.dataset.k,data=AN.series[k];
+    const dpr=Math.min(devicePixelRatio||1,2);
+    c.width=c.clientWidth*dpr;c.height=c.clientHeight*dpr;
+    const g=c.getContext('2d');g.scale(dpr,dpr);
+    const w=c.clientWidth,h=c.clientHeight;
+    if(!data||data.length<2){g.fillStyle='#333d52';g.font='10px sans-serif';g.fillText('collecting…',8,h/2);continue;}
+    const mx=Math.max(...data)*1.15||1;
+    g.strokeStyle=c.dataset.col;g.lineWidth=1.4;g.beginPath();
+    data.forEach((v,i)=>{const x=i/(data.length-1)*w,y=h-3-(v/mx)*(h-6);
+      i?g.lineTo(x,y):g.moveTo(x,y);});
+    g.stroke();
+    g.fillStyle=c.dataset.col+'22';g.lineTo(w,h);g.lineTo(0,h);g.fill();
+  }
+}
+/* ---- Overlays ---- */
+function panelLayers(b){
+  const s=el('div','sec','<h4>Heatmap overlay</h4>');
+  for(const[k,l]of OV_OPTIONS){const r=el('div','row');
+    const rb=document.createElement('input');rb.type='radio';rb.name='ov';rb.checked=S.overlay===k;
+    rb.onchange=()=>{S.overlay=k;buildToolbar();};
+    r.appendChild(rb);r.appendChild(el('label','',l));s.appendChild(r);}
+  s.appendChild(el('div','hint','Network validation colors roads green (main component), amber (other components), red (disconnected ends).'));
+  b.appendChild(s);
+  const s2=el('div','sec','<h4>View</h4>');
+  const dnr=el('div','row');dnr.innerHTML='<label>Day/night</label>';
+  const dc=document.createElement('input');dc.type='checkbox';dc.checked=P.dayNight;dc.onchange=()=>P.dayNight=dc.checked;
+  dnr.appendChild(dc);s2.appendChild(dnr);
+  const zr=el('div','row');const zb=el('button','btn small','Reset camera');
+  zb.onclick=()=>{cam.x=P.mapW/2;cam.y=P.mapH/2;cam.z=Math.min($('#mapwrap').clientWidth/P.mapW,$('#mapwrap').clientHeight/P.mapH)*0.95;};
+  zr.appendChild(zb);s2.appendChild(zr);b.appendChild(s2);
+}
+/* ---- Scenarios / IO defined later ---- */
+
+/* ===================== SCENARIOS ===================== */
+function clearWorld(){
+  W.nodes.clear();W.edges.clear();W.zones.clear();W.stops.clear();W.routes.clear();
+  _uid=1;nodeCache.clear();
+}
+function G(x,y){return newNode(x,y);} // grid helper
+function roadN(a,b,o){const e=newEdge(a.id,b.id,o);return e;}
+function gridRoads(x0,y0,nx,ny,dx,dy,o){
+  const ns=[];
+  for(let j=0;j<=ny;j++){ns.push([]);for(let i=0;i<=nx;i++)ns[j].push(G(x0+i*dx,y0+j*dy));}
+  for(let j=0;j<=ny;j++)for(let i=0;i<nx;i++)roadN(ns[j][i],ns[j][i+1],o);
+  for(let j=0;j<ny;j++)for(let i=0;i<=nx;i++)roadN(ns[j][i],ns[j+1][i],o);
+  return ns;
+}
+function signalize(ns,cond){for(let j=0;j<ns.length;j++)for(let i=0;i<ns[j].length;i++){
+  const n=ns[j][i];if(n.edges.length>=3&&(!cond||cond(i,j)))mkSignal(n);}}
+function mkRoute(name,color,coords,opt){
+  const stops=[];
+  for(const[x,y]of coords){const b=nearestEdgePoint(x,y);if(!b||b.d>140)continue;
+    const s={id:sid(),edge:b.e.id,pos:clamp(b.s,3,b.e.len-3),dir:b.e.oneway==='b'?'b':'f',
+      name:name+' '+(stops.length+1),routeIds:[]};
+    W.stops.set(s.id,s);stops.push(s.id);}
+  if(stops.length<2)return null;
+  const r={id:rid(),name,color,stops,headway:opt?.headway||P.busHeadway,capacity:opt?.cap||P.busCap,vehs:[],nextSpawn:3,rid:0};
+  W.routes.set(r.id,r);linkRouteStops(r);markDirty();return r;
+}
+function Z(type,x,y,w,h,o){const z={id:zid(),type,x,y,w,h,boost:o?.boost||1,name:o?.name||''};W.zones.set(z.id,z);return z;}
+const SCEN={
+  crossroads:{name:'Simple crossroads',desc:'One signal, four arms, mixed demand',build(){
+    P.mapW=1600;P.mapH=1100;P.demand=0.9;P.transitShare=0.15;
+    const c=G(800,550);
+    roadN(G(200,550),c);roadN(c,G(1400,550));
+    roadN(G(800,120),c);roadN(c,G(800,980));
+    mkSignal(c);
+    Z('res',120,80,300,250);Z('res',1180,760,300,250);
+    Z('com',120,780,300,240);Z('ind',1180,80,300,240);
+    mkRoute('Loop','#ff6b6b',[[500,560],[810,420],[1100,550],[800,660],[500,560]]);
+  }},
+  avenue:{name:'Synchronized avenue',desc:'5 signals on a corridor — tune the green wave',build(){
+    P.mapW=2600;P.mapH=1100;P.demand=1.1;P.transitShare=0.2;P.signalPolicy='fixed';
+    const ns=[];
+    for(let i=0;i<5;i++){const n=G(400+i*450,550);ns.push(n);
+      roadN(G(400+i*450,180),n);roadN(n,G(400+i*450,920));}
+    for(let i=0;i<4;i++)roadN(ns[i],ns[i+1],{lanesF:2,lanesB:2});
+    roadN(G(60,550),ns[0],{lanesF:2,lanesB:2});roadN(ns[4],G(2500,550),{lanesF:2,lanesB:2});
+    for(const n of ns)mkSignal(n);
+    Z('res',60,120,260,320);Z('res',2280,700,280,300);
+    Z('com',60,700,260,300);Z('com',1200,120,300,240);Z('com',2280,140,280,300);
+    mkRoute('Avenue','#4cc2ff',[[300,560],[620,540],[1070,560],[1520,540],[1970,560],[2330,540]]);
+  }},
+  bottleneck:{name:'Suburban bottleneck',desc:'One bridge between suburbs and downtown',build(){
+    P.mapW=2600;P.mapH=1400;P.demand=1.5;P.transitShare=0.35;
+    // river gap — east-west connected by single bridge at y=700
+    const w1=G(1050,700),w2=G(1550,700);
+    roadN(w1,w2,{lanesF:1,lanesB:1,speed:16.7,name:'Bridge'});
+    // west suburbs
+    const gw=gridRoads(150,350,2,2,300,300,{});
+    roadN(gw[1][2],w1,{lanesF:2,lanesB:2,name:'West approach'});
+    // east downtown
+    const ge=gridRoads(1750,300,2,2,280,300,{lanesF:2,lanesB:2});
+    roadN(w2,ge[1][0],{lanesF:2,lanesB:2,name:'East approach'});
+    signalize(ge);
+    Z('res',100,80,700,240);Z('res',100,980,700,320);
+    Z('com',1750,80,700,180,{boost:1.4});Z('com',2050,950,400,320);
+    Z('ind',1750,950,280,320);
+    mkRoute('Crosstown','#46d19a',[[500,650],[1050,700],[1600,700],[1890,600],[2100,950]]);
+  }},
+  downtown:{name:'Downtown grid',desc:'4×4 signalized blocks, heavy demand, BRT spine',build(){
+    P.mapW=2200;P.mapH=1700;P.demand=1.0;P.transitShare=0.45;P.busHeadway=90;
+    const ns=gridRoads(400,300,4,4,300,260,{lanesF:1,lanesB:1});
+    signalize(ns);
+    Z('res',150,150,220,500,{boost:1.2});Z('res',1830,150,220,500);
+    Z('com',450,80,1250,180,{boost:1.6});Z('com',450,1430,1250,200,{boost:1.4});
+    Z('com',1830,700,220,500,{boost:1.2});Z('sch',150,950,220,400);
+    Z('ind',1830,1250,220,300);
+    mkRoute('BRT North-South','#ff6b6b',[[850,180],[850,500],[850,760],[850,1020],[850,1280],[850,1500]],{headway:80});
+    mkRoute('Ring','#46d19a',[[550,430],[1300,430],[1300,1150],[550,1150],[550,430]],{headway:150});
+  }},
+  stadium:{name:'Stadium event',desc:'Surge demand to an event venue at 20:00',build(){
+    P.mapW=2400;P.mapH=1500;P.demand=1.2;P.transitShare=0.4;S.eventMode=true;
+    W.startT=19*3600+10*60;W.simTime=W.startT;
+    const ns=gridRoads(500,350,3,2,450,420,{lanesF:2,lanesB:2});
+    signalize(ns,(i,j)=>i>0||j>0);
+    Z('evt',1030,20,380,300,{boost:3,name:'Stadium'});
+    Z('res',150,150,300,1100,{boost:1.4});Z('res',1950,150,320,1100,{boost:1.4});
+    Z('com',550,1180,1300,240,{boost:1.1});
+    mkRoute('Shuttle','#ffd166',[[450,770],[950,560],[1410,560],[1850,770],[1410,980],[950,980],[450,770]],{headway:60,cap:60});
+  }},
+  bridge:{name:'Bridge closure',desc:'Two bridges — one closes mid-scenario, watch reroute',build(){
+    P.mapW=2600;P.mapH=1400;P.demand=1.4;P.transitShare=0.2;
+    const gw=gridRoads(150,300,2,2,320,340,{}),ge=gridRoads(1800,300,2,2,320,340,{lanesF:2,lanesB:2});
+    const b1a=G(1150,480),b1b=G(1520,480),b2a=G(1150,920),b2b=G(1520,920);
+    roadN(gw[0][2],b1a,{lanesF:2,lanesB:2});roadN(b1a,b1b,{lanesF:1,lanesB:1,name:'Old Bridge'});
+    roadN(b1b,ge[0][0],{lanesF:2,lanesB:2});
+    roadN(gw[2][2],b2a,{lanesF:2,lanesB:2});roadN(b2a,b2b,{lanesF:2,lanesB:2,name:'New Bridge',speed:16.7});
+    roadN(b2b,ge[2][0],{lanesF:2,lanesB:2});
+    signalize(ge);
+    Z('res',100,80,900,240,{boost:1.5});Z('res',100,1100,900,240,{boost:1.5});
+    Z('com',1750,80,700,180,{boost:1.6});Z('ind',1750,1150,700,200);
+    Z('com',2200,600,300,300);
+    mkRoute('River X','#4cc2ff',[[700,640],[1180,480],[1560,480],[2000,640]]);
+    setTimeout(()=>{},0);
+    // schedule closure
+    W._pendingClose={e:[...W.edges.values()].find(e=>e.name==='Old Bridge')?.id,t:W.simTime+180};
+  }},
+  brt:{name:'BRT corridor',desc:'Dedicated busway vs mixed traffic — compare travel times',build(){
+    P.mapW=2800;P.mapH=1300;P.demand=1.5;P.transitShare=0.6;P.busHeadway=60;P.busCap=60;
+    const ns=[];for(let i=0;i<6;i++){const n=G(300+i*440,650);ns.push(n);
+      if(i>0&&i<5){roadN(G(300+i*440,250),n);roadN(n,G(300+i*440,1050));}}
+    for(let i=0;i<5;i++)roadN(ns[i],ns[i+1],{lanesF:1,lanesB:1,name:'Main St'});
+    for(const n of ns.slice(1,5))mkSignal(n);
+    Z('res',100,100,500,300,{boost:1.5});Z('res',100,900,500,300,{boost:1.5});
+    Z('com',1150,100,600,250,{boost:1.5});Z('com',1900,950,700,260,{boost:1.3});
+    Z('com',2300,100,400,400);Z('sch',800,950,300,280);
+    mkRoute('BRT-1','#ff6b6b',[[350,650],[740,650],[1180,650],[1620,650],[2060,650],[2450,650]],{headway:60,cap:60});
+    mkRoute('Local-2','#46d19a',[[350,650],[740,400],[1180,650],[1620,900],[2060,650]],{headway:150});
+  }},
+  strike:{name:'Transit strike',desc:'Same city as BRT but routes disabled — mode collapse',build(){
+    SCEN.brt.build();P.transitShare=0.02;W.routes.clear();
+    for(const s of W.stops.values())s.routeIds=[];
+  }},
+  induced:{name:'Induced demand',desc:'Toggle the new bypass: does congestion improve?',build(){
+    P.mapW=2800;P.mapH=1500;P.demand=1.8;P.transitShare=0.15;
+    const ns=gridRoads(500,350,4,2,440,400,{});
+    signalize(ns);
+    Z('res',100,100,340,1200,{boost:1.6});Z('com',2260,100,440,500,{boost:1.6});
+    Z('ind',2260,900,440,400,{boost:1.2});Z('com',900,1150,900,280);
+    mkRoute('East-West','#ffd166',[[500,550],[940,550],[1380,550],[1820,550],[2260,550]]);
+    // bypass toggle offered via button in scenario card
+    W._bypass=()=>{ // add fast ring north
+      pushUndo('bypass');
+      const a=G(500,150),b=G(2260,150);
+      const n1=G(940,150),n2=G(1820,150);
+      roadN(ns[0][0],a);roadN(a,n1,{lanesF:2,lanesB:2,speed:22.2,name:'Bypass'});
+      roadN(n1,n2,{lanesF:2,lanesB:2,speed:22.2});roadN(n2,b,{lanesF:2,lanesB:2,speed:22.2});
+      roadN(b,ns[0][4]);markDirty();toast('Bypass opened');
+    };
+  }},
+  stress:{name:'Dense stress test',desc:'6×6 grid, max demand, many routes',build(){
+    P.mapW=2600;P.mapH=2000;P.demand=2.4;P.transitShare=0.5;P.spawnCap=1400;P.busHeadway=70;
+    const ns=gridRoads(300,250,6,6,320,270,{});
+    signalize(ns,(i,j)=>(i+j)%2===0);
+    Z('res',60,60,200,1800,{boost:1.8});Z('res',2340,60,200,1800,{boost:1.8});
+    Z('com',400,60,1800,140,{boost:1.8});Z('com',400,1800,1800,150,{boost:1.6});
+    Z('ind',1100,800,400,400,{boost:1.2});Z('sch',60,800,200,300);
+    mkRoute('L1','#ff6b6b',[[300,520],[940,520],[1580,520],[2220,520]],{headway:70});
+    mkRoute('L2','#4cc2ff',[[620,250],[620,790],[620,1330],[620,1870]],{headway:70});
+    mkRoute('L3','#46d19a',[[300,1150],[940,1150],[1580,1150],[2220,1150]],{headway:90});
+    mkRoute('Ring','#ffd166',[[460,380],[2060,380],[2060,1600],[460,1600],[460,380]],{headway:120});
+  }},
+};
+function fitCamera(){
+  const wr=$('#mapwrap');
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const n of W.nodes.values()){x0=Math.min(x0,n.x);y0=Math.min(y0,n.y);x1=Math.max(x1,n.x);y1=Math.max(y1,n.y);}
+  if(x0>x1){x0=0;y0=0;x1=P.mapW;y1=P.mapH;}
+  const m=140;x0-=m;y0-=m;x1+=m;y1+=m;
+  cam.x=(x0+x1)/2;cam.y=(y0+y1)/2;
+  cam.z=Math.min(wr.clientWidth/(x1-x0),wr.clientHeight/(y1-y0));
+  cam.z=clamp(cam.z,0.42,3);
+}
+function loadScenario(key){
+  pushUndo('scenario');
+  clearWorld();
+  S.sel=null;S.editRouteId=null;S.eventMode=false;S.weather=1;P.weather='clear';
+  Object.assign(P,{demand:1,transitShare:0.25,spawnCap:900,headway:1,aggr:0.5,reroute:0.5,
+    laneChange:0.5,busHeadway:120,busCap:40,dwell:12,incidentRate:0.3,mapW:2600,mapH:1800,signalPolicy:'auto',dayNight:false});
+  W.startT=6*3600+30*60;SCEN[key].build();
+  resetSim();rebuildAll();
+  fitCamera();
+  toast(SCEN[key].name+' loaded');renderPanel();
+}
+function panelScen(b){
+  for(const k in SCEN){
+    const d=el('div','scen');
+    d.innerHTML=`<span><b>${SCEN[k].name}</b><br><span class="d">${SCEN[k].desc}</span></span>`;
+    const lb=el('button','btn small primary','Load');
+    lb.onclick=e2=>{e2.stopPropagation();loadScenario(k);};
+    d.appendChild(lb);d.onclick=()=>loadScenario(k);
+    b.appendChild(d);
+  }
+  if(W._bypass){const bb=el('button','btn primary','Open bypass (induced demand)');
+    bb.onclick=()=>{W._bypass();W._bypass=null;renderPanel();};b.appendChild(bb);}
+}
+
+/* ===================== SAVE / LOAD / EXPORT ===================== */
+function serialize(){return JSON.stringify({v:1,model:modelSnapshot()},null,0);}
+function deserialize(txt){
+  const o=JSON.parse(txt);
+  if(!o||!o.model||!Array.isArray(o.model.edges)||!Array.isArray(o.model.nodes))
+    throw new Error('not a Metroflux city file');
+  for(const e of o.model.edges)if(!W||typeof e.a!=='string'){}
+  for(const e of o.model.edges){if(!e.id||!e.a||!e.b)throw new Error('edge missing fields');}
+  for(const n of o.model.nodes){if(!n.id||!isFinite(n.x)||!isFinite(n.y))throw new Error('node missing fields');}
+  return o;
+}
+function saveFile(){
+  const blob=new Blob([serialize()],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='metroflux-city.json';a.click();URL.revokeObjectURL(a.href);
+}
+function loadFile(file){
+  const r=new FileReader();
+  r.onload=()=>{try{const o=deserialize(r.result);pushUndo('load');
+    modelRestore(o.model);resetSim();rebuildAll();cam.x=P.mapW/2;cam.y=P.mapH/2;
+    cam.z=Math.min($('#mapwrap').clientWidth/P.mapW,$('#mapwrap').clientHeight/P.mapH)*0.95;
+    toast('City loaded');renderPanel();}
+    catch(err){toast('Import failed: '+err.message);}};
+  r.readAsText(file);
+}
+function saveLocal(name){localStorage.setItem('metroflux:'+name,serialize());
+  localStorage.setItem('metroflux:names',JSON.stringify([...new Set([...(JSON.parse(localStorage.getItem('metroflux:names')||'[]')),name])]));}
+function listLocal(){try{return JSON.parse(localStorage.getItem('metroflux:names')||'[]');}catch{return[];}}
+function exportCSV(){
+  let csv='sim_time,throughput,avg_travel,p50,p95,delay,queue,net_speed,active,completed,failed,pax_wait,ridership,occupancy,avg_wait,emissions\n';
+  for(const h of AN.hist)csv+=`${h.t},${h.throughput},${h.avgT},${h.p50},${h.p95},${h.delay},${h.queue},${h.netSpeed},${h.active},${h.completed},${h.failed},${h.paxWait},${h.ridership},${h.occ},${h.avgWait},${h.emis}\n`;
+  const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='metroflux-metrics.csv';a.click();URL.revokeObjectURL(a.href);
+}
+function exportPNG(){
+  draw();
+  const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download='metroflux-map.png';a.click();
+}
+function panelIO(b){
+  const s1=el('div','sec','<h4>File</h4>');
+  const r=el('div','row');
+  const sb=el('button','btn primary','⬇ Save JSON');sb.onclick=saveFile;
+  const lf=el('label','btn','⬆ Load JSON');lf.style.cursor='pointer';
+  const fi=document.createElement('input');fi.type='file';fi.accept='.json';fi.style.display='none';
+  fi.onchange=()=>fi.files[0]&&loadFile(fi.files[0]);lf.appendChild(fi);
+  r.append(sb,lf);s1.appendChild(r);
+  const s2=el('div','sec','<h4>Local slots</h4>');
+  const nr=el('div','row');
+  const ni=document.createElement('input');ni.type='text';ni.placeholder='slot name';ni.style.width='110px';
+  const nb2=el('button','btn small','Save');nb2.onclick=()=>{if(ni.value){saveLocal(ni.value);toast('saved "'+ni.value+'"');renderPanel();}};
+  nr.append(ni,nb2);s2.appendChild(nr);
+  if(localStorage.getItem('metroflux:autosave')){
+    const ar=el('div','row');ar.appendChild(el('label','','autosave (15s)'));
+    const ab=el('button','btn small','Resume');
+    ab.onclick=()=>{try{const o=deserialize(localStorage.getItem('metroflux:autosave'));
+      pushUndo('autosave');modelRestore(o.model);resetSim();rebuildAll();fitCamera();toast('autosave resumed');renderPanel();}
+      catch(e2){toast('autosave corrupt');}};
+    ar.appendChild(ab);s2.appendChild(ar);
+  }
+  for(const name of listLocal()){
+    const d=el('div','row');
+    d.appendChild(el('label','',name));
+    const lb=el('button','btn small','Load');lb.onclick=()=>{try{const o=deserialize(localStorage.getItem('metroflux:'+name));
+      pushUndo('load slot');modelRestore(o.model);resetSim();rebuildAll();toast('loaded "'+name+'"');renderPanel();}catch(e2){toast('load failed');}};
+    const db=el('button','btn small danger','✕');db.onclick=()=>{localStorage.removeItem('metroflux:'+name);
+      localStorage.setItem('metroflux:names',JSON.stringify(listLocal().filter(x=>x!==name)));renderPanel();};
+    d.append(lb,db);s2.appendChild(d);
+  }
+  const s3=el('div','sec','<h4>Export</h4>');
+  const er=el('div','row');
+  const cb=el('button','btn small','CSV metrics');cb.onclick=exportCSV;
+  const pb=el('button','btn small','PNG map');pb.onclick=exportPNG;
+  er.append(cb,pb);s3.appendChild(er);
+  const s4=el('div','sec','<h4>Determinism</h4>');
+  s4.appendChild(row('Seed',W.seed));
+  const sr=el('div','row');sr.innerHTML='<label>New seed</label>';
+  const si=document.createElement('input');si.type='number';si.value=W.seed;
+  si.onchange=()=>{W.seed=+si.value|0||1;};sr.appendChild(si);
+  const rp=el('button','btn small','Replay (reset & reseed)');rp.onclick=()=>{resetSim();toast('replaying from seed '+W.seed);};
+  s4.append(sr,rp,el('div','hint','Same seed + same edits ⇒ same simulation.'));
+  b.append(s1,s2,s3,s4);
+}
+
+/* ===================== AUDIO ===================== */
+const AU={ctx:null,master:null,eng:null,noise:null};
+function audioInit(){
+  if(AU.ctx)return;
+  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+  AU.ctx=new C();AU.master=AU.ctx.createGain();AU.master.gain.value=0;AU.master.connect(AU.ctx.destination);
+  // traffic bed: filtered noise
+  const len=AU.ctx.sampleRate*2,buf=AU.ctx.createBuffer(1,len,AU.ctx.sampleRate);
+  const d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+  AU.noise=AU.ctx.createBufferSource();AU.noise.buffer=buf;AU.noise.loop=true;
+  const f=AU.ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=420;f.Q.value=0.6;
+  AU.eng=AU.ctx.createGain();AU.eng.gain.value=0;
+  AU.noise.connect(f);f.connect(AU.eng);AU.eng.connect(AU.master);AU.noise.start();
+}
+function audioSet(on){
+  S.audioOn=on;$('#btnAudio').textContent=on?'🔊':'🔇';
+  if(on){audioInit();if(!AU.ctx)return;AU.ctx.resume();
+    AU.master.gain.linearRampToValueAtTime(0.5,AU.ctx.currentTime+0.3);}
+  else if(AU.ctx)AU.master.gain.linearRampToValueAtTime(0,AU.ctx.currentTime+0.2);
+}
+function audioFrame(){
+  if(!S.audioOn||!AU.ctx)return;
+  const m=metrics();
+  const target=clamp(m.active/300,0,1)*0.5+clamp(m.netSpeed/60,0,1)*0.1;
+  AU.eng.gain.linearRampToValueAtTime(target*0.14,AU.ctx.currentTime+0.4);
+}
+function beep(f=660,d=0.06,g=0.1){
+  if(!S.audioOn||!AU.ctx)return;
+  const o=AU.ctx.createOscillator(),gn=AU.ctx.createGain();
+  o.frequency.value=f;o.type='sine';gn.gain.value=g;
+  gn.gain.exponentialRampToValueAtTime(0.001,AU.ctx.currentTime+d);
+  o.connect(gn);gn.connect(AU.master);o.start();o.stop(AU.ctx.currentTime+d);
+}
+
+/* ===================== HUD / LOOP ===================== */
+let fpsA=0,fpsC=0,lastF=performance.now(),acc=0,panelTimer=0;
+function hud(){
+  const m=metrics();
+  $('#hud').innerHTML=`<div id="hudTitle">METROFLUX</div>`+
+   `<div class="r"><span>fps</span><b>${(window._fps||0)|0}</b></div>`+
+   `<div class="r"><span>sim time</span><b>${fmtT2(W.simTime)}</b></div>`+
+   `<div class="r"><span>speed</span><b>${S.speed}× ${S.paused?'⏸':''}</b></div>`+
+   `<div class="r"><span>vehicles</span><b>${m.active}</b></div>`+
+   `<div class="r"><span>trips done</span><b>${m.completed}</b></div>`+
+   `<div class="r"><span>failed</span><b>${m.failed+m.unserved}</b></div>`+
+   `<div class="r"><span>avg travel</span><b>${fmt(m.avgT,0)}s</b></div>`+
+   `<div class="r"><span>net speed</span><b>${fmt(m.netSpeed,0)} km/h</b></div>`+
+   `<div class="r"><span>queue</span><b>${m.queue}</b></div>`+
+   `<div class="r"><span>ridership</span><b>${m.ridership}</b></div>`+
+   `<div class="r"><span>incidents</span><b>${W.incidents.length}</b></div>`+
+   `<div class="r"><span>tool</span><b>${S.tool}</b></div>`+
+   (S.paused?`<div class="r paused"><span>state</span><b>PAUSED</b></div>`:'');
+  $('#stLeft').textContent=`${W.nodes.size} nodes · ${W.edges.size} edges · ${W.zones.size} zones · ${W.stops.size} stops · ${W.routes.size} routes`;
+  $('#stRight').textContent=`seed ${W.seed} · ${fmt(cam.z,2)}× · ${S.overlay}`+(P.sandbox?'':` · $${fmt(P.budget,0)}`);
+}
+function toast(msg,ms=2200){const t=$('#toast');t.textContent=msg;t.style.opacity=1;
+  clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,ms);}
+function frame(t){
+  requestAnimationFrame(frame);
+  const dtms=Math.min(100,t-lastF);lastF=t;
+  fpsC++;if(t-fpsA>500){$('#hud');window._fps=fpsC*1000/(t-fpsA);fpsA=t;fpsC=0;}
+  // pending scenario effects
+  if(W._pendingClose&&W.simTime>W._pendingClose.t){const e=W.edges.get(W._pendingClose.e);
+    if(e){e.closed=true;rerouteAffected(e.id);toast('🚧 '+ (e.name||'Bridge')+' CLOSED',3500);beep(220,0.4,0.2);}
+    W._pendingClose=null;}
+  if(!S.paused||S.stepOnce){
+    const steps=S.stepOnce?1:Math.min(MAXSUB,Math.round(dtms/1000*30*S.speed));
+    acc+=S.stepOnce?DT:dtms/1000*S.speed;
+    let n=0;
+    while(acc>=DT&&n<MAXSUB){stepSim(DT);acc-=DT;n++;}
+    if(n>=MAXSUB)acc=0;
+    S.stepOnce=false;
+  }
+  draw();hud();
+  panelTimer+=dtms;
+  if(panelTimer>2000){panelTimer=0;
+    if(S.panel==='analytics'){renderPanel();}
+    else if(S.sel&&['node','veh','stop','edge','incident'].includes(S.sel.kind)&&S.panel==='inspect')renderPanel();
+    audioFrame();}
+}
+/* keyboard */
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+  const k=e.key;
+  if(k===' '){e.preventDefault();togglePause();}
+  else if(k==='.'){S.stepOnce=true;S.paused=true;$('#btnPlay').textContent='▶';}
+  else if(k==='+'||k==='=')setSpeed(S.speed*2);
+  else if(k==='-')setSpeed(S.speed/2);
+  else if(k==='Escape'){S.draw=null;S.sel=null;S.editRouteId=null;renderPanel();}
+  else if((k==='z'||k==='Z')&&(e.ctrlKey||e.metaKey)){e.preventDefault();e.shiftKey?redo():undo();}
+  else if((k==='y'||k==='Y')&&(e.ctrlKey||e.metaKey)){e.preventDefault();redo();}
+  else if(k==='v')S.tool='select';else if(k==='h')S.tool='pan';else if(k==='r')S.tool='road';
+  buildToolbar();
+});
+function togglePause(){S.paused=!S.paused;$('#btnPlay').textContent=S.paused?'▶':'⏸';}
+const SPEEDS=[0.25,0.5,1,2,4,8,16];
+function setSpeed(v){S.speed=clamp(v,0.25,16);
+  $('#speedLbl').textContent=(S.speed<1?fmt(S.speed,2):S.speed)+'×';}
+$('#btnPlay').onclick=togglePause;
+$('#btnStep').onclick=()=>{S.paused=true;$('#btnPlay').textContent='▶';S.stepOnce=true;};
+$('#btnReset').onclick=()=>{resetSim();toast('Simulation reset (map kept)');};
+$('#btnSlower').onclick=()=>setSpeed(S.speed/2);
+$('#btnFaster').onclick=()=>setSpeed(S.speed*2);
+$('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
+$('#btnAudio').onclick=()=>audioSet(!S.audioOn);
+$('#collapseBtn').onclick=()=>{$('#panel').classList.toggle('hidden');};
+// scenario dropdown mirrors the panel list
+const scSel=$('#scenSel');
+scSel.innerHTML='<option value="">▶ Scenarios…</option>'+Object.keys(SCEN).map(k=>`<option value="${k}">${SCEN[k].name}</option>`).join('');
+scSel.onchange=()=>{if(scSel.value)loadScenario(scSel.value);scSel.value='';};
+/* autosave */
+setInterval(()=>{try{localStorage.setItem('metroflux:autosave',serialize());}catch(e){}},15000);
+function refreshAll(){markDirty();}
+/* ===================== INIT ===================== */
+function init(){
+  resize();
+  try{const auto=localStorage.getItem('metroflux:autosave');
+    if(auto){/* autosave exists but default scenario is friendlier on first paint */}}catch(e){}
+  loadScenario('downtown');
+  W.seed=(Math.random()*1e9)|0;
+  S.speed=1;
+  requestAnimationFrame(t=>{lastF=t;frame(t);});
+  // audio unlock on first gesture
+  const unlock=()=>{if(S.audioOn)audioInit();removeEventListener('pointerdown',unlock);};
+  addEventListener('pointerdown',unlock);
+}
+init();
+</script>
+</body>
+</html>

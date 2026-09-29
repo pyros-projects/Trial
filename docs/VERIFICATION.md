@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## SWE-2 through prompt 23 and Gemini's complete set: 2026-09-29
+
+Nine SWE-2 builds (15–23) and three Gemini builds (21, 23, 24) bring the collection to **134 builds across eight models**. Gemini now covers every prompt; SWE-2 covers 01–23. Model order and reported setup are unchanged.
+
+All **265 original files totaling 36,382,701 bytes** are preserved. Twelve thumbnail aliases exactly copy visually reviewed supplied screenshots; no final-HTML capture binding is claimed. The bounded publication review covered **79 text files, 186 PNGs, and two SVGs**. No confirmed credentials, private identity linkage, runtime network endpoints, or Netlify Forms were found. Gemini's chart-export evidence includes a malformed PNG and a quoted SVG; these originals remain untouched, and a valid application screenshot is used for its preview. Selected screenshot pixels were checked; remaining evidence pixels were not exhaustively reviewed. Raw evidence remains public in GitHub and is excluded from Netlify. Submitted development scripts were not executed.
+
+Public-sandbox checks reproduced four SWE-2 storage failures: Logic Lab does not initialize its default circuit; DELVE leaves the roguelike on its start screen; the node studio's Open/Save controls fail while its preview and timeline remain usable; and the traffic simulator's Save/Load tab fails while its simulation and pause controls work. Each has a public-only notice. These observations describe the gallery environment and do not establish behavior of downloaded HTML or complete task correctness.
+
+Bounded production procedures covered all twelve new apps: ten responded to a tested native control, while SWE-2's Logic Lab and roguelike remained blocked as documented. All twelve viewers maximized and removed their frames on close. No other runtime error type or external HTTP request was observed. Gemini's spreadsheet exported a valid, visually checked PNG; the malformed file in its supplied evidence therefore does not establish a broken in-app export.
+
+Production deployment **`6abbf36e693595cd897e624f`** publishes **526 files totaling 24,466,830 bytes (23.33 MiB)**: 134 builds with thumbnails/share pages, 24 prompt comparisons, and eight model collections. The exact export inventory and all 134 source HTML hashes passed. Live HTTPS checks matched **52 files** against the export, and **27 representative excluded routes returned 404**. All **19 focused gallery checks passed locally and in production**, including model order, collection counts, canonical copy links, hidden missing entries, and three/two/one-column layouts at 1440/768/390 pixels. Comparisons 21/23/24 contain four/four/three builds. The four new notices reproduce in production and collapse without replacing the iframe, changing its document, or reducing the viewport. The README preview was refreshed from the live homepage and visually inspected.
+
 ## Opus 5.5 and SWE-2's ecosystem: 2026-09-27
 
 Opus 5.5 adds prompts 01–04 with the reported setup **Claude Code · xhigh** and appears first with tint `#B9A4FF`. SWE-2 adds prompt 14. The collection now contains **122 builds from eight models**.

@@ -1,5 +1,11 @@
 # Changelog
 
+## SWE-2 through prompt 23 and Gemini's complete set: 2026-09-29
+
+- Added nine SWE-2 builds for prompts 15–23 and Gemini's spreadsheet, project planner, and Capstone. Gemini now covers all 24 prompts; SWE-2 covers 01–23.
+- Updated supplied screenshot previews and sharing pages. The collection now contains 134 builds from eight models; the configured model order is unchanged.
+- Added public-gallery notices for SWE-2's storage failures: Logic Lab initialization, starting a roguelike run, the node studio's Open/Save controls, and the traffic simulator's Save/Load tab.
+
 ## Opus 5.5 and SWE-2's ecosystem: 2026-09-27
 
 - Added four Opus 5.5 builds with the reported setup Claude Code at xhigh. It appears first in the showcase with its own violet tint.

@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Project Planning Studio</title>
+<style>
+:root{
+  --bg:#14171c; --panel:#1b1f26; --panel2:#20252e; --line:#2c333d; --line2:#3a4350;
+  --text:#dfe5ec; --dim:#8b95a3; --accent:#4f9cf9; --accent2:#2f6fd0;
+  --crit:#f0714f; --critbg:rgba(240,113,79,.16); --ok:#5ec48a; --warn:#e8b54d; --err:#e5655e;
+  --bar:#3f7fd6; --bar-un:#5a6b7e;
+  --mil:#e8b54d;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--text)}
+button:hover:not(:disabled){border-color:var(--accent);background:#253042}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--accent2);border-color:var(--accent2)}
+button.danger{border-color:#6e3a38;color:#f0a09a}
+input,select,textarea{background:#12151a;border:1px solid var(--line2);border-radius:5px;padding:3px 6px;color:var(--text)}
+input[type=number]{width:64px}
+input[type=date]{width:130px}
+textarea{width:100%;min-height:150px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+label{color:var(--dim);font-size:12px}
+
+header{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:0;z-index:30}
+header .brand{font-weight:700;font-size:14px;white-space:nowrap}
+header .sep{width:1px;height:20px;background:var(--line2)}
+header input.proj{width:140px}
+#notice{padding:4px 12px;font-size:12px;min-height:24px;display:flex;align-items:center;border-bottom:1px solid var(--line);background:var(--panel)}
+#notice.err{color:#ffb3ae;background:#2a1d1e}
+#notice.ok{color:#9fe0bd}
+#notice.info{color:#a9c8f0}
+#summary{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:5px 12px;font-size:12px;border-bottom:1px solid var(--line);background:#181c22}
+#summary b{color:#fff}
+#summary .critv{color:var(--crit)}
+#summary .dim{color:var(--dim)}
+#viewtabs{display:none}
+
+main{flex:1;display:grid;grid-template-columns:minmax(560px,52%) minmax(260px,1fr) 320px;grid-template-rows:1fr 210px;min-height:0;grid-template-areas:"table gantt details" "res res details"}
+.view{min-height:0;min-width:0;overflow:auto;border-right:1px solid var(--line);position:relative}
+#view-table{grid-area:table}#view-gantt{grid-area:gantt}#view-res{grid-area:res;border-top:1px solid var(--line)}#view-details{grid-area:details;border-right:0;border-left:1px solid var(--line)}
+.pane-title{position:sticky;top:0;background:var(--panel);padding:5px 10px;font-weight:600;font-size:12px;border-bottom:1px solid var(--line);z-index:5;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pane-title .sub{font-weight:400;color:var(--dim)}
+
+/* task table */
+table.tasks{border-collapse:collapse;width:100%;font-size:12px}
+table.tasks th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:4px 6px;border-bottom:1px solid var(--line2);white-space:nowrap;z-index:2}
+table.tasks td{padding:2px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.tasks tr.sel td{background:rgba(79,156,249,.13)}
+table.tasks tr:hover td{background:rgba(255,255,255,.03)}
+table.tasks tr.sel:hover td{background:rgba(79,156,249,.18)}
+table.tasks input{width:100%;min-width:36px;background:transparent;border:1px solid transparent;padding:2px 4px}
+table.tasks td.num input{width:46px}
+table.tasks select{max-width:96px}
+table.tasks td.schd{white-space:nowrap}
+table.tasks input:hover{border-color:var(--line2)}
+table.tasks input:focus{border-color:var(--accent);background:#12151a}
+table.tasks td.num input{text-align:right}
+.tid{font-family:ui-monospace,Menlo,Consolas,monospace;color:#9fc2f2;white-space:nowrap}
+.mflag{color:var(--mil);font-size:10px;border:1px solid var(--mil);border-radius:3px;padding:0 3px;margin-left:3px}
+.critflag{color:var(--crit)}
+.preds-btn{background:none;border:none;color:#a9c8f0;padding:1px 3px;cursor:pointer;text-align:left}
+.preds-btn:hover{color:#fff;text-decoration:underline}
+.small{font-size:11px;color:var(--dim)}
+.del-btn{padding:1px 6px;color:#e5908a;border-color:transparent;background:none}
+.del-btn:hover{border-color:#6e3a38}
+.nb-clear{padding:0 4px;border:none;background:none;color:var(--dim)}
+.nb-clear:hover{color:#fff}
+td .nbwrap{display:flex;gap:2px;align-items:center}
+td .nbwrap input{width:118px}
+
+/* gantt */
+#gview-wrap{display:flex;flex-direction:column;height:100%;min-height:0}
+#gantt-ctl{display:flex;gap:6px;align-items:center;padding:4px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+#gantt-scroll{flex:1;overflow:auto;position:relative;min-height:0}
+#gantt-inner{display:flex;width:max-content;min-width:100%}
+#gantt-labels{position:sticky;left:0;z-index:4;background:var(--panel);flex:0 0 auto;width:170px;border-right:1px solid var(--line2)}
+#gantt-labels .gl-head{height:44px;border-bottom:1px solid var(--line2);padding:4px 8px;color:var(--dim);font-size:11px}
+.gantt-lrow{height:26px;display:flex;align-items:center;padding:0 8px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-size:12px}
+.gantt-lrow.sel{background:rgba(79,156,249,.15)}
+.gantt-lrow .dot{width:8px;height:8px;border-radius:2px;background:var(--bar);margin-right:6px;flex:0 0 auto}
+.gantt-lrow .dot.mil{border-radius:50%;background:var(--mil)}
+.gantt-lrow .dot.crit{background:var(--crit)}
+#gantt-svg{display:block}
+.gbar{fill:var(--bar);stroke:#1c4c8a;cursor:grab}
+.gbar.unassigned{fill:#5a6b7e;stroke:#3a4450}
+.gbar.crit{fill:var(--crit);stroke:#8a3a26}
+.gbar.sel{stroke:#fff;stroke-width:1.5}
+.gbar:active{cursor:grabbing}
+.gmil{fill:var(--mil);stroke:#7a5d15;cursor:pointer}
+.gmil.crit{fill:var(--crit);stroke:#8a3a26}
+.gmil.sel{stroke:#fff;stroke-width:1.5}
+.gghost{fill:rgba(79,156,249,.30);stroke:var(--accent);stroke-dasharray:4 3;pointer-events:none}
+.gdep{stroke:#6f7d8f;fill:none;stroke-width:1.2}
+.gdep.crit{stroke:var(--crit);stroke-width:2}
+.gday-tick{stroke:var(--line)}
+.gwkend{fill:rgba(255,255,255,.045)}
+.gwkend-top{fill:rgba(255,255,255,.09)}
+.gtxt{fill:#cfe0f5;font-size:10px;pointer-events:none}
+.gaxis{font-size:10px;fill:var(--dim)}
+.gaxis-big{font-size:11px;fill:#c6d2e0;font-weight:600}
+.gnbline{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:5 3}
+.gempty{fill:var(--dim);font-size:13px}
+#drag-tip{position:absolute;pointer-events:none;background:#0d1015;border:1px solid var(--accent);border-radius:5px;padding:3px 8px;font-size:11px;color:#cfe0f5;display:none;z-index:10;white-space:nowrap}
+
+/* resources */
+.res-block{border-bottom:1px solid var(--line)}
+.res-head{display:flex;gap:8px;align-items:center;padding:5px 10px;background:var(--panel2);flex-wrap:wrap}
+.res-head .rid{font-family:ui-monospace,Menlo,Consolas,monospace;color:#9fc2f2;font-weight:600}
+.res-head input.name{width:130px}
+.res-lane{display:flex;overflow-x:auto;padding:4px 0 6px}
+.res-day{flex:0 0 auto;width:30px;border-right:1px solid var(--line);text-align:center}
+.res-day .dnum{font-size:9px;color:var(--dim);height:12px}
+.res-day.wkstart .dnum{color:#c6d2e0;font-weight:600}
+.res-slot{height:15px;margin:1px 2px;border-radius:2px;background:#12151a;border:1px solid #242b34;font-size:8.5px;line-height:13px;overflow:hidden;white-space:nowrap;color:#0d1015;cursor:default}
+.res-slot.full{background:#7f9fc9;color:#0d1420;cursor:pointer;font-weight:600}
+.res-slot.sel{outline:1.5px solid #fff}
+.res-slot.over{background:var(--err);color:#fff}
+.res-day.selday{background:rgba(79,156,249,.08)}
+
+/* details */
+#view-details{padding:0 0 30px}
+.det-body{padding:8px 10px}
+.det-grid{display:grid;grid-template-columns:86px 1fr;gap:5px 8px;align-items:center}
+.det-grid label{font-size:11px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:3px 8px;font-size:12px;margin-top:6px}
+.kv .k{color:var(--dim)}
+.badge{display:inline-block;border-radius:4px;padding:0 6px;font-size:11px;margin-left:4px}
+.badge.crit{background:var(--critbg);color:var(--crit);border:1px solid var(--crit)}
+.badge.wait{background:rgba(232,181,77,.15);color:var(--warn);border:1px solid var(--warn)}
+.badge.okb{background:rgba(94,196,138,.12);color:var(--ok);border:1px solid var(--ok)}
+.predlist{max-height:130px;overflow:auto;border:1px solid var(--line);border-radius:5px;padding:3px 6px}
+.predlist label{display:flex;gap:6px;align-items:center;color:var(--text);font-size:12px;padding:1px 0}
+h4.sect{margin:14px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.policy{font-size:12px;color:#b9c4d0}
+.policy li{margin:3px 0}
+.block-int{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px}
+
+/* dialogs */
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:10px;padding:0;max-width:520px;width:92vw;box-shadow:0 12px 50px rgba(0,0,0,.6)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dlg-head{padding:10px 14px;border-bottom:1px solid var(--line);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.dlg-body{padding:12px 14px;display:grid;gap:8px}
+.dlg-grid{display:grid;grid-template-columns:110px 1fr;gap:7px 10px;align-items:center}
+.dlg-foot{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.dlg-err{color:#ffb3ae;font-size:12px;white-space:pre-wrap}
+.menu{position:relative}
+.menu-list{position:absolute;top:100%;right:0;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;padding:4px;display:none;z-index:50;min-width:170px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.menu-list.open{display:block}
+.menu-list button{display:block;width:100%;text-align:left;border:none;background:none;padding:5px 9px;border-radius:4px}
+.menu-list button:hover{background:#2c3646}
+
+.empty-note{color:var(--dim);padding:18px;font-size:13px}
+#crit-btn.on{background:var(--critbg);border-color:var(--crit);color:var(--crit)}
+
+@media (max-width:720px){
+  main{display:block;grid-template-areas:none}
+  .view{display:none;height:calc(100dvh - 150px);border-right:0}
+  .view.mob{display:block}
+  #view-details.mob{height:calc(100dvh - 150px)}
+  #viewtabs{display:flex;position:sticky;top:0;z-index:40;background:var(--panel);border-bottom:1px solid var(--line)}
+  #viewtabs button{flex:1;border:none;border-radius:0;padding:9px 0;border-bottom:2px solid transparent;background:none;color:var(--dim)}
+  #viewtabs button.on{color:#fff;border-bottom-color:var(--accent)}
+  header{gap:5px;padding:5px 6px}
+  header input.proj{width:90px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">Project Planning Studio</span>
+  <input id="proj-name" class="proj" title="Project name" aria-label="Project name">
+  <input id="proj-start" type="date" title="Project start (weekends normalize forward to Monday)" aria-label="Project start date">
+  <span class="sep"></span>
+  <button id="btn-add-task">+ Task</button>
+  <button id="btn-add-milestone">+ Milestone</button>
+  <button id="btn-add-res">+ Resource</button>
+  <span class="sep"></span>
+  <button id="crit-btn" title="Highlight dependency-only zero-float tasks and edges">Critical path</button>
+  <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+  <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+  <button id="btn-reset" class="danger">Reset</button>
+  <span class="sep"></span>
+  <button id="btn-import">Import</button>
+  <span class="menu"><button id="btn-export">Export ▾</button>
+    <span class="menu-list" id="export-menu">
+      <button id="exp-json">JSON project file</button>
+      <button id="exp-csv">CSV schedule</button>
+      <button id="exp-svg">Gantt as SVG</button>
+    </span></span>
+  <span class="small" id="hdr-limits" title=""></span>
+</header>
+
+<div id="notice" class="info"></div>
+<div id="summary"></div>
+<nav id="viewtabs">
+  <button data-v="view-table" class="on">Table</button>
+  <button data-v="view-gantt">Gantt</button>
+  <button data-v="view-res">Resources</button>
+  <button data-v="view-details">Details</button>
+</nav>
+
+<main>
+  <section class="view mob" id="view-table">
+    <div class="pane-title">Tasks <span class="sub" id="task-count"></span></div>
+    <div id="table-host"></div>
+  </section>
+  <section class="view" id="view-gantt">
+    <div id="gview-wrap">
+      <div id="gantt-ctl">
+        <span class="sub" style="color:var(--dim);font-size:12px">Gantt</span>
+        <button id="z-out" title="Zoom out">−</button>
+        <button id="z-in" title="Zoom in">+</button>
+        <span class="small">drag bar = set not-before · drag empty space = pan · Ctrl+wheel = zoom · Esc = cancel drag</span>
+      </div>
+      <div id="gantt-scroll">
+        <div id="drag-tip"></div>
+        <div id="gantt-inner">
+          <div id="gantt-labels"><div class="gl-head">task</div><div id="gl-rows"></div></div>
+          <svg id="gantt-svg" role="img" aria-label="Gantt chart"></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="view" id="view-res">
+    <div class="pane-title">Resources <span class="sub">per-day occupancy vs capacity · click a filled slot to select the task</span></div>
+    <div id="res-host"></div>
+  </section>
+  <aside class="view" id="view-details">
+    <div class="pane-title">Details</div>
+    <div class="det-body" id="det-body"></div>
+  </aside>
+</main>
+
+<dialog id="dlg"><form method="dialog" style="display:contents">
+  <div class="dlg-head"><span id="dlg-title"></span><button value="cancel" class="del-btn" aria-label="Close">✕</button></div>
+  <div class="dlg-body" id="dlg-body"></div>
+  <div class="dlg-foot" id="dlg-foot"></div>
+</form></dialog>
+
+<script>
+'use strict';
+/* ================= limits & constants ================= */
+const MIN_DATE='2000-01-01', MAX_DATE='2099-12-31';
+const MAX_OFF=2600, MAX_DUR=260, MAX_PRIO=9999, MIN_CAP=1, MAX_CAP=4;
+const MAX_TASKS=500, MAX_RESOURCES=16, MAX_HISTORY=200;
+const ID_RE=/^[A-Za-z0-9_-]+$/;
+const LIMITS_TEXT='Limits: working-day offsets 0–'+MAX_OFF+' · dates '+MIN_DATE+' … '+MAX_DATE+' (Mon–Fri, no holidays) · duration 0–'+MAX_DUR+' wd · priority 0–'+MAX_PRIO+' · capacity '+MIN_CAP+'–'+MAX_CAP+' · ≤'+MAX_TASKS+' tasks, ≤'+MAX_RESOURCES+' resources';
+
+/* ================= civil-date math (no DST, no elapsed ms) ================= */
+function daysFromCivil(y,m,d){y-=m<=2?1:0;const era=Math.floor((y>=0?y:y-399)/400);const yoe=y-era*400;
+  const doy=Math.floor((153*(m+(m>2?-3:9))+2)/5)+d-1;const doe=yoe*365+Math.floor(yoe/4)-Math.floor(yoe/100)+doy;
+  return era*146097+doe-719468;}
+function civilFromDays(z){z+=719468;const era=Math.floor((z>=0?z:z-146096)/146097);const doe=z-era*146097;
+  const yoe=Math.floor((doe-Math.floor(doe/1460)+Math.floor(doe/36524)-Math.floor(doe/146096))/365);
+  const y=yoe+era*400;const doy=doe-(365*yoe+Math.floor(yoe/4)-Math.floor(yoe/100));
+  const mp=Math.floor((5*doy+2)/153);const d=doy-Math.floor((153*mp+2)/5)+1;const m=mp+(mp<10?3:-9);
+  return{y:y+(m<=2?1:0),m,d};}
+function pad2(n){return(n<10?'0':'')+n}
+function fmtDate(z){const c=civilFromDays(z);return c.y+'-'+pad2(c.m)+'-'+pad2(c.d)}
+function parseDate(s){ // strict YYYY-MM-DD; returns days or null
+  if(typeof s!=='string')return null;const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);if(!m)return null;
+  const y=+m[1],mo=+m[2],d=+m[3];if(mo<1||mo>12||d<1||d>31)return null;
+  const z=daysFromCivil(y,mo,d);const c=civilFromDays(z);
+  if(c.y!==y||c.m!==mo||c.d!==d)return null;return z;}
+function dowMon0(z){return((z+3)%7+7)%7} // 1970-01-01 Thu -> 3 ; Mon=0..Sun=6
+const WD_NAME=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const MIN_Z=parseDate(MIN_DATE), MAX_Z=parseDate(MAX_DATE);
+
+/* ================= model ================= */
+function seed(){return{project:{name:'Studio Launch',startDate:'2026-09-07'},
+ resources:[{id:'R1',name:'Studio',capacity:1},{id:'R2',name:'Review',capacity:1}],
+ tasks:[
+  {id:'T1',name:'Design',duration:2,priority:1,resourceId:'R1',predecessors:[],notBefore:null},
+  {id:'T2',name:'Build',duration:3,priority:2,resourceId:'R1',predecessors:['T1'],notBefore:null},
+  {id:'T3',name:'Documentation',duration:2,priority:3,resourceId:'R1',predecessors:['T1'],notBefore:null},
+  {id:'T4',name:'Review',duration:1,priority:4,resourceId:'R2',predecessors:['T2','T3'],notBefore:null},
+  {id:'T5',name:'Launch',duration:0,priority:5,resourceId:null,predecessors:['T4'],notBefore:null}]};}
+let model=seed(), derived=null, selection=null, critOn=false;
+let undoStack=[], redoStack=[];
+let dayW=18; // gantt zoom: px per working day
+const clone=o=>JSON.parse(JSON.stringify(o));
+
+/* ================= date<->offset on the project calendar ================= */
+function startDays(m){return parseDate(m.project.startDate)}
+function normalizeMonday(z){const dow=dowMon0(z);return dow===5?z+2:dow===6?z+1:z}
+function offToDate(m,o){const sd=startDays(m);return fmtDate(sd+Math.floor(o/5)*7+o%5)}
+function offToZ(m,o){const sd=startDays(m);return sd+Math.floor(o/5)*7+o%5}
+function dateToOff(m,z){const diff=z-startDays(m);if(diff<=0)return 0;
+  const w=Math.floor(diff/7),dow=diff%7;return dow>4?(w+1)*5:w*5+dow}
+function zToOffNorm(m,z){return dateToOff(m,normalizeMonday(z))}
+
+/* ================= validation ================= */
+function intIn(v,lo,hi,what,errs){const n=typeof v==='number'?v:Number(v);
+  if(!Number.isSafeInteger(n)||n<lo||n>hi){errs.push(what+' must be an integer '+lo+'–'+hi+' (got '+JSON.stringify(v)+')');return null}return n}
+function validate(m){
+  const errs=[];
+  const nz=parseDate(m.project&&m.project.startDate);
+  if(typeof m.project.name!=='string'||!m.project.name.trim())errs.push('project name must be nonempty');
+  if(nz===null){errs.push('project start "'+m.project.startDate+'" is not a valid YYYY-MM-DD date');return errs}
+  if(nz<MIN_Z||nz>MAX_Z)errs.push('project start '+m.project.startDate+' is outside '+MIN_DATE+' … '+MAX_DATE);
+  const rids=new Set(),tids=new Set();
+  if(m.resources.length>MAX_RESOURCES)errs.push('too many resources ('+m.resources.length+' > '+MAX_RESOURCES+')');
+  for(const r of m.resources){
+    if(!ID_RE.test(r.id))errs.push('resource id '+JSON.stringify(r.id)+' must be nonempty ASCII letters/digits/_/-');
+    if(rids.has(r.id))errs.push('duplicate resource id "'+r.id+'"');rids.add(r.id);
+    intIn(r.capacity,MIN_CAP,MAX_CAP,'capacity of resource "'+r.id+'"',errs);}
+  if(m.tasks.length>MAX_TASKS)errs.push('too many tasks ('+m.tasks.length+' > '+MAX_TASKS+')');
+  for(const t of m.tasks){
+    if(!ID_RE.test(t.id))errs.push('task id '+JSON.stringify(t.id)+' must be nonempty ASCII letters/digits/_/-');
+    if(tids.has(t.id))errs.push('duplicate task id "'+t.id+'"');tids.add(t.id);
+    intIn(t.duration,0,MAX_DUR,'duration of task "'+t.id+'"',errs);
+    intIn(t.priority,0,MAX_PRIO,'priority of task "'+t.id+'"',errs);
+    if(t.resourceId!==null&&t.resourceId!==undefined){
+      if(!rids.has(t.resourceId))errs.push('task "'+t.id+'" references unknown resource "'+t.resourceId+'"');
+      if(t.duration===0)errs.push('task "'+t.id+'" is a milestone (duration 0) and cannot have a resource');}
+    if(t.notBefore!==null&&t.notBefore!==undefined){
+      const z=parseDate(t.notBefore);
+      if(z===null)errs.push('not-before of task "'+t.id+'" is not a valid YYYY-MM-DD date: '+JSON.stringify(t.notBefore));
+      else if(z<MIN_Z||z>MAX_Z)errs.push('not-before of task "'+t.id+'" outside '+MIN_DATE+' … '+MAX_DATE);
+      else{const off=dateToOff(m,normalizeMonday(z));if(off>MAX_OFF)errs.push('not-before of task "'+t.id+'" exceeds horizon: offset '+off+' > '+MAX_OFF);}}
+    if(!Array.isArray(t.predecessors)){errs.push('predecessors of task "'+t.id+'" must be a list');t.predecessors=[]}
+    for(const p of t.predecessors){
+      if(p===t.id)errs.push('task "'+t.id+'" lists itself as predecessor');
+      else if(!tids.has(p)&&!m.tasks.some(x=>x.id===p))errs.push('task "'+t.id+'" has missing predecessor "'+p+'"');}}
+  // duplicate pred entries
+  for(const t of m.tasks){const seen=new Set();for(const p of t.predecessors){if(seen.has(p))errs.push('task "'+t.id+'" lists predecessor "'+p+'" twice');seen.add(p)}}
+  // cycles
+  const white=new Set(tids),grey=new Set(),black=new Set();
+  const byId=new Map(m.tasks.map(t=>[t.id,t]));
+  const dfs=id=>{if(black.has(id))return false;if(grey.has(id))return true;
+    grey.add(id);const t=byId.get(id);for(const p of (t?t.predecessors:[])){if(byId.has(p)&&dfs(p))return true}
+    grey.delete(id);black.add(id);return false};
+  for(const t of m.tasks)if(dfs(t.id)){errs.push('dependency cycle involving task "'+t.id+'"');break}
+  return errs}
+
+/* ================= deterministic serial scheduler ================= */
+function computeDerived(m){
+  const errs=validate(m);if(errs.length)throw{errors:errs};
+  const occ={},who={};
+  for(const r of m.resources){occ[r.id]=new Int16Array(MAX_OFF+2);who[r.id]=Array.from({length:MAX_OFF+2},()=>[])}
+  const info={},placed=new Set(),byId=new Map(m.tasks.map(t=>[t.id,t]));
+  const remaining=new Set(m.tasks.map(t=>t.id));
+  while(remaining.size){
+    let pick=null;
+    for(const id of remaining){const t=byId.get(id);
+      if(t.predecessors.every(p=>placed.has(p))&&(!pick||t.priority<pick.priority||(t.priority===pick.priority&&t.id<pick.id)))pick=t}
+    if(!pick)throw{errors:['dependency cycle prevents scheduling']};
+    const t=pick;remaining.delete(t.id);
+    let cand=0,predBound=null;
+    for(const p of t.predecessors){const pf=info[p].finish;if(predBound===null||pf>predBound.off)predBound={off:pf,id:p}}
+    if(predBound)cand=predBound.off;
+    let nbOff=0;
+    if(t.notBefore){nbOff=zToOffNorm(m,parseDate(t.notBefore));if(nbOff>cand)cand=nbOff}
+    let s,f;
+    if(t.duration===0){s=f=cand}
+    else if(!t.resourceId){s=cand;f=cand+t.duration}
+    else{
+      const o=occ[t.resourceId],cap=byIdRes(m,t.resourceId).capacity;
+      let run=0;s=-1;
+      for(let d=cand;d<MAX_OFF;d++){
+        if(o[d]<cap)run++;else run=0;
+        if(run>=t.duration){s=d-t.duration+1;break}}
+      if(s===-1)throw{errors:['task "'+t.id+'" cannot fit: needs '+t.duration+' consecutive working day(s) with free "'+t.resourceId+'" capacity within offsets 0–'+MAX_OFF]};
+      f=s+t.duration;
+      for(let d=s;d<f;d++){o[d]++;who[t.resourceId][d].push(t.id)}}
+    if(f>MAX_OFF)throw{errors:['task "'+t.id+'" finishes at offset '+f+' > horizon '+MAX_OFF]};
+    if(offToZ(m,f)>MAX_Z)throw{errors:['task "'+t.id+'" finish date '+offToDate(m,f)+' exceeds '+MAX_DATE]};
+    info[t.id]={start:s,finish:f,cand,nbOff,predBound};placed.add(t.id)}
+  // blockers: full days between candidate and chosen start
+  for(const t of m.tasks){const i=info[t.id];
+    if(t.resourceId&&i.start>i.cand){
+      const o=occ[t.resourceId],cap=byIdRes(m,t.resourceId).capacity;const blocks=[];
+      let d=i.cand;
+      while(d<i.start){
+        if(o[d]>=cap){const from=d,occSet=new Set(who[t.resourceId][d]);
+          while(d<i.start&&o[d]>=cap){who[t.resourceId][d].forEach(x=>occSet.add(x));d++}
+          blocks.push({from,to:d,occupants:[...occSet].sort()})}
+        else d++}
+      i.blockers=blocks;
+      if(!blocks.length||blocks[0].from>i.cand)i.gapNote='free run before first busy day shorter than duration '+t.duration;}
+    i.delayDays=i.start-i.cand}
+  // completion + CPM (dependency-only, unlimited resources, no not-before)
+  let completion=0;for(const t of m.tasks)completion=Math.max(completion,info[t.id].finish);
+  const es={},ef={};const done=new Set();
+  while(done.size<m.tasks.length){for(const t of m.tasks){if(done.has(t.id))continue;
+    if(t.predecessors.every(p=>done.has(p))){es[t.id]=t.predecessors.length?Math.max(...t.predecessors.map(p=>ef[p])):0;
+      ef[t.id]=es[t.id]+t.duration;done.add(t.id)}}}
+  let comp=0;for(const t of m.tasks)comp=Math.max(comp,ef[t.id]);
+  const lf={},ls={};const undone=new Set(m.tasks.map(t=>t.id));
+  while(undone.size){for(const t of m.tasks){if(!undone.has(t.id))continue;
+    const succs=m.tasks.filter(u=>u.predecessors.includes(t.id));
+    if(succs.every(u=>!undone.has(u.id))){lf[t.id]=succs.length?Math.min(...succs.map(u=>ls[u.id])):comp;
+      ls[t.id]=lf[t.id]-t.duration;undone.delete(t.id)}}}
+  const cpm={};for(const t of m.tasks)cpm[t.id]={es:es[t.id],ef:ef[t.id],ls:ls[t.id],lf:lf[t.id],float:ls[t.id]-es[t.id]};
+  return{info,occ,who,completion,cpm,cpmCompletion:comp}}
+function byIdRes(m,id){return m.resources.find(r=>r.id===id)}
+
+/* ================= commit / undo ================= */
+let lastNotice='';
+function notice(msg,kind){const n=document.getElementById('notice');n.textContent=msg||'';n.className=kind||'info';lastNotice=msg}
+// snap weekend dates forward to Monday (project start + not-before); returns notes
+function normalizeWeekends(m){
+  const notes=[];const fix=(obj,key,label)=>{const z=parseDate(obj[key]);if(z===null)return;
+    const nz=normalizeMonday(z);if(nz!==z){obj[key]=fmtDate(nz);notes.push(label+' '+WD_NAME[dowMon0(z)]+' '+fmtDate(z)+' normalized forward to Monday '+obj[key])}};
+  fix(m.project,'startDate','project start');
+  for(const t of m.tasks)if(t.notBefore)fix(t,'notBefore','not-before of '+t.id);
+  return notes}
+function applyModel(m2){
+  const errs=validate(m2);if(errs.length)return{ok:false,msg:errs.join('\n')};
+  const notes=normalizeWeekends(m2);
+  let d;try{d=computeDerived(m2)}catch(e){return{ok:false,msg:(e.errors||[e.message]).join('\n')}}
+  undoStack.push(clone(model));if(undoStack.length>MAX_HISTORY)undoStack.shift();redoStack.length=0;
+  model=m2;derived=d;return{ok:true,notes}}
+function tryCommit(newModel,label,notes){
+  const r=applyModel(newModel);
+  if(!r.ok){notice('Rejected: '+r.msg.replace(/\n/g,' · '),'err');renderAll();return false}
+  notice((label||'Applied')+((notes||[]).concat(r.notes||[]).length?'. '+(notes||[]).concat(r.notes||[]).join('. '):''),'ok');
+  renderAll();return true}
+function undo(){if(!undoStack.length)return;redoStack.push(clone(model));model=undoStack.pop();
+  derived=computeDerived(model);if(selection&&!model.tasks.some(t=>t.id===selection))selection=null;
+  notice('Undone','info');renderAll()}
+function redo(){if(!redoStack.length)return;undoStack.push(clone(model));model=redoStack.pop();
+  derived=computeDerived(model);if(selection&&!model.tasks.some(t=>t.id===selection))selection=null;
+  notice('Redone','info');renderAll()}
+function resetAll(){model=seed();derived=computeDerived(model);undoStack=[];redoStack=[];selection=null;
+  notice('Reset to seed plan; history cleared','info');renderAll()}
+
+/* ================= small DOM helpers ================= */
+const $=s=>document.querySelector(s);
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function el(html){const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild}
+function fmtOD(m,o){return o+' ('+offToDate(m,o)+')'}
+
+/* ================= render: summary ================= */
+function renderSummary(){
+  const n=model.tasks.length,nres=model.resources.length;
+  $('#summary').innerHTML=
+   '<span>Actual completion <b>'+fmtOD(model,derived.completion)+'</b> <span class="dim">(exclusive boundary)</span></span>'+
+   '<span>Dependency-only completion <b class="critv">'+derived.cpmCompletion+'</b> <span class="dim">wd (ignores resources &amp; not-before)</span></span>'+
+   '<span class="dim">'+n+' task(s) · '+nres+' resource(s) · start '+model.project.startDate+'</span>'+
+   '<span class="dim">Policy: place tasks in priority+ID order at the earliest feasible working-day interval.</span>'}
+
+/* ================= render: table ================= */
+function renderTable(){
+  const host=$('#table-host');
+  if(!model.tasks.length){host.innerHTML='<div class="empty-note">No tasks yet. Use “+ Task” or “+ Milestone”.</div>';return}
+  const resOpts=sel=>'<option value="">— unassigned —</option>'+model.resources.map(r=>'<option value="'+esc(r.id)+'"'+(r.id===sel?' selected':'')+'>'+esc(r.id)+' '+esc(r.name)+'</option>').join('');
+  const rows=model.tasks.map(t=>{const i=derived.info[t.id],c=derived.cpm[t.id],mil=t.duration===0;
+    const sd=offToDate(model,i.start).slice(5),fd=offToDate(model,i.finish).slice(5),ld=mil?'—':offToDate(model,i.finish-1).slice(5);
+    return '<tr data-id="'+esc(t.id)+'"'+(t.id===selection?' class="sel"':'')+'>'+
+    '<td><button class="del-btn" data-act="del" title="delete task">✕</button></td>'+
+    '<td><span class="tid">'+esc(t.id)+'</span>'+(mil?'<span class="mflag">◆</span>':'')+(critOn&&c.float===0?'<span class="critflag" title="dependency-only zero float"> ●</span>':'')+'</td>'+
+    '<td><input data-f="name" value="'+esc(t.name)+'" aria-label="name"></td>'+
+    '<td class="num"><input data-f="duration" type="number" min="0" max="'+MAX_DUR+'" step="1" value="'+t.duration+'" aria-label="duration"></td>'+
+    '<td class="num"><input data-f="priority" type="number" min="0" max="'+MAX_PRIO+'" step="1" value="'+t.priority+'" aria-label="priority"></td>'+
+    '<td><select data-f="resourceId" '+(mil?'disabled title="milestones have no resource"':'')+'>'+(mil?'<option>—</option>':resOpts(t.resourceId))+'</select></td>'+
+    '<td><button class="preds-btn" data-act="preds" title="edit predecessors in Details">'+(t.predecessors.length?esc(t.predecessors.join(',')):'<span class="small">none</span>')+'</button></td>'+
+    '<td><span class="nbwrap"><input data-f="notBefore" type="date" min="'+MIN_DATE+'" max="'+MAX_DATE+'" value="'+(t.notBefore||'')+'" aria-label="not-before"><button class="nb-clear" data-act="clearnb" title="clear constraint">×</button></span></td>'+
+    '<td class="small schd" title="start '+offToDate(model,i.start)+'">'+i.start+'·'+sd+'</td>'+
+    '<td class="small schd" title="finish (exclusive) '+offToDate(model,i.finish)+'">'+i.finish+'·'+fd+'</td>'+
+    '<td class="small schd" title="last working day '+(mil?'—':offToDate(model,i.finish-1))+'">'+ld+'</td>'+
+    '<td class="small">'+(c.float===0?'<span class="critflag">0</span>':c.float)+'</td></tr>'}).join('');
+  host.innerHTML='<table class="tasks"><thead><tr><th></th><th>ID</th><th>Name</th><th title="working days">Dur</th><th>Prio</th><th>Resource</th><th>Preds</th><th>Not-before</th><th title="offset · MM-DD">Start</th><th title="offset · MM-DD, exclusive">Finish</th><th title="last working day MM-DD">Last</th><th title="dependency-only total float">Float*</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  host.querySelectorAll('input[data-f],select[data-f]').forEach(inp=>{
+    inp.addEventListener('change',()=>{const tr=inp.closest('tr'),id=tr.dataset.id,f=inp.dataset.f;
+      const m2=clone(model);const t=m2.tasks.find(x=>x.id===id);
+      if(f==='name')t.name=inp.value;
+      else if(f==='duration'){const v=inp.value.trim()===''?NaN:Number(inp.value);t.duration=v;
+        if(v===0&&t.resourceId){t.resourceId=null;tryCommit(m2,'Task '+id+' duration set','duration 0 → milestone, resource cleared');return}}
+      else if(f==='priority')t.priority=inp.value.trim()===''?NaN:Number(inp.value);
+      else if(f==='resourceId')t.resourceId=inp.value||null;
+      else if(f==='notBefore')t.notBefore=inp.value||null;
+      tryCommit(m2,'Task '+id+' updated')})});
+  host.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click',e=>{if(e.target.closest('input,select,button'))return;select(tr.dataset.id)})});
+  host.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',e=>{
+    const id=b.closest('tr').dataset.id,act=b.dataset.act;
+    if(act==='del')requestDeleteTask(id);
+    else if(act==='clearnb'){const m2=clone(model);m2.tasks.find(t=>t.id===id).notBefore=null;tryCommit(m2,'Cleared not-before on '+id)}
+    else if(act==='preds'){select(id);switchMobile('view-details');setTimeout(()=>{const p=$('#pred-list');if(p)p.scrollIntoView({block:'nearest'})},0)}}))}
+
+/* ================= gantt geometry ================= */
+const GAP=10,ROWH=26,HEADH=44;
+function xB(o){const w=Math.floor(o/5),r=o%5;return w*(5*dayW+GAP)+r*dayW}
+function xToBoundary(x){const wk=5*dayW+GAP;const w=Math.max(0,Math.floor(x/wk));const rem=x-w*wk;
+  return Math.min(MAX_OFF,Math.max(0,w*5+Math.min(5,Math.round(rem/dayW))))}
+
+function renderGantt(previewInfo){
+  const rows=model.tasks;
+  const showTo=Math.max(derived.completion+8,15);
+  const W=xB(showTo)+dayW, H=HEADH+rows.length*ROWH+8;
+  const svg=$('#gantt-svg');svg.setAttribute('width',W);svg.setAttribute('height',H);
+  let s='';
+  // axis: week bands + day ticks + weekend gaps
+  for(let w=0;xB(w*5)<=W;w++){
+    const wx=xB(w*5),endX=xB(Math.min(w*5+5,showTo));
+    s+='<rect class="gwkend" x="'+(wx+5*dayW)+'" y="0" width="'+GAP+'" height="'+H+'"/>';
+    const monDate=offToDate(model,w*5);
+    s+='<line class="gday-tick" x1="'+wx+'" y1="16" x2="'+wx+'" y2="'+H+'"/>'+
+       '<text class="gaxis-big" x="'+(wx+3)+'" y="12">'+esc(monDate)+'</text>';
+    if(dayW>=11)for(let r=0;r<5;r++){const d=w*5+r;if(d>showTo)break;
+      const c=civilFromDays(offToZ(model,d));
+      s+='<line class="gday-tick" x1="'+(wx+r*dayW)+'" y1="30" x2="'+(wx+r*dayW)+'" y2="'+H+'" opacity=".5"/>'+
+         '<text class="gaxis" x="'+(wx+r*dayW+dayW/2)+'" y="40" text-anchor="middle" font-size="9">'+(dayW>=22?WD_NAME[r][0]:'')+c.d+'</text>'}
+    s+='<rect class="gwkend-top" x="'+(wx+5*dayW)+'" y="16" width="'+GAP+'" height="'+28+'"><title>weekend</title></rect>'}
+  // rows
+  rows.forEach((t,ri)=>{const y=HEADH+ri*ROWH;
+    s+='<line x1="0" y1="'+y+'" x2="'+W+'" y2="'+y+'" style="stroke:var(--line)" stroke-width="1"/>'});
+  // dependency edges
+  rows.forEach(t=>{const it=derived.info[t.id],y2=HEADH+rows.indexOf(t)*ROWH+ROWH/2;
+    t.predecessors.forEach(p=>{const pi=rows.findIndex(u=>u.id===p);if(pi<0)return;const ip=derived.info[p];
+      const x1=xB(ip.finish),y1=HEADH+pi*ROWH+ROWH/2,x2=xB(it.start);
+      const crit=critOn&&derived.cpm[p].float===0&&derived.cpm[t.id].float===0&&derived.cpm[p].ef===derived.cpm[t.id].es;
+      const mid=Math.max(x1+6,(x1+x2)/2);
+      s+='<path class="gdep'+(crit?' crit':'')+'" d="M'+x1+','+y1+' L'+mid+','+y1+' L'+mid+','+y2+' L'+x2+','+y2+'"/>'+
+         '<circle cx="'+x2+'" cy="'+y2+'" r="2" fill="'+(crit?'var(--crit)':'#6f7d8f')+'"/>'})});
+  // preview ghosts
+  if(previewInfo){rows.forEach((t,ri)=>{const pv=previewInfo[t.id];if(!pv)return;const y=HEADH+ri*ROWH+4;
+    if(t.duration===0){const x=xB(pv.start);s+='<rect class="gghost" x="'+(x-6)+'" y="'+y+'" width="12" height="'+(ROWH-8)+'" rx="3"/>'}
+    else s+='<rect class="gghost" x="'+xB(pv.start)+'" y="'+y+'" width="'+Math.max(3,xB(pv.finish)-xB(pv.start))+'" height="'+(ROWH-8)+'" rx="3"/>'})}
+  // bars
+  rows.forEach((t,ri)=>{const i=derived.info[t.id],y=HEADH+ri*ROWH+4,h=ROWH-8;
+    const crit=critOn&&derived.cpm[t.id].float===0;
+    if(t.duration===0){const x=xB(i.start);
+      s+='<path class="gmil'+(crit?' crit':'')+(t.id===selection?' sel':'')+'" data-id="'+esc(t.id)+'" d="M'+x+','+(y-2)+' L'+(x+8)+','+(y+h/2)+' L'+x+','+(y+h+2)+' L'+(x-8)+','+(y+h/2)+' Z"><title>'+esc(t.id)+' '+esc(t.name)+' — milestone at '+fmtOD(model,i.start)+'</title></path>'+
+         '<text class="gtxt" x="'+(x+11)+'" y="'+(y+h/2+3)+'">'+esc(t.id)+'</text>'}
+    else{const x=xB(i.start),wdt=Math.max(3,xB(i.finish)-xB(i.start));
+      s+='<rect class="gbar'+(!t.resourceId?' unassigned':'')+(crit?' crit':'')+(t.id===selection?' sel':'')+'" data-id="'+esc(t.id)+'" x="'+x+'" y="'+y+'" width="'+wdt+'" height="'+h+'" rx="3">'+
+         '<title>'+esc(t.id)+' '+esc(t.name)+'\n'+fmtOD(model,i.start)+' → '+fmtOD(model,i.finish)+' (excl.)\nlast work day '+(i.finish>i.start?offToDate(model,i.finish-1):'—')+'</title></rect>'+
+         '<text class="gtxt" x="'+(x+wdt+4)+'" y="'+(y+h/2+3)+'">'+esc(t.id)+'</text>'}
+    if(t.notBefore)s+='<line class="gnbline" x1="'+xB(i.nbOff)+'" y1="'+(y-3)+'" x2="'+xB(i.nbOff)+'" y2="'+(y+h+3)+'"><title>not-before '+esc(t.notBefore)+'</title></line>'});
+  if(!rows.length)s+='<text class="gempty" x="30" y="'+(HEADH+40)+'">No tasks yet — add a task to see the schedule.</text>';
+  svg.innerHTML=s;
+  // labels column
+  $('#gl-rows').innerHTML=rows.map(t=>'<div class="gantt-lrow'+(t.id===selection?' sel':'')+'" data-id="'+esc(t.id)+'"><span class="dot'+(t.duration===0?' mil':'')+(critOn&&derived.cpm[t.id].float===0?' crit':'')+'"></span>'+esc(t.id)+' '+esc(t.name)+'</div>').join('');
+  $('#gl-rows').querySelectorAll('.gantt-lrow').forEach(r=>r.addEventListener('click',()=>select(r.dataset.id)));
+  svg.querySelectorAll('.gbar,.gmil').forEach(b=>{
+    b.addEventListener('pointerdown',e=>startDrag(e,b.dataset.id,b))});
+  bindPan($('#gantt-scroll'))}
+
+/* gantt pan + drag-to-set-not-before */
+let panState=null,drag=null;
+function bindPan(sc){
+  if(sc._panBound)return;sc._panBound=true;
+  sc.addEventListener('pointerdown',e=>{if(e.target.closest('.gbar,.gmil'))return;
+    panState={x:e.clientX,y:e.clientY,sl:sc.scrollLeft,st:sc.scrollTop};
+    sc.setPointerCapture(e.pointerId)});
+  sc.addEventListener('pointermove',e=>{if(!panState)return;
+    sc.scrollLeft=panState.sl-(e.clientX-panState.x);
+    sc.scrollTop=panState.st-(e.clientY-panState.y)});
+  sc.addEventListener('pointerup',()=>panState=null);
+  sc.addEventListener('pointercancel',()=>panState=null);
+  sc.addEventListener('wheel',e=>{if(e.ctrlKey){e.preventDefault();zoomAt(e.deltaY<0?1:-1,e.clientX)}},{passive:false})}
+function zoomAt(dir,cx){
+  const i=ZOOMS.indexOf(dayW),ni=Math.min(ZOOMS.length-1,Math.max(0,i+dir));if(ni===i)return;
+  const sc=$('#gantt-scroll'),rect=sc.getBoundingClientRect();
+  const frac=(cx-rect.left+sc.scrollLeft-170)/Math.max(1,xB(Math.max(derived.completion+8,15)));
+  dayW=ZOOMS[ni];renderGantt();
+  sc.scrollLeft=170+frac*Math.max(1,xB(Math.max(derived.completion+8,15)))-(cx-rect.left)}
+const ZOOMS=[5,8,11,14,18,24,32,44];
+function startDrag(e,id,bar){
+  const t=model.tasks.find(x=>x.id===id);if(!t)return;
+  const svg=$('#gantt-svg'),ri=model.tasks.indexOf(t);
+  drag={id,svg,startX:e.clientX,moved:false,boundary:null};
+  svg.setPointerCapture(e.pointerId);e.stopPropagation();panState=null;
+  const tip=$('#drag-tip');
+  const move=ev=>{
+    const dx=ev.clientX-drag.startX;
+    if(!drag.moved&&Math.abs(dx)<4)return;
+    drag.moved=true;
+    const rect=svg.getBoundingClientRect(),x=ev.clientX-rect.left;
+    drag.boundary=xToBoundary(x);
+    let pv=null;
+    const m2=clone(model);const tt=m2.tasks.find(u=>u.id===id);
+    tt.notBefore=offToDate(model,drag.boundary);
+    try{const d=computeDerived(m2);pv={};for(const k in d.info)pv[k]={start:d.info[k].start,finish:d.info[k].finish}}catch(_){}
+    renderGanttPreview(pv,drag.boundary,ev)}
+  const up=ev=>{
+    svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',up);
+    document.removeEventListener('keydown',escH);tip.style.display='none';
+    if(!drag){return}
+    const d=drag;drag=null;
+    if(!d.moved){select(id);return}
+    const m2=clone(model);const tt=m2.tasks.find(u=>u.id===id);
+    tt.notBefore=offToDate(model,d.boundary);
+    tryCommit(m2,'Set not-before of '+id+' to '+tt.notBefore+' (offset '+d.boundary+')')}
+  const escH=ev=>{if(ev.key==='Escape'){drag=null;svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',up);document.removeEventListener('keydown',escH);tip.style.display='none';renderGantt();notice('Drag cancelled — no change','info')}};
+  svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',up);document.addEventListener('keydown',escH)}
+function renderGanttPreview(pv,boundary,ev){
+  renderGantt(pv);
+  const svg=$('#gantt-svg');
+  const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+  ln.setAttribute('x1',xB(boundary));ln.setAttribute('x2',xB(boundary));ln.setAttribute('y1',16);ln.setAttribute('y2',svg.getAttribute('height'));
+  ln.setAttribute('stroke','var(--warn)');ln.setAttribute('stroke-width','2');ln.setAttribute('stroke-dasharray','6 3');svg.appendChild(ln);
+  const tip=$('#drag-tip'),scr=$('#gantt-scroll'),sr=scr.getBoundingClientRect();
+  tip.style.display='block';
+  tip.style.left=Math.max(4,ev.clientX-sr.left+scr.scrollLeft+14)+'px';
+  tip.style.top=Math.max(4,ev.clientY-sr.top+scr.scrollTop+14)+'px';
+  tip.textContent='not-before ≥ '+offToDate(model,boundary)+' (offset '+boundary+') — release to apply, Esc to cancel'}
+
+/* ================= resources view ================= */
+function renderRes(){
+  const host=$('#res-host');
+  if(!model.resources.length){host.innerHTML='<div class="empty-note">No resources. Use “+ Resource”.</div>';return}
+  host.innerHTML='';
+  const maxOff=Math.max(derived.completion+5,10);
+  for(const r of model.resources){
+    const blk=el('<div class="res-block"></div>');
+    const inUse=model.tasks.filter(t=>t.resourceId===r.id).length;
+    const head=el('<div class="res-head"><span class="rid">'+esc(r.id)+'</span>'+
+      '<input class="name" value="'+esc(r.name)+'" aria-label="resource name">'+
+      '<label>capacity</label><select class="cap">'+[1,2,3,4].map(c=>'<option'+(c===r.capacity?' selected':'')+'>'+c+'</option>').join('')+'</select>'+
+      '<span class="small">'+inUse+' task(s) assigned</span>'+
+      '<button class="del-btn" title="delete resource">✕ delete</button></div>');
+    head.querySelector('.name').addEventListener('change',e=>{const m2=clone(model);byIdRes(m2,r.id).name=e.target.value;tryCommit(m2,'Renamed resource '+r.id)});
+    head.querySelector('.cap').addEventListener('change',e=>{const m2=clone(model);byIdRes(m2,r.id).capacity=Number(e.target.value);tryCommit(m2,'Capacity of '+r.id+' → '+e.target.value)});
+    head.querySelector('.del-btn').addEventListener('click',()=>{
+      const users=model.tasks.filter(t=>t.resourceId===r.id).map(t=>t.id);
+      if(users.length){notice('Cannot delete resource "'+r.id+'": in use by '+users.join(', '),'err');return}
+      const m2=clone(model);m2.resources=m2.resources.filter(x=>x.id!==r.id);tryCommit(m2,'Deleted resource '+r.id)});
+    blk.appendChild(head);
+    const lane=el('<div class="res-lane" role="grid" aria-label="occupancy of '+esc(r.id)+'"></div>');
+    for(let d=0;d<=maxOff;d++){
+      const occ=derived.occ[r.id][d],who=derived.who[r.id][d];
+      const col=el('<div class="res-day'+(dowMon0(offToZ(model,d))===0?' wkstart':'')+'"><div class="dnum">'+d+'</div></div>');
+      for(let s2=0;s2<r.capacity;s2++){
+        const tid=who[s2];
+        const cell=el('<div class="res-slot'+(tid?' full':'')+(occ>r.capacity?' over':'')+(tid&&tid===selection?' sel':'')+'" title="day '+d+' ('+offToDate(model,d)+') — '+(tid?esc(tid):'free')+'/'+r.capacity+'">'+(tid?esc(tid):'·')+'</div>');
+        if(tid)cell.addEventListener('click',()=>select(tid));
+        col.appendChild(cell)}
+      if(occ>r.capacity){/* can't happen under this scheduler; shown red if it ever does */}
+      lane.appendChild(col)}
+    blk.appendChild(lane);host.appendChild(blk)}}
+
+/* ================= details / inspector ================= */
+function renderDetails(){
+  const host=$('#det-body');const t=model.tasks.find(x=>x.id===selection);
+  if(!t){host.innerHTML='<h4 class="sect">Scheduling policy</h4><ul class="policy">'+
+   '<li>Serial rule: repeatedly pick the unscheduled task whose predecessors are all placed with the <b>lowest priority</b>, then the <b>smallest ID</b>.</li>'+
+   '<li>Its candidate start is the max of project start, its not-before date, and every predecessor finish.</li>'+
+   '<li>Assigned tasks slide forward to the earliest interval where resource occupancy stays under capacity — earlier free gaps count.</li>'+
+   '<li>Weekends are non-working. Finish boundaries are <b>exclusive</b>; the “last work day” column shows the real final working day.</li>'+
+   '<li><b>Dependency-only CPM</b> ignores resources and not-before dates; resource waits are labelled separately, never merged into the critical path.</li></ul>'+
+   '<h4 class="sect">Limits</h4><div class="policy">'+esc(LIMITS_TEXT)+'</div>'+
+   '<h4 class="sect">Hints</h4><ul class="policy"><li>Select a task (row, bar, or resource slot) to edit it and see why it starts when it does.</li><li>Drag a bar to set a not-before constraint; Esc cancels.</li><li>All edits, imports and deletes are undoable.</li></ul>';return}
+  const i=derived.info[t.id],c=derived.cpm[t.id],mil=t.duration===0;
+  const resOpts='<option value="">— unassigned —</option>'+model.resources.map(r=>'<option value="'+esc(r.id)+'"'+(r.id===t.resourceId?' selected':'')+'>'+esc(r.id)+' '+esc(r.name)+' (cap '+r.capacity+')</option>').join('');
+  const predHtml='<div class="predlist" id="pred-list">'+model.tasks.filter(u=>u.id!==t.id).map(u=>{
+    const cyc=wouldCycle(t.id,u.id);
+    return '<label title="'+(cyc?'would create a cycle':'')+'"><input type="checkbox" data-pred="'+esc(u.id)+'"'+(t.predecessors.includes(u.id)?' checked':'')+'> '+esc(u.id)+' '+esc(u.name)+(cyc?' <span class="small">(would create cycle)</span>':'')+'</label>'}).join('')+'</div>';
+  host.innerHTML=
+   '<div class="det-grid">'+
+   '<label>ID</label><span class="tid">'+esc(t.id)+'</span>'+
+   '<label>Name</label><input id="d-name" value="'+esc(t.name)+'">'+
+   '<label>Duration (wd)</label><input id="d-dur" type="number" min="0" max="'+MAX_DUR+'" step="1" value="'+t.duration+'">'+
+   '<label>Priority</label><input id="d-pri" type="number" min="0" max="'+MAX_PRIO+'" step="1" value="'+t.priority+'">'+
+   '<label>Resource</label><select id="d-res" '+(mil?'disabled':'')+'>'+(mil?'<option>— milestone —</option>':resOpts)+'</select>'+
+   '<label>Not-before</label><span class="nbwrap"><input id="d-nb" type="date" min="'+MIN_DATE+'" max="'+MAX_DATE+'" value="'+(t.notBefore||'')+'"><button id="d-nbclear" class="nb-clear" title="clear">×</button><span class="small">'+(t.notBefore?'offset '+i.nbOff:'')+'</span></span>'+
+   '<label>Predecessors</label><span>'+predHtml+'</span></div>'+
+   '<div style="margin-top:8px;display:flex;gap:8px"><button id="d-del" class="danger">Delete task</button></div>'+
+   '<h4 class="sect">Why this start</h4><div class="kv">'+
+   '<span class="k">Chosen start</span><span><b>'+fmtOD(model,i.start)+'</b>'+delayBadge(t,i)+'</span>'+
+   '<span class="k">Finish (exclusive)</span><span>'+fmtOD(model,i.finish)+'</span>'+
+   '<span class="k">Last working day</span><span>'+(mil?'— (milestone)':esc(offToDate(model,i.finish-1)))+'</span>'+
+   '<span class="k">Predecessor bound</span><span>'+(i.predBound?'finish of '+esc(i.predBound.id)+' → offset '+fmtOD(model,i.predBound.off):'none')+'</span>'+
+   '<span class="k">Not-before bound</span><span>'+(t.notBefore?esc(t.notBefore)+' → offset '+i.nbOff+(i.nbOff>=(i.predBound?i.predBound.off:-1)?' (binding)':' (not binding)'):'none')+'</span>'+
+   '<span class="k">Candidate boundary</span><span>offset '+fmtOD(model,i.cand)+'</span>'+
+   (t.resourceId?'<span class="k">Resource</span><span>'+esc(t.resourceId)+' '+esc(byIdRes(model,t.resourceId).name)+' (cap '+byIdRes(model,t.resourceId).capacity+')</span>'+
+     (i.blockers&&i.blockers.length?'<span class="k">Blocked days</span><span>'+i.blockers.map(b=>'<div class="block-int">'+b.from+'–'+(b.to-1)+' ('+offToDate(model,b.from)+'…'+offToDate(model,b.to-1)+') full: '+b.occupants.map(esc).join(', ')+'</div>').join('')+'</span>':
+      (i.delayDays>0?'<span class="k">Blocked days</span><span class="small">free gap before busy day shorter than duration '+t.duration+'</span>':'')):
+     '<span class="k">Resource</span><span>'+(mil?'milestone — occupies no capacity':'unassigned — no capacity limit')+'</span>')+
+   '</div>'+
+   '<h4 class="sect">Dependency-only CPM <span class="small">(unlimited resources, ignores not-before)</span></h4><div class="kv">'+
+   '<span class="k">ES / EF</span><span>'+c.es+' / '+c.ef+'</span>'+
+   '<span class="k">LS / LF</span><span>'+c.ls+' / '+c.lf+'</span>'+
+   '<span class="k">Total float</span><span>'+(c.float===0?'<b class="critflag">0 — critical</b>':c.float)+'</span></div>';
+  const commitField=(f,v,extra)=>{const m2=clone(model);const tt=m2.tasks.find(x=>x.id===t.id);tt[f]=v;if(extra)extra(tt);tryCommit(m2,'Task '+t.id+' updated')};
+  $('#d-name').addEventListener('change',e=>commitField('name',e.target.value));
+  $('#d-dur').addEventListener('change',e=>{const v=e.target.value.trim()===''?NaN:Number(e.target.value);
+    commitField('duration',v,tt=>{if(tt.duration===0)tt.resourceId=null})});
+  $('#d-pri').addEventListener('change',e=>commitField('priority',e.target.value.trim()===''?NaN:Number(e.target.value)));
+  $('#d-res').addEventListener('change',e=>commitField('resourceId',e.target.value||null));
+  $('#d-nb').addEventListener('change',e=>commitField('notBefore',e.target.value||null));
+  $('#d-nbclear').addEventListener('click',()=>commitField('notBefore',null));
+  host.querySelectorAll('[data-pred]').forEach(cb=>cb.addEventListener('change',()=>{
+    const m2=clone(model);const tt=m2.tasks.find(x=>x.id===t.id);
+    tt.predecessors=[...host.querySelectorAll('[data-pred]:checked')].map(x=>x.dataset.pred).sort();
+    tryCommit(m2,'Predecessors of '+t.id+' updated')}));
+  $('#d-del').addEventListener('click',()=>requestDeleteTask(t.id))}
+function delayBadge(t,i){
+  if(i.delayDays===0)return ' <span class="badge okb">no wait</span>';
+  let why='resource capacity';
+  if(t.notBefore&&i.nbOff===i.start&&(!i.predBound||i.nbOff>=i.predBound.off))why='not-before constraint';
+  return ' <span class="badge wait">+'+i.delayDays+' wd — '+why+'</span>'}
+function dependents(id){return model.tasks.filter(t=>t.predecessors.includes(id))}
+function wouldCycle(id,predId){ // adding predId to task id's preds → cycle iff id reachable from predId
+  const seen=new Set();const dfs=x=>{if(x===id)return true;const t=model.tasks.find(u=>u.id===x);
+    if(!t||seen.has(x))return false;seen.add(x);return t.predecessors.some(dfs)};return dfs(predId)}
+function requestDeleteTask(id){
+  const deps=dependents(id);
+  if(!deps.length){const m2=clone(model);m2.tasks=m2.tasks.filter(t=>t.id!==id);tryCommit(m2,'Deleted task '+id);return}
+  openDialog('Delete '+id+'?','<div>Task <b>'+esc(id)+'</b> is a predecessor of '+deps.map(d=>esc(d.id)).join(', ')+'. Deleting it will remove those dependency edge(s).</div><div class="dlg-err" id="dlg-err"></div>',
+    [{label:'Cancel',cls:'',fn:null},
+     {label:'Delete and remove '+deps.length+' edge(s)',cls:'danger',fn:()=>{
+       const m2=clone(model);m2.tasks=m2.tasks.filter(t=>t.id!==id);
+       m2.tasks.forEach(t=>t.predecessors=t.predecessors.filter(p=>p!==id));
+       tryCommit(m2,'Deleted task '+id+' and '+deps.length+' edge(s)')}}])}
+
+/* ================= dialogs ================= */
+const dlg=$('#dlg');
+function openDialog(title,bodyHtml,buttons){
+  $('#dlg-title').textContent=title;$('#dlg-body').innerHTML=bodyHtml;
+  const foot=$('#dlg-foot');foot.innerHTML='';
+  buttons.forEach(b=>{const btn=el('<button'+(b.cls?' class="'+b.cls+'"':'')+'>'+esc(b.label)+'</button>');
+    btn.addEventListener('click',e=>{e.preventDefault();if(b.fn)b.fn();if(!b.keep)dlg.close()});foot.appendChild(btn)});
+  dlg.showModal()}
+function dlgErr(msg){const e=$('#dlg-err');if(e)e.textContent=msg;else notice(msg,'err')}
+
+/* add task / milestone / resource */
+function nextId(prefix,ids){let n=1;while(ids.has(prefix+n))n++;return prefix+n}
+function addTaskDialog(milestone){
+  const ids=new Set(model.tasks.map(t=>t.id));
+  const rid=model.resources[0]?model.resources[0].id:'';
+  openDialog(milestone?'New milestone':'New task',
+   '<div class="dlg-grid">'+
+   '<label>ID</label><input id="f-id" value="'+nextId('T',ids)+'">'+
+   '<label>Name</label><input id="f-name" value="'+(milestone?'Milestone':'Task')+'">'+
+   (milestone?'':'<label>Duration (wd)</label><input id="f-dur" type="number" min="1" max="'+MAX_DUR+'" value="1">'+
+   '<label>Resource</label><select id="f-res"><option value="">— unassigned —</option>'+model.resources.map(r=>'<option value="'+esc(r.id)+'">'+esc(r.id)+' '+esc(r.name)+'</option>').join('')+'</select>')+
+   '<label>Priority</label><input id="f-pri" type="number" min="0" max="'+MAX_PRIO+'" value="'+(model.tasks.length?Math.max(...model.tasks.map(t=>t.priority))+1:0)+'">'+
+   '<label>Predecessors</label><select id="f-preds" multiple size="'+Math.min(6,Math.max(3,model.tasks.length))+'">'+model.tasks.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.id)+' '+esc(t.name)+'</option>').join('')+'</select>'+
+   '<label>Not-before</label><input id="f-nb" type="date" min="'+MIN_DATE+'" max="'+MAX_DATE+'">'+
+   '</div><div class="dlg-err" id="dlg-err"></div>',
+   [{label:'Cancel',fn:null},{label:'Create',cls:'primary',keep:true,fn:()=>{
+     const m2=clone(model);
+     const t={id:$('#f-id').value.trim(),name:$('#f-name').value,
+       duration:milestone?0:($('#f-dur').value.trim()===''?NaN:Number($('#f-dur').value)),
+       priority:$('#f-pri').value.trim()===''?NaN:Number($('#f-pri').value),
+       resourceId:milestone?null:($('#f-res').value||null),
+       predecessors:[...$('#f-preds').selectedOptions].map(o=>o.value),
+       notBefore:$('#f-nb').value||null};
+     m2.tasks.push(t);
+     const r=applyModel(m2);if(!r.ok){dlgErr(r.msg);return}
+     selection=t.id;notice('Created '+t.id+(r.notes.length?'. '+r.notes.join('. '):''),'ok');dlg.close();renderAll()}}])}
+function addResourceDialog(){
+  const ids=new Set(model.resources.map(r=>r.id));
+  openDialog('New resource','<div class="dlg-grid"><label>ID</label><input id="f-id" value="'+nextId('R',ids)+'"><label>Name</label><input id="f-name" value="Resource"><label>Capacity</label><select id="f-cap">'+[1,2,3,4].map(c=>'<option>'+c+'</option>').join('')+'</select></div><div class="dlg-err" id="dlg-err"></div>',
+   [{label:'Cancel',fn:null},{label:'Create',cls:'primary',keep:true,fn:()=>{
+     const m2=clone(model);m2.resources.push({id:$('#f-id').value.trim(),name:$('#f-name').value,capacity:Number($('#f-cap').value)});
+     const r=applyModel(m2);if(!r.ok){dlgErr(r.msg);return}
+     notice('Created resource','ok');dlg.close();renderAll()}}])}
+
+/* ================= import / export ================= */
+function openImport(){
+  openDialog('Import project JSON',
+   '<div class="small">Format: <code>{version:1, project:{name,startDate}, resources:[{id,name,capacity}], tasks:[{id,name,duration,priority,resourceId,predecessors,notBefore}]}</code>. Use <code>null</code> for no resource / no constraint. The schedule is always recomputed — imported schedule caches are ignored.</div>'+
+   '<input type="file" id="imp-file" accept=".json,application/json">'+
+   '<textarea id="imp-text" placeholder="…or paste JSON here" aria-label="paste project JSON"></textarea>'+
+   '<div class="dlg-err" id="dlg-err"></div>',
+   [{label:'Cancel',fn:null},{label:'Import',cls:'primary',keep:true,fn:()=>{
+     const file=$('#imp-file').files[0],txt=$('#imp-text').value.trim();
+     const apply=str=>{let obj;try{obj=JSON.parse(str)}catch(e){dlgErr('not valid JSON: '+e.message);return}
+       const m2=importModel(obj);if(!m2)return;
+       const r=applyModel(m2);if(!r.ok){dlgErr(r.msg);return}
+       selection=null;notice('Imported project "'+m2.project.name+'" — schedule recomputed'+(r.notes.length?'. '+r.notes.join('. '):''),'ok');dlg.close();renderAll()};
+     if(txt)apply(txt);
+     else if(file){const r=new FileReader();r.onload=()=>apply(r.result);r.onerror=()=>dlgErr('cannot read file');r.readAsText(file)}
+     else dlgErr('choose a file or paste JSON')}}])}
+function importModel(o){
+  const bad=m=>{dlgErr(m);return null};
+  if(!o||typeof o!=='object')return bad('top level must be an object');
+  if(o.version!==1)return bad('version must be 1');
+  if(!o.project||typeof o.project!=='object')return bad('missing project object');
+  if(!Array.isArray(o.resources)||!Array.isArray(o.tasks))return bad('resources and tasks must be arrays');
+  const m={project:{name:String(o.project.name??''),startDate:String(o.project.startDate??'')},resources:[],tasks:[]};
+  for(const r of o.resources){if(!r||typeof r!=='object')return bad('bad resource entry');
+    m.resources.push({id:String(r.id??''),name:String(r.name??r.id??''),capacity:r.capacity===undefined?NaN:r.capacity})}
+  for(const t of o.tasks){if(!t||typeof t!=='object')return bad('bad task entry');
+    m.tasks.push({id:String(t.id??''),name:String(t.name??''),duration:t.duration===undefined?NaN:t.duration,
+      priority:t.priority===undefined?0:t.priority,
+      resourceId:(t.resourceId===null||t.resourceId===undefined||t.resourceId==='')?null:String(t.resourceId),
+      predecessors:Array.isArray(t.predecessors)?t.predecessors.map(String):[],
+      notBefore:(t.notBefore===null||t.notBefore===undefined||t.notBefore==='')?null:String(t.notBefore)})}
+  return m}
+function download(name,text,mime){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime}));a.download=name;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},400)}
+function exportJSON(){
+  const o={version:1,project:{name:model.project.name,startDate:model.project.startDate},
+    resources:model.resources.map(r=>({id:r.id,name:r.name,capacity:r.capacity})),
+    tasks:model.tasks.map(t=>({id:t.id,name:t.name,duration:t.duration,priority:t.priority,resourceId:t.resourceId,predecessors:[...t.predecessors],notBefore:t.notBefore}))};
+  download((model.project.name.replace(/[^\w-]+/g,'_')||'project')+'.json',JSON.stringify(o,null,2),'application/json');
+  notice('Exported JSON','ok')}
+function csvCell(v){v=String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function exportCSV(){
+  const head=['task_id','name','resource_id','predecessors','duration_wd','not_before','start_offset','start_date','finish_offset','finish_date','last_work_date','dependency_only_float'];
+  const lines=[head.join(',')];
+  for(const t of model.tasks){const i=derived.info[t.id],c=derived.cpm[t.id];
+    lines.push([t.id,t.name,t.resourceId||'',t.predecessors.join(';'),t.duration,t.notBefore||'',
+      i.start,offToDate(model,i.start),i.finish,offToDate(model,i.finish),
+      t.duration>0?offToDate(model,i.finish-1):'',c.float].map(csvCell).join(','))}
+  download('schedule.csv',lines.join('\r\n')+'\r\n','text/csv');notice('Exported CSV','ok')}
+function exportSVG(){
+  const W2=18;const xB2=o=>Math.floor(o/5)*(5*W2+8)+o%5*W2;
+  const rows=model.tasks,RH=24,pad=170;
+  const showTo=Math.max(derived.completion+4,10);
+  const W=pad+xB2(showTo)+W2,H=60+rows.length*RH+70;
+  const bg='#ffffff',fg='#1a1a1a';
+  let s='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" font-family="system-ui,sans-serif" font-size="11" style="background:'+bg+'">';
+  s+='<text x="'+pad+'" y="22" font-size="15" font-weight="700" fill="'+fg+'">'+esc(model.project.name)+' — Gantt (start '+model.project.startDate+', Mon–Fri)</text>';
+  s+='<text x="'+pad+'" y="38" fill="#666">actual completion '+fmtOD(model,derived.completion)+' (exclusive) · dependency-only completion '+derived.cpmCompletion+' wd · bars: orange = zero-float, grey = unassigned, ◆ = milestone, shaded gap = weekend</text>';
+  for(let w=0;xB2(w*5)<=W-pad;w++){const wx=pad+xB2(w*5);
+    s+='<rect x="'+(wx+5*W2)+'" y="48" width="8" height="'+(H-110)+'" fill="#eee"/>'+
+       '<line x1="'+wx+'" y1="48" x2="'+wx+'" y2="'+(H-62)+'" stroke="#ccc"/>'+
+       '<text x="'+(wx+2)+'" y="58" fill="#333" font-weight="600">'+esc(offToDate(model,w*5))+'</text>'}
+  rows.forEach((t,ri)=>{const y=70+ri*RH,i=derived.info[t.id],crit=derived.cpm[t.id].float===0;
+    s+='<text x="6" y="'+(y+11)+'" fill="'+fg+'">'+esc(t.id)+' '+esc(t.name)+'</text>';
+    t.predecessors.forEach(p=>{const pi=rows.findIndex(u=>u.id===p);if(pi<0)return;const ip=derived.info[p];
+      s+='<path d="M'+(pad+xB2(ip.finish))+','+(70+pi*RH+5)+' L'+(pad+(xB2(ip.finish)+xB2(i.start))/2)+','+(70+pi*RH+5)+' L'+(pad+(xB2(ip.finish)+xB2(i.start))/2)+','+(y+5)+' L'+(pad+xB2(i.start))+','+(y+5)+'" stroke="#888" fill="none"/>'});
+    if(t.duration===0){const x=pad+xB2(i.start);
+      s+='<path d="M'+x+','+y+' L'+(x+6)+','+(y+7)+' L'+x+','+(y+14)+' L'+(x-6)+','+(y+7)+' Z" fill="'+(crit?'#e0704d':'#d9a437')+'"/>'+
+         '<text x="'+(x+9)+'" y="'+(y+11)+'" fill="#555">'+esc(t.id)+' · '+esc(offToDate(model,i.start))+'</text>'}
+    else{const x=pad+xB2(i.start),wd=xB2(i.finish)-xB2(i.start);
+      s+='<rect x="'+x+'" y="'+y+'" width="'+wd+'" height="14" rx="3" fill="'+(crit?'#e0704d':t.resourceId?'#3f7fd6':'#8a97a5')+'"/>'+
+         '<text x="'+(x+wd+4)+'" y="'+(y+11)+'" fill="#555">'+esc(t.id)+' · '+esc(offToDate(model,i.start))+' → '+esc(offToDate(model,i.finish))+' (excl)</text>'}});
+  s+='<text x="6" y="'+(H-30)+'" fill="#666">Generated by Project Planning Studio — finish boundaries are exclusive; weekends shaded; offsets are working days.</text></svg>';
+  download('gantt.svg',s,'image/svg+xml');notice('Exported SVG','ok')}
+
+/* ================= selection & misc ================= */
+function select(id){selection=id;renderAll()}
+function switchMobile(vid){
+  document.querySelectorAll('#viewtabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===vid));
+  document.querySelectorAll('main > .view').forEach(v=>v.classList.toggle('mob',v.id===vid))}
+function renderAll(){
+  renderSummary();renderTable();renderGantt();renderRes();renderDetails();
+  $('#btn-undo').disabled=!undoStack.length;$('#btn-redo').disabled=!redoStack.length;
+  $('#crit-btn').classList.toggle('on',critOn);
+  $('#task-count').textContent=model.tasks.length+' task(s)';
+  $('#proj-name').value=model.project.name;$('#proj-start').value=model.project.startDate;
+  $('#hdr-limits').textContent='≤'+MAX_TASKS+' tasks · '+MIN_DATE+'…'+MAX_DATE+' · horizon '+MAX_OFF+' wd'}
+
+/* ================= wiring ================= */
+function init(){
+  derived=computeDerived(model);
+  $('#btn-undo').addEventListener('click',undo);
+  $('#btn-redo').addEventListener('click',redo);
+  $('#btn-reset').addEventListener('click',resetAll);
+  $('#btn-add-task').addEventListener('click',()=>addTaskDialog(false));
+  $('#btn-add-milestone').addEventListener('click',()=>addTaskDialog(true));
+  $('#btn-add-res').addEventListener('click',addResourceDialog);
+  $('#btn-import').addEventListener('click',openImport);
+  $('#crit-btn').addEventListener('click',()=>{critOn=!critOn;renderAll();notice(critOn?'Critical path on: dependency-only zero-float tasks and tight edges highlighted':'Critical path off','info')});
+  $('#btn-export').addEventListener('click',e=>{e.stopPropagation();$('#export-menu').classList.toggle('open')});
+  document.addEventListener('click',()=>$('#export-menu').classList.remove('open'));
+  $('#exp-json').addEventListener('click',exportJSON);
+  $('#exp-csv').addEventListener('click',exportCSV);
+  $('#exp-svg').addEventListener('click',exportSVG);
+  $('#z-in').addEventListener('click',()=>{const i=ZOOMS.indexOf(dayW);if(i<ZOOMS.length-1){dayW=ZOOMS[i+1];renderGantt()}});
+  $('#z-out').addEventListener('click',()=>{const i=ZOOMS.indexOf(dayW);if(i>0){dayW=ZOOMS[i-1];renderGantt()}});
+  $('#proj-name').addEventListener('change',e=>{const m2=clone(model);m2.project.name=e.target.value;tryCommit(m2,'Project renamed')});
+  $('#proj-start').addEventListener('change',e=>{
+    const m2=clone(model);m2.project.startDate=e.target.value;
+    tryCommit(m2,'Project start set')});
+  document.querySelectorAll('#viewtabs button').forEach(b=>b.addEventListener('click',()=>switchMobile(b.dataset.v)));
+  document.addEventListener('keydown',e=>{
+    if(e.target.closest('input,select,textarea'))return;
+    if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();undo()}
+    else if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.shiftKey&&e.key.toLowerCase()==='z'))){e.preventDefault();redo()}});
+  renderAll()}
+
+/* weekend normalization feedback for date inputs on commit paths */
+init();
+</script>
+</body>
+</html>

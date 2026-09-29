@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Storm Lab 3D — Weather &amp; Storm Laboratory</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#10151dee; --line:#22303f; --txt:#c8d6e5; --dim:#6d8093;
+    --acc:#4fc3f7; --acc2:#ffd54f; --bad:#ef5350; --ok:#81c784;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+    font:12px/1.45 "SF Mono",Consolas,Menlo,monospace;color:var(--txt);
+    -webkit-user-select:none;user-select:none;touch-action:none;}
+  #gl{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;}
+  #hud{position:absolute;top:8px;left:8px;transition:left .18s ease;background:var(--panel);border:1px solid var(--line);
+    border-radius:6px;padding:6px 9px;font-size:11px;pointer-events:none;white-space:pre;
+    text-shadow:0 1px 2px #000;min-width:230px;}
+  #hud b{color:var(--acc);}
+  #mapwrap{position:absolute;right:8px;top:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:6px;padding:4px;pointer-events:auto;}
+  #mapwrap .mtitle{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);padding:2px 4px;cursor:pointer;}
+  #map{display:block;border-radius:4px;image-rendering:pixelated;}
+  #panel{position:absolute;top:8px;left:8px;bottom:8px;width:296px;overflow-y:auto;overflow-x:hidden;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;
+    transform:translateX(-320px);transition:transform .18s ease;scrollbar-width:thin;}
+  #panel.open{transform:none;}
+  #panelToggle{position:absolute;top:8px;left:8px;z-index:5;background:var(--panel);border:1px solid var(--line);
+    color:var(--txt);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit;}
+  body.panelopen #hud{left:316px;}
+  body:not(.panelopen) #hud{top:46px;}
+  #panel h1{font-size:13px;color:var(--acc);letter-spacing:.5px;margin:2px 0 6px;}
+  #panel details{border:1px solid var(--line);border-radius:6px;margin-bottom:6px;background:#0d121a;}
+  #panel details[open]{background:#0e141d;}
+  #panel summary{cursor:pointer;padding:5px 8px;color:var(--acc);font-size:11px;letter-spacing:.4px;
+    list-style:none;}
+  #panel summary::before{content:"▸ ";color:var(--dim);}
+  #panel details[open] summary::before{content:"▾ ";}
+  #panel .body{padding:4px 8px 8px;}
+  .row{display:flex;align-items:center;gap:6px;margin:3px 0;}
+  .row label{flex:0 0 118px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row input[type=range]{flex:1;min-width:0;accent-color:var(--acc);height:14px;}
+  .row .val{flex:0 0 44px;text-align:right;color:var(--acc2);font-size:10px;}
+  select,input[type=number],input[type=text]{background:#0a0f16;border:1px solid var(--line);color:var(--txt);
+    border-radius:4px;padding:3px 5px;font:inherit;width:100%;}
+  button{background:#14202e;border:1px solid var(--line);color:var(--txt);border-radius:5px;
+    padding:5px 8px;cursor:pointer;font:inherit;}
+  button:hover{border-color:var(--acc);color:#fff;}
+  button.on{background:#1d3a52;border-color:var(--acc);color:#fff;}
+  button.warn{border-color:var(--bad);}
+  .btnrow{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0;}
+  .btnrow button{flex:1 1 auto;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;}
+  .toolgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;}
+  .toolgrid button{padding:5px 2px;font-size:10px;}
+  .hint{color:var(--dim);font-size:10px;margin:3px 0;}
+  #warn{color:var(--bad);font-size:10px;margin:4px 0;white-space:pre-wrap;}
+  #probePanel{position:absolute;right:8px;bottom:8px;width:296px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:8px;display:none;z-index:4;}
+  #probePanel.open{display:block;}
+  #probePanel canvas{display:block;background:#0a0f16;border-radius:4px;margin-top:4px;}
+  #probePanel .cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;font-size:10px;}
+  #msg{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);background:#000a;
+    border:1px solid var(--acc);color:#fff;padding:10px 18px;border-radius:8px;display:none;
+    pointer-events:none;font-size:13px;text-align:center;max-width:80vw;}
+  #fatal{position:absolute;inset:0;background:var(--bg);display:none;place-items:center;z-index:50;}
+  #fatal div{max-width:560px;padding:24px;border:1px solid var(--bad);border-radius:8px;color:#fff;}
+  .kbd{background:#182635;border-radius:3px;padding:0 4px;border:1px solid var(--line);}
+  @media (max-width:640px){
+    #panel{width:86vw;}
+    #probePanel{width:86vw;}
+    #hud{font-size:9px;min-width:0;max-width:60vw;}
+    #mapwrap{transform:scale(.7);transform-origin:top right;}
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<button id="panelToggle">☰ CONTROLS</button>
+<div id="hud"></div>
+<div id="mapwrap"><div class="mtitle"><span id="mapTitle">MAP</span><span id="mapHint">layer ▾</span></div><canvas id="map" width="200" height="200"></canvas></div>
+<div id="panel" class="open"></div>
+<div id="probePanel"></div>
+<div id="msg"></div>
+<div id="fatal"><div id="fatalText"></div></div>
+<script>
+'use strict';
+/* =====================================================================
+   STORM LAB 3D — single-file interactive weather & storm laboratory
+   CPU grid atmosphere + WebGL2 renderer. No external dependencies.
+   ===================================================================== */
+
+// ---------------- utils ----------------
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>x<a?a:(x>b?b:x);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const TAU=Math.PI*2;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+let RNG=mulberry32(1);
+const frand=()=>RNG();
+// value-noise for terrain gen
+function makeNoise(seed){
+  const r=mulberry32(seed),g=new Float32Array(256*256);
+  for(let i=0;i<g.length;i++)g[i]=r();
+  const at=(x,y)=>g[((y&255)<<8)|(x&255)];
+  return function(x,y){
+    const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const sx=xf*xf*(3-2*xf),sy=yf*yf*(3-2*yf);
+    return lerp(lerp(at(xi,yi),at(xi+1,yi),sx),lerp(at(xi,yi+1),at(xi+1,yi+1),sx),sy);
+  };
+}
+function fbm(n,x,y,o){let v=0,a=1,f=1,s=0;for(let i=0;i<o;i++){v+=a*n(x*f,y*f);s+=a;a*=.5;f*=2.03;}return v/s;}
+// f64-safe base64 for typed arrays
+function u8tob64(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return btoa(s);}
+function b64tou8(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
+function f32b64(a){return u8tob64(new Uint8Array(a.buffer,a.byteOffset,a.byteLength));}
+function b64f32(s,n){const u=b64tou8(s);if(u.byteLength<n*4)throw new Error('short array');return new Float32Array(u.buffer,u.byteOffset,n);}
+function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);}
+function toast(t,ms){const m=$('msg');m.textContent=t;m.style.display='block';clearTimeout(m._t);m._t=setTimeout(()=>m.style.display='none',ms||2200);}
+
+// ---------------- parameters ----------------
+const P={
+  seed:1337, nx:64, nz:64, nl:16,
+  dt:0.8, substeps:2, simSpeed:1.0,
+  windBase:5.0, coriolis:0.5, lapseRate:0.55, baseRH:0.66,
+  evap:1.0, condThresh:1.0, precipRate:0.55, buoyancy:1.0,
+  diffusion:0.5, terrainInfluence:1.0, lightningProb:0.5, solar:1.0,
+  renderScale:1.0, cloudQuality:0.55, precipDensity:1.0, exposure:1.05, timeOfDay:13.0,
+  viz:'cinematic', mapLayer:4, sliceAxis:'z', slicePos:0.5, sliceOn:false,
+  arrows:false, streamlines:true, contours:false,
+  brushRadius:5, brushStrength:1.0, tool:'camera', surfPaint:'ocean',
+  adaptive:true, audio:true, camPreset:'overview', flySpeed:8,
+  pause:false, forceBand:-1,
+};
+// unstable-combo warnings recomputed each frame
+function stabilityWarnings(){
+  const w=[];
+  const umax=Math.max(Math.abs(P.windBase),maxWind);
+  if(umax*P.dt>0.85)w.push('CFL risk: max wind*dt ≈ '+(umax*P.dt).toFixed(2)+' cells/step — lower dt or wind.');
+  if(P.lapseRate>1.0)w.push('Absolutely unstable lapse rate — expect violent convection.');
+  if(P.diffusion<=0.02&&P.dt>1.5)w.push('No diffusion + large dt may produce grid noise.');
+  if(P.condThresh<0.4)w.push('Very low condensation threshold — saturation storms likely.');
+  return w;
+}
+
+// ---------------- sim state ----------------
+const WORLD={half:30, top:16, sea:0.55};
+let NX=P.nx,NZ=P.nz,NL=P.nl,N=NX*NZ*NL;
+const IDX=(i,j,k)=>(k*NZ+j)*NX+i;
+const ID2=(i,j)=>j*NX+i;
+let F=null;           // Float32Array fields: u v w tp qv qc qr p (3D), chg not here
+let S=null;           // scratch for advection
+let Ht=null;          // terrain height (world units) NX*NZ
+let Sur=null;         // surface type Uint8: 0 land 1 ocean 2 forest 3 city 4 snow/ice 5 sand
+let Wet=null;         // ground wetness 0..3
+let Chg=null;         // charge proxy
+let KG=null;          // first non-solid k per column (Int16 NX*NZ)
+let Solid=null;       // Uint8 per cell
+let Rain2=null;       // surface precip rate 2D (for map/viz)
+let HeatV=null;       // per-column heating variation (convective organization)
+let simTime=0, precipTotal=0, cloudCoverAvg=0, maxUp=0, maxWind=0, chargeMax=0;
+let probes=[];        // {i,j,id,hist:[{t,T,RH,p,ws,qc,rr,w}]}
+let boltList=[];      // active lightning bolts
+let pendingThunders=[];
+let STRESS=false;
+
+const FIELDS=['u','v','w','tp','qv','qc','qr','p'];
+function allocState(){
+  NX=P.nx;NZ=P.nz;NL=P.nl;N=NX*NZ*NL;
+  F={};S={};
+  for(const f of FIELDS){F[f]=new Float32Array(N);S[f]=new Float32Array(N);}
+  Ht=new Float32Array(NX*NZ);Sur=new Uint8Array(NX*NZ);
+  Wet=new Float32Array(NX*NZ);Chg=new Float32Array(NX*NZ);
+  KG=new Int16Array(NX*NZ);Solid=new Uint8Array(N);
+  Rain2=new Float32Array(NX*NZ);HeatV=new Float32Array(NX*NZ);
+}
+const T0=22, G_AD=0.8;                 // surface temp, adiabatic lapse (units/layer)
+const tbase=k=>T0-P.lapseRate*k;
+const kH=k=>(k+0.5)*WORLD.top/NL;      // layer center height (world)
+const cellZ=()=>WORLD.top/NL;          // vertical cell size (world)
+const cellX=()=>2*WORLD.half/NX;       // horizontal cell size (world)
+const Q0=3.4;                          // saturation vapor scale at surface
+const qsat=(k,tp)=>{const t=tbase(k)+tp;return Q0*Math.exp(-0.10*k)*Math.exp(0.065*(t-10));};
+const RHof=(k,tp,qv)=>qv/Math.max(0.05,qsat(k,tp));
+
+function recomputeKG(){
+  _sol=0;
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const h=Ht[ID2(i,j)];let kg=NL;
+    for(let k=0;k<NL;k++)if(kH(k)>=h){kg=k;break;}
+    KG[ID2(i,j)]=kg;
+    for(let k=0;k<NL;k++){const s=k<kg?1:0;Solid[IDX(i,j,k)]=s;_sol+=s;}
+  }
+}
+// ---------------- terrain & init ----------------
+function genTerrain(seed,style){
+  const n=makeNoise(seed),n2=makeNoise(seed*7+3);
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++)
+    HeatV[ID2(i,j)]=0.3+fbm(n2,i/NX*7,j/NZ*7,3)*1.5;
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const x=i/NX,y=j/NZ;let h=0;
+    if(style==='ridge'){
+      const cx=(x-0.5);
+      h=fbm(n,x*3,y*3,4)*1.4+Math.exp(-cx*cx*38)*4.4*(0.7+0.6*fbm(n2,x*5,y*5,3));
+    }else if(style==='island'){
+      const dx=x-0.5,dy=y-0.5,r=Math.sqrt(dx*dx+dy*dy);
+      h=Math.max(0,(0.55-r))*9*(0.5+fbm(n,x*4,y*4,4));
+    }else if(style==='coast'){
+      h=smooth01(x*1.6-0.25)*4.0*(0.45+0.8*fbm(n,x*3,y*3,4));
+    }else if(style==='flat'){
+      h=0.9+fbm(n,x*3,y*3,4)*0.8;
+    }else{ // hills
+      h=fbm(n,x*3.2,y*3.2,5)*3.4+Math.max(0,fbm(n2,x*6,y*6,3)-0.55)*5;
+    }
+    Ht[ID2(i,j)]=h;
+  }
+}
+function smooth01(t){t=clamp(t,0,1);return t*t*(3-2*t);}
+function genSurface(style){
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const id=ID2(i,j),x=i/NX;let s=0;
+    if(style==='oceanAll')s=1;
+    else if(style==='coast')s=(x<0.36||Ht[id]<WORLD.sea*0.7)?1:0;
+    else if(style==='island')s=Ht[id]<WORLD.sea?1:(frand()<0.35?2:0);
+    else{ // land with lakes/forest patches
+      const n=makeNoise(P.seed+11);
+      if(Ht[id]<WORLD.sea)s=1;
+      else if(fbm(n,i/NX*4,j/NZ*4,3)>0.62)s=2;
+    }
+    Sur[id]=s;Wet[id]=s===1?2:0;
+  }
+}
+function clearFields(){
+  for(const f of FIELDS){F[f].fill(0);}
+  Chg.fill(0);Rain2.fill(0);
+  for(let i=0;i<Wet.length;i++)if(Sur[i]!==1)Wet[i]*=0.3;
+}
+function initAtmos(o){
+  // o: {rh, tpAmp, windU, windV, shear}
+  clearFields();
+  const rh=o.rh!=null?o.rh:P.baseRH;
+  const tpAmp=o.tpAmp||0, wu=o.windU!=null?o.windU:P.windBase, wv=o.windV||0;
+  for(let k=0;k<NL;k++){
+    const prof=0.35+0.65*k/NL;
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const id=IDX(i,j,k);if(Solid[id])continue;
+      F.u[id]=wu*prof+(frand()-0.5)*0.4;
+      F.v[id]=wv*prof+(frand()-0.5)*0.4;
+      const kg=KG[ID2(i,j)];if(k<kg)continue;
+      const qs=qsat(k,0);
+      F.qv[id]=qs*clamp(rh-0.22*k/NL+0.12*(frand()-0.5),0.02,1.05);
+      F.tp[id]=tpAmp*(frand()-0.5);
+    }
+  }
+}
+
+// ---------------- presets ----------------
+const PRESETS={
+  'fair':{name:'Fair-weather cumulus',setup(){
+    P.lapseRate=0.62;P.baseRH=0.82;P.windBase=2.5;P.coriolis=0.4;P.solar=1.15;P.timeOfDay=13;
+    genTerrain(P.seed,'hills');genSurface('land');recomputeKG();initAtmos({rh:0.78,tpAmp:1.2,windU:2.5});
+  }},
+  'sea-breeze':{name:'Sea breeze',setup(){
+    P.lapseRate=0.55;P.baseRH=0.7;P.windBase=0.6;P.solar=1.3;P.timeOfDay=14;
+    genTerrain(P.seed,'coast');genSurface('coast');recomputeKG();
+    initAtmos({rh:0.75,windU:0.5});
+    // warm the land side
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++)if(i/NX>0.42){const kg=KG[ID2(i,j)];for(let k=kg;k<Math.min(kg+3,NL);k++)F.tp[IDX(i,j,k)]+=2.5*(1-i/NX*0+0.5);}
+  }},
+  'mtn-rain':{name:'Mountain rain',setup(){
+    P.lapseRate=0.5;P.baseRH=0.85;P.windBase=7;P.terrainInfluence=1.3;P.solar=0.6;P.timeOfDay=15;
+    genTerrain(P.seed,'ridge');genSurface('land');recomputeKG();initAtmos({rh:0.9,windU:7});
+  }},
+  'squall':{name:'Squall line',setup(){
+    P.lapseRate=0.8;P.baseRH=0.78;P.windBase=9;P.coriolis=0.3;P.solar=0.8;P.timeOfDay=17;
+    genTerrain(P.seed,'flat');genSurface('land');recomputeKG();initAtmos({rh:0.8,tpAmp:1,windU:9});
+    const j0=NZ*0.35|0;
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const dj=Math.abs(j-j0);
+      if(dj<4){const kg=KG[ID2(i,j)];
+        for(let k=kg;k<NL;k++){const id=IDX(i,j,k);
+          const tpAdd=4*(1-dj/4)*Math.exp(-k*0.12);
+          F.tp[id]+=tpAdd;
+          F.qv[id]=Math.max(F.qv[id],qsat(k,tpAdd)*1.03*Math.exp(-Math.abs(k-6)*0.22));
+          // pre-seed the line: a developing storm band that dynamics takes over
+          const env=Math.exp(-Math.abs(k-6)*0.28);
+          F.qc[id]+=1.8*(1-dj/4)*env;
+        }}
+      if(dj<8)F.u[IDX(i,j,KG[ID2(i,j)])]+=2*(1-dj/8);
+    }
+    // cold pool behind the line
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++)if(j<j0-4){const kg=KG[ID2(i,j)];for(let k=kg;k<Math.min(kg+3,NL);k++)F.tp[IDX(i,j,k)]-=3.5;}
+    P.forceBand=j0;   // moist inflow keeps the line alive, drifts downwind
+  }},
+  'supercell':{name:'Rotating supercell',setup(){
+    P.lapseRate=0.9;P.baseRH=0.8;P.windBase=6;P.coriolis=0.7;P.solar=1.0;P.timeOfDay=16;P.lightningProb=0.8;
+    genTerrain(P.seed,'flat');genSurface('land');recomputeKG();initAtmos({rh:0.82,tpAmp:1,windU:6});
+    const ci=NX*0.5|0,cj=NZ*0.5|0,R=10;
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const dx=i-ci,dz=j-cj,r=Math.hypot(dx,dz);if(r>R*2.2)continue;
+      const kg=KG[ID2(i,j)],sw=Math.exp(-r*r/(R*R*0.8));
+      for(let k=kg;k<NL;k++){
+        const id=IDX(i,j,k),tang=9*sw*Math.exp(-k*0.05);
+        F.u[id]+=-dz/(r+0.5)*tang;F.v[id]+=dx/(r+0.5)*tang;
+        F.p[id]-=6*sw*Math.exp(-k*0.1);
+        if(r<R*0.6){F.tp[id]+=5*Math.exp(-k*0.15);F.qv[id]*=1.2;}
+      }
+    }
+  }},
+  'cyclone':{name:'Tropical cyclone (approx.)',setup(){
+    P.lapseRate=0.5;P.baseRH=0.9;P.windBase=0.8;P.coriolis=1.8;P.solar=0.7;P.timeOfDay=11;P.evap=1.4;
+    genTerrain(P.seed,'flat');genSurface('oceanAll');recomputeKG();initAtmos({rh:0.92,windU:0.8});
+    const ci=NX*0.5|0,cj=NZ*0.5|0,R=11;
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const dx=i-ci,dz=j-cj,r=Math.hypot(dx,dz);if(r>26)continue;
+      const kg=KG[ID2(i,j)],prof=r<R? (r/R):Math.exp(-(r-R)*0.12);
+      for(let k=kg;k<NL;k++){
+        const id=IDX(i,j,k),tang=13*prof*Math.exp(-k*0.06);
+        F.u[id]+=-dz/(r+0.6)*tang*1.5;F.v[id]+=dx/(r+0.6)*tang*1.5;
+        F.p[id]-=9*Math.exp(-r*r/(2*R*R/3))*Math.exp(-k*0.12);
+        if(r<R*0.35){F.tp[id]+=3.5*Math.exp(-k*0.2);F.qv[id]=Math.min(F.qv[id]*1.3,qsat(k,0)*0.98);}
+      }
+    }
+  }},
+  'cold-front':{name:'Cold front',setup(){
+    P.lapseRate=0.7;P.baseRH=0.75;P.windBase=5;P.solar=0.75;P.timeOfDay=15;
+    genTerrain(P.seed,'hills');genSurface('land');recomputeKG();initAtmos({rh:0.72,windU:5,windV:4});
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const front=i/NX+(j/NZ-0.5)*0.25;const kg=KG[ID2(i,j)];
+      for(let k=kg;k<NL;k++){const id=IDX(i,j,k);
+        if(front<0.45){F.tp[id]-=5.5*Math.exp(-(k-kg)*0.3);}
+        else if(front<0.55){F.tp[id]+=2*Math.exp(-(k-kg)*0.2);F.qv[id]*=1.35;F.v[id]+=3;}
+      }
+    }
+  }},
+  'heat-island':{name:'Heat-island thunderstorm',setup(){
+    P.lapseRate=0.85;P.baseRH=0.72;P.windBase=1.2;P.solar=1.3;P.timeOfDay=15.5;P.lightningProb=0.6;
+    genTerrain(P.seed,'flat');genSurface('land');recomputeKG();
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const dx=i-NX/2,dz=j-NZ/2;if(Math.hypot(dx,dz)<7)Sur[ID2(i,j)]=3;
+    }
+    initAtmos({rh:0.75,windU:1});
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const dx=i-NX/2,dz=j-NZ/2,r=Math.hypot(dx,dz);if(r>8)continue;
+      const kg=KG[ID2(i,j)];for(let k=kg;k<Math.min(kg+4,NL);k++)F.tp[IDX(i,j,k)]+=6*Math.exp(-r*r/30)*Math.exp(-(k-kg)*0.35);
+    }
+  }},
+  'snow-band':{name:'Snow band',setup(){
+    P.lapseRate=0.4;P.baseRH=0.8;P.windBase=8;P.solar=0.35;P.timeOfDay=9;P.precipRate=0.7;
+    genTerrain(P.seed,'hills');genSurface('land');recomputeKG();initAtmos({rh:0.85,windU:8});
+    for(let k=0;k<NL;k++)for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){const id=IDX(i,j,k);if(!Solid[id])F.tp[id]=-tbase(k)-4-k*0.4;}
+    // moist fetch band
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX*0.4;i++)for(let k=KG[ID2(i,j)];k<NL*0.6;k++)F.qv[IDX(i,j,k)]*=1.3;
+  }},
+  'stress':{name:'Numerical stress test',setup(){
+    P.lapseRate=1.15;P.baseRH=0.9;P.windBase=14;P.coriolis=1.2;P.dt=1.4;P.diffusion=0.2;
+    P.solar=1.4;P.lightningProb=1;P.terrainInfluence=1.5;
+    STRESS=true;
+    genTerrain(P.seed,'ridge');genSurface('land');recomputeKG();initAtmos({rh:0.95,tpAmp:6,windU:14,windV:6});
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+      const kg=KG[ID2(i,j)];
+      for(let k=kg;k<NL;k++){const id=IDX(i,j,k);F.tp[id]+=(frand()-0.5)*7;F.u[id]+=(frand()-0.5)*8;F.v[id]+=(frand()-0.5)*8;F.qv[id]*=0.9+frand()*0.4;}
+    }
+  }},
+};
+let activePreset='fair';
+function applyPreset(key){
+  STRESS=false;
+  const pr=PRESETS[key];if(!pr)return;
+  // reset volatile params to sane defaults first
+  P.dt=0.8;P.substeps=2;P.coriolis=0.5;P.precipRate=0.55;P.buoyancy=1;P.evap=1;P.condThresh=1;P.diffusion=0.5;P.terrainInfluence=1;P.forceBand=-1;
+  activePreset=key;
+  const sel=document.getElementById('presetSel');if(sel)sel.value=key;
+  pr.setup();
+  recomputeKG();
+  simTime=0;precipTotal=0;boltList=[];pendingThunders=[];probes=[];
+  rebuildTerrainGPU();refreshProbeUI();
+  toast(pr.name);
+}
+
+// ---------------- simulation step ----------------
+const tmpCol={pH:null,N:-1};
+function stepSim(dt){
+  const u=F.u,v=F.v,w=F.w,tp=F.tp,qv=F.qv,qc=F.qc,qr=F.qr,p=F.p;
+  const dx=1,dz=1;
+  if(tmpCol.N!==N){tmpCol.pH=new Float32Array(N);tmpCol.N=N;}
+  const pH=tmpCol.pH;
+
+  // 1) surface exchange + dynamics sources
+  const sunEl=sunElev();
+  const solarFlux=Math.max(0,sunEl)*P.solar;
+  const surfHeat=[0.20,0.045,0.12,0.30,0.03,0.15];   // per surface type
+  const surfEvap=[0.28,1.0,0.5,0.08,0.05,0.18];
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const c=ID2(i,j),kg=KG[c];if(kg>=NL)continue;
+    const s=Sur[c],id=IDX(i,j,kg);
+    const albedo=s===4?0.4:1;
+    F.tp[id]+=solarFlux*surfHeat[s]*albedo*HeatV[c]*dt*(s===3?1.7:1);
+    if(s===3)F.tp[id]+=0.05*dt; // anthropogenic heat always on
+    const qs=qsat(kg,F.tp[id]);
+    const target=qs*clamp(P.baseRH*(s===1?1.3:s===2?1.1:1)*HeatV[c],0,1.0);
+    const evap=(target-F.qv[id])*surfEvap[s]*(1+Wet[c])*P.evap*0.45*dt;
+    if(evap>0){const de=Math.min(evap,qs*0.99-F.qv[id]);F.qv[id]+=de;F.tp[id]-=Math.min(de*0.35,0.15*dt);}
+    Wet[c]*=(1-0.006*dt); if(s===1)Wet[c]=2;
+  }
+  // 1b) sustained band forcing (squall-line moist inflow); band drifts with flow
+  if(P.forceBand>=0){
+    const jb=P.forceBand;
+    for(let j=Math.max(0,jb-3|0);j<Math.min(NZ,jb+4);j++){
+      const dj=Math.abs(j-jb);
+      for(let i=0;i<NX;i++){
+        const c=ID2(i,j),kg=KG[c];
+        for(let k=kg;k<NL;k++){
+          const id=IDX(i,j,k);
+          const env=Math.exp(-Math.abs(k-6)*0.3)*(1-dj/4);
+          if(env>0.05){
+            const qs=qsat(k,F.tp[id]);
+            if(F.qv[id]<qs*1.3*env)F.qv[id]+=(qs*1.3*env-F.qv[id])*0.5*dt;
+            F.tp[id]+=1.5*env*dt;
+            if(dj<2)F.qc[id]+=0.3*env*dt;
+          }
+        }
+      }
+    }
+    P.forceBand+=P.windBase*0.008*dt;
+    if(P.forceBand>NZ-4)P.forceBand=-1;
+  }
+  // 2) buoyancy, pressure, coriolis, base wind relaxation, terrain
+  const Kb=P.buoyancy;
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    // column-integrated buoyancy -> hydrostatic pressure proxy
+    // (warm/moist column => negative pressure anomaly => low-level inflow)
+    const c=ID2(i,j);
+    let acc=0;
+    for(let k=KG[c];k<NL;k++){
+      const id=IDX(i,j,k);
+      acc+=Kb*(0.075*tp[id]+0.03*qv[id]-0.5*(qc[id]+qr[id]));
+    }
+    const ph=-acc*0.5;
+    for(let k=0;k<NL;k++)pH[IDX(i,j,k)]=ph;
+    for(let k=KG[c];k<NL;k++){
+      const id=IDX(i,j,k);
+      const b=Kb*(0.075*tp[id]+0.03*qv[id]-0.5*(qc[id]+qr[id]));
+      w[id]+=(b-0.15*w[id])*dt;
+      p[id]+=(pH[id]*0.08-p[id])*0.45*dt;
+      // coriolis
+      const f=P.coriolis*0.06*dt;
+      const uu=u[id]+f*v[id],vv=v[id]-f*u[id];
+      u[id]=uu;v[id]=vv;
+      // relax toward base profile (weak — keeps momentum/vortices alive)
+      const prof=0.35+0.65*k/NL;
+      u[id]+=(P.windBase*prof-u[id])*0.008*dt;
+      v[id]+=(0-v[id])*0.008*dt;
+    }
+    // pressure gradient horizontal accel (low draws in)
+    const i1=(i+1)%NX,j1=j+1<NZ?j+1:j;
+    for(let k=KG[c];k<NL;k++){
+      const id=IDX(i,j,k);
+      const gx=(p[IDX(i1,j,k)]-p[id])*0.5, gz=(p[IDX(i,j1,k)]-p[id])*0.5;
+      u[id]-=gx*3.5*dt;v[id]-=gz*3.5*dt;
+    }
+    // terrain drag + orographic lift on near-ground cells
+    const hL=Ht[ID2((i-1+NX)%NX,j)],hR=Ht[ID2((i+1)%NX,j)];
+    const hD=Ht[ID2(i,j-1<0?j:j-1)],hU=Ht[ID2(i,j+1<NZ?j+1:j)];
+    const dhdx=(hR-hL)*0.5,dhdz=(hU-hD)*0.5;
+    for(let k=KG[c];k<Math.min(KG[c]+3,NL);k++){
+      const id=IDX(i,j,k);
+      const lift=-(u[id]*dhdx+v[id]*dhdz)/cellX()*P.terrainInfluence*2.2;
+      w[id]+=clamp(lift,-3,3)*dt;
+      const drag=0.025*P.terrainInfluence*dt;
+      u[id]*=(1-drag);v[id]*=(1-drag);
+      // slow ambient moisture flux-convergence in the boundary layer
+      // (closed-domain storms otherwise exhaust all vapor and the sky dies)
+      if(qv[id]<Q0*0.65*Math.exp(-0.18*(k-KG[c])))F.qv[id]+=0.008*dt;
+    }
+  }
+  // approximate continuity: remove most of the per-layer mean vertical motion,
+  // so updraft cores are balanced by subsidence (organizes/patches convection)
+  for(let k=0;k<NL;k++){
+    let s=0,n=0;
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){const id=IDX(i,j,k);if(!Solid[id]){s+=w[id];n++;}}
+    if(!n)continue;const m=s/n*0.85;
+    for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){const id=IDX(i,j,k);if(!Solid[id])w[id]-=m;}
+  }
+  // stable-stratification adiabatic term: tp += w*(lapse-G)*dt
+  const adi=(P.lapseRate-G_AD)*dt;
+  for(let id=0;id<N;id++){tp[id]+=w[id]*adi;}
+  // 3) microphysics
+  const LH=1.15,condT=P.condThresh,pr=P.precipRate;
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const c=ID2(i,j);let prec=0;
+    for(let k=NL-1;k>=KG[c];k--){
+      const id=IDX(i,j,k);
+      // entrainment / environmental drying aloft — keeps free atmosphere
+      // subsaturated so cloud only persists inside active updraft plumes
+      if(k>NL*0.45){const ef=1-0.02*dt*(k-NL*0.45);if(qv[id]>0.05)qv[id]*=ef;}
+      const qs=qsat(k,tp[id]);
+      // condensation / evaporation of cloud
+      if(qv[id]>qs*condT){const d=Math.min((qv[id]-qs*condT)*0.5,qv[id]);qv[id]-=d;qc[id]+=d;tp[id]+=d*LH;}
+      else if(qc[id]>0&&qv[id]<qs*0.8){const d=Math.min(qc[id],(qs*0.8-qv[id])*0.2);qc[id]-=d;qv[id]+=d;if(tp[id]>-5)tp[id]-=d*LH*0.8;}
+      // autoconversion to rain
+      if(qc[id]>0.35){const d=Math.min(qc[id]-0.25,(qc[id]-0.25)*pr*0.25*dt+qr[id]*qc[id]*0.02*dt);qc[id]-=d;qr[id]+=d;}
+      // rain falls one column step
+      if(qr[id]>0){
+        const cold=(tbase(k)+tp[id])<0;
+        const vf=cold?1.2:3.2;
+        const fall=Math.min(qr[id],vf*dt/dz);
+        qr[id]-=fall;
+        if(k-1>=KG[c]){qr[IDX(i,j,k-1)]+=fall;}
+        else{prec+=fall;Wet[c]+=fall*2;precipTotal+=fall;}
+        // evaporation of falling rain in subsaturated air (bounded — virga, not a heat sink)
+        if(qr[id]>0&&qv[id]<qs*0.8&&tp[id]>-4){
+          const d=Math.min(qr[id],(qs*0.8-qv[id])*0.12*dt);qr[id]-=d;qv[id]+=d;tp[id]-=d*LH*0.7;}
+      }
+    }
+    Rain2[c]=prec/Math.max(dt,1e-4);
+  }
+  // 4) advection (semi-Lagrangian) + diffusion
+  for(const f of FIELDS)advect(F[f],S[f],dt);
+  diffuse(tp,S.tp,P.diffusion*0.10*dt);diffuse(qv,S.qv,P.diffusion*0.10*dt);
+  diffuse(qc,S.qc,P.diffusion*0.08*dt);diffuse(p,S.p,0.12*dt+0.02);
+  diffuse(u,S.u,0.05*dt);diffuse(v,S.v,0.05*dt);diffuse(w,S.w,0.05*dt);
+  // 5) sanitize + stats + charge
+  let mUp=0,mW=0,cloudCells=0;
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const c=ID2(i,j);let colQ=0,colUp=0;
+    for(let k=KG[c];k<NL;k++){
+      const id=IDX(i,j,k);
+      let x;
+      x=u[id];u[id]=(x!==x)?0:clamp(x,-30,30);
+      x=v[id];v[id]=(x!==x)?0:clamp(x,-30,30);
+      x=w[id];w[id]=(x!==x)?0:clamp(x,-9,9);
+      x=tp[id];tp[id]=(x!==x)?0:clamp(x,-18,40);
+      x=qv[id];qv[id]=(x!==x||x<0)?0:Math.min(x,12);
+      x=qc[id];qc[id]=(x!==x||x<0)?0:Math.min(x,12);
+      x=qr[id];qr[id]=(x!==x||x<0)?0:Math.min(x,12);
+      x=p[id];p[id]=(x!==x)?0:clamp(x,-60,60);
+      const sp=Math.hypot(u[id],v[id]);if(sp>mW)mW=sp;
+      if(w[id]>mUp)mUp=w[id];
+      if(w[id]>colUp)colUp=w[id];
+      if(qc[id]>0.05)cloudCells++;
+      colQ+=qc[id]+qr[id];
+    }
+    // charge proxy: strong updraft + condensate
+    const prod=Math.max(0,colUp-0.6)*colQ*0.006;
+    Chg[c]=Math.max(0,Chg[c]*(1-0.02*dt)+prod*dt*60);
+  }
+  maxUp=mUp;maxWind=mW;
+  cloudCoverAvg=cloudCells/Math.max(1,N-NXZ_solid());
+  chargeMax=0;
+  for(let c=0;c<NX*NZ;c++)if(Chg[c]>chargeMax)chargeMax=Chg[c];
+  // automatic lightning
+  if(chargeMax>6&&frand()<P.lightningProb*dt*(chargeMax/14)){
+    // find strike cell near charge max
+    let best=0,bv=0;for(let c=0;c<NX*NZ;c++)if(Chg[c]>bv){bv=Chg[c];best=c;}
+    strikeAt(best%NX,(best/NX)|0,1);
+  }
+  simTime+=dt;
+}
+let _sol=0;function NXZ_solid(){return Math.max(0,_sol);}
+function advect(A,B,dt){
+  // B <- A advected; then copy back
+  for(let k=0;k<NL;k++)for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const id=IDX(i,j,k);
+    if(Solid[id]){B[id]=0;continue;}
+    let sx=i-F.u[id]*dt, sy=j-F.v[id]*dt, sz=k-F.w[id]*dt;
+    // periodic in x, clamp in z & y
+    sx=((sx%NX)+NX)%NX;sy=clamp(sy,0,NZ-1.001);
+    const i0=sx|0,i1=(i0+1)%NX,j0=sy|0,j1=j0+1;
+    // never sample below terrain of the backtraced column (prevents mass bleed)
+    const kg=Math.max(KG[ID2(i0,j0)],KG[ID2(i1,j0)]);
+    sz=clamp(sz,kg,NL-1.001);
+    const k0=sz|0,k1=k0+1;
+    const fx=sx-i0,fy=sy-j0,fz=sz-k0;
+    const a00=lerp(A[IDX(i0,j0,k0)],A[IDX(i1,j0,k0)],fx);
+    const a10=lerp(A[IDX(i0,j1,k0)],A[IDX(i1,j1,k0)],fx);
+    const a01=lerp(A[IDX(i0,j0,k1)],A[IDX(i1,j0,k1)],fx);
+    const a11=lerp(A[IDX(i0,j1,k1)],A[IDX(i1,j1,k1)],fx);
+    B[id]=lerp(lerp(a00,a10,fy),lerp(a01,a11,fy),fz);
+  }
+  A.set(B);
+}
+function diffuse(A,B,k){
+  if(k<=0.0005)return;k=Math.min(k,0.2);
+  for(let z=0;z<NL;z++)for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const id=IDX(i,j,z);
+    if(Solid[id]){B[id]=A[id];continue;}
+    const l=A[IDX((i-1+NX)%NX,j,z)],r=A[IDX((i+1)%NX,j,z)];
+    const d=A[IDX(i,j-1<0?j:j-1,z)],u2=A[IDX(i,j+1<NZ?j+1:j,z)];
+    const dn=z>0?A[IDX(i,j,z-1)]:A[id],up=z<NL-1?A[IDX(i,j,z+1)]:A[id];
+    B[id]=A[id]+k*(l+r+d+u2+dn+up-6*A[id]);
+  }
+  A.set(B);
+}
+// sun
+function sunElev(){const a=(P.timeOfDay-6)/12*Math.PI;return Math.sin(a);}
+function sunDir(){
+  const a=(P.timeOfDay-6)/12*Math.PI;
+  const el=Math.max(0.02,Math.sin(a)),az=a*0.6+Math.PI*0.5;
+  const e=Math.max(0.06,el);
+  return norm3([Math.cos(az)*Math.sqrt(Math.max(0,1-e*e)),e,Math.sin(az)*Math.sqrt(Math.max(0,1-e*e))]);
+}
+function norm3(v){const l=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/l,v[1]/l,v[2]/l];}
+// ================= WebGL2 renderer =================
+let gl=null,canvas=$('gl');
+const PROG={};
+const TEX={};
+let terrainVAO=null,terrainN=0;
+let lineVAO=null,lineVBO=null,lineCap=0;
+let sliceVAO=null,sliceVBO=null;
+let quadVAO=null,cubeVAO=null,cubeN=0;
+let flash={pos:[0,0,0],i:0};
+let aspect=1,viewM=null,projM=null,invVP=null;
+const cam={mode:'orbit',tgt:[0,3,0],yaw:0.9,pitch:0.55,dist:70,
+           pos:[0,8,50],fyaw:-1.6,fpitch:-0.05,speed:9};
+let camPos=[0,8,60];
+let renderScaleEff=1;
+
+// ---- minimal mat4 (column major) ----
+function m4persp(f,a,n,fa){const t=1/Math.tan(f/2),d=1/(n-fa);
+  return new Float32Array([t/a,0,0,0, 0,t,0,0, 0,0,(fa+n)*d,-1, 0,0,2*fa*n*d,0]);}
+function m4lookAt(e,c,up){
+  const z=norm3([e[0]-c[0],e[1]-c[1],e[2]-c[2]]);
+  const x=norm3([up[1]*z[2]-up[2]*z[1],up[2]*z[0]-up[0]*z[2],up[0]*z[1]-up[1]*z[0]]);
+  const y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-x[0]*z[1]];
+  return new Float32Array([
+    x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+    -(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]),1]);}
+function m4mul(a,b){const o=new Float32Array(16);
+  for(let c=0;c<4;c++)for(let r=0;r<4;r++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+r]*b[c*4+k];o[c*4+r]=s;}return o;}
+function m4inv(m){const x=new Float32Array(16);
+  x[0]=m[5]*m[10]*m[15]-m[5]*m[11]*m[14]-m[9]*m[6]*m[15]+m[9]*m[7]*m[14]+m[13]*m[6]*m[11]-m[13]*m[7]*m[10];
+  x[4]=-m[4]*m[10]*m[15]+m[4]*m[11]*m[14]+m[8]*m[6]*m[15]-m[8]*m[7]*m[14]-m[12]*m[6]*m[11]+m[12]*m[7]*m[10];
+  x[8]=m[4]*m[9]*m[15]-m[4]*m[11]*m[13]-m[8]*m[5]*m[15]+m[8]*m[7]*m[13]+m[12]*m[5]*m[11]-m[12]*m[7]*m[9];
+  x[12]=-m[4]*m[9]*m[14]+m[4]*m[10]*m[13]+m[8]*m[5]*m[14]-m[8]*m[6]*m[13]-m[12]*m[5]*m[10]+m[12]*m[6]*m[9];
+  x[1]=-m[1]*m[10]*m[15]+m[1]*m[11]*m[14]+m[9]*m[2]*m[15]-m[9]*m[3]*m[14]-m[13]*m[2]*m[11]+m[13]*m[3]*m[10];
+  x[5]=m[0]*m[10]*m[15]-m[0]*m[11]*m[14]-m[8]*m[2]*m[15]+m[8]*m[3]*m[14]+m[12]*m[2]*m[11]-m[12]*m[3]*m[10];
+  x[9]=-m[0]*m[9]*m[15]+m[0]*m[11]*m[13]+m[8]*m[1]*m[15]-m[8]*m[3]*m[13]-m[12]*m[1]*m[11]+m[12]*m[3]*m[9];
+  x[13]=m[0]*m[9]*m[14]-m[0]*m[10]*m[13]-m[8]*m[1]*m[14]+m[8]*m[2]*m[13]+m[12]*m[1]*m[10]-m[12]*m[2]*m[9];
+  x[2]=m[1]*m[6]*m[15]-m[1]*m[7]*m[14]-m[5]*m[2]*m[15]+m[5]*m[3]*m[14]+m[13]*m[2]*m[7]-m[13]*m[3]*m[6];
+  x[6]=-m[0]*m[6]*m[15]+m[0]*m[7]*m[14]+m[4]*m[2]*m[15]-m[4]*m[3]*m[14]-m[12]*m[2]*m[7]+m[12]*m[3]*m[6];
+  x[10]=m[0]*m[5]*m[15]-m[0]*m[7]*m[13]-m[4]*m[1]*m[15]+m[4]*m[3]*m[13]+m[12]*m[1]*m[7]-m[12]*m[3]*m[5];
+  x[14]=-m[0]*m[5]*m[14]+m[0]*m[6]*m[13]+m[4]*m[1]*m[14]-m[4]*m[2]*m[13]-m[12]*m[1]*m[6]+m[12]*m[2]*m[5];
+  x[3]=-m[1]*m[6]*m[11]+m[1]*m[7]*m[10]+m[5]*m[2]*m[11]-m[5]*m[3]*m[10]-m[9]*m[2]*m[7]+m[9]*m[3]*m[6];
+  x[7]=m[0]*m[6]*m[11]-m[0]*m[7]*m[10]-m[4]*m[2]*m[11]+m[4]*m[3]*m[10]+m[8]*m[2]*m[7]-m[8]*m[3]*m[6];
+  x[11]=-m[0]*m[5]*m[11]+m[0]*m[7]*m[9]+m[4]*m[1]*m[11]-m[4]*m[3]*m[9]-m[8]*m[1]*m[7]+m[8]*m[3]*m[5];
+  x[15]=m[0]*m[5]*m[10]-m[0]*m[6]*m[9]-m[4]*m[1]*m[10]+m[4]*m[2]*m[9]+m[8]*m[1]*m[6]-m[8]*m[2]*m[5];
+  let det=m[0]*x[0]+m[1]*x[4]+m[2]*x[8]+m[3]*x[12];
+  if(!det)return m.slice();
+  det=1/det;for(let i=0;i<16;i++)x[i]*=det;return x;}
+function m4v(m,v){const o=[0,0,0,0];
+  for(let r=0;r<4;r++)o[r]=m[r]*v[0]+m[4+r]*v[1]+m[8+r]*v[2]+m[12+r]*v[3];return o;}
+
+// ---- shader helpers ----
+function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error('shader: '+gl.getShaderInfoLog(s));
+  return s;}
+function prog(vs,fs){const p=gl.createProgram();
+  gl.attachShader(p,sh(gl.VERTEX_SHADER,vs));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error('link: '+gl.getProgramInfoLog(p));
+  p._u={};return p;}
+function U(p,n){if(!(n in p._u))p._u[n]=gl.getUniformLocation(p,n);return p._u[n];}
+
+const VS_QUAD=`#version 300 es
+out vec2 vuv;void main(){vec2 p=vec2[3](vec2(-1,-1),vec2(3,-1),vec2(-1,3))[gl_VertexID];
+vuv=p*0.5+0.5;gl_Position=vec4(p,0,1);}`;
+
+const GLSL_CMAP=`
+vec3 cmap(float t){t=clamp(t,0.,1.);
+ vec3 c1=vec3(.05,.12,.45),c2=vec3(.05,.65,.75),c3=vec3(.95,.8,.15),c4=vec3(.9,.12,.08);
+ return t<.33?mix(c1,c2,t/.33):t<.66?mix(c2,c3,(t-.33)/.33):mix(c3,c4,(t-.66)/.34);}`;
+
+// ---------- shaders ----------
+const FS_SKY=`#version 300 es
+precision highp float;in vec2 vuv;out vec4 o;
+uniform mat4 uInvVP;uniform vec3 uSun,uCam;uniform float uFlash,uExp,uTime;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+void main(){
+ vec4 wp=uInvVP*vec4(vuv*2.-1.,1.,1.);vec3 rd=normalize(wp.xyz/wp.w);
+ float e=uSun.y;float day=smoothstep(-0.02,0.22,e);
+ vec3 hor=mix(vec3(.03,.045,.08),mix(vec3(.55,.72,.9),vec3(1.,.5,.22),clamp(1.-e*4.,0.,1.)*.85),day);
+ vec3 zen=mix(vec3(.01,.015,.04),vec3(.12,.32,.72),day);
+ vec3 c=mix(hor,zen,pow(clamp(rd.y,0.,1.),.55));
+ float s=dot(rd,uSun);
+ c+=vec3(1.,.85,.6)*day*(smoothstep(.9993,.9998,s)*1.8+pow(max(s,0.),20.)*.3);
+ vec3 moon=normalize(vec3(-uSun.x,max(.15,-uSun.y+.2),-uSun.z));
+ float ms=dot(rd,moon);
+ c+=vec3(.75,.8,.95)*(1.-day)*(smoothstep(.9996,.9999,ms)*1.+pow(max(ms,0.),90.)*.12);
+ if(day<.35&&rd.y>.03){vec2 sp=rd.xz/(rd.y+.18)*30.;vec2 cell=floor(sp);
+   float st=hash(cell);
+   if(st>.991)c+=vec3(.9,.95,1.)*(st-.991)*130.*(.35-day)*(.6+.4*sin(uTime*3.+st*40.));}
+ c=mix(c,hor,exp(-abs(rd.y)*8.)*.3);
+ c+=vec3(1.,.97,.9)*uFlash*.5;
+ o=vec4(c*uExp,1.);}`;
+
+const VS_TERRAIN=`#version 300 es
+layout(location=0) in vec2 aCell;
+uniform sampler2D uH;uniform mat4 uVP;uniform vec2 uDim;uniform float uHmax;
+out vec3 vW;out vec3 vN;out vec2 vUV;
+float hgt(vec2 c){return texture(uH,(clamp(c,vec2(0),uDim-1.)+.5)/uDim).r*uHmax;}
+void main(){
+ float h=hgt(aCell);
+ vec3 p=vec3((aCell.x/(uDim.x-1.)-.5)*60.,h,(aCell.y/(uDim.y-1.)-.5)*60.);
+ float cs=60./(uDim.x-1.);
+ float hx=hgt(aCell+vec2(1,0))-hgt(aCell-vec2(1,0));
+ float hz=hgt(aCell+vec2(0,1))-hgt(aCell-vec2(0,1));
+ vN=normalize(vec3(-hx/(2.*cs),1.,-hz/(2.*cs)));
+ vW=p;vUV=aCell/(uDim-1.);
+ gl_Position=uVP*vec4(p,1.);}`;
+
+const FS_TERRAIN=`#version 300 es
+precision highp float;in vec3 vW,vN;in vec2 vUV;out vec4 o;
+uniform sampler2D uH,uS,uWet,uDiag;uniform vec3 uSun,uCam,uFlashPos;
+uniform float uExp,uSea,uDiagMix,uHmax,uTime,uFlash;
+${GLSL_CMAP}
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+void main(){
+ float h=texture(uH,vUV).r*uHmax;
+ float s=floor(texture(uS,vUV).r*8.+.5);
+ float wet=texture(uWet,vUV).r*3.;
+ vec3 n=normalize(vN);
+ float day=clamp(uSun.y*4.+.15,.08,1.);
+ float ndl=max(dot(n,uSun),0.)*day;
+ float vr=hash(floor(vUV*300.));
+ vec3 base;
+ if(s<.5)base=mix(vec3(.22,.38,.16),vec3(.5,.45,.35),clamp(h/8.,0.,1.));
+ else if(s<1.5)base=vec3(.65,.6,.4);             // ocean floor -> sand
+ else if(s<2.5)base=vec3(.1,.3,.12);              // forest
+ else if(s<3.5)base=vec3(.42,.4,.44);             // city
+ else if(s<4.5)base=vec3(.9,.92,.96);             // snow surf
+ else base=vec3(.76,.68,.5);                      // sand
+ base*=.9+.2*vr;
+ // snow on high ground
+ if(h>7.5)base=mix(base,vec3(.92,.94,.98),clamp((h-7.5)/2.,0.,1.)*.9);
+ // wetness darkening
+ base*=1.-clamp(wet,0.,1.)*.45;
+ vec3 c=base*(.25+.85*ndl+.15*day);
+ // diag tint
+ if(uDiagMix>0.01){vec3 dc=cmap(texture(uDiag,vUV).r);c=mix(c,dc,uDiagMix*.72);}
+ // haze / fog
+ float d=distance(uCam,vW);
+ float fog=1.-exp(-d*0.0065);
+ vec3 fogc=mix(vec3(.02,.03,.06),vec3(.45,.58,.78),day)*(.7+.3*day);
+ c=mix(c,fogc,clamp(fog,0.,.85));
+ c+=vec3(1.)*uFlash*exp(-distance(uFlashPos,vW)*.06)*.5;
+ o=vec4(c*uExp,1.);}`;
+
+const VS_WATER=`#version 300 es
+layout(location=0) in vec2 aP;
+uniform mat4 uVP;uniform float uSea;
+out vec3 vW;out vec2 vUV;
+void main(){vec3 p=vec3((aP.x-.5)*60.,uSea,(aP.y-.5)*60.);vW=p;vUV=aP;
+ gl_Position=uVP*vec4(p,1.);}`;
+
+const FS_WATER=`#version 300 es
+precision highp float;in vec3 vW;in vec2 vUV;out vec4 o;
+uniform sampler2D uH,uS;uniform vec3 uSun,uCam;uniform float uSea,uExp,uTime,uFlash,uHmax;
+void main(){
+ float s=floor(texture(uS,vUV).r*8.+.5);
+ float h=texture(uH,vUV).r*uHmax;
+ if(!(s>.5&&s<1.5))discard;
+ float depth=clamp((uSea-h)/2.,0.,1.);
+ vec2 q=vUV*60.;
+ vec3 n=normalize(vec3(sin(q.x*.9+uTime*1.3)*.06+sin(q.y*1.7-uTime*.9)*.05,1.,cos(q.x*1.3-uTime*1.1)*.06));
+ vec3 v=normalize(uCam-vW);
+ float day=clamp(uSun.y*4.+.15,.05,1.);
+ vec3 c=mix(vec3(.06,.22,.35),vec3(.02,.08,.16),depth)*day;
+ float spec=pow(max(dot(reflect(-uSun,n),v),0.),90.)*day*.9;
+ float fres=pow(1.-max(dot(n,v),0.),3.);
+ vec3 skyc=mix(vec3(.03,.04,.08),vec3(.5,.65,.85),day);
+ c=mix(c,skyc,fres*.5+.15)+spec;
+ c+=vec3(1.)*uFlash*exp(-distance(uCam,vW)*.01)*.3;
+ o=vec4(c*uExp,.92);}`;
+
+const VS_BOX=`#version 300 es
+layout(location=0) in vec3 aP;
+uniform mat4 uVP;out vec3 vW;
+void main(){vec3 p=vec3((aP.x-.5)*60.,aP.y*16.,(aP.z-.5)*60.);vW=p;
+ gl_Position=uVP*vec4(p,1.);}`;
+
+const FS_CLOUD=`#version 300 es
+precision highp float;precision highp sampler3D;in vec3 vW;out vec4 o;
+uniform sampler3D uQ;uniform sampler2D uH;
+uniform vec3 uCam,uSun;uniform float uExp,uTime,uHmax,uDens,uFlash,uQual;uniform vec3 uFlashPos;
+float hash(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+ return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+            mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+vec2 boxT(vec3 ro,vec3 rd){
+ vec3 bmin=vec3(-30.,0.,-30.),bmax=vec3(30.,16.,30.);
+ vec3 t1=(bmin-ro)/rd,t2=(bmax-ro)/rd;
+ vec3 tn=min(t1,t2),tf=max(t1,t2);
+ return vec2(max(max(tn.x,tn.y),tn.z),min(min(tf.x,tf.y),tf.z));}
+float hgt(vec2 xz){return texture(uH,clamp(xz/60.+.5,0.,1.)).r*uHmax;}
+float dens(vec3 p){
+ vec3 uvw=vec3(p.x/60.+.5,p.z/60.+.5,p.y/16.);
+ if(uvw.y<0.||uvw.y>1.)return 0.;
+ float q=texture(uQ,uvw).r*6.;
+ if(q<=0.03)return 0.;
+ float n=noise(p*0.55+vec3(0.,-uTime*0.15,0.));
+ float n2=noise(p*1.7)*0.5;
+ return max(0.,(q-0.05)*(0.6+0.55*n+0.4*n2))*uDens;}
+void main(){
+ vec3 ro=uCam;vec3 rd=normalize(vW-ro);
+ vec2 tt=boxT(ro,rd);float t0=max(tt.x,0.),t1=tt.y;
+ if(t1<=t0){discard;}
+ int STEPS=int(20.+uQual*44.);
+ float dt=(t1-t0)/float(STEPS);
+ float day=clamp(uSun.y*4.+.2,.06,1.);
+ vec3 sunC=mix(vec3(.9,.85,.8),vec3(1.,.75,.5),clamp(1.-uSun.y*3.,0.,1.));
+ vec3 amb=mix(vec3(.05,.06,.1),vec3(.45,.52,.62),day);
+ vec3 acc=vec3(0.);float T=1.;
+ float jitter=hash(vec3(rd.xy*51.,uTime*7.));
+ float t=t0+dt*jitter;
+ for(int i=0;i<64;i++){
+  if(i>=STEPS||t>t1||T<.02)break;
+  vec3 p=ro+rd*t;
+  if(p.y<hgt(p.xz)){t+=dt;continue;}
+  float d=dens(p);
+  if(d>0.001){
+   // light march toward sun (2 samples)
+   float dl=dens(p+uSun*dt*2.)*1.5+dens(p+uSun*dt*5.)*1.2;
+   float li=exp(-dl*1.8);
+   vec3 cc=(amb+sunC*li*1.4)*day;
+   cc+=vec3(1.,.95,.8)*uFlash*exp(-distance(p,uFlashPos)*.12)*2.5;
+   float a=1.-exp(-d*dt*2.2);
+   acc+=cc*a*T;T*=1.-a;
+  }
+  t+=dt;}
+ o=vec4(acc*uExp,1.-T);}`;
+
+const VS_LINE=`#version 300 es
+layout(location=0) in vec3 aP;layout(location=1) in vec4 aC;
+uniform mat4 uVP;out vec4 vC;
+void main(){vC=aC;gl_Position=uVP*vec4(aP,1.);}`;
+const FS_LINE=`#version 300 es
+precision highp float;in vec4 vC;out vec4 o;uniform float uExp;
+void main(){o=vec4(vC.rgb*uExp,vC.a);}`;
+
+const VS_DIAG=`#version 300 es
+layout(location=0) in vec2 aP;
+uniform mat4 uVP;uniform float uY;
+out vec2 vUV;out vec3 vW;
+void main(){vec3 p=vec3((aP.x-.5)*60.,uY,(aP.y-.5)*60.);vW=p;vUV=aP;
+ gl_Position=uVP*vec4(p,1.);}`;
+const FS_DIAG=`#version 300 es
+precision highp float;in vec2 vUV;in vec3 vW;out vec4 o;
+uniform sampler2D uDiag;uniform float uAlpha,uExp;
+${GLSL_CMAP}
+void main(){float v=texture(uDiag,vUV).r;
+ vec3 c=cmap(v);
+ // subtle iso-lines
+ float f=abs(fract(v*12.)-.5);float iso=smoothstep(.46,.5,f);
+ o=vec4((c+iso*.35)*uExp,uAlpha*(0.25+0.75*smoothstep(.02,.2,v)));}`;
+
+const VS_SLICE=`#version 300 es
+layout(location=0) in vec2 aP;
+uniform mat4 uVP;uniform vec3 uA;uniform vec3 uB;uniform float uLift;
+out vec2 vUV;
+void main(){vec3 p=uA+(uB-uA)*aP.x;p.y+=aP.y*16.+uLift;vUV=aP;
+ gl_Position=uVP*vec4(p,1.);}`;
+const FS_SLICE=`#version 300 es
+precision highp float;in vec2 vUV;out vec4 o;
+uniform sampler2D uSlice;uniform float uExp;
+${GLSL_CMAP}
+void main(){float v=texture(uSlice,vUV).r;vec3 c=cmap(v);
+ float f=abs(fract(v*12.)-.5);float iso=smoothstep(.46,.5,f);
+ o=vec4((c+iso*.3)*uExp,.28+.6*smoothstep(.02,.2,v));}`;
+
+// ---------- GL init ----------
+function initGL(){
+  canvas=$('gl');
+  gl=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'});
+  if(!gl){fatal('WebGL2 is not available in this browser. Storm Lab needs WebGL2 — try Chrome/Firefox/Edge with hardware acceleration enabled.');return false;}
+  try{
+    PROG.sky=prog(VS_QUAD,FS_SKY);
+    PROG.terrain=prog(VS_TERRAIN,FS_TERRAIN);
+    PROG.water=prog(VS_WATER,FS_WATER);
+    PROG.cloud=prog(VS_BOX,FS_CLOUD);
+    PROG.line=prog(VS_LINE,FS_LINE);
+    PROG.diag=prog(VS_DIAG,FS_DIAG);
+    PROG.slice=prog(VS_SLICE,FS_SLICE);
+  }catch(e){fatal('Shader compile failed: '+e.message);return false;}
+  // quad vao (empty)
+  quadVAO=gl.createVertexArray();
+  // terrain textures
+  TEX.h=mkTex(NX,NZ);TEX.s=mkTex(NX,NZ);TEX.w=mkTex(NX,NZ);TEX.diag=mkTex(NX,NZ);
+  TEX.slice=gl.createTexture();
+  TEX.q=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_3D,TEX.q);
+  gl.texParameteri(gl.TEXTURE_3D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D,gl.TEXTURE_WRAP_R,gl.CLAMP_TO_EDGE);
+  allocQTex();
+  buildTerrainMesh();buildCube();buildSliceVAO();
+  lineVAO=gl.createVertexArray();
+  gl.bindVertexArray(lineVAO);
+  lineVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,lineVBO);
+  lineCap=65536;gl.bufferData(gl.ARRAY_BUFFER,lineCap*28,gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,28,0);
+  gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.FLOAT,false,28,12);
+  gl.bindVertexArray(null);
+  gl.enable(gl.DEPTH_TEST);
+  return true;
+}
+function fatal(msg){const f=$('fatal');f.style.display='grid';
+  $('fatalText').innerHTML='<h2 style="color:#ef5350;margin-bottom:8px">Storm Lab cannot start</h2><p>'+msg+'</p>';}
+function mkTex(w,h){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,w,h,0,gl.RED,gl.UNSIGNED_BYTE,null);return t;}
+function updTex(t,w,h,data){gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,w,h,0,gl.RED,gl.UNSIGNED_BYTE,data);}
+function allocQTex(){gl.bindTexture(gl.TEXTURE_3D,TEX.q);
+  gl.texImage3D(gl.TEXTURE_3D,0,gl.R8,NX,NZ,NL,0,gl.RED,gl.UNSIGNED_BYTE,null);}
+function uploadQ(){
+  // pack qc -> bytes (transposed to x,z,y layout for texture)
+  if(!uploadQ.buf||uploadQ.buf.length!==N)uploadQ.buf=new Uint8Array(N);
+  const b=uploadQ.buf;
+  const qc=F.qc,qr=F.qr;
+  for(let k=0;k<NL;k++)for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    const v=qc[IDX(i,j,k)]+qr[IDX(i,j,k)]*0.7;
+    b[(k*NZ+j)*NX+i]=clamp(v*255/6,0,255);}
+  gl.bindTexture(gl.TEXTURE_3D,TEX.q);
+  gl.texSubImage3D(gl.TEXTURE_3D,0,0,0,0,NX,NZ,NL,gl.RED,gl.UNSIGNED_BYTE,b);}
+function uploadSurf(){
+  const b=new Uint8Array(NX*NZ);
+  for(let c=0;c<b.length;c++)b[c]=Sur[c]*32;
+  updTex(TEX.s,NX,NZ,b);}
+function uploadH(){
+  const b=new Uint8Array(NX*NZ);
+  for(let c=0;c<b.length;c++)b[c]=clamp(Ht[c]/16*255,0,255);
+  updTex(TEX.h,NX,NZ,b);}
+function uploadWet(){
+  const b=new Uint8Array(NX*NZ);
+  for(let c=0;c<b.length;c++)b[c]=clamp(Wet[c]/3*255,0,255);
+  updTex(TEX.w,NX,NZ,b);}
+function rebuildTerrainGPU(){uploadH();uploadSurf();uploadWet();}
+function buildTerrainMesh(){
+  const verts=new Float32Array(NX*NZ*2);
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){verts[(j*NX+i)*2]=i;verts[(j*NX+i)*2+1]=j;}
+  const idx=new Uint32Array((NX-1)*(NZ-1)*6);let q=0;
+  for(let j=0;j<NZ-1;j++)for(let i=0;i<NX-1;i++){
+    const a=j*NX+i,b=a+1,c=a+NX,d=c+1;
+    idx[q++]=a;idx[q++]=c;idx[q++]=b;idx[q++]=b;idx[q++]=c;idx[q++]=d;}
+  terrainVAO=gl.createVertexArray();gl.bindVertexArray(terrainVAO);
+  const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);
+  gl.bufferData(gl.ARRAY_BUFFER,verts,gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,idx,gl.STATIC_DRAW);
+  terrainN=idx.length;gl.bindVertexArray(null);}
+function buildCube(){
+  const v=new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0, 0,0,1, 1,0,1, 1,1,1, 0,1,1]);
+  const ix=new Uint16Array([0,1,2,0,2,3,4,6,5,4,7,6,0,4,5,0,5,1,3,2,6,3,6,7,0,3,7,0,7,4,1,5,6,1,6,2]);
+  cubeVAO=gl.createVertexArray();gl.bindVertexArray(cubeVAO);
+  const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);
+  gl.bufferData(gl.ARRAY_BUFFER,v,gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+  const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,ix,gl.STATIC_DRAW);
+  cubeN=ix.length;gl.bindVertexArray(null);}
+function buildSliceVAO(){
+  sliceVAO=gl.createVertexArray();gl.bindVertexArray(sliceVAO);
+  sliceVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,sliceVBO);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,1,0,0,1,0,1,1,0,1,1]),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  gl.bindVertexArray(null);}
+function waterVAO(){ // reuse sliceVAO geometry
+  return sliceVAO;}
+
+// ---------- camera ----------
+const CAM_PRESETS={
+  overview(){cam.mode='orbit';cam.tgt=[0,3,0];cam.yaw=0.9;cam.pitch=0.55;cam.dist=70;},
+  chase(){cam.mode='orbit';cam.tgt=[0,4,0];cam.yaw=2.3;cam.pitch=0.18;cam.dist=42;},
+  ground(){cam.mode='orbit';cam.tgt=[0,3,0];cam.yaw=1.5;cam.pitch=0.05;cam.dist=30;},
+  top(){cam.mode='orbit';cam.tgt=[0,0,0];cam.yaw=0;cam.pitch=1.45;cam.dist=75;},
+  fly(){cam.mode='fly';cam.pos=[-20,7,34];cam.fyaw=-0.55;cam.fpitch=-0.06;},
+  inside(){cam.mode='fly';cam.pos=[0,kH(NL*0.55),0];cam.fyaw=0.8;cam.fpitch=0.05;},
+};
+function camDir(){return[Math.cos(cam.fpitch)*Math.sin(cam.fyaw),Math.sin(cam.fpitch),Math.cos(cam.fpitch)*Math.cos(cam.fyaw)];}
+function updateCamera(){
+  if(cam.mode==='fly'){camPos=cam.pos;
+    const d=camDir();viewM=m4lookAt(camPos,[camPos[0]+d[0],camPos[1]+d[1],camPos[2]+d[2]],[0,1,0]);}
+  else{cam.pitch=clamp(cam.pitch,-1.5,1.55);cam.dist=clamp(cam.dist,6,240);
+    camPos=[cam.tgt[0]+cam.dist*Math.cos(cam.pitch)*Math.sin(cam.yaw),
+            cam.tgt[1]+cam.dist*Math.sin(cam.pitch),
+            cam.tgt[2]+cam.dist*Math.cos(cam.pitch)*Math.cos(cam.yaw)];
+    if(camPos[1]<0.4)camPos[1]=0.4;
+    viewM=m4lookAt(camPos,cam.tgt,[0,1,0]);}
+  projM=m4persp(58*Math.PI/180,aspect,0.15,600);
+  invVP=m4inv(m4mul(projM,viewM));
+  return m4mul(projM,viewM);
+}
+function pickGround(px,py){
+  // px,py in CSS pixels -> NDC; march ray down to terrain
+  const r=canvas.getBoundingClientRect();
+  const nx=(px-r.left)/r.width*2-1, ny=1-(py-r.top)/r.height*2;
+  const a=m4v(invVP,[nx,ny,-1,1]),b=m4v(invVP,[nx,ny,1,1]);
+  const ro=[a[0]/a[3],a[1]/a[3],a[2]/a[3]];
+  const rd=norm3([b[0]/b[3]-ro[0],b[1]/b[3]-ro[1],b[2]/b[3]-ro[2]]);
+  if(ro[1]>20&&rd[1]>0)return null;
+  let t=0;
+  for(let s=0;s<400;s++){
+    const wx=ro[0]+rd[0]*t,wy=ro[1]+rd[1]*t,wz=ro[2]+rd[2]*t;
+    const gx=(wx/60+0.5)*NX,gz=(wz/60+0.5)*NZ;
+    if(gx<0||gx>=NX||gz<0||gz>=NZ){t+=1.5;if(t>500)return null;continue;}
+    const i=clamp(gx|0,0,NX-1),j=clamp(gz|0,0,NZ-1);
+    const surf=Math.max(Ht[ID2(i,j)],Sur[ID2(i,j)]===1?WORLD.sea:0);
+    if(wy<=surf)return{i,j,x:wx,y:surf,z:wz};
+    t+=Math.max(0.35,(wy-surf)*0.5);
+    if(t>500)return null;
+  }
+  return null;
+}
+function hAtWorld(x,z){const gx=clamp((x/60+0.5)*NX,0,NX-1.001),gz=clamp((z/60+0.5)*NZ,0,NZ-1.001);
+  const i=gx|0,j=gz|0;return Ht[ID2(i,j)];}
+
+// ---------- viz field extraction ----------
+const VIZ={
+  cinematic:{label:'Cinematic',field:null},
+  temp:{label:'Temperature',lvl:true,get:(i,j,k)=>F.tp[IDX(i,j,k)]+tbase(k),r:[-12,34]},
+  humidity:{label:'Humidity RH',lvl:true,get:(i,j,k)=>RHof(k,F.tp[IDX(i,j,k)],F.qv[IDX(i,j,k)])*100,r:[0,110]},
+  cloud:{label:'Cloud water',col:true,get:(i,j)=>{let s=0;const kg=KG[ID2(i,j)];for(let k=kg;k<NL;k++)s+=F.qc[IDX(i,j,k)];return s;},r:[0,4]},
+  precip:{label:'Precip rate',surf:true,get:(i,j)=>Rain2[ID2(i,j)],r:[0,3]},
+  pressure:{label:'Pressure/Buoy.',lvl:true,get:(i,j,k)=>F.p[IDX(i,j,k)],r:[-8,8]},
+  wind:{label:'Wind speed',lvl:true,get:(i,j,k)=>Math.hypot(F.u[IDX(i,j,k)],F.v[IDX(i,j,k)]),r:[0,18]},
+  vertical:{label:'Vertical motion',lvl:true,get:(i,j,k)=>F.w[IDX(i,j,k)],r:[-5,5]},
+  vort:{label:'Vorticity',lvl:true,get:(i,j,k)=>{const i1=(i+1)%NX,i0=(i-1+NX)%NX,j1=Math.min(j+1,NZ-1),j0=Math.max(j-1,0);
+      return (F.v[IDX(i1,j,k)]-F.v[IDX(i0,j,k)])/2-(F.u[IDX(i,j1,k)]-F.u[IDX(i,j0,k)])/2;},r:[-3,3]},
+  terrain:{label:'Terrain height',surf:true,get:(i,j)=>Ht[ID2(i,j)],r:[0,9]},
+  wetness:{label:'Surface moisture',surf:true,get:(i,j)=>Wet[ID2(i,j)],r:[0,3]},
+};
+let diagBuf=null;
+function buildDiag(){
+  const vz=VIZ[P.viz];diagBuf=diagBuf&&diagBuf.length===NX*NZ?diagBuf:new Float32Array(NX*NZ);
+  const out=new Uint8Array(NX*NZ);
+  if(!vz.field&&P.viz==='cinematic'){out.fill(0);diagBuf.fill(0);updTex(TEX.diag,NX,NZ,out);return diagBuf;}
+  const [lo,hi]=vz.r;
+  for(let j=0;j<NZ;j++)for(let i=0;i<NX;i++){
+    let v;
+    if(vz.col)v=vz.get(i,j);
+    else if(vz.surf)v=vz.get(i,j);
+    else{const k=clamp(P.mapLayer|0,KG[ID2(i,j)],NL-1);v=vz.get(i,j,k);}
+    diagBuf[ID2(i,j)]=v;out[ID2(i,j)]=clamp((v-lo)/(hi-lo)*255,0,255);}
+  updTex(TEX.diag,NX,NZ,out);
+  return diagBuf;
+}
+function buildSliceTex(){
+  // vertical cross-section along x or z at slicePos, of current viz field
+  const vz=VIZ[P.viz];const get=vz.field?vz.get:(vz.col||vz.surf)?vz.get:VIZ.temp.get;
+  const w=P.sliceAxis==='x'?NZ:NX;
+  const b=new Uint8Array(w*NL);
+  const fixed=clamp(Math.round(P.slicePos*(P.sliceAxis==='x'?NX:NZ)-0.5),0,(P.sliceAxis==='x'?NX:NZ)-1);
+  const [lo,hi]=vz.r||[0,1];
+  for(let a=0;a<w;a++)for(let k=0;k<NL;k++){
+    const i=P.sliceAxis==='x'?fixed:a, j=P.sliceAxis==='x'?a:fixed;
+    let v;
+    if(vz.col||vz.surf)v=vz.get(i,j);
+    else v=vz.get(i,j,k);
+    b[k*w+a]=Solid[IDX(i,j,k)]?0:clamp((v-lo)/(hi-lo)*255,0,255);}
+  gl.bindTexture(gl.TEXTURE_2D,TEX.slice);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,w,NL,0,gl.RED,gl.UNSIGNED_BYTE,b);}
+
+// ---------- particles ----------
+const MAXP=12000;
+const rain={n:0,p:new Float32Array(MAXP*3),v:new Float32Array(MAXP*3),life:new Float32Array(MAXP),snow:new Uint8Array(MAXP)};
+const NSTREAK=420;
+const streak={p:new Float32Array(NSTREAK*3),life:new Float32Array(NSTREAK)};
+function cellWindAt(x,z,k,out){
+  const gx=clamp((x/60+0.5)*NX,0,NX-1.001),gz=clamp((z/60+0.5)*NZ,0,NZ-1.001);
+  const i=gx|0,j=gz|0,id=IDX(i,j,clamp(k|0,0,NL-1));
+  out[0]=F.u[id];out[1]=F.w[id];out[2]=F.v[id];}
+const _w3=[0,0,0];
+function spawnRain(dt){
+  // iterate columns with precip
+  const want=Math.min(MAXP,P.precipDensity*9000)|0;
+  let tries=0;
+  while(rain.n<want&&tries++<800){
+    const i=(frand()*NX)|0,j=(frand()*NZ)|0,c=ID2(i,j);
+    if(Rain2[c]<0.15&&!(frand()<0.01))continue;
+    const kg=KG[c];if(kg>=NL)continue;
+    // find cloud base (lowest k with qc)
+    let kb=Math.min(kg+2,NL-1);
+    for(let k=kg;k<NL;k++)if(F.qc[IDX(i,j,k)]>0.15){kb=k;break;}
+    const cold=(tbase(kb)+F.tp[IDX(i,j,kb)])<0;
+    const n=rain.n;
+    rain.p[n*3]=(i+frand())/NX*60-30;
+    rain.p[n*3+1]=kH(kb)+0.2;
+    rain.p[n*3+2]=(j+frand())/NZ*60-30;
+    cellWindAt(rain.p[n*3],rain.p[n*3+2],kb,_w3);
+    rain.v[n*3]=_w3[0]*cellX()*0.6;
+    rain.v[n*3+1]=cold?-2.6:-6.5;
+    rain.v[n*3+2]=_w3[2]*cellX()*0.6;
+    rain.life[n]=3;rain.snow[n]=cold?1:0;
+    rain.n++;
+  }
+}
+function updateRain(dt){
+  let n=rain.n;
+  for(let a=0;a<n;a++){
+    rain.life[a]-=dt;
+    const x=rain.p[a*3]+rain.v[a*3]*dt,y=rain.p[a*3+1]+rain.v[a*3+1]*dt,z=rain.p[a*3+2]+rain.v[a*3+2]*dt;
+    if(rain.life[a]<=0||y<hAtWorld(x,z)+0.05||x<-32||x>32||z<-32||z>32){
+      n--;rain.p[a*3]=rain.p[n*3];rain.p[a*3+1]=rain.p[n*3+1];rain.p[a*3+2]=rain.p[n*3+2];
+      rain.v[a*3]=rain.v[n*3];rain.v[a*3+1]=rain.v[n*3+1];rain.v[a*3+2]=rain.v[n*3+2];
+      rain.life[a]=rain.life[n];rain.snow[a]=rain.snow[n];a--;continue;}
+    rain.p[a*3]=x;rain.p[a*3+1]=y;rain.p[a*3+2]=z;
+  }
+  rain.n=n;
+}
+function updateStreaks(dt){
+  for(let a=0;a<NSTREAK;a++){
+    streak.life[a]-=dt;
+    if(streak.life[a]<=0){
+      const i=(frand()*NX)|0,j=(frand()*NZ)|0,c=ID2(i,j),kg=KG[c];
+      streak.p[a*3]=(i+frand())/NX*60-30;
+      streak.p[a*3+1]=Math.max(kH(Math.min(kg+1,NL-1)),hAtWorld((i+0.5)/NX*60-30,(j+0.5)/NZ*60-30)+0.4);
+      streak.p[a*3+2]=(j+frand())/NZ*60-30;
+      streak.life[a]=1+frand()*2;}
+    else{
+      cellWindAt(streak.p[a*3],streak.p[a*3+2],Math.round(streak.p[a*3+1]/cellZ()),_w3);
+      streak.p[a*3]+=_w3[0]*cellX()*0.9*dt;
+      streak.p[a*3+2]+=_w3[2]*cellX()*0.9*dt;
+      if(streak.p[a*3]<-30)streak.p[a*3]+=60;if(streak.p[a*3]>30)streak.p[a*3]-=60;
+      if(streak.p[a*3+2]<-30||streak.p[a*3+2]>30)streak.life[a]=0;}}
+}
+// lightning
+function strikeAt(gi,gj,strength){
+  const c=ID2(clamp(gi|0,0,NX-1),clamp(gj|0,0,NZ-1));
+  Chg[c]*=0.15;
+  const x0=(gi+0.5)/NX*60-30+ (frand()-0.5)*2,z0=(gj+0.5)/NZ*60-30+(frand()-0.5)*2;
+  const y0=Math.min(kH(NL-1)*0.9,11),yg=Math.max(Ht[c],Sur[c]===1?WORLD.sea:0);
+  const segs=[];
+  let x=x0,z=z0,y=y0;
+  const steps=14;
+  for(let s=0;s<steps;s++){
+    const ny=lerp(y0,yg,(s+1)/steps);
+    const nx=x+(frand()-0.5)*1.8,nz=z+(frand()-0.5)*1.8;
+    segs.push(x,y,z,nx,ny,nz);
+    if(s>2&&frand()<0.35){
+      let bx=nx,by=ny,bz=nz;
+      for(let b=0;b<3+((frand()*3)|0);b++){const nbx=bx+(frand()-0.5)*3.2,nby=by-frand()*1.7,nbz=bz+(frand()-0.5)*3.2;
+        segs.push(bx,by,bz,nbx,nby,nbz);bx=nbx;by=nby;bz=nbz;}}
+    x=nx;y=ny;z=nz;}
+  boltList.push({segs:new Float32Array(segs),life:0.22,t:0});
+  flash.pos=[x0,(y0+yg)/2,z0];flash.i=Math.min(1.4,(strength||1));
+  // thunder delay ~ 0.3s per 10 world units dist
+  const d=Math.hypot(camPos[0]-x0,camPos[1]-yg,camPos[2]-z0);
+  pendingThunders.push({delay:d*0.045+0.05,vol:clamp(1.6-d/90,0.1,1)});
+}
+function updateBolts(dt){
+  for(let i=boltList.length-1;i>=0;i--){const b=boltList[i];b.t+=dt;
+    if(b.t>b.life)boltList.splice(i,1);}
+  flash.i*=Math.pow(0.001,dt*4);
+  for(let i=pendingThunders.length-1;i>=0;i--){const t=pendingThunders[i];
+    t.delay-=dt;if(t.delay<=0){thunder(t.vol);pendingThunders.splice(i,1);}}
+}
+// ================= lines buffer =================
+const lineBuf=new Float32Array(65536*7);
+let lineN=0;
+function lineReset(){lineN=0;}
+function lineSeg(x1,y1,z1,x2,y2,z2,r,g,b,a){
+  if(lineN+2>65536)return;
+  const o=lineN*7;
+  lineBuf[o]=x1;lineBuf[o+1]=y1;lineBuf[o+2]=z1;lineBuf[o+3]=r;lineBuf[o+4]=g;lineBuf[o+5]=b;lineBuf[o+6]=a;
+  lineBuf[o+7]=x2;lineBuf[o+8]=y2;lineBuf[o+9]=z2;lineBuf[o+10]=r;lineBuf[o+11]=g;lineBuf[o+12]=b;lineBuf[o+13]=a;
+  lineN+=2;}
+function linesFlush(additive){
+  if(!lineN)return;
+  gl.useProgram(PROG.line);gl.bindVertexArray(lineVAO);
+  gl.bindBuffer(gl.ARRAY_BUFFER,lineVBO);
+  gl.bufferSubData(gl.ARRAY_BUFFER,0,lineBuf.subarray(0,lineN*7));
+  gl.uniformMatrix4fv(U(PROG.line,'uVP'),false,m4mul(projM,viewM));
+  gl.uniform1f(U(PROG.line,'uExp'),P.exposure);
+  if(additive){gl.blendFunc(gl.ONE,gl.ONE);}else{gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);}
+  gl.enable(gl.BLEND);gl.depthMask(false);
+  gl.drawArrays(gl.LINES,0,lineN);
+  gl.depthMask(true);gl.disable(gl.BLEND);gl.bindVertexArray(null);}
+
+// ================= audio =================
+let AC=null;
+function ensureAudio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}
+  if(AC&&AC.state==='suspended')AC.resume();}
+function thunder(vol){
+  if(!AC||!P.audio)return;
+  const dur=1.8+Math.random()*1.4,n=AC.sampleRate*dur;
+  const buf=AC.createBuffer(1,n,AC.sampleRate),d=buf.getChannelData(0);
+  let v=0;
+  for(let i=0;i<n;i++){const t=i/n;
+    const env=Math.exp(-t*3.2)*(0.6+0.4*Math.sin(t*30))*Math.min(1,t*30);
+    v=v*0.965+(Math.random()*2-1)*0.035;
+    d[i]=v*env*22*(0.7+0.3*Math.sin(t*50+t*t*200));}
+  const src=AC.createBufferSource();src.buffer=buf;
+  const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=160+vol*120;
+  const g=AC.createGain();g.gain.value=vol*0.5;
+  src.connect(f);f.connect(g);g.connect(AC.destination);src.start();}
+
+// ================= UI =================
+const panel=$('panel');
+function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+function sliderRow(id,label,min,max,step,fmt){
+  const r=el('div','row');const l=el('label','',label);l.title=id;
+  const inp=document.createElement('input');inp.type='range';inp.min=min;inp.max=max;inp.step=step;inp.id='sl-'+id;
+  const v=el('span','val');
+  const upd=()=>{v.textContent=fmt?fmt(P[id]):(+P[id]).toPrecision(3);};
+  inp.value=P[id];upd();
+  inp.oninput=()=>{P[id]=+inp.value;upd();onParam(id);};
+  r.append(l,inp,v);r._refresh=()=>{inp.value=P[id];upd();};
+  return r;}
+function selectRow(id,label,opts){
+  const r=el('div','row');const l=el('label','',label);
+  const s=document.createElement('select');s.id='sl-'+id;
+  for(const o of opts){const op=document.createElement('option');op.value=o[0];op.textContent=o[1];s.appendChild(op);}
+  s.value=P[id];s.onchange=()=>{P[id]=isNaN(+s.value)?s.value:+s.value;onParam(id);};
+  r.append(l,s);r._refresh=()=>{s.value=P[id];};
+  return r;}
+function onParam(id){
+  if(id==='nx'||id==='nz'||id==='nl')reinit();
+  if(id==='viz'&&mapModeAuto)drawMap();
+  saveSettings();
+}
+const rows={};function reg(id,row){rows[id]=row;return row;}
+function refreshPanel(){for(const k in rows)if(rows[k]._refresh)rows[k]._refresh();
+  document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===P.tool));}
+
+const TOOLS=[['camera','🎥 Cam'],['probe','📍 Probe'],['heat','🔥 Heat'],['cool','❄ Cool'],
+  ['moist','💧 Moist'],['dry','🏜 Dry'],['wind','💨 Wind'],['press','🌀 LowP'],
+  ['seed','☁ Seed'],['raise','⛰ Raise'],['lower','🕳 Lower'],['surf','🖌 Surface'],
+  ['bolt','⚡ Bolt']];
+const SURF_NAMES=['land','ocean','forest','city','snow','sand'];
+
+function buildPanel(){
+  panel.innerHTML='';
+  panel.appendChild(el('h1','','⛈ STORM LAB 3D'));
+  // --- run ---
+  let d=el('details');d.open=true;d.append(el('summary','','Run'));
+  let b=el('div','body');
+  const br=el('div','btnrow');
+  const pb=el('button','','⏸ Pause');pb.id='btnPause';
+  pb.onclick=()=>{P.pause=!P.pause;syncPauseBtn();};
+  const sb=el('button','','⏭ Step');sb.onclick=()=>{P.pause=true;syncPauseBtn();for(let s=0;s<P.substeps;s++)stepSim(P.dt);};
+  const rb=el('button','','↺ Reset');rb.onclick=()=>{RNG=mulberry32(P.seed);applyPreset(activePreset);};
+  br.append(pb,sb,rb);b.appendChild(br);
+  b.appendChild(reg('seed',sliderRow('seed','Deterministic seed',1,99999,1,v=>v|0)));
+  b.appendChild(el('div','hint','Pause: Space · Step: . · tools act on the terrain below the pointer'));
+  d.append(b);panel.appendChild(d);
+  // --- preset ---
+  d=el('details');d.open=true;d.append(el('summary','','Scenario preset'));
+  b=el('div','body');
+  const ps=document.createElement('select');ps.id='presetSel';
+  for(const k in PRESETS){const o=document.createElement('option');o.value=k;o.textContent=PRESETS[k].name;ps.appendChild(o);}
+  ps.value=activePreset;ps.onchange=()=>{RNG=mulberry32(P.seed);applyPreset(ps.value);refreshPanel();};
+  b.appendChild(ps);d.append(b);panel.appendChild(d);
+  // --- camera ---
+  d=el('details');d.append(el('summary','','Camera'));
+  b=el('div','body');
+  const cr=el('div','btnrow');
+  for(const k in CAM_PRESETS){const bt=el('button','',k);bt.onclick=()=>{CAM_PRESETS[k]();P.camPreset=k;};cr.appendChild(bt);}
+  b.appendChild(cr);
+  b.appendChild(el('div','hint','L-drag orbit · R/M-drag pan · wheel zoom · fly: WASD+QE, drag look'));
+  b.appendChild(reg('flySpeed',sliderRow('flySpeed','Fly speed',2,30,1)));
+  d.append(b);panel.appendChild(d);
+  // --- tools ---
+  d=el('details');d.open=true;d.append(el('summary','','Intervention tools'));
+  b=el('div','body');
+  const tg=el('div','toolgrid');
+  for(const [k,n] of TOOLS){const bt=el('button','',n);bt.dataset.tool=k;
+    bt.onclick=()=>{P.tool=k;refreshPanel();};tg.appendChild(bt);}
+  b.appendChild(tg);
+  b.appendChild(reg('brushRadius',sliderRow('brushRadius','Brush radius',1,15,0.5)));
+  b.appendChild(reg('brushStrength',sliderRow('brushStrength','Brush strength',-2,2,0.05)));
+  const sr=el('div','row');sr.appendChild(el('label','','Surface paint'));
+  const ss=document.createElement('select');for(const s2 of SURF_NAMES){const o=document.createElement('option');o.value=s2;o.textContent=s2;ss.appendChild(o);}
+  ss.value=P.surfPaint;ss.onchange=()=>{P.surfPaint=ss.value;};
+  sr.appendChild(ss);b.appendChild(sr);
+  b.appendChild(el('div','hint','Negative strength inverts tools (heat→cool, raise→lower, LowP→HighP).'));
+  d.append(b);panel.appendChild(d);
+  // --- viz ---
+  d=el('details');d.open=true;d.append(el('summary','','Visualization'));
+  b=el('div','body');
+  b.appendChild(reg('viz',selectRow('viz','Field',Object.keys(VIZ).map(k=>[k,VIZ[k].label]))));
+  b.appendChild(reg('mapLayer',sliderRow('mapLayer','Sample layer',0,NL-1,1,v=>v|0)));
+  const chk=(id,label)=>{const r=el('div','row');const l=el('label','',label);
+    const c=document.createElement('input');c.type='checkbox';c.checked=P[id];
+    c.onchange=()=>{P[id]=c.checked;saveSettings();};r.append(l,c);return r;};
+  b.appendChild(chk('arrows','Vector arrows'));
+  b.appendChild(chk('streamlines','Wind streaks'));
+  b.appendChild(chk('sliceOn','Vertical slice'));
+  b.appendChild(reg('sliceAxis',selectRow('sliceAxis','Slice axis',[['z','along X'],['x','along Z']])));
+  b.appendChild(reg('slicePos',sliderRow('slicePos','Slice position',0,1,0.01)));
+  d.append(b);panel.appendChild(d);
+  // --- sim params ---
+  d=el('details');d.append(el('summary','','Simulation'));
+  b=el('div','body');
+  b.appendChild(reg('nx',selectRow('nx','Resolution X',[[32,'32'],[48,'48'],[64,'64'],[96,'96'],[128,'128']])));
+  b.appendChild(reg('nz',selectRow('nz','Resolution Z',[[32,'32'],[48,'48'],[64,'64'],[96,'96'],[128,'128']])));
+  b.appendChild(reg('nl',selectRow('nl','Vertical layers',[[8,'8'],[12,'12'],[16,'16'],[20,'20'],[24,'24']])));
+  b.appendChild(reg('dt',sliderRow('dt','Timestep',0.1,2.5,0.05)));
+  b.appendChild(reg('substeps',sliderRow('substeps','Substeps/frame',1,8,1,v=>v|0)));
+  b.appendChild(reg('simSpeed',sliderRow('simSpeed','Sim speed ×',0.25,4,0.25)));
+  b.appendChild(reg('windBase',sliderRow('windBase','Wind strength',-16,16,0.25)));
+  b.appendChild(reg('coriolis',sliderRow('coriolis','Coriolis',0,2.5,0.05)));
+  b.appendChild(reg('lapseRate',sliderRow('lapseRate','Lapse rate',0,1.6,0.02)));
+  b.appendChild(reg('baseRH',sliderRow('baseRH','Base humidity',0.1,1.05,0.01)));
+  b.appendChild(reg('evap',sliderRow('evap','Evaporation',0,3,0.05)));
+  b.appendChild(reg('condThresh',sliderRow('condThresh','Condensation thr.',0.3,1.4,0.02)));
+  b.appendChild(reg('precipRate',sliderRow('precipRate','Precip rate',0,2,0.02)));
+  b.appendChild(reg('buoyancy',sliderRow('buoyancy','Buoyancy',0,3,0.05)));
+  b.appendChild(reg('diffusion',sliderRow('diffusion','Diffusion',0,2,0.02)));
+  b.appendChild(reg('terrainInfluence',sliderRow('terrainInfluence','Terrain influence',0,2,0.05)));
+  b.appendChild(reg('lightningProb',sliderRow('lightningProb','Lightning prob.',0,1.5,0.02)));
+  b.appendChild(reg('solar',sliderRow('solar','Solar heating',0,2,0.05)));
+  const w=el('div','');w.id='warn';b.appendChild(w);
+  d.append(b);panel.appendChild(d);
+  // --- render ---
+  d=el('details');d.append(el('summary','','Rendering'));
+  b=el('div','body');
+  b.appendChild(reg('renderScale',sliderRow('renderScale','Render resolution',0.35,2,0.05)));
+  b.appendChild(reg('cloudQuality',sliderRow('cloudQuality','Cloud quality',0.05,1,0.05)));
+  b.appendChild(reg('precipDensity',sliderRow('precipDensity','Precip density',0,2,0.05)));
+  b.appendChild(reg('exposure',sliderRow('exposure','Exposure',0.3,2.5,0.05)));
+  b.appendChild(reg('timeOfDay',sliderRow('timeOfDay','Time of day',0,24,0.1,v=>(+v).toFixed(1)+'h')));
+  b.appendChild(chk('adaptive','Adaptive quality'));
+  b.appendChild(chk('audio','Thunder audio'));
+  d.append(b);panel.appendChild(d);
+  // --- file ---
+  d=el('details');d.append(el('summary','','File / Export'));
+  b=el('div','body');
+  const fr=el('div','btnrow');
+  const sv=el('button','','💾 Save state');sv.onclick=saveState;
+  const ld=el('button','','📂 Load');ld.onclick=()=>$('loadFile').click();
+  const lf=document.createElement('input');lf.type='file';lf.id='loadFile';lf.accept='.json';lf.style.display='none';
+  lf.onchange=()=>{if(lf.files[0])lf.files[0].text().then(t=>loadState(t));lf.value='';};
+  const csv=el('button','','📄 Probe CSV');csv.onclick=exportCSV;
+  const png=el('button','','🖼 PNG');png.onclick=exportPNG;
+  fr.append(sv,ld,csv,png,lf);b.appendChild(fr);
+  d.append(b);panel.appendChild(d);
+  syncPauseBtn();
+}
+function syncPauseBtn(){const b=$('btnPause');b.textContent=P.pause?'▶ Resume':'⏸ Pause';b.classList.toggle('on',P.pause);}
+
+// ================= brushes =================
+let pointer={down:false,b:0,moved:0,lx:0,ly:0,lPick:null};
+function applyBrush(gx,gz,dirX,dirZ){
+  const r=P.brushRadius,s=P.brushStrength;
+  const i0=Math.max(0,(gx-r)|0),i1=Math.min(NX-1,Math.ceil(gx+r));
+  const j0=Math.max(0,(gz-r)|0),j1=Math.min(NZ-1,Math.ceil(gz+r));
+  for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
+    const dd=Math.hypot(i-gx,j-gz);if(dd>r)continue;
+    const f=Math.exp(-dd*dd/(r*r*0.4))*s;
+    const c=ID2(i,j),kg=KG[c];
+    switch(P.tool){
+      case 'heat':for(let k=kg;k<Math.min(kg+4,NL);k++)F.tp[IDX(i,j,k)]+=f*3.0*Math.exp(-(k-kg)*0.4);break;
+      case 'cool':for(let k=kg;k<Math.min(kg+4,NL);k++)F.tp[IDX(i,j,k)]-=f*3.0*Math.exp(-(k-kg)*0.4);break;
+      case 'moist':for(let k=kg;k<Math.min(kg+4,NL);k++)F.qv[IDX(i,j,k)]+=f*1.2;break;
+      case 'dry':for(let k=kg;k<NL;k++){const id=IDX(i,j,k);F.qv[id]*=Math.max(0,1-f*0.3);F.qc[id]*=Math.max(0,1-f*0.3);}break;
+      case 'wind':{
+        const dx=dirX!=null?dirX:1,dz=dirZ!=null?dirZ:0;
+        for(let k=kg;k<Math.min(kg+5,NL);k++){const id=IDX(i,j,k);F.u[id]+=dx*f*4;F.v[id]+=dz*f*4;}break;}
+      case 'press':for(let k=kg;k<NL;k++)F.p[IDX(i,j,k)]-=f*4;break;
+      case 'seed':for(let k=kg+1;k<Math.min(kg+6,NL);k++)F.qc[IDX(i,j,k)]+=f*0.8;break;
+      case 'raise':Ht[c]+=f*0.3;break;
+      case 'lower':Ht[c]-=f*0.3;break;
+      case 'surf':{
+        const t=SURF_NAMES.indexOf(P.surfPaint);if(t<0)break;
+        Sur[c]=t;
+        if(t===1)Ht[c]=Math.min(Ht[c],WORLD.sea-0.4);
+        else if(Ht[c]<WORLD.sea)Ht[c]=WORLD.sea+0.35;
+        if(t===1)Wet[c]=2;
+        break;}
+      case 'bolt':break;
+    }}
+  if(P.tool==='raise'||P.tool==='lower'||P.tool==='surf'){recomputeKG();uploadH();uploadSurf();}
+  if(P.tool==='moist'||P.tool==='dry')uploadWet();
+}
+let brushDir=null,brushHold=null;
+canvas.addEventListener('pointerdown',e=>{
+  ensureAudio();
+  pointer.down=true;pointer.b=e.button;pointer.moved=0;pointer.lx=e.clientX;pointer.ly=e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+  if(e.button===0&&P.tool==='bolt'){const g=pickGround(e.clientX,e.clientY);if(g)strikeAt(g.i,g.j,1.2);pointer.down=false;}
+  if(e.button===0&&P.tool!=='camera'&&P.tool!=='probe'&&P.tool!=='bolt'){
+    const g=pickGround(e.clientX,e.clientY);
+    if(g){pointer.lPick=g;brushHold=g;applyBrush(g.i,g.j,null,null);}
+  }
+});
+canvas.addEventListener('pointermove',e=>{
+  const dx=e.clientX-pointer.lx,dy=e.clientY-pointer.ly;
+  if(pointer.down)pointer.moved+=Math.abs(dx)+Math.abs(dy);
+  pointer.lx=e.clientX;pointer.ly=e.clientY;
+  if(!pointer.down)return;
+  const camTool=P.tool==='camera'||P.tool==='probe';
+  if(pointer.b===0&&(camTool&&cam.mode==='orbit')){cam.yaw-=dx*0.008;cam.pitch+=dy*0.008;}
+  else if(pointer.b===0&&camTool&&cam.mode==='fly'){cam.fyaw-=dx*0.006;cam.fpitch-=dy*0.006;cam.fpitch=clamp(cam.fpitch,-1.5,1.5);}
+  else if(pointer.b===1||pointer.b===2){
+    const sc=cam.dist*0.0016;
+    const fwd=cam.mode==='fly'?camDir():norm3([cam.tgt[0]-camPos[0],0,cam.tgt[2]-camPos[2]]);
+    const rgt=[fwd[2],0,-fwd[0]];
+    if(cam.mode==='fly'){cam.pos[0]+=(-rgt[0]*dx-fwd[0]*dy)*sc;cam.pos[2]+=(-rgt[2]*dx-fwd[2]*dy)*sc;}
+    else{cam.tgt[0]+=(-rgt[0]*dx-fwd[0]*dy)*sc;cam.tgt[2]+=(-rgt[2]*dx-fwd[2]*dy)*sc;}
+  }
+  else if(pointer.b===0&&!camTool&&P.tool!=='bolt'){
+    const g=pickGround(e.clientX,e.clientY);
+    if(g){
+      let dxw=null,dzw=null;
+      if(pointer.lPick){dxw=g.x-pointer.lPick.x;dzw=g.z-pointer.lPick.z;
+        const l=Math.hypot(dxw,dzw);if(l>0.01){dxw/=l;dzw/=l;}else{dxw=null;}}
+      applyBrush(g.i,g.j,dxw,dzw);pointer.lPick=g;brushHold=g;brushHold.dx=dxw;brushHold.dz=dzw;}
+  }
+});
+canvas.addEventListener('pointerup',e=>{
+  if(pointer.b===0&&P.tool==='probe'&&pointer.moved<6){
+    const g=pickGround(e.clientX,e.clientY);
+    if(g)addProbe(g.i,g.j);}
+  pointer.down=false;pointer.lPick=null;brushHold=null;});
+canvas.addEventListener('pointercancel',()=>{pointer.down=false;pointer.lPick=null;brushHold=null;});
+canvas.addEventListener('wheel',e=>{e.preventDefault();
+  if(cam.mode==='fly')cam.speed=clamp(cam.speed*(e.deltaY>0?0.9:1.12),1,60);
+  else cam.dist=clamp(cam.dist*(e.deltaY>0?1.11:0.9),6,240);
+},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+const keys={};
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  keys[e.key.toLowerCase()]=true;
+  if(e.key===' '){e.preventDefault();P.pause=!P.pause;syncPauseBtn();}
+  if(e.key==='.'){P.pause=true;syncPauseBtn();for(let s=0;s<P.substeps;s++)stepSim(P.dt);}});
+window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+$('panelToggle').onclick=()=>{panel.classList.toggle('open');
+  document.body.classList.toggle('panelopen',panel.classList.contains('open'));};
+document.body.classList.toggle('panelopen',panel.classList.contains('open'));
+
+// ================= probes =================
+let probeSeq=0;
+function addProbe(i,j){
+  probes.push({i,j,id:++probeSeq,hist:[]});
+  if(probes.length>6)probes.shift();
+  refreshProbeUI();}
+function probeSample(pr){
+  const i=clamp(pr.i|0,0,NX-1),j=clamp(pr.j|0,0,NZ-1),c=ID2(i,j),kg=KG[c];
+  const id=IDX(i,j,Math.min(kg,NL-1));
+  let colQ=0,mUp=0;
+  for(let k=kg;k<NL;k++){colQ+=F.qc[IDX(i,j,k)]+F.qr[IDX(i,j,k)];if(F.w[IDX(i,j,k)]>mUp)mUp=F.w[IDX(i,j,k)];}
+  return{t:simTime,T:tbase(kg)+F.tp[id],RH:RHof(kg,F.tp[id],F.qv[id])*100,
+    p:F.p[id],ws:Math.hypot(F.u[id],F.v[id]),qc:colQ,rr:Rain2[c],w:mUp};}
+function refreshProbeUI(){
+  const pp=$('probePanel');
+  if(!probes.length){pp.classList.remove('open');return;}
+  pp.classList.add('open');
+  pp.innerHTML='<b style="color:var(--acc)">Probes</b> <span class="hint">(click map/terrain with Probe tool)</span>';
+  for(const pr of probes){
+    const s=probeSample(pr);
+    const dv=el('div','',`#${pr.id} @(${pr.i|0},${pr.j|0})  T=${s.T.toFixed(1)}° RH=${s.RH.toFixed(0)}% p=${s.p.toFixed(1)} wnd=${s.ws.toFixed(1)} w↑=${s.w.toFixed(1)} qc=${s.qc.toFixed(2)} rr=${s.rr.toFixed(2)}`);
+    dv.style.cssText='font-size:10px;margin:3px 0;color:var(--txt)';
+    pp.appendChild(dv);}
+  const cv=document.createElement('canvas');cv.width=270;cv.height=90;cv.id='probeCv';
+  pp.appendChild(cv);}
+function drawProbeCv(){
+  const cv=$('probeCv');if(!cv)return;const ctx=cv.getContext('2d');
+  ctx.fillStyle='#0a0f16';ctx.fillRect(0,0,270,90);
+  const pr=probes[probes.length-1];if(!pr||pr.hist.length<2)return;
+  const h=pr.hist,n=h.length;
+  const series=[['T',h.map(s=>s.T),0,30,'#ffd54f'],['RH',h.map(s=>s.RH),0,100,'#4fc3f7'],
+    ['qc',h.map(s=>s.qc),0,4,'#eeeeee'],['rr',h.map(s=>s.rr),0,3,'#81c784']];
+  for(const [nm,vals,lo,hi,col] of series){
+    ctx.strokeStyle=col;ctx.beginPath();
+    vals.forEach((v,x)=>{const px=4+x/(Math.max(n-1,1))*262,py=85-((v-lo)/(hi-lo))*80;
+      x?ctx.lineTo(px,py):ctx.moveTo(px,py);});
+    ctx.stroke();}
+  ctx.fillStyle='#6d8093';ctx.font='9px monospace';
+  ctx.fillText('probe #'+pr.id+' history (T=yellow RH=blue qc=white rain=green)',4,10);}
+function exportCSV(){
+  if(!probes.length){toast('No probes placed');return;}
+  let csv='probe,t,T,RH,p,wind,w,qc,rainrate\n';
+  for(const pr of probes)for(const s of pr.hist)
+    csv+=`${pr.id},${s.t.toFixed(2)},${s.T.toFixed(3)},${s.RH.toFixed(2)},${s.p.toFixed(3)},${s.ws.toFixed(3)},${s.w.toFixed(3)},${s.qc.toFixed(4)},${s.rr.toFixed(4)}\n`;
+  download('stormlab-probes.csv',new Blob([csv],{type:'text/csv'}));}
+
+// ================= map canvas =================
+const mapCv=$('map'),mapCtx=mapCv.getContext('2d');
+const mapImg=mapCtx.createImageData(200,200);
+let mapModeAuto=true;
+function drawMap(){
+  const W=200,H=200,d=mapImg.data;
+  const cin=P.viz==='cinematic';
+  const sd=sunDir();
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=clamp(x/W*NX|0,0,NX-1),j=clamp(y/H*NZ|0,0,NZ-1),c=ID2(i,j);
+    let r,g,b2;
+    if(cin){
+      // terrain + cloud composite
+      const s=Sur[c],h=Ht[c];
+      if(s===1){r=20;g=60;b2=110;}
+      else if(s===2){r=20;g=70;b2=25;}
+      else if(s===3){r=95;g=95;b2=100;}
+      else if(s===4){r=230;g=235;b2=245;}
+      else{const t=clamp(h/8,0,1);r=60+40*t;g=90-20*t;b2=40;}
+      let q=0;const kg=KG[c];
+      for(let k=kg;k<NL;k++)q+=F.qc[IDX(i,j,k)];
+      const cw=clamp(q*40,0,235);
+      r=r*(1-cw/255)+cw;g=g*(1-cw/255)+cw;b2=b2*(1-cw/255)+cw;
+      const pr=clamp(Rain2[c]*80,0,120);b2=Math.min(255,b2+pr);
+      const wet=clamp(Wet[c]*30,0,80);r-=wet;g-=wet*0.5;
+    }else{
+      const v=clamp(((diagBuf?diagBuf[c]:0)-VIZ[P.viz].r[0])/(VIZ[P.viz].r[1]-VIZ[P.viz].r[0]),0,1);
+      [r,g,b2]=cmapJS(v);}
+    const o=(y*W+x)*4;d[o]=r;d[o+1]=g;d[o+2]=b2;d[o+3]=255;}
+  mapCtx.putImageData(mapImg,0,0);
+  // wind arrows
+  if(P.arrows||P.viz==='wind'||P.viz==='vort'){
+    mapCtx.strokeStyle='rgba(255,255,255,.75)';mapCtx.lineWidth=1;
+    const st=Math.max(4,NX/16|0),k=clamp(P.mapLayer|0,0,NL-1);
+    for(let j=st/2|0;j<NZ;j+=st)for(let i=st/2|0;i<NX;i+=st){
+      const id=IDX(i,j,k);if(Solid[id])continue;
+      const x=(i+0.5)/NX*W,y=(j+0.5)/NZ*H;
+      const u=F.u[id],v=F.v[id],sp=Math.hypot(u,v);if(sp<0.4)continue;
+      const sc=Math.min(sp,10)/sp*8;
+      mapCtx.beginPath();mapCtx.moveTo(x,y);mapCtx.lineTo(x+u*sc,y+v*sc);mapCtx.stroke();}}
+  // probes
+  for(const pr of probes){
+    const x=(pr.i+0.5)/NX*W,y=(pr.j+0.5)/NZ*H;
+    mapCtx.fillStyle='#ffd54f';mapCtx.beginPath();mapCtx.arc(x,y,3,0,TAU);mapCtx.fill();
+    mapCtx.fillStyle='#000';mapCtx.font='7px monospace';mapCtx.fillText(pr.id,x+4,y+2);}
+  // slice line
+  if(P.sliceOn){mapCtx.strokeStyle='#ffd54f';mapCtx.setLineDash([3,3]);mapCtx.beginPath();
+    if(P.sliceAxis==='z'){const y=P.slicePos*H;mapCtx.moveTo(0,y);mapCtx.lineTo(W,y);}
+    else{const x=P.slicePos*W;mapCtx.moveTo(x,0);mapCtx.lineTo(x,H);}
+    mapCtx.stroke();mapCtx.setLineDash([]);}
+  $('mapTitle').textContent='MAP — '+(VIZ[P.viz]?VIZ[P.viz].label:'');
+}
+mapCv.addEventListener('pointerdown',e=>{
+  const r=mapCv.getBoundingClientRect();
+  const i=(e.clientX-r.left)/r.width*NX,j=(e.clientY-r.top)/r.height*NZ;
+  if(P.tool==='probe'||e.shiftKey)addProbe(i,j);
+  else{const g={i,j};if(P.tool!=='camera')applyBrush(i,j,null,null);}
+});
+$('mapHint').onclick=()=>{P.mapLayer=(P.mapLayer+4)%NL;saveSettings();};
+function cmapJS(t){t=clamp(t,0,1);
+  const stops=[[13,30,114],[13,166,191],[242,204,38],[230,30,20]];
+  const x=t*3,i=Math.min(2,x|0),f=x-i;
+  return[lerp(stops[i][0],stops[i+1][0],f),lerp(stops[i][1],stops[i+1][1],f),lerp(stops[i][2],stops[i+1][2],f)];}
+
+// ================= save / load =================
+const SAVE_FIELDS=['u','v','w','tp','qv','qc','qr','p'];
+function saveState(){
+  const o={v:1,seed:P.seed,nx:NX,nz:NZ,nl:NL,time:simTime,params:{},
+    fields:{},Ht:f32b64(Ht),Sur:u8tob64(Sur),Wet:f32b64(Wet),Chg:f32b64(Chg),
+    probes:probes.map(p=>({i:p.i,j:p.j,id:p.id}))};
+  for(const k in P)if(typeof P[k]==='number'||typeof P[k]==='boolean'||typeof P[k]==='string')o.params[k]=P[k];
+  for(const f of SAVE_FIELDS)o.fields[f]=f32b64(F[f]);
+  download('stormlab-state.json',new Blob([JSON.stringify(o)],{type:'application/json'}));
+  toast('State saved');}
+function loadState(txt){
+  let o;try{o=JSON.parse(txt);}catch(e){toast('Load failed: not JSON');return;}
+  try{
+    if(!o||o.v!==1||!o.fields||!o.fields.u)throw new Error('bad format');
+    if(o.nx!==NX||o.nz!==NZ||o.nl!==NL){
+      P.nx=o.nx;P.nz=o.nz;P.nl=o.nl;
+      allocState();initTextures();buildTerrainMesh();}
+    for(const f of SAVE_FIELDS){
+      if(!o.fields[f])throw new Error('missing field '+f);
+      const a=b64f32(o.fields[f],N);F[f].set(a);}
+    Ht.set(b64f32(o.Ht,NX*NZ));Sur.set(b64tou8(o.Sur));Wet.set(b64f32(o.Wet,NX*NZ));Chg.set(b64f32(o.Chg,NX*NZ));
+    for(let i=0;i<NX*NZ;i++)if(Sur[i]>5)throw new Error('bad surface data');
+    if(o.params)for(const k in o.params)if(k in P)P[k]=o.params[k];
+    simTime=o.time||0;
+    probes=(o.probes||[]).map(p=>({i:p.i,j:p.j,id:p.id,hist:[]}));
+    probeSeq=probes.reduce((m,p)=>Math.max(m,p.id),0);
+    recomputeKG();rebuildTerrainGPU();refreshPanel();refreshProbeUI();
+    toast('State loaded');
+  }catch(e){toast('Load rejected: '+e.message);}}
+let pngPending=false;
+function exportPNG(){pngPending=true;}
+function saveSettings(){
+  try{const o={};for(const k in P)if(typeof P[k]==='number'||typeof P[k]==='boolean'||typeof P[k]==='string')o[k]=P[k];
+    localStorage.setItem('stormlab-settings',JSON.stringify(o));}catch(e){}}
+function loadSettings(){
+  try{const o=JSON.parse(localStorage.getItem('stormlab-settings'));
+    if(o)for(const k in o)if(k in P&&k!=='nx'&&k!=='nz'&&k!=='nl')P[k]=o[k];}catch(e){}}
+function initTextures(){
+  for(const k of['h','s','w','diag'])TEX[k]=mkTex(NX,NZ);
+  allocQTex();}
+
+// ================= render frame =================
+let lastT=0,fps=60,fpsAcc=0,fpsN=0,frame=0,mapTick=0,histTick=0;
+function renderFrame(now){
+  requestAnimationFrame(renderFrame);
+  const dtR=Math.min(0.05,(now-lastT)/1000||0.016);lastT=now;
+  fpsAcc+=1/Math.max(dtR,1e-3);fpsN++;
+  if(fpsN>=30){fps=fpsAcc/fpsN;fpsAcc=0;fpsN=0;
+    if(P.adaptive){
+      if(fps<28&&renderScaleEff>0.5){renderScaleEff=Math.max(0.5,renderScaleEff*0.9);}
+      else if(fps>50&&renderScaleEff<P.renderScale)renderScaleEff=Math.min(P.renderScale,renderScaleEff*1.05);}}
+  if(!P.adaptive)renderScaleEff=P.renderScale;
+  else renderScaleEff=Math.min(renderScaleEff,P.renderScale);
+  resize();
+  // sim
+  if(!P.pause){const steps=Math.max(1,Math.round(P.substeps*P.simSpeed));
+    for(let s=0;s<steps;s++)stepSim(P.dt);}
+  // fly move
+  if(cam.mode==='fly'){
+    const d=camDir(),r=[d[2],0,-d[0]],sp=cam.speed*dtR*4;
+    if(keys['w']){cam.pos[0]+=d[0]*sp;cam.pos[1]+=d[1]*sp;cam.pos[2]+=d[2]*sp;}
+    if(keys['s']){cam.pos[0]-=d[0]*sp;cam.pos[1]-=d[1]*sp;cam.pos[2]-=d[2]*sp;}
+    if(keys['a']){cam.pos[0]-=r[0]*sp;cam.pos[2]-=r[2]*sp;}
+    if(keys['d']){cam.pos[0]+=r[0]*sp;cam.pos[2]+=r[2]*sp;}
+    if(keys['q'])cam.pos[1]-=sp;if(keys['e'])cam.pos[1]+=sp;
+    cam.pos[1]=clamp(cam.pos[1],0.5,40);
+    cam.pos[0]=clamp(cam.pos[0],-90,90);cam.pos[2]=clamp(cam.pos[2],-90,90);}
+  // sustained brush: while pointer held on a tool, keep injecting (rate-scaled)
+  if(brushHold&&pointer.down&&pointer.b===0){
+    const s0=P.brushStrength;P.brushStrength=s0*dtR*6;
+    applyBrush(brushHold.i,brushHold.j,brushHold.dx,brushHold.dz);
+    P.brushStrength=s0;}
+  updateParticles(dtR);
+  updateBolts(dtR);
+  const VP=updateCamera();
+  uploadQ();uploadWet();buildDiag();
+  if(P.sliceOn)buildSliceTex();
+  draw(VP);
+  frame++;
+  if(now-mapTick>150){mapTick=now;drawMap();}
+  if(!P.pause&&now-histTick>600){histTick=now;
+    for(const pr of probes){pr.hist.push(probeSample(pr));if(pr.hist.length>240)pr.hist.shift();}
+    refreshProbeUI();drawProbeCv();}
+  updateHUD();
+  $('warn').textContent=stabilityWarnings().join('\n');
+  if(pngPending){pngPending=false;
+    canvas.toBlob(b=>download('stormlab-view.png',b),'image/png');}
+}
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=Math.max(8,canvas.clientWidth*dpr*renderScaleEff|0),h=Math.max(8,canvas.clientHeight*dpr*renderScaleEff|0);
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  aspect=w/h;gl.viewport(0,0,w,h);}
+function draw(VP){
+  const sd=sunDir();
+  gl.clearColor(0.02,0.03,0.05,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  // sky
+  gl.disable(gl.DEPTH_TEST);gl.useProgram(PROG.sky);gl.bindVertexArray(quadVAO);
+  gl.uniformMatrix4fv(U(PROG.sky,'uInvVP'),false,invVP);
+  gl.uniform3fv(U(PROG.sky,'uSun'),sd);gl.uniform3fv(U(PROG.sky,'uCam'),camPos);
+  gl.uniform1f(U(PROG.sky,'uFlash'),flash.i);gl.uniform1f(U(PROG.sky,'uExp'),P.exposure);
+  gl.uniform1f(U(PROG.sky,'uTime'),simTime);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.enable(gl.DEPTH_TEST);
+  // terrain
+  gl.useProgram(PROG.terrain);gl.bindVertexArray(terrainVAO);
+  setBase(PROG.terrain,VP,sd);
+  gl.uniform2f(U(PROG.terrain,'uDim'),NX,NZ);gl.uniform1f(U(PROG.terrain,'uHmax'),16);
+  gl.uniform1f(U(PROG.terrain,'uSea'),WORLD.sea);
+  gl.uniform1f(U(PROG.terrain,'uDiagMix'),P.viz==='cinematic'?0:0.85);
+  bindTex(0,TEX.h,'uH',PROG.terrain);bindTex(1,TEX.s,'uS',PROG.terrain);
+  bindTex(2,TEX.w,'uWet',PROG.terrain);bindTex(3,TEX.diag,'uDiag',PROG.terrain);
+  gl.drawElements(gl.TRIANGLES,terrainN,gl.UNSIGNED_INT,0);
+  // water
+  gl.useProgram(PROG.water);gl.bindVertexArray(sliceVAO);
+  gl.uniformMatrix4fv(U(PROG.water,'uVP'),false,VP);
+  gl.uniform1f(U(PROG.water,'uSea'),WORLD.sea);gl.uniform1f(U(PROG.water,'uHmax'),16);
+  gl.uniform3fv(U(PROG.water,'uSun'),sd);gl.uniform3fv(U(PROG.water,'uCam'),camPos);
+  gl.uniform1f(U(PROG.water,'uExp'),P.exposure);gl.uniform1f(U(PROG.water,'uTime'),simTime);
+  gl.uniform1f(U(PROG.water,'uFlash'),flash.i);
+  bindTex(0,TEX.h,'uH',PROG.water);bindTex(1,TEX.s,'uS',PROG.water);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+  gl.depthMask(true);
+  // diag plane
+  if(P.viz!=='cinematic'){
+    gl.useProgram(PROG.diag);gl.bindVertexArray(sliceVAO);
+    gl.uniformMatrix4fv(U(PROG.diag,'uVP'),false,VP);
+    gl.uniform1f(U(PROG.diag,'uY'),kH(clamp(P.mapLayer,0,NL-1))+0.02);
+    gl.uniform1f(U(PROG.diag,'uAlpha'),0.5);gl.uniform1f(U(PROG.diag,'uExp'),P.exposure);
+    bindTex(0,TEX.diag,'uDiag',PROG.diag);
+    gl.drawArrays(gl.TRIANGLES,0,6);}
+  gl.disable(gl.BLEND);gl.depthMask(true);
+  // slice
+  if(P.sliceOn){
+    gl.useProgram(PROG.slice);gl.bindVertexArray(sliceVAO);
+    gl.uniformMatrix4fv(U(PROG.slice,'uVP'),false,VP);
+    if(P.sliceAxis==='z'){const z=(P.slicePos-0.5)*60;
+      gl.uniform3fv(U(PROG.slice,'uA'),[-30,0,z]);gl.uniform3fv(U(PROG.slice,'uB'),[30,0,z]);}
+    else{const x=(P.slicePos-0.5)*60;
+      gl.uniform3fv(U(PROG.slice,'uA'),[x,0,-30]);gl.uniform3fv(U(PROG.slice,'uB'),[x,0,30]);}
+    gl.uniform1f(U(PROG.slice,'uLift'),0.05);
+    gl.uniform1f(U(PROG.slice,'uExp'),P.exposure);
+    bindTex(0,TEX.slice,'uSlice',PROG.slice);
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    gl.depthMask(true);gl.disable(gl.BLEND);}
+  // clouds
+  gl.useProgram(PROG.cloud);gl.bindVertexArray(cubeVAO);
+  gl.uniformMatrix4fv(U(PROG.cloud,'uVP'),false,VP);
+  gl.uniform3fv(U(PROG.cloud,'uCam'),camPos);gl.uniform3fv(U(PROG.cloud,'uSun'),sd);
+  gl.uniform1f(U(PROG.cloud,'uExp'),P.exposure);gl.uniform1f(U(PROG.cloud,'uTime'),simTime);
+  gl.uniform1f(U(PROG.cloud,'uHmax'),16);gl.uniform1f(U(PROG.cloud,'uDens'),1.35);
+  gl.uniform1f(U(PROG.cloud,'uQual'),P.cloudQuality);
+  gl.uniform1f(U(PROG.cloud,'uFlash'),flash.i);gl.uniform3fv(U(PROG.cloud,'uFlashPos'),flash.pos);
+  bindTex3D(0,TEX.q,'uQ',PROG.cloud);bindTex(1,TEX.h,'uH',PROG.cloud);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(false);gl.disable(gl.CULL_FACE);
+  gl.drawElements(gl.TRIANGLES,cubeN,gl.UNSIGNED_SHORT,0);
+  gl.depthMask(true);gl.disable(gl.BLEND);
+  gl.bindVertexArray(null);
+  // lines: rain / streaks / bolts / arrows / probes
+  lineReset();
+  if(P.streamlines){for(let a=0;a<NSTREAK;a++){
+    const x=streak.p[a*3],y=streak.p[a*3+1],z=streak.p[a*3+2];
+    cellWindAt(x,z,Math.round(y/cellZ()),_w3);
+    const l=Math.min(Math.hypot(_w3[0],_w3[2])*0.22,1.4);
+    lineSeg(x,y,z,x-_w3[0]*l,y-_w3[1]*l*0.2,z-_w3[2]*l,0.5,0.75,0.9,0.28);}}
+  for(let a=0;a<rain.n;a++){
+    const x=rain.p[a*3],y=rain.p[a*3+1],z=rain.p[a*3+2],sn=rain.snow[a];
+    const ln=sn?0.25:0.6;
+    if(sn)lineSeg(x,y,z,x-rain.v[a*3]*0.03,y-rain.v[a*3+1]*0.03,z-rain.v[a*3+2]*0.03,0.92,0.94,1,0.8);
+    else lineSeg(x,y,z,x-rain.v[a*3]*0.05,y-ln,z-rain.v[a*3+2]*0.05,0.55,0.7,1,0.5);}
+  linesFlush(false);
+  // bolts + arrows additive
+  lineReset();
+  for(const b of boltList){
+    const a=(1-b.t/b.life),s=b.segs;
+    for(let k=0;k<s.length;k+=6)
+      lineSeg(s[k],s[k+1],s[k+2],s[k+3],s[k+4],s[k+5],1.3*a+0.4,1.3*a+0.4,1.6*a+0.5,0.9*a);}
+  if(P.arrows||P.viz==='wind'||P.viz==='vertical'||P.viz==='vort'){
+    const st=Math.max(2,NX/24|0),k=clamp(P.mapLayer|0,0,NL-1),y=kH(k)+0.05;
+    for(let j=st/2|0;j<NZ;j+=st)for(let i=st/2|0;i<NX;i+=st){
+      const id=IDX(i,j,k);if(Solid[id])continue;
+      const u=F.u[id],v=F.v[id],sp=Math.hypot(u,v);if(sp<0.3)continue;
+      const x=(i+0.5)/NX*60-30,z=(j+0.5)/NZ*60-30;
+      const sc=Math.min(sp,12)/sp*1.2,ux=u*sc,vz=v*sc;
+      const r=clamp(sp/12,0.2,1);
+      lineSeg(x,y,z,x+ux,y,z+vz,0.3+r,1-r*0.5,0.3,0.85);
+      const a2=Math.atan2(vz,ux);
+      lineSeg(x+ux,y,z+vz,x+ux-Math.cos(a2-0.5)*0.3,y,z+vz-Math.sin(a2-0.5)*0.3,1,1,1,0.85);
+      lineSeg(x+ux,y,z+vz,x+ux-Math.cos(a2+0.5)*0.3,y,z+vz-Math.sin(a2+0.5)*0.3,1,1,1,0.85);}}
+  for(const pr of probes){
+    const x=(pr.i+0.5)/NX*60-30,z=(pr.j+0.5)/NZ*60-30;
+    const y0=Math.max(Ht[ID2(clamp(pr.i|0,0,NX-1),clamp(pr.j|0,0,NZ-1))],0);
+    lineSeg(x,y0,z,x,y0+14,z,1,0.85,0.2,0.9);
+    for(let s2=0;s2<8;s2++){const a1=s2/8*TAU,a3=(s2+1)/8*TAU;
+      lineSeg(x+Math.cos(a1),y0+0.2,z+Math.sin(a1),x+Math.cos(a3),y0+0.2,z+Math.sin(a3),1,0.85,0.2,0.9);}}
+  linesFlush(true);
+}
+function bindTex(unit,t,name,p){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.uniform1i(U(p,name),unit);}
+function bindTex3D(unit,t,name,p){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_3D,t);
+  gl.uniform1i(U(p,name),unit);}
+function setBase(p,VP,sd){
+  gl.uniformMatrix4fv(U(p,'uVP'),false,VP);
+  gl.uniform3fv(U(p,'uSun'),sd);gl.uniform3fv(U(p,'uCam'),camPos);
+  gl.uniform1f(U(p,'uExp'),P.exposure);gl.uniform1f(U(p,'uTime'),simTime);
+  gl.uniform1f(U(p,'uFlash'),flash.i);gl.uniform3fv(U(p,'uFlashPos'),flash.pos);}
+function updateParticles(dt){
+  if(!P.pause){spawnRain(dt);updateRain(dt);updateStreaks(dt);}}
+
+// ================= HUD =================
+function updateHUD(){
+  const cfl=maxWind*P.dt;
+  $('hud').innerHTML=
+   `<b>⛈ STORM LAB</b>  ${fps.toFixed(0)} fps`+(P.pause?'  <b style="color:#ef5350">PAUSED</b>':'')+`\n`+
+   `grid ${NX}×${NZ}×${NL}  t=${fmtTime(simTime)}  dt=${P.dt}s\n`+
+   `cloud ${(cloudCoverAvg*100).toFixed(1)}%  precip ${precipTotal.toFixed(1)}\n`+
+   `w↑max ${maxUp.toFixed(1)}  wind ${maxWind.toFixed(1)}  CFL ${cfl.toFixed(2)}\n`+
+   `preset ${activePreset} · viz ${P.viz} · probes ${probes.length}\n`+
+   `charge ${chargeMax.toFixed(1)} · scale ${renderScaleEff.toFixed(2)}`;
+}
+function fmtTime(t){const m=t/60|0,s=t%60|0;return `${m}:${s<10?'0':''}${s}`;}
+
+// ================= reinit / boot =================
+function reinit(){
+  allocState();
+  initTextures();buildTerrainMesh();allocQTex();
+  RNG=mulberry32(P.seed);
+  applyPreset(activePreset);
+  rows.mapLayer&&sliderRefreshLayers();
+  toast(`Grid ${NX}×${NZ}×${NL}`);}
+function sliderRefreshLayers(){const s=$('sl-mapLayer');if(s){s.max=NL-1;}}
+function boot(){
+  loadSettings();
+  allocState();
+  if(!initGL())return;
+  RNG=mulberry32(P.seed);
+  buildPanel();
+  applyPreset('mtn-rain');
+  refreshPanel();
+  window.SL={
+    P,F:()=>F,Ht:()=>Ht,Sur:()=>Sur,Wet:()=>Wet,KG:()=>KG,Solid:()=>Solid,
+    IDX,ID2,NX:()=>NX,NZ:()=>NZ,NL:()=>NL,
+    stats:()=>({t:simTime,cloud:cloudCoverAvg,precip:precipTotal,w:maxUp,wind:maxWind,chg:chargeMax,fps,probes:probes.length}),
+    step:(n)=>{for(let i=0;i<n;i++)stepSim(P.dt);},
+    preset:(k)=>{RNG=mulberry32(P.seed);applyPreset(k);refreshPanel();},
+    strike:strikeAt,probe:(i,j)=>{addProbe(i,j);return probeSample(probes[probes.length-1]);},
+    probeSample,probes:()=>probes,fieldAt:(f,i,j,k)=>F[f][IDX(i,j,k)],
+    applyBrush:(i,j)=>{P.tool='heat';applyBrush(i,j);},
+    brush:(tool,i,j,st)=>{P.tool=tool;if(st!=null)P.brushStrength=st;applyBrush(i,j);},
+    setP:(k,v)=>{P[k]=v;},audioState:()=>AC?AC.state:'none',
+    bolts:()=>boltList.length,ver:'1.0'};
+  requestAnimationFrame(renderFrame);
+}
+boot();
+</script>
+</body>
+</html>
