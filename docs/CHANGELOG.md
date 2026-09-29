@@ -1,5 +1,11 @@
 # Changelog
 
+## GPT-6.1 Sol joins the showcase: 2026-09-29
+
+- Added GPT-6.1 Sol's fluid simulation, hydraulic erosion laboratory, and modular synthesizer with the reported setup Codex at Max.
+- Placed Sol first with its own amber tint. The showcase now contains 142 builds across nine models, with updated thumbnails, comparison previews, and a shareable model collection.
+- Preserved original submissions and excluded raw evidence from the website.
+
 ## SWE-2's Capstone and Opus 5.5 through prompt 08: 2026-09-29
 
 - Added SWE-2's *Oatworks*, a slime-mould network foundry, completing its 24-prompt collection.

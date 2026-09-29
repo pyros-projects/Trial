@@ -6,10 +6,11 @@ The public static export contains a smaller set: the gallery, public prompt text
 
 ## Included results
 
-The 2026-09-29 checkout contains 139 submitted HTML builds for all 24 tasks across eight model folders:
+The 2026-09-29 checkout contains 142 submitted HTML builds for all 24 tasks across nine model folders:
 
 | Model folder | HTML builds | Task coverage |
 |---|---:|---|
+| `gpt-6.1_sol` | 3 | 01-03 |
 | `anthropic_opus55` | 8 | 01-08 |
 | `gpt-6_astra` | 24 | 01-24 |
 | `anthropic_opus5` | 14 | 01-14 |

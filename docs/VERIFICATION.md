@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## GPT-6.1 Sol joins the showcase: 2026-09-29
+
+GPT-6.1 Sol adds prompts 01–03 with the reported setup **Codex · Max**. It appears first in the display order with amber tint `#F0C06A`. The collection now contains **142 builds across nine models**.
+
+All **327 original files totaling 68,554,158 bytes** are preserved. Three thumbnail aliases exactly copy visually reviewed supplied 1280 × 800 captures; no final-HTML capture binding is claimed. The bounded publication review covered **213 text files, 109 PNGs, four WAVs, and one WebM**, including a HAR and 863 JSONL records. No confirmed credentials, private identity linkage, runtime network endpoints, or Netlify Forms were found. Email-pattern matches are documentation examples; local paths use the existing Pyro pseudonym. Media structure and metadata checks found no sensitive payload. Selected image pixels were inspected; remaining pixels, video frames, and audio content were not exhaustively reviewed. Raw evidence remains public in GitHub and is excluded from Netlify. Submitted development scripts were not executed.
+
+All three apps passed **16 bounded integration checks in each of Netlify Dev and production**: rendered fluid and terrain, native Pause controls, user-activated synth playback with a running audio context and nonzero output, maximized desktop/narrow frames, and cleanup on close. No page/console errors or external HTTP requests were observed, so the thirteen existing notices remain unchanged. These checks do not establish complete task correctness, scientific validity, sustained performance, musical quality, or physical touch-device usability.
+
+Production deployment **`6abc115cd56dc4daa38721b0`** publishes **552 files totaling 25,963,283 bytes (24.76 MiB)**: 142 builds with thumbnails/share pages, 24 prompt comparisons, and nine model collections. The exact export inventory and all 142 original HTML hashes passed. Live HTTPS checks matched **25 files** against the export, and **eight representative excluded routes returned 404**. All **17 focused gallery checks passed locally and in production**, including Sol's first position in filters, comparisons, and the viewer; its three-card collection, tint and setup; canonical copy links; and three/two/one-column layouts without horizontal overflow. Comparisons 01–03 each contain nine models. The README homepage preview was refreshed from production and visually inspected.
+
 ## SWE-2's Capstone and Opus 5.5 through prompt 08: 2026-09-29
 
 SWE-2's *Oatworks* completes its 24-prompt collection. Opus 5.5 adds prompts 05–08, bringing its collection to eight and the showcase to **139 builds across eight models**. Model order and reported setup are unchanged.
