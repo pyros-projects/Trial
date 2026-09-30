@@ -124,7 +124,7 @@ Then choose **Refresh** in the gallery. The [results guide](docs/results.md) cov
 
 ### Customize the gallery
 
-Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set model names, colors, and order. The default configuration is:
+Edit [`gallery/static/appsettings.json`](gallery/static/appsettings.json) to set model names, colors, and order. For example:
 
 ```json
 {
@@ -148,9 +148,12 @@ Record the shared harness and setting in `results/<model>/model.toml`. Cards sho
 
 | Model | Harness | Setting |
 |---|---|---|
+| GPT-6.1 Sol | [Codex](https://openai.com/codex/) | Max |
+| Opus 5.5 | [Claude Code](https://claude.com/product/claude-code) | xhigh |
 | GPT-6 Astra | [Codex CLI](https://developers.openai.com/codex/cli) | Max |
 | Opus 5 | [Claude Code](https://claude.com/product/claude-code) | Max |
 | Grok 4.6 | [Cursor Desktop](https://cursor.com/) | High Fast |
+| SWE-2 | [Devin CLI](https://devin.ai/cli) | High |
 | GLM 5.3 Flash | [Pi](https://pi.dev/) | High |
 | Gemini 3.8 Flash | [Antigravity CLI](https://antigravity.google/) | High |
 | Qwen 3.8 Flash | [Pi](https://pi.dev/) | xhigh |

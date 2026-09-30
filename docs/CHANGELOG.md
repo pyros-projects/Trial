@@ -1,5 +1,10 @@
 # Changelog
 
+## Opus 5.5 completes all 24 prompts: 2026-09-30
+
+- Added Opus 5.5's project planning studio and **Starfix** capstone, a celestial-navigation game with a working sextant. Its collection now covers all 24 prompts; the HTML showcase contains 179 builds across nine models.
+- Updated result counts, screenshot previews, comparison pages, and the Opus collection. Video lab remains a separate collection with three films.
+
 ## Video lab: 2026-09-30
 
 - Added a separate home for video experiments, starting with **What follows if the curve keeps going?** and films from GPT-6.1 Sol, Opus 5.5, and GPT-6 Astra. The 24 HTML challenges retain their own catalog and counts.

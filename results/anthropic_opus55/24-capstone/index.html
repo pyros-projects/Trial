@@ -1,0 +1,1985 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Starfix — find your ship by starlight</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230b1531' stroke='%23d6ab52' stroke-width='3'/%3E%3Cpath d='M32 9 L35 28 L54 32 L35 36 L32 55 L29 36 L10 32 L29 28 Z' fill='%23f2d185'/%3E%3C/svg%3E">
+<meta name="description" content="Take real sextant sights by hand, reduce them with a built-in nautical almanac, cross the lines of position into a fix, and find a small island against a current you cannot see.">
+<style>
+:root{
+  --ink:#070d1c; --ink2:#0e1830; --ink3:#15223f; --line:#253660; --line2:#34497a;
+  --text:#ece6d5; --muted:#9ba6c0; --faint:#6c7897;
+  --brass:#d6ab52; --brass2:#f2d185; --brass3:#8a6a2b;
+  --paper:#f2ead6; --paper2:#e6dbc0; --chart:#4c8098; --chart2:#9ab8c4;
+  --red:#e2553f; --ok:#71c893; --warn:#eab04a; --blue:#5aa7ff;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.4}
+body{overflow:hidden;display:flex;flex-direction:column}
+button,select,input{font:inherit;color:inherit}
+button,.btn{background:var(--ink3);border:1px solid var(--line2);border-radius:8px;padding:6px 11px;cursor:pointer;color:var(--text);line-height:1.2;white-space:nowrap;touch-action:manipulation;user-select:none}
+button:hover,.btn:hover{border-color:var(--brass);color:var(--brass2)}
+button:focus-visible,.btn:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid var(--brass2);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed;border-color:var(--line)}
+button.primary{background:linear-gradient(#e2b964,#b88a35);color:#1b1304;border-color:#f2d185;font-weight:650}
+button.primary:hover{color:#000}
+button.ghost{background:transparent}
+button.danger{border-color:#7a3b35}
+button.danger:hover{border-color:var(--red);color:#ffb3a6}
+button[aria-pressed="true"]{border-color:var(--brass);color:var(--brass2);background:#241d10}
+input[type=number],input[type=text],input[type=datetime-local],select{background:#0a1226;border:1px solid var(--line2);border-radius:7px;padding:5px 7px;min-width:0}
+input[type=range]{accent-color:var(--brass)}
+label{color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+
+/* ---------- header ---------- */
+header.top{display:flex;align-items:center;gap:14px;padding:8px 14px;border-bottom:1px solid var(--line);background:linear-gradient(#0c1631,#08101f);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand svg{flex:none}
+.brand h1{font-family:var(--serif);font-weight:600;letter-spacing:.06em;font-size:21px;margin:0;color:var(--brass2)}
+.brand .sub{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34ch}
+.clock{display:flex;flex-direction:column;align-items:flex-start;padding:2px 12px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.chron{font-family:var(--mono);font-size:20px;color:#fff;letter-spacing:.04em}
+.chronsub{font-size:11px;color:var(--muted)}
+.phase{font-size:12.5px;color:var(--muted);max-width:40ch}
+.phase b{color:var(--text);font-weight:600}
+.phase.go b{color:var(--ok)}
+nav.actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+
+/* ---------- layout ---------- */
+main.app{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
+.deck{position:relative;min-height:0;overflow:hidden;background:#000}
+#deckCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#deckCanvas.dragging{cursor:grabbing}
+aside.side{display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--line);background:var(--ink2)}
+.chartpane{position:relative;flex:0 0 44%;min-height:220px;border-bottom:1px solid var(--line);background:var(--paper)}
+#chartCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.charttools{position:absolute;right:8px;top:8px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.charttools button{background:rgba(242,234,214,.92);color:#243447;border-color:#b7a987;padding:4px 8px;font-size:12px}
+.charttools button:hover{color:#000;border-color:#6b5a2d}
+.charttools button[aria-pressed="true"]{background:#e3cf9a;color:#2a1e05}
+.chartlegend{position:absolute;left:8px;bottom:6px;font-size:11px;color:#3d4a58;background:rgba(242,234,214,.85);padding:3px 7px;border-radius:6px;pointer-events:none}
+.panel{flex:1;display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:9px 6px;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--brass2);border-bottom-color:var(--brass)}
+.tabpane{flex:1;overflow:auto;padding:12px 14px;min-height:0}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}
+.row > label{min-width:74px}
+.row.tight{gap:4px;flex-wrap:nowrap}
+.row.tight button{padding:5px 7px}
+.row.tight > label{min-width:0;margin-right:4px}
+.grp{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin:0 0 12px;background:rgba(10,18,38,.6)}
+.grp h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--brass);font-weight:650}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-family:var(--mono);text-align:right}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+.warn{color:var(--warn)}
+.okc{color:var(--ok)}
+.bad{color:#ff8f7a}
+.big{font-size:17px}
+.btnrow{display:flex;gap:5px;flex-wrap:wrap}
+.btnrow button{padding:5px 9px}
+
+/* sights table */
+table.log{width:100%;border-collapse:collapse;font-size:12.5px}
+table.log th{font-weight:600;color:var(--muted);text-align:left;padding:4px 4px;border-bottom:1px solid var(--line);font-size:11.5px}
+table.log td{padding:5px 4px;border-bottom:1px solid #1a2647;font-family:var(--mono);white-space:nowrap}
+table.log td.nm{font-family:var(--sans)}
+table.log tr{cursor:pointer}
+table.log tr:hover td{background:#132047}
+table.log tr.sel td{background:#1d2a50}
+table.log input{accent-color:var(--brass)}
+.redu{font-family:var(--mono);font-size:12.5px;display:grid;grid-template-columns:auto 1fr;gap:1px 14px;margin-top:6px}
+.redu span:nth-child(odd){color:var(--muted);font-family:var(--sans)}
+.redu span:nth-child(even){text-align:right}
+.redu .sum{border-top:1px solid var(--line2);padding-top:2px}
+.planner td,.planner th{font-size:12.5px}
+.tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:999px;border:1px solid var(--brass3);color:var(--brass2);font-family:var(--sans);margin-left:4px}
+.tag.dim{border-color:var(--line2);color:var(--muted)}
+
+/* deck overlays */
+.coach{position:absolute;left:12px;top:12px;max-width:min(380px,calc(100% - 24px));background:rgba(8,14,30,.86);border:1px solid var(--line2);border-radius:12px;padding:12px 14px 10px;backdrop-filter:blur(4px);box-shadow:0 8px 30px rgba(0,0,0,.4);z-index:3}
+.coach h2{font-family:var(--serif);font-size:16px;margin:0 0 4px;color:var(--brass2);font-weight:600}
+.coach ol{margin:6px 0 4px;padding-left:20px}
+.coach li{margin:3px 0;color:var(--muted);font-size:13px}
+.coach li.now{color:var(--text)}
+.coach li.done{color:var(--ok);text-decoration:line-through;text-decoration-color:rgba(113,200,147,.5)}
+.coach .x{position:absolute;right:6px;top:6px;padding:2px 7px;background:transparent;border:0;color:var(--muted)}
+.coach p{margin:2px 0;font-size:13px}
+.coach .prog{font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:6px}
+.coach .dots{display:flex;gap:5px;margin:4px 0 8px}
+.coach .dots i{width:18px;height:4px;border-radius:2px;background:var(--line2)}
+.coach .dots i.d{background:var(--ok)}
+.coach .dots i.n{background:var(--brass2)}
+.coach .nowstep{font-size:14px;color:var(--text);margin:0 0 6px}
+.coach details{font-size:12px;color:var(--muted)}
+.coach summary{cursor:pointer;color:var(--muted)}
+.deckhud{position:absolute;right:10px;bottom:46px;display:flex;gap:5px;z-index:2;flex-wrap:wrap;justify-content:flex-end}
+.deckhud button{background:rgba(10,18,38,.8);font-size:12.5px}
+.bodycard{position:absolute;z-index:4;min-width:210px;max-width:260px;background:rgba(9,15,32,.95);border:1px solid var(--brass3);border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.bodycard h4{margin:0;font-family:var(--serif);font-size:17px;color:var(--brass2);font-weight:600}
+.bodycard .meta{font-size:12px;color:var(--muted);margin:1px 0 6px}
+.bodycard .x{position:absolute;right:4px;top:4px;padding:1px 7px;border:0;background:transparent;color:var(--muted)}
+.landho{position:absolute;left:50%;top:18%;transform:translateX(-50%);font-family:var(--serif);font-size:34px;color:#fff;text-shadow:0 2px 20px #000;pointer-events:none;z-index:3;letter-spacing:.05em}
+
+/* sextant */
+.sextant{position:absolute;inset:0;z-index:6;background:radial-gradient(ellipse at 40% 50%,rgba(3,6,14,.72),rgba(1,3,8,.94));display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:16px}
+.eyewrap{position:relative;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center}
+#eyeCanvas{width:100%;height:100%;display:block;touch-action:none;cursor:ns-resize}
+#eyeCanvas:focus-visible{outline:1px dashed rgba(242,209,133,.35);outline-offset:-4px}
+.sxpanel{display:flex;flex-direction:column;gap:10px;overflow:auto;min-height:0}
+.sxtitle{font-family:var(--serif);font-size:20px;color:var(--brass2)}
+.sxread{font-family:var(--mono);font-size:32px;color:#fff;letter-spacing:.02em;line-height:1}
+.sxread small{font-size:12px;color:var(--muted);display:block;letter-spacing:0;font-family:var(--sans);margin-bottom:4px}
+.drum{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.drum button{padding:9px 6px;font-family:var(--mono)}
+.markbtn{font-size:18px;padding:14px 10px;letter-spacing:.08em}
+.sxnote{font-size:12px;color:var(--muted)}
+.tilt{height:22px;border:1px solid var(--line2);border-radius:11px;position:relative;background:#0a1226;overflow:hidden}
+.tilt .c{position:absolute;left:50%;top:2px;bottom:2px;width:2px;background:var(--ok);opacity:.6}
+.tilt .b{position:absolute;top:3px;width:16px;height:14px;border-radius:7px;background:var(--brass2);transform:translateX(-50%)}
+
+/* modals */
+.modal{position:fixed;inset:0;z-index:20;background:rgba(2,4,10,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal .card{background:var(--ink2);border:1px solid var(--line2);border-radius:14px;max-width:760px;width:100%;max-height:calc(100vh - 32px);overflow:auto;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.modal h2{font-family:var(--serif);color:var(--brass2);font-weight:600;margin:0 0 8px;font-size:23px}
+.modal h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--brass);margin:16px 0 6px}
+.modal p,.modal li{color:#d6d0c0}
+.modal .close{float:right}
+.voycards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.voycard{border:1px solid var(--line2);border-radius:12px;padding:12px;background:#0b1428;display:flex;flex-direction:column;gap:6px}
+.voycard h4{margin:0;font-family:var(--serif);font-size:17px;color:var(--brass2);font-weight:600}
+.voycard p{margin:0;font-size:12.5px;color:var(--muted)}
+.voycard button{margin-top:auto;align-self:flex-start}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px 12px}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:12px}
+.form .err{color:#ff9d8a;font-size:12px;grid-column:1/-1}
+.refs li{margin:6px 0;font-size:13px}
+.refs .u{font-family:var(--mono);font-size:12px;color:#9cc7ff;user-select:all;word-break:break-all}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0}
+.stat{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#0b1428}
+.stat b{display:block;font-family:var(--mono);font-size:18px;color:#fff}
+.stat span{font-size:11.5px;color:var(--muted)}
+.toasts{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:30;pointer-events:none;align-items:center;width:max-content;max-width:calc(100vw - 24px)}
+.toast{background:rgba(12,20,42,.96);border:1px solid var(--line2);border-left:3px solid var(--brass);padding:8px 12px;border-radius:9px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.toast.bad{border-left-color:var(--red)}
+.toast.good{border-left-color:var(--ok)}
+.mtabs{display:none}
+
+/* ---------- narrow ---------- */
+@media (max-width: 900px){
+  body{overflow:auto;height:auto;min-height:100%}
+  header.top{gap:8px;padding:8px 10px}
+  .brand h1{font-size:18px}
+  .clock{border:0;padding:0}
+  .chron{font-size:17px}
+  .phase{order:5;flex-basis:100%;max-width:none}
+  nav.actions{margin-left:0;flex-basis:100%;gap:4px}
+  nav.actions button,nav.actions .btn{padding:5px 8px;font-size:12.5px}
+  .mtabs{display:flex;position:sticky;top:0;z-index:8;background:var(--ink2);border-bottom:1px solid var(--line)}
+  .mtabs button{flex:1;border:0;border-radius:0;background:transparent;padding:10px 2px;color:var(--muted);border-bottom:2px solid transparent;font-size:13px}
+  .mtabs button[aria-selected="true"]{color:var(--brass2);border-bottom-color:var(--brass)}
+  main.app{display:block}
+  .deck{height:calc(100svh - 196px);min-height:380px}
+  aside.side{border-left:0;display:block}
+  .chartpane{height:calc(100svh - 196px);min-height:380px}
+  .panel .tabs{display:none}
+  .tabpane{overflow:visible}
+  body[data-view="deck"] aside.side{display:none}
+  body:not([data-view="deck"]) .deck{display:none}
+  body:not([data-view="chart"]) .chartpane{display:none}
+  body[data-view="chart"] .panel{display:none}
+  body[data-view="deck"] .panel{display:none}
+  .sextant{position:fixed;z-index:15;background:#03060e;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,46svh) auto;padding:10px 12px;gap:6px;overflow:auto}
+  .sxpanel{overflow:visible;min-width:0;gap:7px}
+  .sxread{font-size:26px}
+  .drum{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .drum button{font-size:12.5px;padding:8px 2px}
+  .sxlong{display:none}
+  .markbtn{padding:12px 10px}
+  .coach{max-width:calc(100% - 20px);left:10px;top:10px;padding:10px 12px 8px}
+  .coach li{font-size:12.5px}
+  .deckhud{bottom:44px;right:6px}
+  .bodycard{left:10px!important;right:10px;top:auto!important;bottom:88px;max-width:none}
+}
+</style>
+</head>
+<body data-view="deck">
+<header class="top">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="30" fill="#0b1531" stroke="#d6ab52" stroke-width="2"/>
+      <path d="M32 9 L35 28 L54 32 L35 36 L32 55 L29 36 L10 32 L29 28 Z" fill="#f2d185"/>
+      <path d="M12 44 Q32 50 52 44" stroke="#5aa7ff" stroke-width="2.5" fill="none"/>
+    </svg>
+    <div><h1>STARFIX</h1><span class="sub" id="voyName">—</span></div>
+  </div>
+  <div class="clock" title="Ship's chronometer. Your sights are timed by it.">
+    <div class="chron" id="chron">--:--:--</div>
+    <div class="chronsub" id="chronSub">chronometer</div>
+  </div>
+  <div class="phase" id="phase"></div>
+  <nav class="actions" aria-label="Session">
+    <button id="btnVoyages">Voyages</button>
+    <button id="btnGuide" aria-pressed="true">Guide</button>
+    <button id="btnAbout">About this idea</button>
+    <button id="btnSound" aria-pressed="false" title="Sea wash, chronometer tick and bells (off until you turn it on)">Sound off</button>
+    <button id="btnExport" title="Download the voyage log as a JSON file">Export log</button>
+    <label class="btn" for="fileImport" tabindex="0" id="lblImport" title="Restore a previously exported voyage log">Import</label>
+    <input type="file" id="fileImport" accept=".json,application/json" hidden>
+    <button id="btnReset" class="danger" title="Discard everything and restore the opening state">Reset</button>
+  </nav>
+</header>
+<nav class="mtabs" id="mtabs" role="tablist" aria-label="Views">
+  <button data-view="deck" aria-selected="true">Deck</button>
+  <button data-view="chart" aria-selected="false">Chart</button>
+  <button data-view="helm" aria-selected="false">Helm</button>
+  <button data-view="sights" aria-selected="false">Sights</button>
+  <button data-view="planner" aria-selected="false">Planner</button>
+</nav>
+<main class="app">
+  <section class="deck" id="paneDeck" aria-label="Deck view of sky and sea">
+    <canvas id="deckCanvas" tabindex="0" aria-label="Sky and horizon from the deck. Drag to look around, click a star or the Sun to select it."></canvas>
+    <div class="coach" id="coach" role="region" aria-label="Navigator's guide"></div>
+    <div class="bodycard" id="bodyCard" hidden role="dialog" aria-label="Selected body"></div>
+    <div class="landho" id="landho" hidden>Land ho!</div>
+    <div class="deckhud">
+      <button id="lookL" title="Look left (←)">◀ Look</button>
+      <button id="lookR" title="Look right (→)">Look ▶</button>
+      <button id="btnLabels" aria-pressed="true" title="Show names of navigational stars">Star names</button>
+    </div>
+    <div class="sextant" id="sextant" hidden role="dialog" aria-label="Sextant">
+      <div class="eyewrap"><canvas id="eyeCanvas" tabindex="0" aria-label="Sextant telescope view. Turn the drum with the mouse wheel, arrow keys, or by dragging up and down."></canvas></div>
+      <div class="sxpanel">
+        <div><div class="sxtitle" id="sxBody">—</div><div class="sxnote" id="sxBodyNote"></div></div>
+        <div class="sxread"><small>Sextant reading (Hs)</small><span id="sxHs">--°--.-′</span></div>
+        <div class="drum" role="group" aria-label="Micrometer drum">
+          <button data-d="10" title="Page Up = 1°">Arc +10′ ▼</button>
+          <button data-d="-10">Arc −10′ ▲</button>
+          <button data-d="1" title="↓ key">Arc +1′ ▼</button>
+          <button data-d="-1" title="↑ key">Arc −1′ ▲</button>
+          <button data-d="0.2">+0.2′</button>
+          <button data-d="-0.2">−0.2′</button>
+        </div>
+        <p class="sxnote sxlong">▼/▲ show which way the body's image moves. Wheel, ↑/↓ (Shift ×10), PgUp/PgDn (1°) or drag the view also turn the drum.</p>
+        <div><div class="sxnote">Sextant tilt — mark as the body passes the bottom of its swing</div><div class="tilt" aria-hidden="true"><div class="c"></div><div class="b" id="tiltB"></div></div></div>
+        <button class="primary markbtn" id="btnMark">MARK <span style="font-weight:400;font-size:12px">(Space)</span></button>
+        <div class="btnrow"><button id="btnPreset" title="Set the arc to the altitude predicted from your dead-reckoning position">Preset from DR</button><button id="btnSxClose">Done (Esc)</button></div>
+        <div class="sxnote mono" id="sxClock"></div>
+        <div class="sxnote" id="sxMsg" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+  <aside class="side">
+    <section class="chartpane" id="paneChart" aria-label="Plotting sheet">
+      <canvas id="chartCanvas" tabindex="0" aria-label="Plotting sheet: dead reckoning, lines of position and fixes. Drag to pan, wheel to zoom."></canvas>
+      <div class="charttools">
+        <button id="chZoomIn" title="Zoom in">+</button>
+        <button id="chZoomOut" title="Zoom out">−</button>
+        <button id="chCenter" title="Center on current dead-reckoning position">DR</button>
+        <button id="chFit" title="Fit voyage">Fit</button>
+      </div>
+      <div class="chartlegend" id="chartLegend"></div>
+    </section>
+    <section class="panel">
+      <div class="tabs" role="tablist" aria-label="Panels">
+        <button data-tab="helm" role="tab" aria-selected="true">Helm &amp; time</button>
+        <button data-tab="sights" role="tab" aria-selected="false">Sights &amp; fix</button>
+        <button data-tab="planner" role="tab" aria-selected="false">Star planner</button>
+      </div>
+      <div class="tabpane" id="paneHelm" role="tabpanel"></div>
+      <div class="tabpane" id="paneSights" role="tabpanel" hidden></div>
+      <div class="tabpane" id="panePlanner" role="tabpanel" hidden></div>
+    </section>
+  </aside>
+</main>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true"><div class="card" id="modalCard"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+'use strict';
+const NAV_STARS=[["Markab","α Peg",346.190223,15.205267,60.4,-41.3,2.48],["Fomalhaut","α PsA",344.412693,-29.622237,328.9,-164.7,1.16],["Al Na'ir","α Gru",332.05827,-46.960974,126.7,-147.5,1.71],["Enif","ε Peg",326.046484,9.875009,26.9,0.4,2.39],["Deneb","α Cyg",310.35798,45.280339,2,1.9,1.25],["Peacock","α Pav",306.411904,-56.73509,6.9,-86,1.918],["Altair","α Aql",297.695827,8.868321,536.2,385.3,0.76],["Nunki","σ Sgr",283.81636,-26.296724,15.1,-53.4,2.067],["Vega","α Lyr",279.234735,38.783689,200.9,286.2,0.03],["Kaus Australis","ε Sgr",276.042993,-34.384616,-39.4,-124.2,1.81],["Eltanin","γ Dra",269.151541,51.488896,-8.5,-22.8,2.23],["Rasalhague","α Oph",263.733623,12.560037,108.1,-221.6,2.07],["Shaula","λ Sco",263.402167,-37.103824,-8.5,-30.8,1.63],["Sabik","η Oph",257.594529,-15.724907,40.1,99.2,2.42],["Atria","α TrA",252.16623,-69.027712,18,-31.6,1.88],["Antares","α Sco",247.351915,-26.432003,-12.1,-23.3,0.91],["Alphecca","α CrB",233.671952,26.714685,118.9,-87.7,2.24],["Zubenelgenubi","α Lib",222.719638,-16.041777,-105.7,-68.4,2.75],["Kochab","β UMi",222.676357,74.155504,-32.6,11.4,2.08],["Rigil Kentaurus","α Cen",219.902058,-60.833993,-3679.3,473.7,-0.27],["Arcturus","α Boo",213.9153,19.182409,-1093.4,-2000.1,-0.05],["Menkent","θ Cen",211.670615,-36.369955,-520.5,-518.1,2.05],["Hadar","β Cen",210.955856,-60.373035,-33.3,-23.2,0.58],["Alkaid","η UMa",206.885157,49.313267,-121.2,-14.9,1.86],["Spica","α Vir",201.298247,-11.161319,-42.4,-30.7,0.97],["Alioth","ε UMa",193.50729,55.959823,111.9,-8.2,1.77],["Gacrux","γ Cru",187.791498,-57.113213,28.2,-265.1,1.64],["Acrux","α Cru",186.649567,-63.099092,-35.4,-14.7,1.28],["Gienah","γ Crv",183.951545,-17.54193,-158.6,21.9,2.58],["Denebola","β Leo",177.26491,14.572058,-497.7,-114.7,2.13],["Dubhe","α UMa",165.931965,61.751035,-134.1,-34.7,1.79],["Regulus","α Leo",152.092962,11.967209,-248.7,5.6,1.4],["Alphard","α Hya",141.896845,-8.6586,-15.2,34.4,1.97],["Miaplacidus","β Car",138.299906,-69.717208,-156.5,109,1.69],["Suhail","λ Vel",136.998991,-43.432591,-24,13.5,2.21],["Avior","ε Car",125.62848,-59.509484,-25.5,22.1,1.86],["Pollux","β Gem",116.328958,28.026199,-626.5,-45.8,1.14],["Procyon","α CMi",114.825498,5.224988,-714.6,-1036.8,0.37],["Adhara","ε CMa",104.656453,-28.972086,3.2,1.3,1.5],["Sirius","α CMa",101.287155,-16.716116,-546,-1223.1,-1.46],["Canopus","α Car",95.987958,-52.695661,19.9,23.2,-0.74],["Betelgeuse","α Ori",88.792939,7.407064,27.5,11.3,0.42],["Alnilam","ε Ori",84.053389,-1.201919,1.4,-0.8,1.69],["Elnath","β Tau",81.572971,28.607452,22.8,-173.6,1.65],["Bellatrix","γ Ori",81.282764,6.349703,-8.1,-12.9,1.64],["Capella","α Aur",79.172328,45.997991,75.3,-426.9,0.08],["Rigel","β Ori",78.634467,-8.201638,1.3,0.5,0.13],["Aldebaran","α Tau",68.980163,16.509302,63.5,-188.9,0.86],["Mirfak","α Per",51.080709,49.861179,23.8,-26.2,1.79],["Menkar","α Cet",45.569888,4.089739,-10.4,-76.8,2.53],["Acamar","θ Eri",44.565318,-40.304678,-52.3,23.1,3.18],["Polaris","α UMi",37.954561,89.264109,44.5,-11.8,2.02],["Hamal","α Ari",31.793357,23.462418,188.6,-148.1,2.01],["Achernar","α Eri",24.428523,-57.236753,87,-38.2,0.46],["Diphda","β Cet",10.897379,-17.986606,232.6,32,2.01],["Schedar","α Cas",10.126846,56.537329,49.1,-31.6,2.23],["Ankaa","α Phe",6.571048,-42.305987,233.1,-356.3,2.38],["Alpheratz","α And",2.096916,29.090431,137.5,-163.4,2.06]];
+const BG_STARS="et52c70x8rp9el106kn6sm129fy3ai1289i4wp12ke93mk136xoaev137o787k137dr5k4141cf9oy156pi675152e1a7l15qab3bs153moa3s15eou36016fiab6l16nksa1u16byj8h4169bu3uw17aqv2dc1706dbib17h0g3ad17jhi4ar17ftd2th17gw03ow17iiw57617crmbam18khu3xl1813ebmo186ek6x618qoy94018drqb35188ke4om19h2l91719onwbrv19aud2p719o1f9kd19img5ez19e1t31419d058j019g483an1aj8h64n1a6f25ki1am1h4n01a6xt9td1ahot67y1ai7r7fv1aejw5501aelu1ly1a6jv4bd1b27m8jt1bk9p42e1bl8l4n51b1nlblc1bg3n8d41bhbz3m71b5q99i51bch534q1b8fl42y1bmvs7rh1bffz4411bizcbov1beoy6tz1bisn6nr1ckij7ap1ce6j2et1ccei1z51ci1f3rn1c6gy6hl1cj3o8lp1c5xs6jv1cf367sg1c0hw0zf1cjbc9ds1ck9haza1c9el52i1cj7l4rm1cldf4ze1cptj2am1cp7o5p71c6by5cc1c0978461c2ah26z1c4il9ek1difb21t1dk5w2nr1dmuwafd1d4dz8sz1d7dy8oj1deyx9wg1dm6g5bm1d4l6a151d8mj7l11dowx6ij1dixe4yx1dhq51n81dihv4xh1d3kcb2n1d7wo31f1d4lb5wh1dpkp6x41degr5o41dqaj99y1ekag33g1e7si8vt1ebau8s11ee315761ejip40b1e5tpabq1e7c44mi1eky14li1em3f80i1ebbq1x91ekle3uj1e2hz9n71efet55n1ehrechj1e4atamr1ecx2adm1epcg4281egtm9wf1e85s53t1e6ih8kq1ec06a5a1fm8ec5y1fjne2mh1fnjx5sy1fml093o1fabt7ej1fcj55p11fl6943w1fnvf3an1fhcf3p21f6rq46n1fjys8v01faegang1fb0p2jl1fatm9lj1flpp4v11fdf722y1fjugc0j1g7o83m01gb1taxk1g5wva4j1g5w557v1gjys9s91g5la7hc1gh0v1xi1ghru3t31gjmq7o21gojz99z1gkmy4341ghfu4zs1gnd76vq1gouwce01give6kz1g7vh25y1gl8t6py1hlyy9gt1h8nz3lq1hk3m50k1h4dt17s1hc6x26n1haqf1qk1h78c8oj1hqim5q21h0rb9bq1hgbr4vw1h5aa2p41hhubbht1h61b5oz1h91w50y1h19w3c81hm4i4t51he6qbcf1hjws3lw1hjyi81z1hbu71jg1hktc66v1hk5z2le1hpo7bfo1i69c6rc1id0884v1ibwj27n1i7tg7xu1imhd76n1i4wp24h1ihsr3hv1i27gbuv1ia5t7fu1ieym77g1ifpr6wc1ig023q71i3kl9xw1iamm2e71io0k1u41io0sbps1i4n57wp1i56l8631iq9h7s31ibpr88k1ibw98r21iiir3zc1ihlj2xa1i9udbmo1i26j9861ikkl9301ilss9io1i1pd3lo1im406kg1ig043o11i9732uu1i0y4bem1ibwja971j1bn65q1jbii2qf1jlcq3eb1jqee2zg1j6gq7pl1j84v4sf1j35f7701jn4h8g51jqfe8uc1jd369hx1jhns9ij1j20a5pq1jjcg9y41jly35bd1jkeg5r81jheda271j9kt7nj1jb7l7ph1j6oy5su1jgkt3e21j56j8fa1j8hn8n21jibh6oh1jqf6c1w1j4b166w1jdd94hi1jjj040e1jhs545a1jahjal01k0di69i1kpnr7f81kes51ot1k8g887y1k4z34c41kd3s5sy1knbe1u61k1w2ap31k8yj8ts1k2mt2yx1keau2a81kl8mck11knhv5z61kkk31y81ki2q4ru1k64k6f01k1md6ba1kgtg9ad1k3a291q1k3y87n31k6n857n1k7yo9kc1kdpj72w1kb0b3tl1k8z340j1kbs15zp1kf391f91k1rj84n1kqnoa7l1kjkl3oc1kk9x29g1k4f58st1knvf82k1ka1b2v01kqsw5b71ki3u4na1k50f85f1lq0p6xy1ldm01sn1lo7e2fn1l0pob3q1lkym32v1lb0wbt61lp2u5nq1li9384u1lgaebwu1l5m87dl1la3m4dt1lhwc96v1lica7ag1l93x3ta1l3uk59k1l4c68sz1lqy97741lksg9791lhla36m1ln237ft1l28j2yn1l6xob4s1ldmbamq1l6vi5un1l25f65a1lp3t0z11lola9vp1loefac11l43v67q1l5oc74s1lh3g7391lkz47ok1l7i06eh1lotj57r1ljh92e01l89r1i61lq0xbga1mkpibbz1m3zv7p11m5u2a441mkll75j1mahw3b61mbaf24d1mmkbaxp1m9r71ua1mmbkb291m52l8aq1mixw8f71m6fp24f1mq2eato1mplj8wf1mm2x59m1mo2g67m1mgzx8051m3ajb9a1m6j96qs1m86j8j51m8lj9381mqh76cy1md2z9dl1mclt2ej1mh4l0ug1m4cea8a1mkfraht1mn0470t1mnwv8671mabk29k1mnetaju1mg653p21m3nlaem1mbefbi01mc2s5n81mmwl8dh1ma1k3cf1mc412eu1mrcfaj21m5bd4l41m8dy4vn1mkz995w1mclp9l11mlig6b41mcwb2e61m4bp1xz1mpvp6u51mite2131m56i86c1mig785i1mlag8mh1mcal3811mdc5cal1n6rz5c01n7dd4d41nl3k5bi1nbuw3p01nj5w0uu1nigi4ov1n4we3oj1n6p63051nem73761n4cu8tp1n5d75ua1n6e047h1n7zl52u1n3ej69a1n13f9wy1nc7g7nv1n06j3ex1ng6f3hk1niweain1nqtj3gb1nbfn8y91nfn83wj1nh196ia1nkre9th1nn2s9ng1neik1dn1n4ov7en1nej9cbv1n7wm4fp1nhgk3bb1n9r66n51ne9u6w51n4bs9fp1n7nh5gi1nb6o6uu1ni1o5sx1na5b3e41nefh32h1nmx4cd71nas39s81njoj9bx1n5bw6op1n8wb67h1n8y34pl1nqcz8rh1nmeq5kf1nkug7651nom07cl1n1rd35p1n2dqcj61no91a4d1na4d8cf1n0i73ko1nn5r1bh1nmg93t61namu24w1n8wq1cb1nice4cl1n6s39yr1oa1747x1o3d0b0k1oafga621o53d4bi1o6xf3n21o78b6gl1oe432wj1oine5cl1oq103l61ong3amj1or2a5e61oqf45w91oqyg2g81o3pe4ph1o8fd1p81oagp1tk1oijzbgp1o5ia6oz1o2nd9k11oir05fy1olwfac31oh0h4111olnw1fl1ofj7b6r1oa8f4t11od6y7r91oe1u51b1onpr9ad1oc1m18d1omfe3ii1o1bi2oj1oa5r95w1ooymagn1o5upblw1o2bc5bg1om0u6i21olzf83v1oe871p81oiwg32o1o4ux6f01o4spamj1okxs74y1onse7te1oq586xo1oglm40r1od507er1odm67g51oh1n48b1oexx2j61oa463nj1o9m710c1ogouay11pi6p8z21pe8t2081pgxn34p1phj53g81pjo22uc1php62eo1p4ly9pf1p5pt7zj1p8sm90q1p0wv8tf1pd7m5kw1p200aut1pof55m51p32r6yx1pcq65j61pg0185w1pp58bha1p7zn60k1pgig6hc1pd4x2qn1pm6940q1p3io54e1p6hz7nt1piau8ce1pb2x2dh1p2qg1na1poqc8h01pm6n3wq1p32u1od1p42g7xy1p1v8a511pdmn2821pi2i1ts1p361aqr1pber5sr1p91v3d71pq1c3kh1ple135p1p2cr75o1pqmy2vh1p33l3va1p68z6cb1p86a5ql1pre37dn1pdzm7m91po5c4v81pc9b0vn1po1c4zt1pqcn0ny1pih090o1phzv9d41pn223pp1p9zh7du1pp608x91pe0s1yj1p7i48i51preead51p9zh3ml1pi167ra1p70v8qm1q8bx6wn1qprr9uv1qj4573i1qk6n52u1qj7x4821q0mxbst1q4x0aoh1qpsd6ce1qiee5nj1q4fc45g1qilp62f1qk4s9t71qq8w4uw1qp7iaqz1qgiqai11q4d68sj1q8nw9ea1q97556g1qg004ab1qlpq8j31qj6da7w1q4dj55f1q6dq7ej1qqd37vt1q4xt2yz1q54a8nx1qin943s1qlu92591qqjj4fm1qc419rz1qgga65h1qm444321qjeld9w1qnpwbsz1q417bki1ql8fcg61qqwa6h71qlqr6kt1qotd1wf1q1brdlm1qkh35y81qe8r0tp1q46canv1qfxe4e81qj4h49m1qo129bc1q0dy1xt1qgqgcsa1q35z5vi1qg8h72a1qon39zf1qmys9hf1q94p38e1qjcl0yo1qady7uy1q1caal81r6xyahm1r9p7a9z1r44h59x1r5bf7q81rqxd68r1rc3j4jp1rejga4w1rf9x93g1ro1q86s1r2u339i1rb4rd7x1r5g08ps1r5c5a4m1r2177ng1r36k7q31rkdq3yo1rcbz2nk1rk7c4n11rioraet1r4er41i1r5d67wr1r5yp69p1r14p4og1roqg5n91rpl55vh1rex43ue1rj4a5nv1rnhl5z91r3uu3md1rf6h33d1rmfs3hk1rnenbb51ri7lcy31r4xg7mp1r17q7jx1rdr34bt1r54y8pd1r0lx2341rp6kbns1rpjbbxj1r4r9atv1r5o7c2a1r65x5xe1r8xr9681rq2k4g51rpnm9i61rrctaa71reia5p01r54d8bt1r46m6z41r4ce8tz1r5er5fd1r6zo7ot1r8n87mt1ra3d77g1rr5r7fq1r2uw7li1rdg06vq1rlvv9si1rgq10hl1rdou20t1r7ei7as1rb118pt1rk6r79i1ra1j2c01rh773ky1raq92i61ra5j5wd1rcna8ur1rf8m8ap1rdy42251rk2t5yb1rkzz2151r1deb771r6ep8dn1r7k454y1r9fb6pq1rhpe4m91rint5c11rnvy6ux1reww3621rg8j3fc1ri3f3nr1rqr43l41rkapdmj1ra6z7e81r9no0ys1rp684e91reep94j1rl7t9q61rgbj3rm1rl038jt1r81sbga1s5lt7mq1s78o97y1s2kd7ml1sp5x8a71sb4l34w1sglg2ld1sgpj3fy1s428anc1s6wa4801s0pm9jo1smp66uf1slqo8ci1slp39uh1s6nf1ve1s0u42ie1sla52771sq16amj1s3p38gt1s4px8nc1s79i48e1sr9840y1sn554801s9ax74h1s0qs97f1sbq67ps1sjk67q91sms68ak1smri8c11smb19vx1s80z5mn1sk2x5bd1s8rb5821sr4f5co1scqg3op1spf82p91s9fm5gj1s7398311sf8l6im1scry8i21sm989yr1s9eu1ne1snbicxv1s5ne6iv1s6u48ic1s8go50p1s9m84461sqys68i1sr3y8r01shf173t1s7ma2uu1slxk1r91sqzf4fn1s7wm2t21sqrtcrf1s6gj7od1s01d6hb1sh694sc1sk9o8yj1sksz99v1s9843581s26x3de1snzi83v1s4d260e1s8be9a11s9h83vy1s13q8r21song9my1si997if1sgnc3w91sgtz31u1s8un4vk1skv871n1s4xa6cr1s7ob5jc1sa0977a1sj1g5iq1sc9e2i41s5qgb3b1scgh0qa1s7bnbhx1spx1az31s0xt7j31s1yg7d91so2h6k11snlx9ff1s9j33tx1s4y42da1s61j5y21saf23rf1scyf56l1smahcls1t4ip6pt1t5eu3pq1t60v6111td1x6nv1tj4z5ad1tmnc7ii1tmjm8ui1tpkx3w61t5rc72r1tq8tad01t39f4fz1t36o5if1t0a65hf1taw48yq1tdpv3gj1tb37ayl1tail1cc1t3v496p1t7v974p1tqqz5421tgvf98n1te1m31a1trry1vu1t9483y21tmozati1t4fec011tal6axc1t54z85e1t76a81h1t7hk4fi1t61k75y1toot2tj1trg05tm1t7sk7yr1t9124xy1tol27pt1tpqba0b1tbpu9nw1tbq66wz1tfyi8ai1thb26lx1t8ce3c41ta5s2kb1tpzn1xj1t6qy2lz1tnzx2xs1tb6c27n1t0v2ao41tn7ac6j1tggpaxv1t6qh9yu1t7kv7id1t7mc5681tpmi4ed1tofy50j1touy59f1tizf5ec1t4na25c1ti5v8gn1tl1t3ed1tovt8ro1tfhe28l1to0ubdy1t59y4nb1tqh54eo1trfj72y1t38m9791tazb4651tbz72mc1tq1ua9s1t1ds99l1toflamd1tqv2ar91t6y16ph1toho62f1tqp178m1tqr77o51t26u8fl1t0cq9s71tdno8i61tgkm5wv1tnga9391tfic1yq1tg1o4ed1tj1k39x1tn384uj1t8tm48v1t0yla441t3b49ne1t8od7vd1t02l5lu1tajj9wt1tpvaaja1t41sbhk1t2cpcez1t83qcvu1thbcc151tht343m1thli5f11tkld4sp1tk6u6jv1to299rd1tbya2p51tcew29r1tb186uq1tkhgcif1up0r5fx1uhg390v1u6td92p1ugph3ge1ubf7b461ur6l7xg1uakl4y61ukzm4qy1uir84sf1uo5j91a1ub2ycbz1urkb4rv1uix052v1ulx179o1u4lt27g1um5h3ti1u5ve47g1upxparg1ur0o8ry1un764t11uj0b80z1u46r3u51ubew3cp1u4ar42d1ubo85xq1uro4bdq1ume1c0j1u6gx6kk1u6jk79g1u8xw4r31uie84zn1u0sp3e01ukd33ct1uh718f21ufa72bk1u4zcatq1ump650w1uaz96qb1ub2s9r41uco242u1uh2r8941uku77a51ulw18ox1uhul3yf1u";
+
+/*<CORE>*/
+/* ===== Astro & navigation core (pure functions, no DOM) ===== */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const norm360 = a => ((a % 360) + 360) % 360;
+const norm180 = a => { a = norm360(a); return a > 180 ? a - 360 : a; };
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const sind = a => Math.sin(a * D2R), cosd = a => Math.cos(a * D2R), tand = a => Math.tan(a * D2R);
+const asind = x => Math.asin(clamp(x, -1, 1)) * R2D, acosd = x => Math.acos(clamp(x, -1, 1)) * R2D;
+const atan2d = (y, x) => Math.atan2(y, x) * R2D;
+
+const Astro = (() => {
+  // Delta T (TT - UT1) seconds, coarse table 1950-2050 (observed to 2020, extrapolated after)
+  const DT = [[1950, 29.1], [1960, 33.2], [1970, 40.2], [1980, 50.5], [1990, 56.9], [2000, 63.8], [2010, 66.1], [2020, 69.4], [2030, 70.5], [2040, 72], [2050, 74]];
+  function deltaT(year) {
+    if (year <= DT[0][0]) return DT[0][1];
+    for (let i = 1; i < DT.length; i++) if (year <= DT[i][0]) {
+      const [y0, v0] = DT[i - 1], [y1, v1] = DT[i]; return v0 + (v1 - v0) * (year - y0) / (y1 - y0);
+    }
+    return DT[DT.length - 1][1];
+  }
+  const jdUT = ms => ms / 86400000 + 2440587.5;
+  function frame(ms) { // quantities that depend only on time; cache by the caller
+    const JD = jdUT(ms);
+    const year = 2000 + (JD - 2451545) / 365.25;
+    const JDE = JD + deltaT(year) / 86400;
+    const T = (JDE - 2451545) / 36525;
+    // nutation (Meeus ch.22, low precision)
+    const Om = 125.04452 - 1934.136261 * T, L = 280.4665 + 36000.7698 * T, Lp = 218.3165 + 481267.8813 * T;
+    const dpsi = (-17.20 * sind(Om) - 1.32 * sind(2 * L) - 0.23 * sind(2 * Lp) + 0.21 * sind(2 * Om)) / 3600;
+    const deps = (9.20 * cosd(Om) + 0.57 * cosd(2 * L) + 0.10 * cosd(2 * Lp) - 0.09 * cosd(2 * Om)) / 3600;
+    const eps0 = 23.4392911111 - (46.8150 * T + 0.00059 * T * T - 0.001813 * T * T * T) / 3600;
+    const eps = eps0 + deps;
+    // sidereal time (GMST, then apparent)
+    const Tu = (JD - 2451545) / 36525;
+    const gmst = norm360(280.46061837 + 360.98564736629 * (JD - 2451545) + 0.000387933 * Tu * Tu - Tu * Tu * Tu / 38710000);
+    const gast = norm360(gmst + dpsi * cosd(eps));
+    // precession angles IAU 1976 (arcsec -> deg)
+    const zeta = (2306.2181 * T + 0.30188 * T * T + 0.017998 * T * T * T) / 3600;
+    const z = (2306.2181 * T + 1.09468 * T * T + 0.018203 * T * T * T) / 3600;
+    const th = (2004.3109 * T - 0.42665 * T * T - 0.041833 * T * T * T) / 3600;
+    // Sun (Meeus ch.25 low accuracy)
+    const L0 = norm360(280.46646 + 36000.76983 * T + 0.0003032 * T * T);
+    const M = norm360(357.52911 + 35999.05029 * T - 0.0001537 * T * T);
+    const e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T * T;
+    const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * sind(M) + (0.019993 - 0.000101 * T) * sind(2 * M) + 0.000289 * sind(3 * M);
+    const sunTrue = L0 + C, nu = M + C;
+    const Rau = 1.000001018 * (1 - e * e) / (1 + e * cosd(nu));
+    const lam = sunTrue - 0.00569 - 0.00478 * sind(Om);
+    const epsApp = eps0 + 0.00256 * cosd(Om);
+    const sunRA = norm360(atan2d(cosd(epsApp) * sind(lam), cosd(lam)));
+    const sunDec = asind(sind(epsApp) * sind(lam));
+    // rotation matrices for stars: precession P, nutation N
+    const P = mmul(mmul(rot3(-z), rot2(th)), rot3(-zeta));
+    const N = mmul(mmul(rot1(-eps), rot3(-dpsi)), rot1(eps0));
+    const PN = mmul(N, P);
+    // annual aberration: Earth velocity direction = ecliptic longitude (sunTrue - 90)
+    const k = 20.49552 / 3600 * D2R;
+    const vl = sunTrue - 90;
+    const vEcl = [cosd(vl), sind(vl), 0];
+    const vEq = mvec(rot1(-eps), vEcl);
+    return {
+      ms, JD, T, years: (JDE - 2451545) / 365.25, gmst, gast, dpsi, eps, PN, ab: [vEq[0] * k, vEq[1] * k, vEq[2] * k],
+      sun: { ra: sunRA, dec: sunDec, gha: norm360(gast - sunRA), sd: 0.266563 / Rau, hp: 8.794 / 3600 / Rau, R: Rau }
+    };
+  }
+  function rot1(a) { const c = cosd(a), s = sind(a); return [[1, 0, 0], [0, c, s], [0, -s, c]]; }
+  function rot2(a) { const c = cosd(a), s = sind(a); return [[c, 0, -s], [0, 1, 0], [s, 0, c]]; }
+  function rot3(a) { const c = cosd(a), s = sind(a); return [[c, s, 0], [-s, c, 0], [0, 0, 1]]; }
+  function mmul(A, B) { const R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) R[i][j] = A[i][0] * B[0][j] + A[i][1] * B[1][j] + A[i][2] * B[2][j]; return R; }
+  function mvec(A, v) { return [A[0][0] * v[0] + A[0][1] * v[1] + A[0][2] * v[2], A[1][0] * v[0] + A[1][1] * v[1] + A[1][2] * v[2], A[2][0] * v[0] + A[2][1] * v[1] + A[2][2] * v[2]]; }
+  // apparent place of a star (J2000 ICRS + proper motion in mas/yr, pmra includes cos dec)
+  function starApparent(F, ra0, dec0, pmra, pmdec) {
+    const yrs = F.years;
+    const dec = dec0 + (pmdec || 0) * yrs / 3.6e6;
+    const ra = ra0 + (pmra || 0) * yrs / 3.6e6 / Math.max(1e-6, cosd(dec0));
+    let v = [cosd(dec) * cosd(ra), cosd(dec) * sind(ra), sind(dec)];
+    v = mvec(F.PN, v);
+    v = [v[0] + F.ab[0], v[1] + F.ab[1], v[2] + F.ab[2]];
+    const r = Math.hypot(v[0], v[1], v[2]);
+    const raA = norm360(atan2d(v[1], v[0])), decA = atan2d(v[2] / r, Math.hypot(v[0], v[1]) / r);
+    return { ra: raA, dec: decA, sha: norm360(360 - raA), gha: norm360(F.gast - raA) };
+  }
+  // J2000 -> date without aberration, used for faint background stars (cheap)
+  function precessOnly(F, ra, dec) {
+    const v = mvec(F.PN, [cosd(dec) * cosd(ra), cosd(dec) * sind(ra), sind(dec)]);
+    return { ra: norm360(atan2d(v[1], v[0])), dec: atan2d(v[2], Math.hypot(v[0], v[1])) };
+  }
+  // horizontal coordinates for GHA/Dec at lat/lon (east positive)
+  function altAz(gha, dec, lat, lon) {
+    const lha = norm360(gha + lon);
+    const sh = sind(lat) * sind(dec) + cosd(lat) * cosd(dec) * cosd(lha);
+    const h = asind(sh);
+    const az = norm360(atan2d(-cosd(dec) * sind(lha), sind(dec) * cosd(lat) - cosd(dec) * sind(lat) * cosd(lha)));
+    return { h, az, lha };
+  }
+  // refraction in degrees
+  const refrBennett = ha => ha < -1 ? 0 : 1 / tand(ha + 7.31 / (ha + 4.4)) / 60;          // from apparent altitude
+  const refrSaemundsson = h => h < -1.5 ? 0 : 1.02 / tand(h + 10.3 / (h + 5.11)) / 60;   // from true altitude
+  const dip = hEye => 1.76 * Math.sqrt(Math.max(0, hEye)) / 60;                            // degrees
+  return { deltaT, jdUT, frame, starApparent, precessOnly, altAz, refrBennett, refrSaemundsson, dip };
+})();
+
+/* ---- Spherical earth helpers (nautical miles, degrees) ---- */
+const Geo = {
+  // rhumb-line step on a sphere: move `dist` nm on true course `crs`
+  rhumb(lat, lon, crs, dist) {
+    const dlat = dist * cosd(crs) / 60;
+    let lat2 = clamp(lat + dlat, -89.9, 89.9);
+    const midLat = (lat + lat2) / 2;
+    const lon2 = norm180(lon + dist * sind(crs) / (60 * Math.max(0.01, cosd(midLat))));
+    return [lat2, lon2];
+  },
+  // great-circle distance nm and initial bearing
+  gc(lat1, lon1, lat2, lon2) {
+    const dlon = lon2 - lon1;
+    const c = sind(lat1) * sind(lat2) + cosd(lat1) * cosd(lat2) * cosd(dlon);
+    const d = acosd(c) * 60;
+    const brg = norm360(atan2d(sind(dlon) * cosd(lat2), cosd(lat1) * sind(lat2) - sind(lat1) * cosd(lat2) * cosd(dlon)));
+    return { d, brg };
+  },
+  // rhumb-line course/distance (for "steer to")
+  rhumbTo(lat1, lon1, lat2, lon2) {
+    const dlat = (lat2 - lat1) * 60;
+    const dlon = norm180(lon2 - lon1) * 60 * cosd((lat1 + lat2) / 2);
+    return { d: Math.hypot(dlat, dlon), crs: norm360(atan2d(dlon, dlat)) };
+  },
+  // local plane (plotting sheet) around ref
+  toXY(ref, lat, lon) { return [norm180(lon - ref[1]) * 60 * cosd(ref[0]), (lat - ref[0]) * 60]; },
+  fromXY(ref, x, y) { return [ref[0] + y / 60, norm180(ref[1] + x / (60 * cosd(ref[0])))]; }
+};
+
+/* ---- Sight reduction (intercept method) ---- */
+function reduceSight(s, F, ap, opts) {
+  // s: {body, kind:'star'|'sun', Hs(deg), IC(arcmin), hEye(m)}; F: frame at UTC estimate; ap:[lat,lon]
+  const IC = s.IC / 60;
+  const dipC = Astro.dip(s.hEye);
+  const Ha = s.Hs + IC - dipC;
+  const refr = Astro.refrBennett(Ha);
+  let sd = 0, par = 0, gha, dec, sha = null;
+  if (s.kind === 'sun') { sd = F.sun.sd; par = F.sun.hp * cosd(Ha); gha = F.sun.gha; dec = F.sun.dec; }
+  else { const st = opts.star; const a = Astro.starApparent(F, st[2], st[3], st[4], st[5]); gha = a.gha; dec = a.dec; sha = a.sha; }
+  const Ho = Ha - refr + sd + par;
+  const aa = Astro.altAz(gha, dec, ap[0], ap[1]);
+  const Hc = aa.h, Zn = aa.az;
+  const intercept = (Ho - Hc) * 60; // nm, + toward
+  return { IC, dip: dipC, Ha, refr, sd, par, Ho, ghaAries: F.gast, sha, gha, dec, lha: aa.lha, Hc, Zn, intercept, ap: ap.slice() };
+}
+
+/* ---- Least-squares fix from LOPs (plane approximation) ---- */
+function solveFix(lops, ref) {
+  // lops: [{ap:[lat,lon] (already advanced), Zn, intercept, sig (nm, optional)}]
+  // weighted least squares; each LOP's sigma grows when it has been advanced by dead reckoning
+  if (lops.length < 2) return null;
+  let a = 0, b = 0, c = 0, bx = 0, by = 0;
+  const L = lops.map(l => {
+    const [x0, y0] = Geo.toXY(ref, l.ap[0], l.ap[1]);
+    const ux = sind(l.Zn), uy = cosd(l.Zn);
+    const d = ux * x0 + uy * y0 + l.intercept; // line: u·p = d
+    const sg = l.sig || 1;
+    return { ux, uy, d, w: 1 / (sg * sg) };
+  });
+  for (const l of L) { a += l.w * l.ux * l.ux; b += l.w * l.ux * l.uy; c += l.w * l.uy * l.uy; bx += l.w * l.ux * l.d; by += l.w * l.uy * l.d; }
+  const det = a * c - b * b;
+  // best crossing angle among pairs (lines cross at the angle between their normals, folded to 0..90)
+  let cut = 0;
+  for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+    const ang = acosd(Math.abs(L[i].ux * L[j].ux + L[i].uy * L[j].uy));
+    cut = Math.max(cut, ang);
+  }
+  if (det < 1e-6 || cut < 3) return { degenerate: true, cut };
+  const x = (c * bx - b * by) / det, y = (a * by - b * bx) / det;
+  const resid = L.map(l => l.ux * x + l.uy * y - l.d);
+  const n = L.length;
+  const wrss = L.reduce((s, l, i) => s + l.w * resid[i] * resid[i], 0);
+  // variance factor: a-priori 1 (sigmas in nm); inflate when redundant LOPs disagree more than expected
+  const vf = n > 2 ? Math.max(1, wrss / (n - 2)) : 1;
+  const sigma = Math.sqrt(vf);
+  const inv = [[c / det, -b / det], [-b / det, a / det]];
+  const cxx = vf * inv[0][0], cxy = vf * inv[0][1], cyy = vf * inv[1][1];
+  const tr = cxx + cyy, dd = Math.sqrt(Math.max(0, (cxx - cyy) * (cxx - cyy) / 4 + cxy * cxy));
+  const l1 = tr / 2 + dd, l2 = Math.max(0, tr / 2 - dd);
+  const theta = 0.5 * Math.atan2(2 * cxy, cxx - cyy); // radians from x axis (east)
+  const k95 = 2.4477; // sqrt(chi2(2, .95))
+  return { pos: Geo.fromXY(ref, x, y), xy: [x, y], resid, sigma, cut, ellipse: { a: k95 * Math.sqrt(l1), b: k95 * Math.sqrt(l2), theta }, n };
+}
+
+/* ---- Sextant geometry: apparent angle when the instrument is tilted by phi ---- */
+function swingAngle(h, phi) {
+  // right spherical triangle: tan(psi) = sin(h) tan(phi); cos(alpha) = cos(h) cos(psi)
+  const psi = Math.atan(sind(Math.abs(h)) * tand(phi)) * R2D;
+  const alpha = acosd(cosd(h) * cosd(psi));
+  return { alpha: h >= 0 ? alpha : -alpha, psi };
+}
+
+/*</CORE>*/
+/* ===== Starfix application ===== */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ---------- data ---------- */
+const BG = (() => {
+  const s = BG_STARS, out = [];
+  for (let i = 0; i + 8 <= s.length; i += 8) out.push([parseInt(s.slice(i, i + 3), 36) / 100, (parseInt(s.slice(i + 3, i + 6), 36) - 9000) / 100, (parseInt(s.slice(i + 6, i + 8), 36) - 20) / 10]);
+  return out;
+})();
+const BODIES = NAV_STARS.map(s => ({ name: s[0], bayer: s[1], star: s, kind: 'star', mag: s[6] }));
+BODIES.push({ name: 'Sun', bayer: '☉', kind: 'sun', mag: -26.7 });
+const BODY = Object.fromEntries(BODIES.map(b => [b.name, b]));
+
+const ISLANDS = {
+  bermuda: { name: 'Bermuda', lat: 32.30, lon: -64.78, h: 79, widthKm: 22, light: { range: 26, h: 108 } },
+  pitcairn: { name: 'Pitcairn Island', lat: -25.0667, lon: -130.1067, h: 346, widthKm: 3.6, light: null },
+  clipperton: { name: 'Clipperton Island', lat: 10.30, lon: -109.217, h: 29, widthKm: 4, light: null }
+};
+const VOYAGES = [
+  {
+    id: 'bermuda', title: 'Bermuda Landfall', level: 'First voyage · star sights at dusk',
+    blurb: 'Evening twilight, 110-odd miles ESE of Bermuda after days of overcast. Your dead reckoning is a guess, and something is setting you to the south. Shoot three stars before the horizon fades, fix your position, and make the island before the water runs out.',
+    start: Date.UTC(2026, 9, 1, 22, 19, 0), truePos: [31.25, -62.95], dr: [31.55, -63.35],
+    course: 302, speed: 6, current: { set: 200, drift: 1.4 }, hEye: 2.5, IC: 1.2, sea: 'moderate',
+    chron: { known: 0, unknown: 0 }, island: ISLANDS.bermuda, provisionsH: 48, metVis: 22, practice: false
+  },
+  {
+    id: 'pitcairn', title: "Carteret's Longitude", level: 'Hard · a clock you cannot trust',
+    blurb: 'In 1767 Carteret charted Pitcairn with a good latitude and a longitude about 3° wrong, and Cook later failed to find it. A knockdown last night stopped your chronometer and threw out your dead reckoning; the clock was restarted from a guess. Stars will still give you latitude. Longitude is another matter. Old navigators "ran down the latitude": get onto the island\'s parallel well to one side of it, then sail along it.',
+    start: Date.UTC(2026, 9, 10, 13, 34, 0), truePos: [-23.30, -129.90], dr: [-23.17, -129.10],
+    course: 206, speed: 6, current: { set: 290, drift: 0.8 }, hEye: 3, IC: -0.6, sea: 'moderate',
+    chron: { known: 0, unknown: 360 }, island: ISLANDS.pitcairn, provisionsH: 80, metVis: 25, practice: false
+  },
+  {
+    id: 'clipperton', title: 'Noon Sight for Clipperton', level: 'Medium · the Sun alone',
+    blurb: 'Morning in the eastern Pacific. Clipperton is a low coral ring, visible only 14 miles off by day and invisible at night. The only body in the sky is the Sun: combine morning, noon and afternoon sights into running fixes, and mind the countercurrent.',
+    start: Date.UTC(2026, 9, 5, 13, 40, 0), truePos: [9.70, -108.35], dr: [9.70, -108.654],
+    course: 317, speed: 6, current: { set: 80, drift: 1.0 }, hEye: 2.5, IC: -0.8, sea: 'calm',
+    chron: { known: 0, unknown: 0 }, island: ISLANDS.clipperton, provisionsH: 40, metVis: 20, practice: false
+  }
+];
+const SEA = {
+  calm: { roll: 1.0, rough: 0.12, label: 'Calm' },
+  moderate: { roll: 2.8, rough: 0.35, label: 'Moderate' },
+  rough: { roll: 5.5, rough: 0.8, label: 'Rough' }
+};
+
+/* ---------- formatting ---------- */
+function fmtAng(deg, withSign) {
+  const neg = deg < 0; let x = Math.abs(deg), d = Math.floor(x), m = (x - d) * 60;
+  if (m >= 59.95) { d += 1; m = 0; }
+  return (neg ? '−' : withSign ? '+' : '') + d + '°' + m.toFixed(1).padStart(4, '0') + '′';
+}
+function fmtLat(lat) { return fmtAng(Math.abs(lat)).replace(/^(\d)°/, '0$1°') + (lat >= 0 ? 'N' : 'S'); }
+function fmtLon(lon) { let s = fmtAng(Math.abs(lon)); s = s.replace(/^(\d+)°/, (m, d) => d.padStart(3, '0') + '°'); return s + (lon >= 0 ? 'E' : 'W'); }
+const fmtPos = p => fmtLat(p[0]) + ' ' + fmtLon(p[1]);
+const pad2 = n => String(n).padStart(2, '0');
+function fmtHMS(ms) { const d = new Date(ms); return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds()); }
+function fmtHM(ms) { const d = new Date(ms); return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()); }
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDay(ms) { const d = new Date(ms); return d.getUTCDate() + ' ' + MON[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
+function fmtDur(ms) { const m = Math.max(0, Math.round(ms / 60000)); const h = Math.floor(m / 60); return (h ? h + ' h ' : '') + pad2(m % 60) + ' m'; }
+const fmtNM = x => (Math.abs(x) < 10 ? x.toFixed(1) : x.toFixed(0)) + ' nm';
+const fmt3 = x => String(Math.round(norm360(x)) % 360).padStart(3, '0') + '°';
+
+/* ---------- time frames (cached per second, extrapolated inside the second) ---------- */
+const frameCache = new Map();
+function frameSec(sec) {
+  let F = frameCache.get(sec);
+  if (!F) { F = Astro.frame(sec * 1000); frameCache.set(sec, F); if (frameCache.size > 400) frameCache.delete(frameCache.keys().next().value); }
+  return F;
+}
+const SID_RATE = 360.98564736629 / 86400; // deg per second
+function bodyGHADec(body, t) { // true UTC ms -> {gha, dec, sd, hp}
+  const sec = Math.floor(t / 1000), frac = (t - sec * 1000) / 1000, F = frameSec(sec);
+  if (body.kind === 'sun') return { gha: norm360(F.sun.gha + frac * 15.0 / 3600), dec: F.sun.dec, sd: F.sun.sd, hp: F.sun.hp };
+  const key = '_ap' + Math.floor(sec / 60);
+  let a = body[key];
+  if (!a) { for (const k in body) if (k.startsWith('_ap')) delete body[k]; a = body[key] = Astro.starApparent(frameSec(Math.floor(sec / 60) * 60), body.star[2], body.star[3], body.star[4], body.star[5]); }
+  return { gha: norm360(F.gast + frac * SID_RATE - a.ra), dec: a.dec, sd: 0, hp: 0 };
+}
+// true apparent altitude as seen from pos at t (includes parallax for the Sun and refraction)
+function apparentAltAz(body, t, pos) {
+  const g = bodyGHADec(body, t);
+  const aa = Astro.altAz(g.gha, g.dec, pos[0], pos[1]);
+  let h = aa.h - g.hp * cosd(aa.h);
+  return { h: h + Astro.refrSaemundsson(h), hTrue: h, az: aa.az, sd: g.sd };
+}
+function sunAltAt(t, pos) { return apparentAltAz(BODY.Sun, t, pos).h; }
+
+/* ---------- visibility model ---------- */
+const MLIM = [[5, -4], [0, -2], [-2, -0.6], [-4, 0.9], [-6, 2.1], [-9, 3.3], [-12, 4.3], [-18, 5.5]];
+function magLimit(s) {
+  if (s >= MLIM[0][0]) return MLIM[0][1];
+  for (let i = 1; i < MLIM.length; i++) if (s >= MLIM[i][0]) { const [a, ma] = MLIM[i - 1], [b, mb] = MLIM[i]; return mb + (ma - mb) * (s - b) / (a - b); }
+  return MLIM[MLIM.length - 1][1];
+}
+function extinction(h) { if (h <= 0) return 9; const sh = sind(h); return 0.28 * (1 / (sh + 0.025 * Math.exp(-11 * sh)) - 1); }
+const horizonQ = s => clamp((s + 11) / 6, 0, 1); // 1 at sun -5°, 0 at -11°
+
+/* ---------- state ---------- */
+let S = null, GEN = 0;
+const UI = { tab: 'helm', view: 'deck', coach: true, yaw: 250, pitch: 13, vfov: 55, chart: null, sextant: null, lastPanel: '', toasts: [] };
+
+function cloneVoy(v) { return JSON.parse(JSON.stringify(v)); }
+function makeState(voy) {
+  voy = cloneVoy(voy);
+  return {
+    voy, t: voy.start, running: true,
+    truePos: voy.truePos.slice(),
+    legs: [{ t: voy.start, crs: voy.course, spd: voy.speed }],
+    anchors: [{ t: voy.start, pos: voy.dr.slice(), kind: 'start' }],
+    trueTrack: [[voy.start, voy.truePos[0], voy.truePos[1]]],
+    sights: [], fixes: [], nextId: 1, selSight: null, selBody: null,
+    status: 'sailing', end: null, reveal: !!voy.practice, practiceUsed: !!voy.practice,
+    landSeen: false, sea: voy.sea, labels: true, lastTrackT: voy.start, tick: 0
+  };
+}
+const legAt = t => { let L = S.legs[0]; for (const l of S.legs) { if (l.t <= t) L = l; else break; } return L; };
+// dead-reckoning run from pos between t0 and t1 using only course & speed through the water
+function runFrom(pos, t0, t1) {
+  let p = pos.slice();
+  if (t1 <= t0) return p;
+  for (let i = 0; i < S.legs.length; i++) {
+    const a = Math.max(t0, S.legs[i].t), b = Math.min(t1, i + 1 < S.legs.length ? S.legs[i + 1].t : Infinity);
+    if (b > a) p = Geo.rhumb(p[0], p[1], S.legs[i].crs, S.legs[i].spd * (b - a) / 3.6e6);
+  }
+  return p;
+}
+function anchorAt(t) { let A = S.anchors[0]; for (const a of S.anchors) { if (a.t <= t) A = a; else break; } return A; }
+const drAt = t => { const A = anchorAt(t); return runFrom(A.pos, A.t, t); };
+const drNow = () => drAt(S.t);
+const chronNow = () => S.t + (S.voy.chron.known + S.voy.chron.unknown) * 1000;
+const utcEst = t => t + S.voy.chron.unknown * 1000; // what the navigator believes UTC is at true time t
+
+function trueVelocity(t) {
+  const L = legAt(t), c = S.voy.current;
+  const vx = L.spd * sind(L.crs) + c.drift * sind(c.set), vy = L.spd * cosd(L.crs) + c.drift * cosd(c.set);
+  return { crs: norm360(atan2d(vx, vy)), spd: Math.hypot(vx, vy) };
+}
+function stepTrue(dt) {
+  const v = trueVelocity(S.t);
+  S.truePos = Geo.rhumb(S.truePos[0], S.truePos[1], v.crs, v.spd * dt / 3.6e6);
+  S.t += dt;
+  if (S.t - S.lastTrackT >= 600000) { S.trueTrack.push([S.t, S.truePos[0], S.truePos[1]]); S.lastTrackT = S.t; }
+}
+function advanceBy(ms, discrete) {
+  let rem = ms, moved = false;
+  while (rem > 0 && S.status === 'sailing') {
+    const dt = Math.min(60000, rem); stepTrue(dt); rem -= dt; moved = true;
+    if (checkEvents()) break;
+  }
+  if (moved && discrete) S.tick++;
+  return moved;
+}
+function visRange(isl, sunAlt) {
+  const he = S.voy.hEye;
+  const day = Math.min(2.08 * (Math.sqrt(he) + Math.sqrt(isl.h)), S.voy.metVis);
+  const night = isl.light ? Math.min(isl.light.range, 2.08 * (Math.sqrt(he) + Math.sqrt(isl.light.h))) : 1.5;
+  if (sunAlt >= -3) return day;
+  if (sunAlt <= -9) return night;
+  const f = (sunAlt + 9) / 6; return night + (day - night) * f;
+}
+function islandInfo() {
+  const isl = S.voy.island, g = Geo.gc(S.truePos[0], S.truePos[1], isl.lat, isl.lon);
+  const s = sunAltAt(S.t, S.truePos);
+  return { d: g.d, brg: g.brg, range: visRange(isl, s), sunAlt: s };
+}
+function checkEvents() {
+  const info = islandInfo();
+  if (info.d <= info.range) { landfall(info); return true; }
+  if (S.t >= S.voy.start + S.voy.provisionsH * 3.6e6) { endVoyage('lost'); return true; }
+  return false;
+}
+function landfall(info) {
+  S.landSeen = true; S.status = 'landfall';
+  S.trueTrack.push([S.t, S.truePos[0], S.truePos[1]]);
+  S.end = { result: 'landfall', t: S.t, brg: info.brg, d: info.d };
+  UI.yaw = info.brg; UI.pitch = 4; UI.vfov = 45; closeSextant();
+  $('landho').hidden = false;
+  Snd.bell(2);
+  toast(`Land ho! ${S.voy.island.name} bearing ${fmt3(info.brg)}, about ${fmtNM(info.d)}.`, 'good', 6000);
+  setTimeout(((g) => () => { if (g === GEN && S.status === 'landfall') openDebrief(); })(GEN), 1600);
+  renderAll(); chartFit();
+}
+function endVoyage(result) {
+  if (S.status !== 'sailing') return;
+  S.status = result; S.trueTrack.push([S.t, S.truePos[0], S.truePos[1]]);
+  const info = islandInfo();
+  S.end = { result, t: S.t, brg: info.brg, d: info.d };
+  closeSextant();
+  toast(result === 'lost' ? 'The water is gone. The voyage is over.' : 'Voyage abandoned.', 'bad', 5000);
+  renderAll(); chartFit(); openDebrief();
+}
+
+/* ---------- course & speed ---------- */
+function setLeg(crs, spd) {
+  if (S.status !== 'sailing') return;
+  crs = norm360(Math.round(crs)); spd = clamp(Math.round(spd * 2) / 2, 0, 8);
+  const last = S.legs[S.legs.length - 1];
+  if (last.crs === crs && last.spd === spd) return;
+  if (last.t >= S.t) { last.crs = crs; last.spd = spd; } else S.legs.push({ t: S.t, crs, spd });
+  S.tick++; renderAll();
+}
+
+/* ---------- sights ---------- */
+function predictedHs(body, t, pos) { // what the navigator expects to read (from DR, chronometer time)
+  const g = bodyGHADec(body, utcEst(t));
+  const aa = Astro.altAz(g.gha, g.dec, pos[0], pos[1]);
+  let h = aa.h - g.hp * cosd(aa.h);
+  h += Astro.refrSaemundsson(h);
+  return { Hs: h + Astro.dip(S.voy.hEye) - S.voy.IC / 60 - (body.kind === 'sun' ? g.sd : 0), Zn: aa.az, Hc: aa.h };
+}
+function reduce(s) {
+  const body = BODY[s.body];
+  const F = Astro.frame(s.utc);
+  return reduceSight({ kind: body.kind, Hs: s.Hs, IC: s.IC, hEye: s.hEye }, F, s.ap, { star: body.star });
+}
+function lopError(s) { // signed distance (nm) from the true position to the LOP, + means truth lies toward the body
+  const [x, y] = Geo.toXY(s.red.ap, s.truth.pos[0], s.truth.pos[1]);
+  return sind(s.red.Zn) * x + cosd(s.red.Zn) * y - s.red.intercept;
+}
+function recordSight(body, Hs, tilt) {
+  const t = S.t;
+  const aa = apparentAltAz(body, t, S.truePos);
+  const ideal = aa.h + Astro.dip(S.voy.hEye) - S.voy.IC / 60 - (body.kind === 'sun' ? aa.sd : 0);
+  const s = {
+    id: S.nextId++, body: body.name, Hs, IC: S.voy.IC, hEye: S.voy.hEye, t, chron: chronNow(), utc: t + S.voy.chron.unknown * 1000,
+    ap: drAt(t), use: true, truth: { pos: S.truePos.slice(), ideal, errArc: (Hs - ideal) * 60, tilt }
+  };
+  s.red = reduce(s);
+  s.truth.lopErr = lopError(s);
+  S.sights.push(s); S.selSight = s.id; S.tick++;
+  return s;
+}
+function computeFix() {
+  const used = S.sights.filter(s => s.use);
+  if (!used.length) return null;
+  const tf = Math.max(...used.map(s => s.t));
+  const ref = drAt(tf);
+  // a-priori LOP sigma: 1 nm for a careful sight, growing ~0.8 nm per hour of dead-reckoning advance (unknown current)
+  const lops = used.map(s => { const adv = (tf - s.t) / 60000; return { s, ap: runFrom(s.red.ap, s.t, tf), Zn: s.red.Zn, intercept: s.red.intercept, adv, sig: Math.hypot(1, 0.8 * adv / 60) }; });
+  const last = used.find(s => s.t === tf);
+  const truthPos = last.truth.pos;
+  if (lops.length === 1) {
+    const l = lops[0];
+    const [x0, y0] = Geo.toXY(ref, l.ap[0], l.ap[1]);
+    const ux = sind(l.Zn), uy = cosd(l.Zn), d = ux * x0 + uy * y0 + l.intercept;
+    const pos = Geo.fromXY(ref, d * ux, d * uy); // foot of perpendicular from DR onto the LOP
+    return { kind: 'ep', t: tf, pos, lops, n: 1, err: Geo.gc(pos[0], pos[1], truthPos[0], truthPos[1]).d };
+  }
+  let sol = solveFix(lops, ref), iters = 0;
+  if (!sol || sol.degenerate) return { kind: 'bad', t: tf, lops, n: lops.length, cut: sol ? sol.cut : 0 };
+  // Large intercepts make the straight-line LOP approximation poor. Like a navigator re-working the sights,
+  // re-reduce each sight from the provisional fix (retired to the sight's time) until the fix stops moving.
+  while (iters < 4 && Math.max(...lops.map(l => Math.abs(l.intercept))) > 3) {
+    const p0 = sol.pos;
+    const lops2 = used.map((s, i) => {
+      const run = Geo.toXY(p0, ...runFrom(p0, s.t, tf));
+      const apT = Geo.fromXY(p0, -run[0], -run[1]);               // fix retired to the sight time
+      const r = reduceSight({ kind: BODY[s.body].kind, Hs: s.Hs, IC: s.IC, hEye: s.hEye }, Astro.frame(s.utc), apT, { star: BODY[s.body].star });
+      return Object.assign({}, lops[i], { ap: runFrom(apT, s.t, tf), Zn: r.Zn, intercept: r.intercept });
+    });
+    const sol2 = solveFix(lops2, p0);
+    if (!sol2 || sol2.degenerate) break;
+    const moved = Geo.gc(p0[0], p0[1], sol2.pos[0], sol2.pos[1]).d;
+    sol = sol2; lops.splice(0, lops.length, ...lops2); iters++;
+    if (moved < 0.02) break;
+  }
+  const maxAdv = Math.max(...lops.map(l => l.adv));
+  return { kind: 'fix', iters, running: maxAdv > 20, t: tf, pos: sol.pos, ellipse: sol.ellipse, cut: sol.cut, sigma: sol.sigma, resid: sol.resid, lops, n: lops.length, err: Geo.gc(sol.pos[0], sol.pos[1], truthPos[0], truthPos[1]).d };
+}
+function adoptFix() {
+  const f = computeFix();
+  if (!f || f.kind === 'bad' || S.status !== 'sailing') return;
+  S.anchors = S.anchors.filter(a => a.t < f.t);
+  S.anchors.push({ t: f.t, pos: f.pos.slice(), kind: f.kind });
+  S.fixes.push({ id: S.fixes.length + 1, t: f.t, pos: f.pos.slice(), kind: f.kind, running: !!f.running, n: f.n, cut: f.cut || null, ellipse: f.ellipse || null, err: f.err, sights: f.lops.map(l => l.s.id) });
+  for (const l of f.lops) { l.s.use = false; l.s.consumed = true; }
+  S.tick++;
+  toast(`${f.kind === 'ep' ? 'Estimated position' : 'Fix'} adopted. Dead reckoning restarts from ${fmtPos(f.pos)}.`, 'good');
+  renderAll(); chartFit();
+}
+
+/* ---------- planning helpers ---------- */
+function navigatorSky() { // what the navigator can compute: DR + chronometer; visibility judged by eye (true sky)
+  const dr = drNow(), s = sunAltAt(S.t, S.truePos), ml = magLimit(s), q = horizonQ(s);
+  const out = [];
+  for (const b of BODIES) {
+    const p = predictedHs(b, S.t, dr);
+    const tru = apparentAltAz(b, S.t, S.truePos);
+    let vis, why = '';
+    if (b.kind === 'sun') { vis = tru.h > 0.3; why = vis ? '' : 'below horizon'; }
+    else { const me = b.mag + extinction(tru.h); vis = tru.h > 0.5 && me < ml + 0.6; why = tru.h <= 0.5 ? 'below horizon' : 'not visible yet'; }
+    if (p.Hc < -1 && !vis) continue;
+    out.push({ b, Hc: p.Hc, Zn: p.Zn, vis, why, canSight: vis && q >= 0.15 });
+  }
+  out.sort((a, b) => a.Zn - b.Zn);
+  // suggestion: best-crossing trio of visible stars at useful altitudes (or the Sun)
+  const cand = out.filter(o => o.vis && o.b.kind === 'star' && o.Hc >= 15 && o.Hc <= 72).sort((a, b) => a.b.mag - b.b.mag).slice(0, 18);
+  let best = null, bestScore = -1;
+  const cross = (a, b) => { const d = Math.abs(norm180(a - b)); const f = d > 90 ? 180 - d : d; return f; };
+  for (let i = 0; i < cand.length; i++) for (let j = i + 1; j < cand.length; j++) for (let k = j + 1; k < cand.length; k++) {
+    const m = Math.min(cross(cand[i].Zn, cand[j].Zn), cross(cand[i].Zn, cand[k].Zn), cross(cand[j].Zn, cand[k].Zn));
+    const sc = m - 2 * (cand[i].b.mag + cand[j].b.mag + cand[k].b.mag);
+    if (sc > bestScore) { bestScore = sc; best = [cand[i], cand[j], cand[k]]; }
+  }
+  const sug = new Set(best ? best.map(o => o.b.name) : []);
+  if (!best) { const sun = out.find(o => o.b.kind === 'sun' && o.vis); if (sun) sug.add('Sun'); }
+  return { list: out, sug, sunAlt: s, q, ml };
+}
+function nextStarWindow() { // the navigator's prediction: judged at the DR position, always the next window
+  const inW = t => { const s = sunAltAt(t, drAt(t)); return s >= -9.5 && s <= -3.5; };
+  let prev = inW(S.t);
+  for (let m = 2; m <= 40 * 60; m += 2) {
+    const t = S.t + m * 60000, w = inW(t);
+    if (w && !prev && m > 45) return t + 60000; // skip the window we are in (or about to enter)
+    prev = w;
+  }
+  return null;
+}
+function nextNoon() {
+  let t = S.t + 3600000;
+  for (let k = 0; k < 4; k++) {
+    const pos = drAt(t), g = bodyGHADec(BODY.Sun, t);
+    const lha = norm180(g.gha + pos[1]); // 0 at local apparent noon
+    t -= lha / 15.041 * 3600000;
+  }
+  while (t - 5 * 60000 <= S.t) t += 86400000;
+  return t - 5 * 60000;
+}
+function skipTo(t, label) {
+  if (!t || S.status !== 'sailing') return;
+  closeSextant(); S.selBody = null;
+  const before = S.t;
+  advanceBy(t - S.t, true);
+  if (S.status === 'sailing') toast(`${label}: ${fmtDur(S.t - before)} passed.`);
+  renderAll();
+}
+
+/* ---------- sound (off until the user enables it) ---------- */
+const Snd = {
+  ctx: null, master: null,
+  get on() { return !!this.ctx; },
+  enable() {
+    if (this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) { toast('Audio is not available in this browser.', 'bad'); return; }
+    const ctx = new AC(); this.ctx = ctx;
+    this.master = ctx.createGain(); this.master.gain.value = 0.6; this.master.connect(ctx.destination);
+    const len = ctx.sampleRate * 3, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    let b0 = 0, b1 = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; b0 = 0.99 * b0 + 0.02 * w; b1 = 0.96 * b1 + 0.05 * w; d[i] = (b0 + b1) * 2.2; }
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520;
+    const g = ctx.createGain(); g.gain.value = 0.08;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.11; const lg = ctx.createGain(); lg.gain.value = 0.05; lfo.connect(lg); lg.connect(g.gain);
+    src.connect(lp); lp.connect(g); g.connect(this.master); src.start(); lfo.start();
+    if (ctx.state === 'suspended') ctx.resume();
+  },
+  disable() { if (this.ctx) { try { this.ctx.close(); } catch (e) { } } this.ctx = null; this.master = null; },
+  blip(freqs, dur, vol) {
+    const ctx = this.ctx; if (!ctx) return; const t = ctx.currentTime;
+    for (const [f, a] of freqs) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol * a, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05); }
+  },
+  tick() { this.blip([[2400, 1], [3800, 0.4]], 0.035, 0.05); },
+  mark() { this.blip([[880, 1], [1320, 0.5], [2093, 0.25]], 0.9, 0.18); },
+  bell(n) { if (!this.ctx) return; for (let i = 0; i < n; i++) setTimeout(() => this.blip([[523, 1], [1046, 0.6], [1567, 0.3], [2637, 0.2]], 2.4, 0.25), i * 700); }
+};
+
+/* ---------- canvas helpers ---------- */
+function fitCanvas(c) {
+  const r = c.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; return true; }
+  return false;
+}
+const lerp = (a, b, f) => a + (b - a) * f;
+const mixc = (a, b, f) => [lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
+const rgb = (c, a) => a === undefined ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const SKY = [
+  [20, [48, 110, 190], [168, 204, 236], [30, 72, 112]],
+  [5, [52, 98, 170], [222, 204, 170], [36, 66, 96]],
+  [0, [42, 70, 138], [236, 158, 102], [36, 52, 78]],
+  [-3, [24, 42, 96], [196, 108, 82], [24, 34, 58]],
+  [-6, [13, 24, 60], [104, 78, 108], [15, 22, 42]],
+  [-9, [7, 13, 38], [42, 48, 86], [9, 13, 29]],
+  [-12, [4, 7, 20], [16, 22, 44], [5, 8, 18]],
+  [-18, [2, 3, 9], [6, 9, 20], [2, 4, 10]]
+];
+function skyColors(s) {
+  if (s >= SKY[0][0]) return { top: SKY[0][1], hor: SKY[0][2], sea: SKY[0][3] };
+  for (let i = 1; i < SKY.length; i++) if (s >= SKY[i][0]) {
+    const A = SKY[i - 1], B = SKY[i], f = (s - B[0]) / (A[0] - B[0]);
+    return { top: mixc(B[1], A[1], f), hor: mixc(B[2], A[2], f), sea: mixc(B[3], A[3], f) };
+  }
+  const L = SKY[SKY.length - 1]; return { top: L[1], hor: L[2], sea: L[3] };
+}
+function hash1(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+/* ---------- sea motion (real time, deterministic) ---------- */
+function rollAt(rt) { const A = SEA[S.sea].roll; return A * (0.62 * Math.sin(rt * 2 * Math.PI / 7.3 + 0.7) + 0.38 * Math.sin(rt * 2 * Math.PI / 4.1 + 2.1)) + 0.25 * Math.sin(rt * 1.9 + 0.4); }
+function waveAt(xArc, rt, q) { // horizon perturbation (arcmin), + = horizon appears higher
+  const A = SEA[S.sea].rough * (1 + 1.6 * (1 - q));
+  return A * (0.55 * Math.sin(xArc * 0.21 + rt * 1.3) + 0.3 * Math.sin(xArc * 0.53 - rt * 2.1 + 1.3) + 0.15 * Math.sin(xArc * 1.37 + rt * 3.3 + 0.2));
+}
+
+/* ======================================================================
+   DECK VIEW
+   ====================================================================== */
+const deckC = $('deckCanvas'), deckX = deckC.getContext('2d');
+let deckHits = [];
+function camera(w, h) {
+  const f = (h / 2) / Math.tan(UI.vfov / 2 * D2R);
+  return { w, h, f, yaw: UI.yaw, pitch: UI.pitch, cx: w / 2, cy: h / 2 };
+}
+function project(cam, alt, az) {
+  const da = (az - cam.yaw) * D2R, a = alt * D2R, p = cam.pitch * D2R;
+  const x = Math.cos(a) * Math.sin(da), yv = Math.sin(a), zf = Math.cos(a) * Math.cos(da);
+  const y = yv * Math.cos(p) - zf * Math.sin(p), z = zf * Math.cos(p) + yv * Math.sin(p);
+  if (z < 0.04) return null;
+  return [cam.cx + cam.f * x / z, cam.cy - cam.f * y / z];
+}
+function drawDeck(rt) {
+  fitCanvas(deckC);
+  const ctx = deckX, w = deckC.width, h = deckC.height, dpr = w / Math.max(1, deckC.clientWidth);
+  const cam = camera(w, h), pos = S.truePos, t = S.t;
+  const sun = apparentAltAz(BODY.Sun, t, pos), s = sun.h, col = skyColors(s), q = horizonQ(s), ml = magLimit(s);
+  const dip = Astro.dip(S.voy.hEye);
+  // horizon polyline
+  const hor = [];
+  for (let i = 0; i <= 48; i++) { const az = cam.yaw - 100 + i * 200 / 48; const p = project(cam, -dip, az); if (p) hor.push(p); }
+  const horY = hor.length ? hor[Math.floor(hor.length / 2)][1] : h * 0.7;
+  // sky
+  const topP = project(cam, 60, cam.yaw);
+  const g = ctx.createLinearGradient(0, topP ? topP[1] : 0, 0, horY);
+  g.addColorStop(0, rgb(col.top)); g.addColorStop(0.7, rgb(mixc(col.top, col.hor, 0.55))); g.addColorStop(1, rgb(col.hor));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  // glow toward the Sun
+  const glow = clamp(1 - Math.abs(s + 1) / 10, 0, 1);
+  if (glow > 0) {
+    const sp = project(cam, Math.max(s, -2), sun.az);
+    const gx = sp ? sp[0] : (norm180(sun.az - cam.yaw) > 0 ? w * 1.4 : -w * 0.4);
+    const rg = ctx.createRadialGradient(gx, horY, 0, gx, horY, w * 0.7);
+    rg.addColorStop(0, `rgba(255,170,100,${0.45 * glow})`); rg.addColorStop(0.4, `rgba(240,120,90,${0.16 * glow})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, w, horY + 2);
+  }
+  // stars
+  const F = frameSec(Math.floor(t / 1000));
+  const lat = pos[0], lon = pos[1];
+  ctx.globalCompositeOperation = 'lighter';
+  const starDraw = (h0, az, mag, bright) => {
+    const refr = Astro.refrSaemundsson(h0), ha = h0 + refr;
+    if (ha < -dip) return null;
+    const me = mag + extinction(ha), vis = ml + 0.5 - me;
+    if (vis <= 0) return null;
+    const p = project(cam, ha, az); if (!p || p[0] < -20 || p[0] > w + 20 || p[1] < -20 || p[1] > horY) return null;
+    const a = clamp(vis / 1.6, 0, 1) * (0.85 + 0.15 * Math.sin(rt * 7 + mag * 13 + az));
+    const r = (0.6 + clamp(2.9 - mag * 0.55, 0.2, 3.2)) * dpr * (bright ? 1.15 : 1);
+    ctx.fillStyle = `rgba(255,250,240,${a})`;
+    ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.283); ctx.fill();
+    if (mag < 1.2 && a > 0.3) { ctx.fillStyle = `rgba(200,220,255,${0.12 * a})`; ctx.beginPath(); ctx.arc(p[0], p[1], r * 3.2, 0, 6.283); ctx.fill(); }
+    return { p, a, ha };
+  };
+  for (const st of BG) {
+    const d = Astro.precessOnly(F, st[0], st[1]);
+    const gha = norm360(F.gast - d.ra);
+    const aa = Astro.altAz(gha, d.dec, lat, lon);
+    if (aa.h < -1) continue;
+    starDraw(aa.h, aa.az, st[2], false);
+  }
+  deckHits = [];
+  const labels = [];
+  for (const b of BODIES) {
+    if (b.kind !== 'star') continue;
+    const g2 = bodyGHADec(b, t), aa = Astro.altAz(g2.gha, g2.dec, lat, lon);
+    if (aa.h < -1) continue;
+    const r = starDraw(aa.h, aa.az, b.mag, true);
+    if (r) { deckHits.push({ b, x: r.p[0], y: r.p[1] }); labels.push({ b, x: r.p[0], y: r.p[1], a: r.a }); }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // the Sun
+  const sp = project(cam, sun.h, sun.az);
+  if (sp && sun.h > -1) {
+    const rpx = Math.max(6 * dpr, sun.sd * D2R * cam.f);
+    const rg = ctx.createRadialGradient(sp[0], sp[1], 0, sp[0], sp[1], rpx * 7);
+    rg.addColorStop(0, 'rgba(255,245,220,0.9)'); rg.addColorStop(0.2, 'rgba(255,210,150,0.35)'); rg.addColorStop(1, 'rgba(255,180,120,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(sp[0], sp[1], rpx * 7, 0, 6.283); ctx.fill();
+    ctx.fillStyle = s > 3 ? '#fff8e8' : '#ffd29a'; ctx.beginPath(); ctx.arc(sp[0], sp[1], rpx, 0, 6.283); ctx.fill();
+    deckHits.push({ b: BODY.Sun, x: sp[0], y: sp[1] });
+  }
+  // island silhouette / light
+  drawIsland(ctx, cam, horY, dip, s, rt, dpr);
+  // sea
+  ctx.beginPath(); ctx.moveTo(0, h);
+  if (hor.length) { ctx.lineTo(0, hor[0][1]); for (const p of hor) ctx.lineTo(p[0], p[1]); ctx.lineTo(w, hor[hor.length - 1][1]); } else ctx.lineTo(0, horY);
+  ctx.lineTo(w, h); ctx.closePath();
+  const sg = ctx.createLinearGradient(0, horY, 0, h);
+  sg.addColorStop(0, rgb(mixc(col.sea, col.hor, 0.25))); sg.addColorStop(0.08, rgb(col.sea)); sg.addColorStop(1, rgb(mixc(col.sea, [0, 0, 0], 0.55)));
+  ctx.fillStyle = sg; ctx.fill();
+  // horizon line crispness depends on light
+  ctx.strokeStyle = `rgba(230,235,255,${0.08 + 0.3 * q})`; ctx.lineWidth = 1 * dpr;
+  ctx.beginPath(); hor.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke();
+  // waves
+  ctx.save(); ctx.beginPath(); ctx.rect(0, horY + 1, w, h - horY); ctx.clip();
+  const lum = (col.sea[0] + col.sea[1] + col.sea[2]) / 3;
+  for (let i = 1; i < 26; i++) {
+    const f = i / 26, y = horY + (h - horY) * f * f;
+    ctx.strokeStyle = `rgba(${lum > 40 ? '220,235,255' : '140,160,210'},${0.05 + 0.05 * f})`; ctx.lineWidth = (0.6 + f * 1.6) * dpr;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 12 * dpr) { const yy = y + Math.sin(x * 0.012 / (0.3 + f) + rt * (0.6 + f) + i * 1.7) * (1 + 5 * f) * dpr; x ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); }
+    ctx.stroke();
+  }
+  // glitter path under the Sun
+  if (sp && s > -0.5 && s < 35 && sp[0] > -50 && sp[0] < w + 50) {
+    for (let i = 0; i < 90; i++) {
+      const f = hash1(i + Math.floor(rt * 6) * 0.37), y = horY + (h - horY) * Math.pow(hash1(i * 3.1), 1.6);
+      const spread = (y - horY) * 0.35 + 6 * dpr;
+      const x = sp[0] + (f - 0.5) * spread * 2;
+      ctx.fillStyle = `rgba(255,${200 + 40 * clamp(s / 10, 0, 1)},150,${0.5 * hash1(i * 7.7 + Math.floor(rt * 9))})`;
+      ctx.fillRect(x, y, (3 + 10 * hash1(i)) * dpr, 1.5 * dpr);
+    }
+  }
+  ctx.restore();
+  // labels & selection
+  ctx.font = `${11 * dpr}px system-ui, sans-serif`; ctx.textBaseline = 'middle';
+  const sugg = UI.sugg || new Set();
+  for (const L of labels) {
+    const sel = S.selBody === L.b.name, sug = sugg.has(L.b.name);
+    if (sug || sel) {
+      ctx.strokeStyle = sel ? '#f2d185' : 'rgba(214,171,82,0.7)'; ctx.lineWidth = (sel ? 2 : 1.2) * dpr;
+      ctx.beginPath(); ctx.arc(L.x, L.y, (sel ? 13 : 10) * dpr, 0, 6.283); ctx.stroke();
+    }
+    if (S.labels || sel) {
+      ctx.fillStyle = sel ? '#f2d185' : sug ? 'rgba(242,209,133,0.9)' : `rgba(200,210,235,${0.35 + 0.45 * L.a})`;
+      ctx.fillText(L.b.name, L.x + 9 * dpr, L.y - 9 * dpr);
+    }
+  }
+  if (S.selBody === 'Sun' && sp) { ctx.strokeStyle = '#f2d185'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(sp[0], sp[1], 16 * dpr, 0, 6.283); ctx.stroke(); }
+  // compass tape
+  const tapeH = 32 * dpr;
+  ctx.fillStyle = 'rgba(4,8,18,0.72)'; ctx.fillRect(0, h - tapeH, w, tapeH);
+  ctx.fillStyle = '#c9cfdf'; ctx.strokeStyle = 'rgba(200,210,235,0.6)'; ctx.textAlign = 'center';
+  const halfW = Math.atan((w / 2) / cam.f) * R2D;
+  for (let a = Math.floor((cam.yaw - halfW - 10) / 5) * 5; a <= cam.yaw + halfW + 10; a += 5) {
+    const x = cam.cx + cam.f * Math.tan((a - cam.yaw) * D2R);
+    const major = a % 30 === 0; ctx.lineWidth = dpr;
+    ctx.beginPath(); ctx.moveTo(x, h - tapeH); ctx.lineTo(x, h - tapeH + (major ? 9 : 5) * dpr); ctx.stroke();
+    if (major) { const n = norm360(a); const card = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[n]; ctx.fillStyle = card ? '#f2d185' : '#c9cfdf'; ctx.fillText(card || String(n).padStart(3, '0'), x, h - tapeH / 2 + 5 * dpr); }
+  }
+  const crs = legAt(S.t).crs, cx2 = cam.cx + cam.f * Math.tan(norm180(crs - cam.yaw) * D2R);
+  if (Math.abs(norm180(crs - cam.yaw)) < halfW) { ctx.fillStyle = '#5aa7ff'; ctx.beginPath(); ctx.moveTo(cx2, h - tapeH); ctx.lineTo(cx2 - 6 * dpr, h - tapeH - 8 * dpr); ctx.lineTo(cx2 + 6 * dpr, h - tapeH - 8 * dpr); ctx.fill(); ctx.fillText('bow', cx2, h - tapeH - 15 * dpr); }
+  ctx.textAlign = 'left';
+  // twilight hint
+  if (q < 0.15 && s < -9) { ctx.fillStyle = 'rgba(200,210,235,0.75)'; ctx.font = `${13 * dpr}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('Night: the horizon is invisible. No sights until dawn twilight.', w / 2, horY - 30 * dpr); ctx.textAlign = 'left'; }
+  positionBodyCard(cam, dpr);
+}
+function drawIsland(ctx, cam, horY, dip, sunAlt, rt, dpr) {
+  const isl = S.voy.island, g = Geo.gc(S.truePos[0], S.truePos[1], isl.lat, isl.lon);
+  const range = visRange(isl, sunAlt);
+  if (!S.landSeen && g.d > range) return;
+  const he = S.voy.hEye, hidden = Math.pow(Math.max(0, g.d - 2.08 * Math.sqrt(he)) / 2.08, 2);
+  const visH = Math.max(0, isl.h - hidden);
+  // true angular size, with a small floor so a hull-down island at the limit of visibility still reads as land
+  const angH = Math.max(0.3, Math.atan(visH / (g.d * 1852 + 1)) * R2D), angW = Math.max(2.5, 2 * Math.atan(isl.widthKm * 500 / (g.d * 1852 + 1)) * R2D);
+  if (sunAlt > -7) {
+    const pts = [];
+    const n = 24;
+    for (let i = 0; i <= n; i++) {
+      const f = i / n, az = g.brg - angW / 2 + angW * f;
+      const env = Math.sin(f * Math.PI) ** 0.6 * (0.7 + 0.3 * Math.sin(f * 9 + 1) * hash1(i));
+      const p = project(cam, -dip + angH * env, az); if (p) pts.push(p);
+    }
+    if (pts.length > 2) {
+      const base = project(cam, -dip, g.brg);
+      ctx.fillStyle = `rgba(${sunAlt > 0 ? '70,86,110' : '28,32,48'},${clamp(1.25 - g.d / (range + 1), 0.35, 0.95)})`;
+      ctx.beginPath(); ctx.moveTo(pts[0][0], base ? base[1] + 2 : horY); for (const p of pts) ctx.lineTo(p[0], p[1]); ctx.lineTo(pts[pts.length - 1][0], base ? base[1] + 2 : horY); ctx.fill();
+      if (base) { ctx.fillStyle = 'rgba(242,209,133,0.95)'; ctx.font = `600 ${12 * dpr}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(`${isl.name} · ${fmtNM(g.d)}`, base[0], base[1] - (angH * D2R * cam.f) - 12 * dpr); ctx.textAlign = 'left'; }
+    }
+  }
+  if (isl.light && sunAlt < -3 && g.d <= isl.light.range) {
+    const on = (rt % 10) < 0.35;
+    const p = project(cam, -dip + 0.02, g.brg);
+    if (p && on) { const rg = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], 16 * dpr); rg.addColorStop(0, 'rgba(255,255,230,1)'); rg.addColorStop(1, 'rgba(255,255,200,0)'); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(p[0], p[1], 16 * dpr, 0, 6.283); ctx.fill(); }
+  }
+}
+function positionBodyCard(cam, dpr) {
+  const card = $('bodyCard');
+  if (!S.selBody || card.hidden) return;
+  const hit = deckHits.find(d => d.b.name === S.selBody);
+  const W = deckC.clientWidth, H = deckC.clientHeight;
+  let x, y;
+  if (hit) { x = hit.x / dpr + 18; y = hit.y / dpr - 20; } else { x = W - 280; y = 70; }
+  x = clamp(x, 8, W - card.offsetWidth - 8); y = clamp(y, 8, H - card.offsetHeight - 50);
+  card.style.left = x + 'px'; card.style.top = y + 'px';
+}
+function frameAlt(h) { // keep the horizon in view while showing a body at altitude h
+  UI.vfov = clamp(Math.max(55, h + 22), 20, 95);
+  UI.pitch = clamp(h - 8, 3, UI.vfov / 2 - 12);
+}
+function selectBody(name, face) {
+  S.selBody = name;
+  if (face) { const p = navigatorSky().list.find(o => o.b.name === name); if (p) { UI.yaw = p.Zn; frameAlt(p.Hc); } }
+  renderBodyCard(); renderPanels();
+}
+function renderBodyCard() {
+  const card = $('bodyCard');
+  if (!S.selBody || UI.sextant) { card.hidden = true; return; }
+  const sky = navigatorSky(), o = sky.list.find(x => x.b.name === S.selBody);
+  const b = BODY[S.selBody];
+  let status;
+  if (!o) status = '<span class="bad">Below the horizon.</span>';
+  else if (!o.vis) status = `<span class="warn">${o.why === 'below horizon' ? 'Below the horizon.' : 'Too faint to see yet.'}</span>`;
+  else if (sky.q < 0.15) status = '<span class="warn">Horizon too dark for a sight.</span>';
+  else status = '<span class="okc">Visible: ready for a sight.</span>';
+  card.innerHTML = `<button class="x" aria-label="Close" data-act="closecard">×</button>
+    <h4>${esc(b.name)}</h4><div class="meta">${esc(b.bayer)}${b.kind === 'star' ? ' · mag ' + b.mag.toFixed(1) : ' · lower limb sight'}</div>
+    ${o ? `<div class="kv"><dt>Predicted altitude</dt><dd>${fmtAng(o.Hc)}</dd><dt>Bearing (Zn)</dt><dd>${fmt3(o.Zn)}</dd></div>` : ''}
+    <p class="hint" style="margin:6px 0 8px">${status}</p>
+    <button class="primary" data-act="sight" ${o && o.canSight && S.status === 'sailing' ? '' : 'disabled'}>Take sight ⤵</button>`;
+  card.hidden = false;
+}
+
+/* ======================================================================
+   SEXTANT
+   ====================================================================== */
+const eyeC = $('eyeCanvas'), eyeX = eyeC.getContext('2d');
+function openSextant(name) {
+  if (S.status !== 'sailing') return;
+  const body = BODY[name]; const sky = navigatorSky(); const o = sky.list.find(x => x.b.name === name);
+  if (!o || !o.vis) { toast(`${name} is not visible now.`, 'bad'); return; }
+  if (sky.q < 0.15) { toast('The horizon is too dark to take a sight. Wait for twilight or day.', 'bad'); return; }
+  S.selBody = name;
+  const pre = predictedHs(body, S.t, drNow());
+  UI.sextant = { body, R: Math.round(pre.Hs * 12) / 12, msg: '', flash: 0, lastTick: -1, drag: null, marks: 0 };
+  $('sextant').hidden = false; $('bodyCard').hidden = true;
+  $('sxBody').textContent = body.kind === 'sun' ? 'Sun — lower limb' : name;
+  $('sxBodyNote').textContent = body.kind === 'sun' ? 'Shades in. Bring the bottom edge of the Sun down onto the horizon.' : 'Bring the star down until it just touches the horizon.';
+  $('sxMsg').textContent = 'Arc preset from your DR. Fine-tune with the drum.';
+  UI.yaw = o.Zn;
+  eyeC.focus({ preventScroll: true });
+  renderCoach(); renderPanels();
+}
+function closeSextant() {
+  if (!UI.sextant) return;
+  UI.sextant = null; $('sextant').hidden = true; renderBodyCard(); renderCoach(); renderPanels();
+}
+function sextantGeometry(rt) {
+  const X = UI.sextant, body = X.body;
+  const aa = apparentAltAz(body, S.t, S.truePos);
+  const phi = rollAt(rt);
+  const sw = swingAngle(aa.h, phi);
+  const s = sunAltAt(S.t, S.truePos), q = horizonQ(s);
+  const xArc = sw.psi * 60; // psi carries the sign of the tilt
+  const w = waveAt(xArc, rt, q);
+  const E = (sw.alpha + Astro.dip(S.voy.hEye)) * 60 - w;          // arcmin between body (centre) and local horizon
+  const D = (X.R + S.voy.IC / 60) * 60;                           // actual optical deflection
+  const off = E - D - (body.kind === 'sun' ? aa.sd * 60 : 0);      // + : image (limb) above horizon
+  return { aa, phi, xArc, off, q, s, sd: aa.sd * 60 };
+}
+function drawEyepiece(rt) {
+  fitCanvas(eyeC);
+  const X = UI.sextant; if (!X) return;
+  const ctx = eyeX, W = eyeC.width, H = eyeC.height, dpr = W / Math.max(1, eyeC.clientWidth);
+  const size = Math.min(W, H), r = size * 0.47, cx = W / 2, cy = H / 2, sc = r / 32; // px per arcmin
+  const G = sextantGeometry(rt), col = skyColors(G.s);
+  ctx.clearRect(0, 0, W, H);
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.clip();
+  // sky (reflected + direct share the same colour near the horizon)
+  const skyC = mixc(col.hor, col.top, 0.25);
+  ctx.fillStyle = rgb(skyC); ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+  // horizon & sea
+  const hy = x => cy - waveAt((x - cx) / sc, rt, G.q) * sc;
+  ctx.beginPath(); ctx.moveTo(cx - r, cy + r);
+  for (let x = cx - r; x <= cx + r; x += 3 * dpr) ctx.lineTo(x, hy(x));
+  ctx.lineTo(cx + r, cy + r); ctx.closePath();
+  const sg = ctx.createLinearGradient(0, cy, 0, cy + r);
+  sg.addColorStop(0, rgb(mixc(col.sea, col.hor, 0.35))); sg.addColorStop(1, rgb(col.sea));
+  ctx.fillStyle = sg; ctx.fill();
+  ctx.strokeStyle = `rgba(235,240,255,${0.1 + 0.5 * G.q})`; ctx.lineWidth = 1.2 * dpr;
+  ctx.beginPath(); for (let x = cx - r; x <= cx + r; x += 3 * dpr) { x === cx - r ? ctx.moveTo(x, hy(x)) : ctx.lineTo(x, hy(x)); } ctx.stroke();
+  // sea texture
+  ctx.strokeStyle = 'rgba(200,215,255,0.06)'; ctx.lineWidth = dpr;
+  for (let i = 1; i < 12; i++) { const y = cy + i * i * r / 130; ctx.beginPath(); for (let x = cx - r; x <= cx + r; x += 6 * dpr) { const yy = y + Math.sin(x * 0.02 + rt * 1.7 + i) * 2 * dpr; x === cx - r ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+  // reflected image (mirror tint on the right half)
+  ctx.fillStyle = 'rgba(120,150,210,0.05)'; ctx.fillRect(cx, cy - r, r, 2 * r);
+  const bx = cx + G.xArc * sc, by = cy - G.off * sc;
+  if (X.body.kind === 'sun') {
+    const R = G.sd * sc, ccy = by - R;
+    const rg = ctx.createRadialGradient(bx, ccy, R * 0.2, bx, ccy, R);
+    rg.addColorStop(0, '#ffe7a8'); rg.addColorStop(0.85, '#ffb347'); rg.addColorStop(1, '#e8812a');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(bx, ccy, R, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,240,200,0.9)'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(bx, ccy, R, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  } else {
+    const tw = 0.8 + 0.2 * Math.sin(rt * 23) * Math.sin(rt * 17 + 1);
+    const rg = ctx.createRadialGradient(bx, by, 0, bx, by, 9 * dpr);
+    rg.addColorStop(0, `rgba(255,255,255,${tw})`); rg.addColorStop(0.25, `rgba(230,240,255,${0.6 * tw})`); rg.addColorStop(1, 'rgba(200,220,255,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(bx, by, 9 * dpr, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(bx, by, 1.8 * dpr, 0, 6.283); ctx.fill();
+  }
+  // centre guide
+  ctx.strokeStyle = 'rgba(242,209,133,0.25)'; ctx.setLineDash([4 * dpr, 6 * dpr]); ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke(); ctx.setLineDash([]);
+  // scale ticks every 10'
+  ctx.fillStyle = 'rgba(242,209,133,0.5)'; ctx.font = `${10 * dpr}px ${'system-ui'}`;
+  for (let k = -3; k <= 3; k++) { const y = cy - k * 10 * sc; ctx.fillRect(cx - r + 4 * dpr, y, (k ? 8 : 14) * dpr, 1 * dpr); if (k) ctx.fillText((k > 0 ? '+' : '') + k * 10 + '′', cx - r + 16 * dpr, y + 3 * dpr); }
+  if (X.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${X.flash * 0.35})`; ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r); }
+  // vignette
+  const vg = ctx.createRadialGradient(cx, cy, r * 0.65, cx, cy, r);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)'); ctx.fillStyle = vg; ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+  ctx.restore();
+  // brass rim
+  ctx.strokeStyle = '#8a6a2b'; ctx.lineWidth = 10 * dpr; ctx.beginPath(); ctx.arc(cx, cy, r + 5 * dpr, 0, 6.283); ctx.stroke();
+  ctx.strokeStyle = '#d6ab52'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(cx, cy, r + 1 * dpr, 0, 6.283); ctx.stroke();
+  // off-field indicator
+  const far = Math.abs(G.off) > 30 && Math.abs(G.xArc) < 30;
+  if (far) {
+    ctx.fillStyle = '#f2d185'; ctx.font = `600 ${14 * dpr}px system-ui`; ctx.textAlign = 'center';
+    const up = G.off > 0, y = up ? cy - r + 26 * dpr : cy + r - 16 * dpr;
+    ctx.fillText(up ? `▲ image ${Math.round(G.off)}′ above: Arc +` : `▼ image ${Math.round(-G.off)}′ below: Arc −`, cx, y);
+    ctx.textAlign = 'left';
+  }
+  X.lastG = G;
+  $('tiltB').style.left = (50 + clamp(G.phi / (SEA[S.sea].roll * 1.1 + 0.3), -1, 1) * 46) + '%';
+  X.flash = Math.max(0, X.flash - 0.05);
+}
+function drum(dArc) {
+  const X = UI.sextant; if (!X) return;
+  X.R = clamp(X.R + dArc / 60, -5, 125);
+}
+function markSight() {
+  const X = UI.sextant; if (!X || S.status !== 'sailing') return;
+  const G = X.lastG || sextantGeometry(performance.now() / 1000);
+  if (G.q < 0.15) { $('sxMsg').textContent = 'Horizon too dark — no sight possible.'; return; }
+  if (G.aa.h < (X.body.kind === 'sun' ? 0 : 0.5)) { $('sxMsg').textContent = 'The body has set.'; return; }
+  if (Math.abs(G.off) > 32 && Math.abs(G.xArc) < 32) { $('sxMsg').textContent = 'The body is not in the field of view; nothing to mark.'; return; }
+  const s = recordSight(X.body, X.R, G.phi);
+  X.flash = 1; X.marks++;
+  Snd.mark();
+  $('sxMsg').innerHTML = `Sight #${s.id} logged: ${esc(s.body)} Hs ${fmtAng(s.Hs)} at ${fmtHMS(s.chron)}. The LOP is on the chart.` + (S.reveal ? ` <span class="warn">(practice: ${s.truth.errArc >= 0 ? '+' : ''}${s.truth.errArc.toFixed(1)}′ off)</span>` : '');
+  toast(`Sight #${s.id}: ${s.body} ${fmtAng(s.Hs)} at ${fmtHMS(s.chron)}`);
+  chartFit(); renderPanels(); renderCoach();
+}
+
+/* ======================================================================
+   CHART (plotting sheet)
+   ====================================================================== */
+const chartC = $('chartCanvas'), chartX = chartC.getContext('2d');
+let chartDirty = true;
+UI.chart = { center: null, scale: 3.2 /* px per nm (css) */ };
+function chartView() {
+  const w = chartC.clientWidth, h = chartC.clientHeight;
+  const center = UI.chart.center || drNow();
+  return { w, h, center, sc: UI.chart.scale, ref: [center[0], center[1]] };
+}
+function c2s(v, p) { const [x, y] = Geo.toXY(v.ref, p[0], p[1]); return [v.w / 2 + x * v.sc, v.h / 2 - y * v.sc]; }
+function s2c(v, sx, sy) { return Geo.fromXY(v.ref, (sx - v.w / 2) / v.sc, (v.h / 2 - sy) / v.sc); }
+function drawChart() {
+  fitCanvas(chartC);
+  const ctx = chartX, dpr = chartC.width / Math.max(1, chartC.clientWidth);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const v = chartView(), w = v.w, h = v.h;
+  ctx.fillStyle = '#f2ead6'; ctx.fillRect(0, 0, w, h);
+  // grid
+  const minutesPerLine = [1, 2, 5, 10, 15, 30, 60, 120, 300].find(m => m * v.sc >= 55) || 600;
+  const tl = s2c(v, 0, 0), br = s2c(v, w, h);
+  ctx.lineWidth = 1; ctx.font = '10px ui-monospace, Menlo, monospace'; ctx.fillStyle = '#6a7f8c';
+  const lat0 = Math.floor(Math.min(tl[0], br[0]) * 60 / minutesPerLine) * minutesPerLine, lat1 = Math.max(tl[0], br[0]) * 60;
+  for (let m = lat0; m <= lat1; m += minutesPerLine) {
+    const y = c2s(v, [m / 60, v.ref[1]])[1];
+    ctx.strokeStyle = m % 60 === 0 ? 'rgba(76,128,152,0.55)' : 'rgba(76,128,152,0.22)';
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    ctx.fillText(fmtLat(m / 60).replace('.0′', '′'), 4, y - 3);
+  }
+  const lonStep = [1, 2, 5, 10, 15, 30, 60, 120, 300].find(m => m * v.sc * cosd(v.ref[0]) >= 78) || 600;
+  const lonMin = Math.floor(Math.min(tl[1], br[1]) * 60 / lonStep) * lonStep, lonMax = Math.max(tl[1], br[1]) * 60;
+  for (let m = lonMin; m <= lonMax; m += lonStep) {
+    const x = c2s(v, [v.ref[0], m / 60])[0];
+    ctx.strokeStyle = m % 60 === 0 ? 'rgba(76,128,152,0.55)' : 'rgba(76,128,152,0.22)';
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    ctx.save(); ctx.translate(x + 3, h - ($('chartLegend').offsetHeight || 16) - 12); ctx.fillText(fmtLon(m / 60).replace('.0′', '′'), 0, 0); ctx.restore();
+  }
+  // scale bar
+  const nmBar = [1, 2, 5, 10, 20, 50, 100].find(n => n * v.sc >= 60) || 100;
+  ctx.strokeStyle = '#243447'; ctx.fillStyle = '#243447'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(w - 16 - nmBar * v.sc, h - 12); ctx.lineTo(w - 16, h - 12); ctx.stroke();
+  ctx.fillText(nmBar + ' nm', w - 16 - nmBar * v.sc, h - 17);
+  // island
+  const isl = S.voy.island, ip = c2s(v, [isl.lat, isl.lon]);
+  const rng = visRange(isl, 10);
+  ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(40,120,80,0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(ip[0], ip[1], rng * v.sc, 0, 6.283); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#6b8f4e'; ctx.strokeStyle = '#3d5a2a';
+  ctx.beginPath(); ctx.arc(ip[0], ip[1], Math.max(4, isl.widthKm / 1.852 / 5 * v.sc), 0, 6.283); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#2f4a22'; ctx.font = '600 12px Georgia, serif'; ctx.fillText(isl.name, ip[0] + 8, ip[1] - 8);
+  ctx.font = '10px system-ui'; ctx.fillStyle = 'rgba(40,110,70,0.9)'; ctx.fillText(`seen ~${rng.toFixed(0)} nm by day`, ip[0] + 8, ip[1] + 6);
+  // DR track
+  ctx.strokeStyle = '#1f2d3d'; ctx.lineWidth = 1.4; ctx.setLineDash([6, 4]);
+  for (let i = 0; i < S.anchors.length; i++) {
+    const A = S.anchors[i], tEnd = i + 1 < S.anchors.length ? S.anchors[i + 1].t : S.t;
+    ctx.beginPath(); let p = A.pos, s0 = c2s(v, p); ctx.moveTo(s0[0], s0[1]);
+    for (let t = A.t; t < tEnd;) { const t2 = Math.min(tEnd, t + 900000); p = runFrom(p, t, t2); const q = c2s(v, p); ctx.lineTo(q[0], q[1]); t = t2; }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // hourly DR ticks
+  ctx.fillStyle = '#1f2d3d';
+  for (let t = Math.ceil(S.voy.start / 3600000) * 3600000; t <= S.t; t += 3600000) { const q = c2s(v, drAt(t)); ctx.fillRect(q[0] - 1.5, q[1] - 1.5, 3, 3); }
+  // intended course line ahead
+  const dr = drNow(), dq = c2s(v, dr), L = legAt(S.t);
+  if (L.spd > 0 && S.status === 'sailing') { const ahead = runFromLeg(dr, L.crs, L.spd * 3); const aq = c2s(v, ahead); ctx.strokeStyle = 'rgba(31,45,61,0.35)'; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(dq[0], dq[1]); ctx.lineTo(aq[0], aq[1]); ctx.stroke(); ctx.setLineDash([]); }
+  // current fix candidate
+  const fx = computeFix();
+  // LOPs
+  const activeIds = new Set(fx ? fx.lops.map(l => l.s.id) : []);
+  for (const s of S.sights) {
+    const active = activeIds.has(s.id), sel = S.selSight === s.id;
+    if (!active && !sel && s.consumed && !UI.showOld) continue;
+    const lop = active ? fx.lops.find(l => l.s.id === s.id) : { ap: s.red.ap, Zn: s.red.Zn, intercept: s.red.intercept, adv: 0 };
+    drawLOP(ctx, v, lop, s, active, sel);
+  }
+  if (fx && fx.kind === 'fix') {
+    const p = c2s(v, fx.pos);
+    ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(-fx.ellipse.theta);
+    ctx.fillStyle = 'rgba(214,120,40,0.16)'; ctx.strokeStyle = 'rgba(190,100,30,0.8)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(0, 0, Math.max(2, fx.ellipse.a * v.sc), Math.max(2, fx.ellipse.b * v.sc), 0, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.strokeStyle = '#b3541e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, 6.283); ctx.stroke(); ctx.fillStyle = '#b3541e'; ctx.beginPath(); ctx.arc(p[0], p[1], 1.8, 0, 6.283); ctx.fill();
+    ctx.font = '600 11px system-ui'; ctx.fillText(`${fx.running ? 'running fix' : 'fix'} ${fmtHM(chronOf(fx.t))}`, p[0] + 9, p[1] + 14);
+  } else if (fx && fx.kind === 'ep') {
+    const p = c2s(v, fx.pos); ctx.strokeStyle = '#b3541e'; ctx.lineWidth = 1.6; ctx.strokeRect(p[0] - 5, p[1] - 5, 10, 10);
+    ctx.fillStyle = '#b3541e'; ctx.font = '11px system-ui'; ctx.fillText('EP', p[0] + 8, p[1] + 12);
+  }
+  // adopted fixes
+  for (const f of S.fixes) { const p = c2s(v, f.pos); ctx.strokeStyle = '#1f2d3d'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, 6.283); ctx.stroke(); ctx.fillStyle = '#1f2d3d'; ctx.beginPath(); ctx.arc(p[0], p[1], 1.5, 0, 6.283); ctx.fill(); ctx.font = '10px system-ui'; ctx.fillText(fmtHM(chronOf(f.t)), p[0] + 7, p[1] - 6); }
+  // DR symbol (half circle)
+  ctx.strokeStyle = '#1f2d3d'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(dq[0], dq[1], 7, Math.PI, 0); ctx.stroke(); ctx.beginPath(); ctx.moveTo(dq[0] - 9, dq[1]); ctx.lineTo(dq[0] + 9, dq[1]); ctx.stroke();
+  ctx.fillStyle = '#1f2d3d'; ctx.font = '600 11px system-ui'; ctx.fillText('DR ' + fmtHM(chronNow()), dq[0] + 11, dq[1] - 6);
+  // truth (practice or after the voyage)
+  if (S.reveal || S.status !== 'sailing') {
+    ctx.strokeStyle = 'rgba(200,50,40,0.85)'; ctx.lineWidth = 1.6; ctx.beginPath();
+    S.trueTrack.forEach((p, i) => { const q = c2s(v, [p[1], p[2]]); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+    const tq = c2s(v, S.truePos); ctx.lineTo(tq[0], tq[1]); ctx.stroke();
+    ctx.fillStyle = '#c83228'; ctx.beginPath(); ctx.arc(tq[0], tq[1], 4, 0, 6.283); ctx.fill();
+    ctx.font = '600 11px system-ui'; ctx.fillText('true position', tq[0] + 7, tq[1] + 14);
+  }
+  $('chartLegend').textContent = (S.reveal || S.status !== 'sailing') ? 'dashed: dead reckoning · blue: lines of position · orange: fix · red: true track' : 'dashed: dead reckoning · blue: lines of position · orange: fix & 95% ellipse';
+  chartDirty = false;
+}
+function runFromLeg(p, crs, dist) { return Geo.rhumb(p[0], p[1], crs, dist); }
+const chronOf = t => t + (S.voy.chron.known + S.voy.chron.unknown) * 1000;
+function drawLOP(ctx, v, lop, s, active, sel) {
+  const ux = sind(lop.Zn), uy = cosd(lop.Zn);
+  const ref = v.ref;
+  const [ax, ay] = Geo.toXY(ref, lop.ap[0], lop.ap[1]);
+  const px = ax + ux * lop.intercept, py = ay + uy * lop.intercept;
+  const len = 40;
+  const toS = (x, y) => [v.w / 2 + x * v.sc, v.h / 2 - y * v.sc];
+  const a = toS(px - uy * len, py + ux * len), b = toS(px + uy * len, py - ux * len);
+  ctx.strokeStyle = active ? (sel ? '#0b4fae' : '#2a6fd0') : 'rgba(42,111,208,0.35)'; ctx.lineWidth = sel ? 2.4 : active ? 1.7 : 1;
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  if (sel) { // AP and azimuth line
+    const apS = toS(ax, ay), fS = toS(px, py);
+    ctx.strokeStyle = 'rgba(11,79,174,0.6)'; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(apS[0], apS[1]); ctx.lineTo(fS[0], fS[1]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = '#0b4fae'; ctx.beginPath(); ctx.moveTo(apS[0] - 4, apS[1] - 4); ctx.lineTo(apS[0] + 4, apS[1] + 4); ctx.moveTo(apS[0] + 4, apS[1] - 4); ctx.lineTo(apS[0] - 4, apS[1] + 4); ctx.stroke();
+    ctx.fillStyle = '#0b4fae'; ctx.font = '10px system-ui'; ctx.fillText('AP', apS[0] + 6, apS[1] + 10);
+  }
+  const lab = toS(px + uy * len * 0.55, py - ux * len * 0.55);
+  ctx.fillStyle = active ? '#1c4f9c' : 'rgba(28,79,156,0.5)'; ctx.font = (sel ? '600 ' : '') + '10.5px system-ui';
+  ctx.fillText(`${s.body} ${fmtHM(s.chron)}${lop.adv > 1 ? ' (adv.)' : ''}`, lab[0] + 4, lab[1] - 4);
+}
+
+/* ======================================================================
+   PANELS
+   ====================================================================== */
+function renderAll() { renderHeader(); renderPanels(); renderCoach(); renderBodyCard(); chartDirty = true; }
+function renderHeader() {
+  $('voyName').textContent = S.voy.title + (S.practiceUsed ? ' · practice' : '');
+  $('btnLabels').setAttribute('aria-pressed', String(S.labels));
+  $('btnGuide').setAttribute('aria-pressed', String(UI.coach));
+  $('btnSound').setAttribute('aria-pressed', String(Snd.on)); $('btnSound').textContent = Snd.on ? 'Sound on' : 'Sound off';
+}
+function phaseText(s) {
+  if (s > 6) return ['Day', 'Sun sights possible'];
+  if (s > 0) return ['Sun low', 'Sun sights; refraction is large'];
+  if (s > -3.5) return ['Glow', 'only the brightest stars'];
+  if (s >= -9.5) return ['Twilight', 'stars + horizon: shoot now'];
+  if (s >= -11) return ['Late twilight', 'horizon fading fast'];
+  return ['Night', 'no horizon, no sights'];
+}
+let lastDyn = '';
+function renderDynamic() { // cheap per-frame text
+  $('chron').textContent = fmtHMS(chronNow());
+  const s = sunAltAt(S.t, S.truePos), [p1, p2] = phaseText(s);
+  const key = p1 + p2 + S.status;
+  if (key !== lastDyn) { lastDyn = key; const el = $('phase'); el.innerHTML = `<b>${p1}</b> · ${p2}`; el.className = 'phase' + (p1 === 'Twilight' ? ' go' : ''); }
+  $('chronSub').textContent = fmtDay(chronNow()) + (S.voy.chron.unknown ? ' · chronometer suspect' : ' · rated, error 0 s');
+  UI.lastWater = fmtDur(S.voy.start + S.voy.provisionsH * 3.6e6 - S.t); UI.lastDR = fmtPos(drNow()); UI.lastSun = fmtAng(s, true);
+  const w = $('dynWater'); if (w) w.textContent = UI.lastWater;
+  const d = $('dynDR'); if (d) d.textContent = UI.lastDR;
+  const sa = $('dynSun'); if (sa) sa.textContent = UI.lastSun;
+  if (UI.helmPending) renderHelm();
+  if (UI.sextant) {
+    $('sxHs').textContent = fmtAng(UI.sextant.R);
+    $('sxClock').textContent = 'Chronometer ' + fmtHMS(chronNow());
+  }
+}
+function renderPanels() {
+  renderHelm(); renderSights(); renderPlanner(); renderDynamic();
+}
+function renderHelm() {
+  const el = $('paneHelm'); if (!el) return;
+  const ae = document.activeElement;
+  if (ae && el.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) { UI.helmPending = true; return; }
+  UI.helmPending = false;
+  const L = legAt(S.t), isl = S.voy.island, dr = drNow(), to = Geo.rhumbTo(dr[0], dr[1], isl.lat, isl.lon);
+  const sailing = S.status === 'sailing', sx = !!UI.sextant, dis = (!sailing || sx) ? 'disabled' : '';
+  const c = S.voy.current;
+  setHTML(el, `
+  <div class="grp"><h3>Ship</h3>
+    <div class="row tight"><label for="inCourse">Course °T</label>
+      <button data-crs="-10" ${dis}>−10</button><button data-crs="-1" ${dis}>−1</button>
+      <input id="inCourse" type="number" min="0" max="359" step="1" value="${L.crs}" style="width:58px" ${dis}>
+      <button data-crs="1" ${dis}>+1</button><button data-crs="10" ${dis}>+10</button></div>
+    <div class="row"><label for="inSpeed">Speed</label><input id="inSpeed" type="range" min="0" max="8" step="0.5" value="${L.spd}" style="flex:1" ${dis}><span class="mono" style="width:52px">${L.spd.toFixed(1)} kn</span><button data-act="heaveto" ${dis} title="Stop and drift">Heave to</button></div>
+    <div class="row"><button data-act="steer" ${dis}>Steer for ${esc(isl.name)} from DR (${fmt3(to.crs)})</button></div>
+    <dl class="kv"><dt>DR position now</dt><dd id="dynDR">${UI.lastDR || ''}</dd><dt>${esc(isl.name)} from DR</dt><dd>${fmtNM(to.d)} · ${fmt3(to.crs)}</dd><dt>Water left</dt><dd id="dynWater">${UI.lastWater || ''}</dd></dl>
+  </div>
+  <div class="grp"><h3>Time</h3>
+    <div class="btnrow"><button data-act="pause" aria-pressed="${!S.running}" ${!sailing ? 'disabled' : ''}>${S.running ? 'Hold time' : 'Run clock ▶'}</button>
+      <button data-skip="600000" ${dis}>+10 min</button><button data-skip="3600000" ${dis}>+1 h</button><button data-skip="21600000" ${dis}>+6 h</button></div>
+    <div class="btnrow" style="margin-top:6px"><button data-act="twilight" ${dis}>Next star twilight</button><button data-act="noon" ${dis}>Local noon</button></div>
+    <dl class="kv" style="margin-top:8px"><dt>Sun altitude (here)</dt><dd id="dynSun">${UI.lastSun || ''}</dd></dl>
+    <p class="hint">The clock runs in real time, so stars keep moving while you aim. Time jumps simulate the ship sailing on through the current you cannot see.</p>
+  </div>
+  <div class="grp"><h3>Conditions &amp; instrument</h3>
+    <div class="row"><label for="inSea">Sea state</label><select id="inSea" ${!sailing ? 'disabled' : ''}>${Object.entries(SEA).map(([k, v]) => `<option value="${k}" ${S.sea === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></div>
+    <dl class="kv"><dt>Height of eye</dt><dd>${S.voy.hEye.toFixed(1)} m (dip ${fmtAng(-Astro.dip(S.voy.hEye))})</dd><dt>Index correction</dt><dd>${S.voy.IC >= 0 ? '+' : '−'}${Math.abs(S.voy.IC).toFixed(1)}′</dd>
+    <dt>Chronometer</dt><dd>${S.voy.chron.unknown ? 'restarted, error unknown' : 'rated, error 0 s'}</dd></dl>
+    <div class="row"><label><input type="checkbox" id="inReveal" ${S.reveal ? 'checked' : ''} ${!sailing ? 'disabled' : ''}> Practice: reveal the true position</label></div>
+    ${S.reveal ? `<p class="hint warn">Truth is shown in red and each sight reports its error. The voyage is marked as practice.</p>` : ''}
+  </div>
+  <div class="grp"><h3>Voyage</h3><p class="hint" style="margin-top:0">${esc(S.voy.blurb)}</p>
+    <div class="btnrow" style="margin-top:8px">${sailing ? `<button data-act="abandon">Abandon voyage</button>` : `<button data-act="debrief">Show debrief</button>`}<button data-act="retry">Restart this voyage</button></div></div>`);
+}
+function renderSights() {
+  const el = $('paneSights'); if (!el) return;
+  const f = computeFix();
+  let fixHtml;
+  if (!S.sights.length) fixHtml = `<p class="hint" style="margin:0">No sights yet. Select a body on the deck and take a sight. Each sight becomes a line of position (LOP).</p>`;
+  else if (!f) fixHtml = `<p class="hint" style="margin:0">Tick sights below to combine them into a fix.</p>`;
+  else if (f.kind === 'ep') fixHtml = `<p style="margin:0">One LOP gives a line, not a point. <b>Estimated position</b> (the DR dropped onto the LOP): <span class="mono">${fmtPos(f.pos)}</span>.</p><p class="hint">Add a second body at a different bearing, or wait and advance this LOP for a running fix.</p>
+    ${S.reveal ? `<p class="hint warn">Practice: EP is ${fmtNM(f.err)} from the truth.</p>` : ''}<div class="btnrow" style="margin-top:6px"><button data-act="adopt" ${S.status === 'sailing' ? '' : 'disabled'}>Adopt EP as DR</button></div>`;
+  else if (f.kind === 'bad') fixHtml = `<p class="warn" style="margin:0">These LOPs are almost parallel (best cut ${f.cut.toFixed(0)}°). They cannot fix a point. Choose bodies at least 30° apart in bearing.</p>`;
+  else {
+    const poor = f.cut < 30;
+    fixHtml = `<p style="margin:0"><b>${f.running ? 'Running fix' : 'Fix'}</b> from ${f.n} LOPs at ${fmtHM(chronOf(f.t))}: <span class="mono">${fmtPos(f.pos)}</span></p>
+    <dl class="kv" style="margin-top:4px"><dt>95% ellipse</dt><dd>${f.ellipse.a.toFixed(1)} × ${f.ellipse.b.toFixed(1)} nm</dd><dt>Best crossing angle</dt><dd class="${poor ? 'warn' : ''}">${f.cut.toFixed(0)}°</dd>${f.n > 2 ? `<dt>LOP agreement</dt><dd class="${f.sigma > 2 ? 'warn' : ''}">${f.sigma > 1.05 ? 'scatter ×' + f.sigma.toFixed(1) : 'consistent'}</dd>` : ''}
+    ${f.running ? `<dt>Advanced by DR</dt><dd>up to ${fmtDur(Math.max(...f.lops.map(l => l.adv)) * 60000)}</dd>` : ''}</dl>
+    ${f.iters ? `<p class="hint">Intercepts were long, so the sights were re-worked from the provisional fix (${f.iters}×) until it settled.</p>` : ''}
+    ${f.running ? '<p class="hint">Running fix: earlier lines were moved along your DR course and speed. Any unknown current since then shifts the fix, so the ellipse is wider.</p>' : ''}
+    ${poor ? '<p class="hint warn">Poor cut: a small error along the lines moves the fix a long way.</p>' : ''}
+    ${f.n === 2 ? '<p class="hint">Two lines always meet somewhere. A third body shows whether they agree (the "cocked hat").</p>' : ''}
+    ${S.reveal ? `<p class="hint warn">Practice: this fix is ${fmtNM(f.err)} from the truth.</p>` : ''}
+    <div class="btnrow" style="margin-top:6px"><button class="primary" data-act="adopt" ${S.status === 'sailing' ? '' : 'disabled'}>Adopt fix as new DR</button></div>`;
+  }
+  const rows = S.sights.slice().reverse().map(s => `<tr data-sight="${s.id}" class="${S.selSight === s.id ? 'sel' : ''}">
+    <td><input type="checkbox" data-use="${s.id}" ${s.use ? 'checked' : ''} aria-label="Use sight ${s.id}"></td><td>${s.id}</td><td class="nm">${esc(s.body)}${s.consumed ? ' <span class="tag dim">used</span>' : ''}</td>
+    <td>${fmtHMS(s.chron)}</td><td>${fmtAng(s.Hs)}</td><td>${Math.abs(s.red.intercept).toFixed(1)} ${s.red.intercept >= 0 ? 'T' : 'A'}</td><td>${fmt3(s.red.Zn)}</td>${S.reveal ? `<td class="${Math.abs(s.truth.lopErr) > 2 ? 'bad' : 'okc'}">${Math.abs(s.truth.lopErr).toFixed(1)}</td>` : ''}</tr>`).join('');
+  const sel = S.sights.find(s => s.id === S.selSight);
+  let redHtml = '';
+  if (sel) {
+    const r = sel.red, body = BODY[sel.body];
+    redHtml = `<div class="grp"><h3>Working: sight #${sel.id}, ${esc(sel.body)}</h3>
+    <div class="redu">
+      <span>Sextant altitude Hs</span><span>${fmtAng(sel.Hs)}</span>
+      <span>Index correction</span><span>${fmtAng(r.IC, true)}</span>
+      <span>Dip (${sel.hEye.toFixed(1)} m eye)</span><span>${fmtAng(-r.dip, true)}</span>
+      <span class="sum">Apparent altitude Ha</span><span class="sum">${fmtAng(r.Ha)}</span>
+      <span>Refraction (Bennett)</span><span>${fmtAng(-r.refr, true)}</span>
+      ${body.kind === 'sun' ? `<span>Semidiameter (lower limb)</span><span>${fmtAng(r.sd, true)}</span><span>Parallax</span><span>${fmtAng(r.par, true)}</span>` : ''}
+      <span class="sum">Observed altitude Ho</span><span class="sum">${fmtAng(r.Ho)}</span>
+      <span>Chronometer</span><span>${fmtHMS(sel.chron)}</span>
+      <span>UTC used</span><span>${fmtHMS(sel.chron - S.voy.chron.known * 1000)}</span>
+      ${body.kind === 'star' ? `<span>GHA Aries</span><span>${fmtAng(r.ghaAries)}</span><span>SHA ${esc(sel.body)}</span><span>${fmtAng(r.sha)}</span>` : ''}
+      <span>GHA</span><span>${fmtAng(r.gha)}</span>
+      <span>Declination</span><span>${fmtAng(Math.abs(r.dec))} ${r.dec >= 0 ? 'N' : 'S'}</span>
+      <span>Assumed position (DR)</span><span>${fmtLat(r.ap[0])}<br>${fmtLon(r.ap[1])}</span>
+      <span>Local hour angle</span><span>${fmtAng(r.lha)}</span>
+      <span class="sum">Computed altitude Hc</span><span class="sum">${fmtAng(r.Hc)}</span>
+      <span>Azimuth Zn</span><span>${r.Zn.toFixed(1)}°</span>
+      <span class="sum">Intercept Ho − Hc</span><span class="sum">${Math.abs(r.intercept).toFixed(1)} nm ${r.intercept >= 0 ? 'Toward' : 'Away'}</span>
+    </div>
+    <p class="hint">Plot: from the AP, go ${Math.abs(r.intercept).toFixed(1)} nm ${r.intercept >= 0 ? 'toward' : 'away from'} ${fmt3(r.Zn)}, then draw the LOP at right angles.</p>
+    ${S.reveal ? `<p class="hint warn">Practice: reading was ${sel.truth.errArc >= 0 ? '+' : ''}${sel.truth.errArc.toFixed(1)}′ off (sextant tilt at mark ${sel.truth.tilt.toFixed(1)}°); the LOP passes ${Math.abs(sel.truth.lopErr).toFixed(1)} nm from your true position.${S.voy.chron.unknown && Math.abs(sel.truth.lopErr) > Math.abs(sel.truth.errArc) + 1 ? ` Most of that is the chronometer error (${S.voy.chron.unknown} s = ${Math.abs(S.voy.chron.unknown / 4).toFixed(0)}′ of longitude), not your sight.` : ''}</p>` : ''}
+    <div class="btnrow"><button data-act="delsight" data-id="${sel.id}" ${S.status === 'sailing' ? '' : 'disabled'}>Delete sight #${sel.id}</button></div></div>`;
+  }
+  setHTML(el, `<div class="grp"><h3>Position</h3>${fixHtml}</div>
+    ${S.sights.length ? `<table class="log"><thead><tr><th>Use</th><th>#</th><th>Body</th><th>Chron</th><th>Hs</th><th>Int.</th><th>Zn</th>${S.reveal ? '<th>Err nm</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>` : ''}
+    ${redHtml}
+    ${S.fixes.length ? `<div class="grp" style="margin-top:12px"><h3>Adopted fixes</h3>${S.fixes.map(fx => `<div class="mono" style="font-size:12.5px">${fmtHM(chronOf(fx.t))} ${fmtPos(fx.pos)} <span class="tag dim">${fx.kind === 'ep' ? 'EP' : fx.running ? 'running fix' : fx.n + ' LOPs'}</span></div>`).join('')}</div>` : ''}`);
+}
+function renderPlanner() {
+  const el = $('panePlanner'); if (!el) return;
+  const sky = navigatorSky(); UI.sugg = sky.sug;
+  const day = sky.sunAlt > -1;
+  const rows = sky.list.filter(o => o.Hc > -1 && (!day || o.vis)).map(o => `<tr data-body="${esc(o.b.name)}" class="${S.selBody === o.b.name ? 'sel' : ''}"><td class="nm">${esc(o.b.name)}${sky.sug.has(o.b.name) ? '<span class="tag">suggested</span>' : ''}</td><td>${o.b.kind === 'sun' ? '☉' : o.b.mag.toFixed(1)}</td><td>${fmtAng(o.Hc)}</td><td>${fmt3(o.Zn)}</td><td class="nm">${o.vis ? (o.canSight ? '<span class="okc">shoot</span>' : '<span class="warn">no horizon</span>') : `<span style="color:var(--faint)">${o.why}</span>`}</td></tr>`).join('');
+  setHTML(el, `<p class="hint" style="margin-top:0">Predicted from your DR and the chronometer, like a star finder. Pick three bodies about 120° apart in bearing, at 15°–70° altitude. Click a row to face it.</p>${day ? '<p class="hint warn">Daylight: stars are hidden until evening twilight. Use the Sun, and advance earlier Sun lines into a running fix.</p>' : ''}
+    <table class="log planner"><thead><tr><th>Body</th><th>Mag</th><th>Alt</th><th>Zn</th><th></th></tr></thead><tbody>${rows}</tbody></table>`);
+}
+
+function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
+/* ---------- coach ---------- */
+function coachSteps() {
+  const sunOnly = S.voy.id === 'clipperton';
+  const n = S.sights.length;
+  return [
+    { t: sunOnly ? 'Find the <b>Sun</b> on the deck (or in the <b>Star planner</b>) and click it.' : 'Click a <b>ringed star</b> on the deck. The planner suggests three that are well spread.', done: !!S.selBody || n > 0 },
+    { t: 'Press <b>Take sight</b>. The sextant opens, preset to the altitude your DR predicts.', done: !!UI.sextant || n > 0 },
+    { t: 'Turn the drum (<b>wheel</b>, <b>↑/↓</b> or drag) until the body just <b>touches the horizon</b> at the bottom of its swing, then press <b>Mark</b> (Space).', done: n > 0 },
+    { t: sunOnly ? 'Wait a few hours (Helm → +1 h) and shoot the Sun again from a new bearing. Noon gives latitude.' : 'Shoot <b>two more</b> bodies in other directions. Each sight adds a blue line on the chart.', done: sunOnly ? n >= 2 : n >= 3 },
+    { t: 'In <b>Sights &amp; fix</b>, check the fix and press <b>Adopt fix</b>. The DR restarts from where you really are.', done: S.fixes.length > 0 },
+    { t: `Press <b>Steer for ${esc(S.voy.island.name)}</b>, then jump time. Fix again at the next twilight or noon: the current keeps pushing you.`, done: S.t - S.voy.start > 2 * 3600000 && S.fixes.length > 0 }
+  ];
+}
+let lastCoach = '';
+function renderCoach() {
+  const el = $('coach');
+  if (!UI.coach || S.status !== 'sailing') { el.hidden = true; lastCoach = ''; return; }
+  const steps = coachSteps(); let now = steps.findIndex(s => !s.done);
+  const html = `<button class="x" data-act="hidecoach" aria-label="Hide guide">×</button><h2>Navigator's guide <span class="prog">${now === -1 ? steps.length : now + 1}/${steps.length}</span></h2>
+    <div class="dots">${steps.map((s, i) => `<i class="${s.done ? 'd' : i === now ? 'n' : ''}"></i>`).join('')}</div>
+    ${now === -1 ? '<p class="okc">All steps done. Keep fixing and make your landfall.</p>' : `<p class="nowstep">${steps[now].t}</p>`}
+    <details${UI.coachAll ? ' open' : ''} ontoggle="UI.coachAll=this.open"><summary>All steps</summary><ol>${steps.map((s, i) => `<li class="${s.done ? 'done' : i === now ? 'now' : ''}">${s.t}</li>`).join('')}</ol></details>`;
+  if (html !== lastCoach) { el.innerHTML = html; lastCoach = html; }
+  el.hidden = !!UI.sextant;
+}
+
+/* ---------- toasts & modals ---------- */
+function toast(msg, kind, ms) {
+  const box = $('toasts'), lastT = box.lastElementChild;
+  if (lastT && lastT.textContent === msg) { lastT.remove(); }
+  const d = document.createElement('div'); d.className = 'toast' + (kind ? ' ' + kind : ''); d.textContent = msg;
+  $('toasts').appendChild(d);
+  const id = setTimeout(() => d.remove(), ms || 3500); UI.toasts.push(id);
+  while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
+}
+let modalReturn = null;
+function openModal(html, label) {
+  modalReturn = document.activeElement;
+  $('modalCard').innerHTML = html; $('modal').hidden = false; $('modal').setAttribute('aria-label', label || 'Dialog');
+  const f = $('modalCard').querySelector('button,input,select'); if (f) f.focus();
+}
+function closeModal() { $('modal').hidden = true; $('modalCard').innerHTML = ''; if (modalReturn && modalReturn.focus) modalReturn.focus(); }
+
+function openVoyages() {
+  const cards = VOYAGES.map(v => `<div class="voycard"><h4>${esc(v.title)}</h4><p><b style="color:var(--text)">${esc(v.level)}</b></p><p>${esc(v.blurb)}</p><button class="primary" data-voy="${v.id}">Sail this voyage</button></div>`).join('');
+  const d = new Date(VOYAGES[0].start + 86400000 * 30);
+  const iso = d.toISOString().slice(0, 16);
+  openModal(`<button class="close ghost" data-act="closemodal">Close</button><h2>Voyages</h2>
+  <p>Each voyage hides your true position and a current. Starting one discards the current voyage.</p>
+  <div class="voycards">${cards}</div>
+  <h3>Design your own passage</h3>
+  <p class="hint">Any ocean, any date from 1950 to 2050. The island can be real or invented. Tick practice to watch the truth while you learn.</p>
+  <form id="customForm" class="form" novalidate>
+    <label>Start (UTC)<input type="datetime-local" name="start" value="${iso}"></label>
+    <label>True start latitude (°, N+)<input type="number" name="lat" step="0.01" value="36.20"></label>
+    <label>True start longitude (°, E+)<input type="number" name="lon" step="0.01" value="-28.60"></label>
+    <label>DR error (nm)<input type="number" name="drErr" step="1" value="20"></label>
+    <label>DR error direction (°T)<input type="number" name="drDir" step="1" value="45"></label>
+    <label>Current set (°T)<input type="number" name="set" step="1" value="160"></label>
+    <label>Current drift (kn)<input type="number" name="drift" step="0.1" value="0.8"></label>
+    <label>Island name<input type="text" name="iname" value="Flores (Azores)" maxlength="40"></label>
+    <label>Island latitude<input type="number" name="ilat" step="0.01" value="39.44"></label>
+    <label>Island longitude<input type="number" name="ilon" step="0.01" value="-31.20"></label>
+    <label>Island height (m)<input type="number" name="ih" step="1" value="915"></label>
+    <label>Light range (nm, 0 = none)<input type="number" name="ilight" step="1" value="0"></label>
+    <label>Height of eye (m)<input type="number" name="he" step="0.1" value="2.5"></label>
+    <label>Index correction (′)<input type="number" name="ic" step="0.1" value="0.5"></label>
+    <label>Unknown chronometer error (s)<input type="number" name="chron" step="1" value="0"></label>
+    <label>Provisions (h)<input type="number" name="prov" step="1" value="60"></label>
+    <label>Sea state<select name="sea"><option value="calm">Calm</option><option value="moderate" selected>Moderate</option><option value="rough">Rough</option></select></label>
+    <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" name="practice" checked> Practice (show truth)</label>
+    <div class="err" id="customErr" role="alert"></div>
+    <div><button class="primary" type="submit">Sail custom voyage</button></div>
+  </form>`, 'Voyages');
+}
+function readCustom(form) {
+  const f = Object.fromEntries(new FormData(form).entries());
+  const num = (k, lo, hi, label) => { const x = Number(f[k]); if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${label} must be between ${lo} and ${hi}.`); return x; };
+  const start = Date.parse((f.start || '') + 'Z');
+  if (!Number.isFinite(start)) throw new Error('Start time is not a valid date.');
+  const yr = new Date(start).getUTCFullYear(); if (yr < 1950 || yr > 2050) throw new Error('Start year must be 1950–2050 (almanac validity).');
+  const lat = num('lat', -70, 70, 'Latitude'), lon = num('lon', -180, 180, 'Longitude');
+  const drErr = num('drErr', 0, 150, 'DR error'), drDir = num('drDir', 0, 360, 'DR direction');
+  const ilat = num('ilat', -72, 72, 'Island latitude'), ilon = num('ilon', -180, 180, 'Island longitude');
+  const g = Geo.gc(lat, lon, ilat, ilon);
+  if (g.d < 30) throw new Error('Start at least 30 nm from the island.');
+  if (g.d > 900) throw new Error('Keep the island within 900 nm of the start.');
+  const name = String(f.iname || '').trim().slice(0, 40); if (!name) throw new Error('Give the island a name.');
+  const lr = num('ilight', 0, 40, 'Light range');
+  const dr = Geo.rhumb(lat, lon, drDir, drErr);
+  const crs = Math.round(Geo.rhumbTo(dr[0], dr[1], ilat, ilon).crs);
+  return {
+    id: 'custom', title: 'Custom: ' + name, level: 'Your own passage', blurb: `A passage of ${Math.round(g.d)} nm to ${name}, designed by you.`,
+    start, truePos: [lat, lon], dr, course: crs, speed: 6, current: { set: num('set', 0, 360, 'Current set'), drift: num('drift', 0, 4, 'Current drift') },
+    hEye: num('he', 0.5, 30, 'Height of eye'), IC: num('ic', -10, 10, 'Index correction'), sea: SEA[f.sea] ? f.sea : 'moderate',
+    chron: { known: 0, unknown: num('chron', -900, 900, 'Chronometer error') },
+    island: { name, lat: ilat, lon: ilon, h: num('ih', 2, 3000, 'Island height'), widthKm: 5, light: lr > 0 ? { range: lr, h: 60 } : null },
+    provisionsH: num('prov', 6, 400, 'Provisions'), metVis: 25, practice: f.practice === 'on'
+  };
+}
+function startVoyage(v, msg) {
+  GEN++; clearPending();
+  closeSextant(); closeModal();
+  S = makeState(v);
+  UI.chart.center = null; UI.chart.scale = 3.2; UI.chart.fitted = false; UI.coach = true; $('landho').hidden = true;
+  const sky = navigatorSky(); UI.sugg = sky.sug;
+  const first = sky.list.filter(o => sky.sug.has(o.b.name)).sort((a, b) => a.Hc - b.Hc)[0];
+  if (first) { UI.yaw = first.Zn; frameAlt(first.Hc); } else { const sun = sky.list.find(o => o.b.kind === 'sun' && o.vis); UI.yaw = sun ? sun.Zn : norm360(legAt(S.t).crs); frameAlt(sun ? sun.Hc : 10); }
+  renderAll(); requestAnimationFrame(() => { if (S) chartFit(); });
+  if (msg) toast(msg);
+}
+function clearPending() { for (const id of UI.toasts) clearTimeout(id); UI.toasts = []; $('toasts').innerHTML = ''; }
+
+function openAbout() {
+  openModal(`<button class="close ghost" data-act="closemodal">Close</button><h2>About this idea</h2>
+  <h3>What you can do</h3>
+  <p>Take real sextant sights by hand: bring a star or the Sun down to a rolling sea horizon and mark the instant. Starfix reduces each sight with a built-in almanac (Sun, 57 navigational stars and Polaris; precession, nutation, aberration, refraction, dip, semidiameter). Each sight becomes a line of position. Crossing the lines gives a fix. The fixes then have to find a small island while a current you cannot see sets you off your dead reckoning.</p>
+  <h3>Why this</h3>
+  <p>Few people have ever used a sextant. Placing yourself on Earth from starlight, a clock and spherical trigonometry is a surprising, learnable skill, with a real history behind it (Carteret's lost longitude, Pitcairn, the chronometer).</p>
+  <h3>How it differs</h3>
+  <p>Almanac and sight-reduction tools such as Astron compute everything once you <i>type</i> a sextant reading. In the eSail sailing simulator there is no sextant, and a player practising celestial navigation asked for one. In Starfix the reading comes from your own hand and eye, under sea-state roll, the "swing" of a tilted sextant, twilight limits and a moving sky. That reading feeds a voyage whose true position stays hidden until the debrief. Within this collection, the nearest task is the orbital mission planner. That is a forward dynamics sandbox; Starfix is an inverse measurement problem.</p>
+  <h3>Sources that informed it</h3>
+  <ol class="refs">
+    <li>Intercept method — Wikipedia<br><span class="u">https://en.wikipedia.org/wiki/Intercept_method</span></li>
+    <li>List of stars for navigation — Wikipedia<br><span class="u">https://en.wikipedia.org/wiki/List_of_selected_stars_for_navigation</span></li>
+    <li>ASTRON: Astro Navigation Almanac and Sight Reduction calculator<br><span class="u">https://thenauticalalmanac.com/Astron_web/Astron_web.html</span></li>
+    <li>Celestial Navigation &amp; Sextant — eSail Sailing Simulator feature requests (Steam)<br><span class="u">https://steamcommunity.com/app/794860/discussions/1/3780245614660226086/</span></li>
+    <li>Position of the Sun — Wikipedia<br><span class="u">https://en.wikipedia.org/wiki/Position_of_the_Sun</span></li>
+    <li>Atmospheric refraction (Bennett and Sæmundsson formulas) — Wikipedia<br><span class="u">https://en.wikipedia.org/wiki/Atmospheric_refraction</span></li>
+    <li>Altitude Correction for Dip — Astro Navigation Demystified<br><span class="u">https://astronavigationdemystified.com/altitude-correction-for-dip/</span></li>
+    <li>Correcting Sextant Measurements For Dip — Math Encounters (mathscinotes)<br><span class="u">https://www.mathscinotes.com/2015/10/correcting-sextant-measurements-for-dip/</span></li>
+    <li>Pitcairn Islands (history: Carteret, 1767) — Wikipedia<br><span class="u">https://en.wikipedia.org/wiki/Pitcairn_Islands</span></li>
+    <li>Island data (position, height, light range): Bermuda, Gibbs Hill Lighthouse, Clipperton Island, Pitcairn Island, Flores Island (Azores) — Wikipedia<br><span class="u">https://en.wikipedia.org/wiki/Bermuda</span><br><span class="u">https://en.wikipedia.org/wiki/Gibbs_Hill_Lighthouse</span><br><span class="u">https://en.wikipedia.org/wiki/Clipperton_Island</span><br><span class="u">https://en.wikipedia.org/wiki/Pitcairn_Island</span><br><span class="u">https://en.wikipedia.org/wiki/Flores_Island_(Azores)</span></li>
+    <li>Star positions: SIMBAD astronomical database, CDS Strasbourg (J2000 positions, proper motions, V magnitudes)<br><span class="u">https://simbad.cds.unistra.fr/simbad/</span></li>
+  </ol>
+  <p class="hint">The links are listed as text so they stay selectable inside sandboxed frames. Starfix never fetches them.</p>
+  <h3>Model and limitations</h3>
+  <ul>
+    <li>The almanac is a low-precision model valid for 1950–2050. It agrees with Astron's published sample to about 0.1′ (Polaris SHA 0.3′). No Moon, no planets, no clouds.</li>
+    <li>The Earth is a sphere and the plotting sheet is a local flat projection: fine within a few hundred miles, poor near the poles (custom voyages are limited to ±70°).</li>
+    <li>The sea is modelled as sextant roll plus horizon roughness. The "swing" bias comes from tilted-plane geometry. Real sights also suffer from personal error, abnormal refraction and haze, which are not modelled.</li>
+    <li>Visibility of stars and horizon is an approximate function of the Sun's altitude. Island visibility uses the geographic-range rule 2.08(√h<sub>eye</sub> + √h<sub>object</sub>) nm plus a haze limit. Lights are simplified.</li>
+    <li>Sight reduction and fixes are computed by the app; the running-fix ellipse assumes about 0.8 nm per hour of unknown current. Scenario currents and dead-reckoning errors are invented for play.</li>
+    <li>This is a learning game, not a navigation tool. Do not use it to navigate a real vessel.</li>
+  </ul>
+  <h3>Controls</h3>
+  <p class="hint">Deck: drag to look around, wheel to zoom, click a star, Enter to take a sight. Sextant: wheel, ↑/↓ (Shift ×10), PgUp/PgDn = 1°, drag vertically, Space = Mark, Esc = done. Chart: drag to pan, wheel to zoom. Nothing is saved automatically. Use Export log / Import to keep a voyage, and Reset to return to the opening state.</p>`, 'About this idea');
+}
+function openDebrief() {
+  if (!S.end) return;
+  const e = S.end, won = e.result === 'landfall';
+  const fixes = S.fixes.filter(f => f.kind !== 'ep');
+  const meanFix = fixes.length ? fixes.reduce((a, f) => a + f.err, 0) / fixes.length : null;
+  const lopErrs = S.sights.map(s => Math.abs(s.truth.lopErr));
+  const meanLop = lopErrs.length ? lopErrs.reduce((a, b) => a + b, 0) / lopErrs.length : null;
+  const arcErrs = S.sights.map(s => Math.abs(s.truth.errArc));
+  const meanArc = arcErrs.length ? arcErrs.reduce((a, b) => a + b, 0) / arcErrs.length : null;
+  const drErr = Geo.gc(...drAt(e.t), ...S.truePos).d;
+  const c = S.voy.current;
+  const title = won ? `Land ho! ${esc(S.voy.island.name)}` : e.result === 'lost' ? 'Out of water' : 'Voyage abandoned';
+  const story = won
+    ? `You raised ${esc(S.voy.island.name)} bearing ${fmt3(e.brg)} at about ${fmtNM(e.d)}, ${fmtDur(e.t - S.voy.start)} after the start.`
+    : `At the end, ${esc(S.voy.island.name)} lay ${fmtNM(e.d)} away, bearing ${fmt3(e.brg)} from your true position. Your DR was ${fmtNM(drErr)} from where you really were.`;
+  openModal(`<button class="close ghost" data-act="closemodal">Close</button><h2>${title}</h2>
+  <p>${story}${S.practiceUsed ? ' <span class="tag dim">practice</span>' : ''}</p>
+  <div class="stats">
+    <div class="stat"><b>${fmtDur(e.t - S.voy.start)}</b><span>time at sea</span></div>
+    <div class="stat"><b>${S.sights.length}</b><span>sights taken</span></div>
+    <div class="stat"><b>${S.fixes.length}</b><span>fixes adopted</span></div>
+    <div class="stat"><b>${meanArc === null ? '—' : meanArc.toFixed(1) + '′'}</b><span>mean sextant error (your hand &amp; eye)</span></div>
+    <div class="stat"><b>${meanLop === null ? '—' : meanLop.toFixed(1) + ' nm'}</b><span>mean LOP error${S.voy.chron.unknown ? ' (incl. clock error)' : ''}</span></div>
+    <div class="stat"><b>${meanFix === null ? '—' : meanFix.toFixed(1) + ' nm'}</b><span>mean fix error</span></div>
+    <div class="stat"><b>${fmtNM(drErr)}</b><span>DR error at the end</span></div>
+  </div>
+  <h3>What was hidden</h3>
+  <ul><li>The current set ${fmt3(c.set)} at ${c.drift.toFixed(1)} kn: ${fmtNM(c.drift * (e.t - S.voy.start) / 3.6e6)} of drift over the voyage.</li>
+  <li>Your starting DR was ${fmtNM(Geo.gc(...S.voy.dr, ...S.voy.truePos).d)} from the true start.</li>
+  ${S.voy.chron.unknown ? `<li>The chronometer was ${Math.abs(S.voy.chron.unknown)} s ${S.voy.chron.unknown > 0 ? 'fast' : 'slow'}. Every 4 s of clock error puts a fix 1′ of longitude out, so your fixes sat ${fmtNM(Math.abs(S.voy.chron.unknown) / 4 * cosd(S.voy.island.lat))} ${S.voy.chron.unknown > 0 ? 'west' : 'east'} of the truth while their latitude stayed good.</li>` : ''}
+  ${S.sights.length ? `<li>Your best sight: ${Math.min(...lopErrs).toFixed(1)} nm; your worst: ${Math.max(...lopErrs).toFixed(1)} nm (distance of each LOP from the true position).</li>` : ''}</ul>
+  <p class="hint">The chart now shows your true track in red.</p>
+  <div class="btnrow" style="margin-top:10px"><button class="primary" data-act="retry">Sail it again</button><button data-act="voyages">Choose a voyage</button><button data-act="closemodal">Inspect the chart</button></div>`, 'Voyage debrief');
+}
+
+/* ---------- export / import ---------- */
+function exportLog() {
+  const data = { app: 'starfix', version: 1, exportedAt: new Date().toISOString(), note: 'Starfix voyage log. Contains the hidden truth (true position, current), so opening it spoils the voyage.', voyage: S.voy, state: { t: S.t, running: S.running, truePos: S.truePos, legs: S.legs, anchors: S.anchors, trueTrack: S.trueTrack, sights: S.sights.map(s => ({ id: s.id, body: s.body, Hs: s.Hs, IC: s.IC, hEye: s.hEye, t: s.t, chron: s.chron, utc: s.utc, ap: s.ap, use: s.use, consumed: !!s.consumed, truth: s.truth })), fixes: S.fixes, nextId: S.nextId, status: S.status, end: S.end, reveal: S.reveal, practiceUsed: S.practiceUsed, landSeen: S.landSeen, sea: S.sea, selSight: S.selSight } };
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `starfix-${S.voy.id}-${fmtDay(chronNow()).replace(/ /g, '')}-${fmtHM(chronNow()).replace(':', '')}.json`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast('Voyage log exported.');
+}
+const isNum = x => typeof x === 'number' && Number.isFinite(x);
+const isPos = p => Array.isArray(p) && p.length === 2 && isNum(p[0]) && isNum(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;
+function validateImport(d) {
+  const fail = m => { throw new Error(m); };
+  if (!d || typeof d !== 'object') fail('Not a JSON object.');
+  if (d.app !== 'starfix') fail('This file is not a Starfix voyage log.');
+  if (d.version !== 1) fail(`Unsupported log version ${esc(d.version)}.`);
+  const v = d.voyage, s = d.state;
+  if (!v || !s) fail('Missing voyage or state.');
+  if (!isNum(v.start) || !isPos(v.truePos) || !isPos(v.dr) || !isNum(v.course) || !isNum(v.speed)) fail('Voyage header is incomplete.');
+  const yr = new Date(v.start).getUTCFullYear(); if (yr < 1950 || yr > 2050) fail('Voyage date outside 1950–2050.');
+  if (!v.current || !isNum(v.current.set) || !isNum(v.current.drift) || v.current.drift < 0 || v.current.drift > 6) fail('Bad current.');
+  if (!v.island || !isNum(v.island.lat) || !isNum(v.island.lon) || !isNum(v.island.h) || typeof v.island.name !== 'string') fail('Bad island.');
+  if (!isNum(v.hEye) || !isNum(v.IC) || !SEA[v.sea] || !v.chron || !isNum(v.chron.known) || !isNum(v.chron.unknown) || !isNum(v.provisionsH) || !isNum(v.metVis)) fail('Bad instrument or voyage settings.');
+  if (!isNum(s.t) || s.t < v.start || s.t > v.start + v.provisionsH * 3.6e6 + 3.6e6) fail('Clock is outside the voyage.');
+  if (!isPos(s.truePos)) fail('Bad true position.');
+  if (!Array.isArray(s.legs) || !s.legs.length || !s.legs.every(l => isNum(l.t) && isNum(l.crs) && isNum(l.spd) && l.spd >= 0 && l.spd <= 8)) fail('Bad course/speed log.');
+  for (let i = 1; i < s.legs.length; i++) if (s.legs[i].t < s.legs[i - 1].t) fail('Course log is out of order.');
+  if (!Array.isArray(s.anchors) || !s.anchors.length || !s.anchors.every(a => isNum(a.t) && isPos(a.pos))) fail('Bad DR anchors.');
+  if (!Array.isArray(s.trueTrack) || !s.trueTrack.every(p => Array.isArray(p) && p.length === 3 && p.every(isNum))) fail('Bad track.');
+  if (!Array.isArray(s.sights) || s.sights.length > 500) fail('Bad sights list.');
+  for (const x of s.sights) {
+    if (!BODY[x.body]) fail(`Unknown body "${esc(x.body)}".`);
+    if (!isNum(x.id) || !isNum(x.Hs) || x.Hs < -5 || x.Hs > 125 || !isNum(x.t) || !isNum(x.chron) || !isNum(x.utc) || !isPos(x.ap) || !isNum(x.IC) || !isNum(x.hEye)) fail(`Sight ${esc(x.id)} is malformed.`);
+    if (!x.truth || !isPos(x.truth.pos) || !isNum(x.truth.ideal) || !isNum(x.truth.errArc)) fail(`Sight ${esc(x.id)} lacks its truth record.`);
+  }
+  if (!Array.isArray(s.fixes) || !s.fixes.every(f => isNum(f.t) && isPos(f.pos))) fail('Bad fixes.');
+  if (!['sailing', 'landfall', 'lost', 'abandoned'].includes(s.status)) fail('Bad status.');
+  return true;
+}
+function importLog(file) {
+  const myGen = GEN;
+  if (file.size > 3e6) { toast('That file is too large to be a Starfix log.', 'bad'); return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    if (myGen !== GEN) return; // a reset or new voyage happened meanwhile: ignore
+    let d;
+    try { d = JSON.parse(rd.result); validateImport(d); }
+    catch (err) { toast('Import failed: ' + (err instanceof SyntaxError ? 'the file is not valid JSON.' : (err.message || 'unreadable file')) + ' Your current voyage is unchanged.', 'bad', 6000); return; }
+    const v = d.voyage, st = d.state;
+    GEN++; closeSextant(); closeModal(); clearPending();
+    const N = makeState(v);
+    Object.assign(N, { t: st.t, running: false, truePos: st.truePos.slice(), legs: st.legs.map(l => ({ t: l.t, crs: norm360(l.crs), spd: l.spd })), anchors: st.anchors.map(a => ({ t: a.t, pos: a.pos.slice(), kind: a.kind || 'fix' })), trueTrack: st.trueTrack.map(p => p.slice()), fixes: st.fixes.map(f => Object.assign({}, f)), nextId: Math.max(isNum(st.nextId) ? st.nextId : 1, ...st.sights.map(x => x.id + 1)), status: st.status, end: st.end || null, reveal: !!st.reveal, practiceUsed: !!st.practiceUsed, landSeen: !!st.landSeen, sea: SEA[st.sea] ? st.sea : N.sea, selSight: isNum(st.selSight) ? st.selSight : null, lastTrackT: st.t });
+    S = N;
+    S.sights = st.sights.map(x => { const s = { id: x.id, body: x.body, Hs: x.Hs, IC: x.IC, hEye: x.hEye, t: x.t, chron: x.chron, utc: x.utc, ap: x.ap.slice(), use: !!x.use, consumed: !!x.consumed, truth: Object.assign({ tilt: 0 }, x.truth) }; s.red = reduce(s); s.truth.lopErr = lopError(s); return s; });
+    if (S.status !== 'sailing' && !S.end) S.end = { result: S.status, t: S.t, brg: 0, d: 0 };
+    $('landho').hidden = S.status !== 'landfall';
+    UI.chart.center = null;
+    renderAll();
+    toast(`Voyage log imported: ${S.voy.title}, ${S.sights.length} sights. The clock is held; press Run to continue.`, 'good', 5000);
+  };
+  rd.onerror = () => { if (myGen === GEN) toast('Could not read that file.', 'bad'); };
+  rd.readAsText(file);
+}
+
+/* ======================================================================
+   EVENTS
+   ====================================================================== */
+function resetSession() {
+  Snd.disable();
+  UI.vfov = 55; UI.tab = 'helm'; setTab('helm'); setView('deck');
+  startVoyage(VOYAGES[0]);
+  toast('Session reset: the opening voyage is restored.');
+}
+function setTab(tab) {
+  UI.tab = tab;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  $('paneHelm').hidden = tab !== 'helm'; $('paneSights').hidden = tab !== 'sights'; $('panePlanner').hidden = tab !== 'planner';
+}
+function setView(view) {
+  UI.view = view; document.body.dataset.view = view;
+  document.querySelectorAll('#mtabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === view)));
+  if (['helm', 'sights', 'planner'].includes(view)) setTab(view);
+  chartDirty = true;
+  if (view === 'chart' && !UI.chart.fitted) requestAnimationFrame(() => chartFit());
+}
+document.addEventListener('click', ev => {
+  const t = ev.target.closest('[data-act],[data-voy],[data-skip],[data-crs],[data-sight],[data-body],[data-tab],[data-view],[data-d]');
+  if (!t) return;
+  if (t.dataset.d && t.closest('.drum')) { drum(Number(t.dataset.d)); return; }
+  if (t.dataset.tab) { setTab(t.dataset.tab); return; }
+  if (t.dataset.view && t.closest('#mtabs')) { setView(t.dataset.view); return; }
+  if (t.dataset.voy) { startVoyage(VOYAGES.find(v => v.id === t.dataset.voy), 'New voyage: ' + VOYAGES.find(v => v.id === t.dataset.voy).title); return; }
+  if (t.dataset.skip) { skipTo(S.t + Number(t.dataset.skip), 'Time passes'); return; }
+  if (t.dataset.crs) { const L = legAt(S.t); setLeg(L.crs + Number(t.dataset.crs), L.spd); return; }
+  if (t.dataset.sight && !ev.target.matches('input')) { S.selSight = Number(t.dataset.sight); chartDirty = true; renderSights(); return; }
+  if (t.dataset.body) { selectBody(t.dataset.body, true); if (UI.view === 'planner') setView('deck'); return; }
+  const a = t.dataset.act;
+  switch (a) {
+    case 'closecard': S.selBody = null; renderBodyCard(); renderPlanner(); break;
+    case 'sight': openSextant(S.selBody); break;
+    case 'hidecoach': UI.coach = false; renderCoach(); renderHeader(); break;
+    case 'closemodal': closeModal(); break;
+    case 'steer': { const dr = drNow(), isl = S.voy.island; setLeg(Geo.rhumbTo(dr[0], dr[1], isl.lat, isl.lon).crs, legAt(S.t).spd || 6); toast('Course set for ' + isl.name + ' from your DR.'); break; }
+    case 'heaveto': setLeg(legAt(S.t).crs, 0); break;
+    case 'pause': S.running = !S.running; renderHelm(); break;
+    case 'twilight': skipTo(nextStarWindow(), 'Star twilight'); break;
+    case 'noon': skipTo(nextNoon(), 'Approaching local noon'); break;
+    case 'adopt': adoptFix(); break;
+    case 'delsight': { const id = Number(t.dataset.id); S.sights = S.sights.filter(s => s.id !== id); if (S.selSight === id) S.selSight = null; S.tick++; chartDirty = true; renderSights(); renderCoach(); break; }
+    case 'abandon': endVoyage('abandoned'); break;
+    case 'debrief': openDebrief(); break;
+    case 'retry': { const v = VOYAGES.find(x => x.id === S.voy.id) || S.voy; startVoyage(v, 'Voyage restarted: ' + v.title); break; }
+    case 'voyages': openVoyages(); break;
+  }
+});
+document.addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.id === 'inCourse') { const L = legAt(S.t); const v = Number(t.value); if (Number.isFinite(v)) setLeg(v, L.spd); else renderHelm(); }
+  else if (t.id === 'inSpeed') { const L = legAt(S.t); setLeg(L.crs, Number(t.value)); }
+  else if (t.id === 'inSea') { S.sea = t.value; renderHelm(); t.blur(); }
+  else if (t.id === 'inReveal') { S.reveal = t.checked; if (t.checked) S.practiceUsed = true; renderAll(); }
+  else if (t.dataset.use) { const s = S.sights.find(x => x.id === Number(t.dataset.use)); if (s) { s.use = t.checked; chartDirty = true; renderSights(); } }
+  else if (t.id === 'fileImport') { const f = t.files && t.files[0]; t.value = ''; if (f) importLog(f); }
+});
+document.addEventListener('input', ev => { if (ev.target.id === 'inSpeed') { const sp = ev.target.nextElementSibling; if (sp) sp.textContent = Number(ev.target.value).toFixed(1) + ' kn'; } });
+document.addEventListener('submit', ev => {
+  if (ev.target.id !== 'customForm') return; ev.preventDefault();
+  try { const v = readCustom(ev.target); startVoyage(v, 'Custom voyage: ' + v.island.name); }
+  catch (err) { $('customErr').textContent = err.message; }
+});
+$('btnVoyages').onclick = openVoyages;
+$('btnAbout').onclick = openAbout;
+$('btnGuide').onclick = () => { UI.coach = !UI.coach; renderCoach(); renderHeader(); };
+$('btnSound').onclick = () => { Snd.on ? Snd.disable() : Snd.enable(); renderHeader(); };
+$('btnExport').onclick = exportLog;
+$('btnReset').onclick = resetSession;
+$('lblImport').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileImport').click(); } });
+$('btnLabels').onclick = () => { S.labels = !S.labels; renderHeader(); };
+$('lookL').onclick = () => { UI.yaw = norm360(UI.yaw - 20); };
+$('lookR').onclick = () => { UI.yaw = norm360(UI.yaw + 20); };
+$('btnMark').onclick = markSight;
+$('btnPreset').onclick = () => { const X = UI.sextant; if (!X) return; X.R = Math.round(predictedHs(X.body, S.t, drNow()).Hs * 12) / 12; $('sxMsg').textContent = 'Arc preset from DR.'; };
+$('btnSxClose').onclick = closeSextant;
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+$('chZoomIn').onclick = () => { UI.chart.scale = clamp(UI.chart.scale * 1.5, 0.15, 60); chartDirty = true; };
+$('chZoomOut').onclick = () => { UI.chart.scale = clamp(UI.chart.scale / 1.5, 0.15, 60); chartDirty = true; };
+$('chCenter').onclick = () => { UI.chart.center = null; chartDirty = true; };
+function chartFit() {
+  const fx = computeFix(), active = S.status === 'sailing' && S.sights.some(x => x.use);
+  // while working sights, frame the DR, the LOPs and the fix; otherwise show the passage to the island
+  const pts = active ? [drNow()] : [drNow(), [S.voy.island.lat, S.voy.island.lon], ...S.fixes.slice(-2).map(f => f.pos)];
+  if (fx && fx.pos) pts.push(fx.pos);
+  for (const sg of S.sights.filter(x => x.use)) pts.push(Geo.rhumb(sg.red.ap[0], sg.red.ap[1], sg.red.Zn, sg.red.intercept));
+  if (S.fixes.length === 0) pts.push(S.voy.dr);
+  if (S.reveal || S.status !== 'sailing') { pts.push(S.truePos); for (const p of S.trueTrack) pts.push([p[1], p[2]]); }
+  const lat = pts.map(p => p[0]), lon = pts.map(p => p[1]);
+  const c = [(Math.min(...lat) + Math.max(...lat)) / 2, (Math.min(...lon) + Math.max(...lon)) / 2];
+  const ext = pts.map(p => Geo.toXY(c, p[0], p[1]));
+  const wx = Math.max(10, ...ext.map(e => Math.abs(e[0]))) * 2.5 + 20, wy = Math.max(10, ...ext.map(e => Math.abs(e[1]))) * 2.5 + 20;
+  if (!chartC.clientWidth) { UI.chart.fitted = false; return; }
+  UI.chart.fitted = true;
+  UI.chart.center = c; UI.chart.scale = clamp(Math.min(chartC.clientWidth / wx, chartC.clientHeight / wy), 0.15, 60); chartDirty = true;
+}
+$('chFit').onclick = chartFit;
+
+// keyboard
+const keyDown = new Set();
+document.addEventListener('keydown', e => {
+  if (!$('modal').hidden) { if (e.key === 'Escape') closeModal(); return; }
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  if (UI.sextant) {
+    const k = e.key, big = e.shiftKey ? 10 : 1;
+    if (k === 'ArrowDown') { drum(0.5 * big); e.preventDefault(); }
+    else if (k === 'ArrowUp') { drum(-0.5 * big); e.preventDefault(); }
+    else if (k === 'PageDown') { drum(60); e.preventDefault(); }
+    else if (k === 'PageUp') { drum(-60); e.preventDefault(); }
+    else if ((k === ' ' || k === 'Enter') && !(e.target.tagName === 'BUTTON' && k === 'Enter')) { if (!e.repeat) markSight(); e.preventDefault(); }
+    else if (k === 'Escape') { closeSextant(); e.preventDefault(); }
+    return;
+  }
+  if (e.target === deckC || e.target === document.body) {
+    if (e.key === 'ArrowLeft') { UI.yaw = norm360(UI.yaw - 5); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { UI.yaw = norm360(UI.yaw + 5); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { UI.pitch = clamp(UI.pitch + 3, 0, 75); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { UI.pitch = clamp(UI.pitch - 3, 0, 75); e.preventDefault(); }
+    else if (e.key === 'Enter' && S.selBody) { openSextant(S.selBody); e.preventDefault(); }
+  }
+});
+window.addEventListener('blur', () => { keyDown.clear(); endDrags(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) endDrags(); });
+
+// deck pointer: drag to look, click to select
+let deckDrag = null;
+deckC.addEventListener('pointerdown', e => {
+  deckC.setPointerCapture(e.pointerId); deckC.focus({ preventScroll: true });
+  deckDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: UI.yaw, pitch: UI.pitch, moved: false };
+});
+deckC.addEventListener('pointermove', e => {
+  if (!deckDrag || deckDrag.id !== e.pointerId) return;
+  const dx = e.clientX - deckDrag.x, dy = e.clientY - deckDrag.y;
+  if (Math.hypot(dx, dy) > 4) { deckDrag.moved = true; deckC.classList.add('dragging'); }
+  if (deckDrag.moved) {
+    const degPerPx = UI.vfov / deckC.clientHeight;
+    UI.yaw = norm360(deckDrag.yaw - dx * degPerPx); UI.pitch = clamp(deckDrag.pitch + dy * degPerPx, 0, 75);
+  }
+});
+function deckUp(e) {
+  if (!deckDrag || deckDrag.id !== e.pointerId) return;
+  const d = deckDrag; deckDrag = null; deckC.classList.remove('dragging');
+  if (e.type === 'pointercancel' || d.moved) return;
+  const r = deckC.getBoundingClientRect(), dpr = deckC.width / r.width;
+  const x = (e.clientX - r.left) * dpr, y = (e.clientY - r.top) * dpr;
+  let best = null, bd = 26 * dpr;
+  for (const hh of deckHits) { const dd = Math.hypot(hh.x - x, hh.y - y); if (dd < bd) { bd = dd; best = hh; } }
+  if (best) { selectBody(best.b.name, false); } else { S.selBody = null; renderBodyCard(); renderPlanner(); }
+}
+deckC.addEventListener('pointerup', deckUp);
+deckC.addEventListener('pointercancel', deckUp);
+deckC.addEventListener('dblclick', () => { if (S.selBody) openSextant(S.selBody); });
+deckC.addEventListener('wheel', e => { e.preventDefault(); UI.vfov = clamp(UI.vfov * Math.exp(e.deltaY * 0.001), 20, 90); }, { passive: false });
+
+// eyepiece: drag / wheel turns the drum (drag the image onto the horizon)
+let eyeDrag = null;
+eyeC.addEventListener('pointerdown', e => { eyeC.setPointerCapture(e.pointerId); eyeDrag = { id: e.pointerId, y: e.clientY }; });
+eyeC.addEventListener('pointermove', e => {
+  if (!eyeDrag || eyeDrag.id !== e.pointerId || !UI.sextant) return;
+  const r = eyeC.getBoundingClientRect(), size = Math.min(r.width, r.height), pxPerArc = size * 0.47 / 32;
+  drum((e.clientY - eyeDrag.y) / pxPerArc); eyeDrag.y = e.clientY;
+});
+const eyeUp = e => { if (eyeDrag && eyeDrag.id === e.pointerId) eyeDrag = null; };
+eyeC.addEventListener('pointerup', eyeUp); eyeC.addEventListener('pointercancel', eyeUp);
+eyeC.addEventListener('wheel', e => { e.preventDefault(); const d = e.deltaY || e.deltaX; drum(d * (e.deltaMode === 1 ? 0.33 : 0.01) * (e.shiftKey ? 10 : 1)); }, { passive: false });
+
+// chart pointer
+let chDrag = null;
+chartC.addEventListener('pointerdown', e => { chartC.setPointerCapture(e.pointerId); const v = chartView(); chDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, c: v.center.slice() }; });
+chartC.addEventListener('pointermove', e => {
+  if (!chDrag || chDrag.id !== e.pointerId) return;
+  const dx = e.clientX - chDrag.x, dy = e.clientY - chDrag.y;
+  UI.chart.center = Geo.fromXY(chDrag.c, -dx / UI.chart.scale, dy / UI.chart.scale); chartDirty = true;
+});
+const chUp = e => { if (chDrag && chDrag.id === e.pointerId) chDrag = null; };
+chartC.addEventListener('pointerup', chUp); chartC.addEventListener('pointercancel', chUp);
+chartC.addEventListener('wheel', e => {
+  e.preventDefault();
+  const v = chartView(), r = chartC.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  const before = s2c(v, mx, my); const k = Math.exp(-e.deltaY * 0.0015);
+  UI.chart.scale = clamp(UI.chart.scale * k, 0.15, 60);
+  const v2 = Object.assign({}, v, { sc: UI.chart.scale }); const after = s2c(v2, mx, my);
+  UI.chart.center = [v.center[0] + before[0] - after[0], norm180(v.center[1] + before[1] - after[1])]; chartDirty = true;
+}, { passive: false });
+function endDrags() { deckDrag = null; eyeDrag = null; chDrag = null; deckC.classList.remove('dragging'); }
+new ResizeObserver(() => { chartDirty = true; }).observe(chartC);
+
+/* ---------- main loop ---------- */
+let lastRT = performance.now(), lastPanelTick = -1, lastChartTick = -1, lastSec = -1;
+function loop(now) {
+  const dt = Math.min(0.25, Math.max(0, (now - lastRT) / 1000)); lastRT = now;
+  const rt = now / 1000;
+  if (S.running && S.status === 'sailing' && $('modal').hidden) { advanceBy(dt * 1000); }
+  try {
+    if (UI.view === 'deck' || UI.sextant) { if (UI.sextant) drawEyepiece(rt); else drawDeck(rt); }
+    const sec = Math.floor(S.t / 1000);
+    if (sec !== lastSec) {
+      lastSec = sec; renderDynamic();
+      if (UI.sextant && Snd.on) Snd.tick();
+      if (sec % 20 === 0) { chartDirty = true; renderHelm(); if (UI.tab === 'planner' || UI.view === 'planner') renderPlanner(); if (!$('bodyCard').contains(document.activeElement)) renderBodyCard(); }
+    } else if (UI.sextant) renderDynamic();
+    if (S.tick !== lastPanelTick) { lastPanelTick = S.tick; renderPanels(); renderCoach(); chartDirty = true; }
+    if (chartDirty && (UI.view !== 'deck' || window.innerWidth > 900)) drawChart();
+  } catch (err) { console.error(err); }
+  requestAnimationFrame(loop);
+}
+
+/* read-only diagnostics for testing */
+window.starfix = Object.freeze({
+  summary: () => ({ voyage: S.voy.id, status: S.status, t: new Date(S.t).toISOString(), chron: new Date(chronNow()).toISOString(), running: S.running, truePos: S.truePos.slice(), dr: drNow(), sights: S.sights.map(s => ({ id: s.id, body: s.body, Hs: s.Hs, Ho: s.red.Ho, Hc: s.red.Hc, Zn: s.red.Zn, intercept: s.red.intercept, errArc: s.truth.errArc, lopErr: s.truth.lopErr, use: s.use })), fix: (() => { const f = computeFix(); return f && { kind: f.kind, pos: f.pos, err: f.err, cut: f.cut, ellipse: f.ellipse, n: f.n }; })(), fixes: S.fixes.map(f => ({ t: f.t, pos: f.pos, err: f.err, kind: f.kind })), sextant: UI.sextant ? { body: UI.sextant.body.name, R: UI.sextant.R, off: UI.sextant.lastG && UI.sextant.lastG.off, phi: UI.sextant.lastG && UI.sextant.lastG.phi } : null, legs: S.legs.slice(), end: S.end, island: islandInfo(), gen: GEN, audio: Snd.ctx ? Snd.ctx.state : 'off', dragging: { deck: !!deckDrag, eye: !!eyeDrag, chart: !!chDrag } }),
+  screenOf: name => { const h = deckHits.find(d => d.b.name === name); if (!h) return null; const r = deckC.getBoundingClientRect(), dpr = deckC.width / r.width; return { x: r.left + h.x / dpr, y: r.top + h.y / dpr }; }
+});
+
+startVoyage(VOYAGES[0]);
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

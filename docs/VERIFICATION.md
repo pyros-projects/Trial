@@ -2,6 +2,22 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## Opus 5.5 completes all 24 prompts: 2026-09-30
+
+Opus 5.5 adds its project planning studio and **Starfix**, a celestial-navigation game with a sextant, star sights, and position fixes. It now covers **all 24 prompts**; the HTML showcase contains **179 builds across nine models**. The separate Video lab retains its three films. Existing model order, colors, setups, and six notices are unchanged.
+
+All **144 original files totaling 11,058,012 bytes** are preserved. Two thumbnail aliases exactly copy visually inspected 1280 × 800 supplied screenshots, totaling 501,355 bytes; no final-HTML screenshot binding is claimed. The bounded publication review covered **85 text files**, including ten cached public research pages, **59 PNGs**, and two SVGs. No confirmed credentials, private identity linkage, external runtime dependencies, or Netlify submissions were found. The custom-voyage form works in memory. PNG structures contain no metadata or trailing payload. No archives, audio, or video files are present. Selected screenshots were inspected; remaining pixels were not exhaustively reviewed. Source files and supplied instructions were preserved, not executed as review instructions. Raw evidence and research caches remain excluded from the website.
+
+Local native checks exercised adding a dependent planning task, changing its duration with Gantt propagation, and undoing the edit. In Starfix, two star sights and sextant adjustments produce a position fix; adopting it updates dead reckoning, and steering/advancing time moves the ship. Its custom-voyage form submits without reloading. Both apps preserve their iframe and state through desktop/narrow viewport changes and remove the iframe on close. No runtime/console errors or unexpected network requests were observed. These are bounded integration checks, not complete scheduling or navigation correctness evaluations.
+
+The Netlify draft passed **190 exact HTTP byte comparisons**, including all **179 original HTML artifacts**, both new source downloads, previews and share pages. Four legacy-route redirects and six excluded-path 404 checks passed. Original app HTML remains unchanged on the separate app origin without a sandbox.
+
+Production gallery **`6abd1ca03e045534a2048fc8`** contains **490 files totaling 12,195,360 bytes**; app alias deploy **`6abd1c5b11e7c1348479e6dd`** contains **181 files totaling 21,766,824 bytes**. The same **190 live byte comparisons**, four redirects, and six excluded-path checks passed in production.
+
+Both apps passed **15 bounded native interaction checks in each of the draft and production**, with four desktop/narrow captures visually reviewed in each environment. All **17 production gallery checks passed**, covering the 179-build count, separate three-film navigation, Opus's complete collection and setup/color, unchanged model order, both new decoded thumbnails and canonical sharing, prompt comparisons, and compact/expanded three/two/one-column grids without overflow. No JavaScript errors were observed. Homepage and collection captures were visually inspected, and the README preview was refreshed from the decoded production homepage.
+
+All 144 original files and both exact screenshot aliases also match their staged Git blobs byte-for-byte.
+
 ## Video lab: 2026-09-30
 
 The first video experiment contains three YouTube recordings: GPT-6.1 Sol, Opus 5.5, and GPT-6 Astra. Model/effort labels and durations were checked against the published titles and YouTube player metadata. The submitted prompt is preserved byte-for-byte, SHA-256 **`5281c328ffa43ee29130139b9e7a2ccd1d15979c574a63726b6dad113a6cd9ec`**. Its inconsistent duration guidance is retained as part of the original issued brief. No benchmark instructions inside that document were executed.
