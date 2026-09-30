@@ -1,5 +1,11 @@
 # Changelog
 
+## GPT-6.1 Sol through prompt 21: 2026-09-30
+
+- Added Sol's ecosystem, digital logic lab, roguelike, echo-loop puzzler, weather lab, node graphics studio, traffic simulator, and spreadsheet studio. Sol now covers prompts 01–21; the showcase contains 165 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and Sol's model collection. Model order, colors, and reported setups are unchanged.
+- Preserved original submissions and excluded raw evidence from the website.
+
 ## Sol and Opus 5.5 through prompt 13: 2026-09-29
 
 - Added Sol's stealth heist, factory automation, rhythm bullet hell, and drone racing, plus Opus 5.5's drone racer. Both models now cover prompts 01–13; the showcase contains 157 builds across nine models.

@@ -1,0 +1,8 @@
+// Genuine Chromium mouse-wheel input in the agent-browser session.
+const {execFileSync}=require('node:child_process');
+const info=JSON.parse(execFileSync('agent-browser',['--session','dl-sol61-final','get','cdp-url','--json'],{encoding:'utf8'}));
+const ws=new WebSocket(info.data.cdpUrl);let serial=0,session;const pending=new Map();
+ws.onmessage=ev=>{const m=JSON.parse(ev.data),p=pending.get(m.id);if(p){pending.delete(m.id);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result)}};
+const rpc=(method,params={},sess=session)=>new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params,...(sess?{sessionId:sess}:{})}))});
+async function read(expression){const r=await rpc('Runtime.evaluate',{expression,returnByValue:true});return r.result.value}
+(async()=>{await new Promise(r=>ws.addEventListener('open',r,{once:true}));const t=await rpc('Target.getTargets',{},null),target=t.targetInfos.find(t=>t.type==='page'&&t.url.includes('sol61/15-digital-logic-lab/index.html'));session=(await rpc('Target.attachToTarget',{targetId:target.targetId,flatten:true},null)).sessionId;await rpc('Emulation.setTouchEmulationEnabled',{enabled:false});const before=await read('lab.view');await rpc('Input.dispatchMouseEvent',{type:'mouseWheel',x:Number(process.argv[2]),y:Number(process.argv[3]),deltaY:Number(process.argv[4]),deltaX:0,pointerType:'mouse'});await new Promise(r=>setTimeout(r,120));const after=await read('lab.view');if(after.z===before.z)throw Error('Wheel input did not zoom');console.log(JSON.stringify({input:{x:process.argv[2],y:process.argv[3],deltaY:process.argv[4]},before,after}));ws.close()})().catch(e=>{console.error('FAIL',e.message);ws.close();process.exitCode=1});

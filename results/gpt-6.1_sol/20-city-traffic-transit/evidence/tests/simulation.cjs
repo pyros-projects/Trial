@@ -1,0 +1,23 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const html=fs.readFileSync('index.html','utf8');let source=html.match(/<script>([\s\S]*?)<\/script>/)[1];source=source.slice(0,source.lastIndexOf('wire();resizeCanvas();'));
+const fake={getContext:()=>({}),getBoundingClientRect:()=>({width:700,height:440}),addEventListener:()=>{}};
+const box={document:{querySelector:()=>fake,querySelectorAll:()=>[]},window:{},performance:{now:()=>0},setTimeout,clearTimeout,setInterval,console};vm.createContext(box);vm.runInContext(source,box);
+const run=(id,seconds)=>vm.runInContext(`city=makeScenario('${id}');sim=newSim();rebuild();for(let i=0;i<${seconds*10};i++)tick();measure();JSON.stringify({state:clone(sim),metrics:metric,diagnostics:window.Flowstate.diagnostics,snapshot:snapshot()});`,box);
+for(const id of ['crossroads','avenue','bottleneck','downtown','stadium','bridge','brt','strike','induced','stress']){const sample=JSON.parse(run(id,10));assert.ok(sample.snapshot.city.nodes.length>=5&&sample.snapshot.city.roads.length>0,id+' must have a functioning network');vm.runInContext('validateSnapshot(snapshot())',box);}
+const cross=JSON.parse(run('crossroads',360));assert.equal(cross.state.vehicles.filter(v=>v.type==='bus'&&v.atStop).length,0,'a validated connected transit loop must be able to turn at terminal stops');
+const a=JSON.parse(run('downtown',180));
+assert.equal(a.diagnostics.overlaps,0,'vehicles must preserve physical following gaps');
+assert.equal(a.diagnostics.illegalMovingEdges,0,'no moving vehicle uses closed/wrong-way edges');
+assert.ok(a.state.completed>0,'real OD journeys must complete');assert.ok(a.state.ridership>0,'buses must board real passengers');assert.ok(a.state.transitCompleted>0,'transit passengers must reach destinations');
+assert.ok(a.diagnostics.activeCars>0&&a.diagnostics.activeFreight>0&&a.diagnostics.activeBuses>0,'all three vehicle classes must operate');
+const b=JSON.parse(run('downtown',180));assert.deepEqual(a.state,b.state,'same network and seed must replay exactly');
+vm.runInContext('validateSnapshot(snapshot())',box);
+const stress=JSON.parse(run('stress',240));assert.equal(stress.diagnostics.overlaps,0,'stress must preserve safe gaps');assert.ok(stress.state.vehicles.length+stress.state.passengers.length>300,'stress must generate actual agents');
+vm.runInContext('city.roads.forEach(r=>r.lanes=1);for(let i=0;i<20;i++)tick();',box);
+assert.equal(vm.runInContext('window.Flowstate.diagnostics.overlaps',box),0,'lane removal must stop or safely relocate agents, never merge overlapping lanes');
+vm.runInContext("city={name:'Fixture',scenario:'empty',size:1000,nextId:6,settings:{...defaultSettings},nodes:[{id:1,x:0,y:0},{id:2,x:100,y:0},{id:3,x:200,y:0}],roads:[{id:4,a:1,b:2,lanes:1,speed:40,oneWay:0},{id:5,a:2,b:3,lanes:1,speed:40,oneWay:0}],stops:[],routes:[],zones:[]};sim=newSim();rebuild();",box);
+assert.equal(vm.runInContext('buildSegment({x:50,y:0},{x:150,y:0})',box),0,'a fully covered collinear road stroke must not add overlapping edges');
+assert.equal(vm.runInContext('buildSegment({x:50,y:0},{x:250,y:0})',box),1,'an overlapping extension must create only the uncovered tail');
+assert.equal(vm.runInContext('city.roads.reduce((sum,r)=>sum+Math.hypot(getNode(r.a).x-getNode(r.b).x,getNode(r.a).y-getNode(r.b).y),0)',box),250,'overlap must not duplicate road length');
+vm.runInContext('city.roads.forEach(r=>r.oneWay=1);rebuild();',box);assert.equal(vm.runInContext('validation.components.length',box),5,'directed one-way chain must expose five separate reachability components');
+console.log(JSON.stringify({pass:true,downtown:a.metrics,stress:stress.metrics,stressDiagnostics:stress.diagnostics},null,2));

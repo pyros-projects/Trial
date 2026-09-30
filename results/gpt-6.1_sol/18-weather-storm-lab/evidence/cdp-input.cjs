@@ -1,0 +1,6 @@
+// Supplements agent-browser's CLI with actual CDP wheel coordinates and held/touch input.
+const url=process.argv[2],commands=JSON.parse(process.argv[3]);let sequence=0;const pending=new Map();const socket=new WebSocket(url);
+socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.id&&pending.has(m.id)){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result);}};
+const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});
+socket.onopen=async()=>{try{const {targetInfos}=await send('Target.getTargets');const target=targetInfos.find(t=>t.type==='page'&&t.url.includes('18-weather-storm-lab/index.html'));if(!target)throw Error('Atmos target missing');const {sessionId}=await send('Target.attachToTarget',{targetId:target.targetId,flatten:true});for(const c of commands){if(c.wait)await new Promise(r=>setTimeout(r,c.wait));else await send(c.method,c.params||{},sessionId);}await new Promise(r=>setTimeout(r,180));console.log('CDP real input delivered: '+commands.length+' events.');socket.close();}catch(e){console.error(e);socket.close();process.exitCode=1;}};
+setTimeout(()=>{console.error('CDP timeout');process.exit(1);},12000).unref();

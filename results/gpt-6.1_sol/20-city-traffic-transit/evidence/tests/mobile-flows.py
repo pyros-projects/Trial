@@ -1,0 +1,45 @@
+import importlib.util,pathlib,json
+spec=importlib.util.spec_from_file_location('flow',pathlib.Path(__file__).with_name('browser-flows.py'));f=importlib.util.module_from_spec(spec);spec.loader.exec_module(f)
+for name in ['ROOT','cmd','js','shot','snap','world','clickmap','state']:globals()[name]=getattr(f,name)
+
+def main():
+    cmd('select','#scenarioSelect','downtown');cmd('click','#pauseButton');cmd('select','#overlaySelect','city')
+    cmd('set','device','iPhone 15');cmd('set','viewport','390','844');cmd('click','#fitMap');cmd('scroll','up','2000')
+    screen=js('({w:innerWidth,h:innerHeight,dpr:devicePixelRatio,body:document.body.scrollWidth,canvas:document.querySelector("canvas").width,css:document.querySelector("canvas").getBoundingClientRect().width})')
+    assert screen['w']==390 and screen['h']==844 and screen['body']<=390
+    cmd('set','device','iPhone 15');cmd('wait','--fn','document.querySelector("canvas").width>document.querySelector("canvas").getBoundingClientRect().width*2');highdpi=js('({w:innerWidth,h:innerHeight,dpr:devicePixelRatio,canvas:document.querySelector("canvas").width,css:document.querySelector("canvas").getBoundingClientRect().width})');assert highdpi['dpr']==3 and highdpi['canvas']>highdpi['css']*2;(ROOT/'evidence/logs/high-dpi.json').write_text(json.dumps(highdpi,indent=2));shot('mobile-high-dpi');cmd('set','viewport','390','844');cmd('wait','--fn','Flowstate.camera.w===document.querySelector("canvas").getBoundingClientRect().width')
+    (ROOT/'evidence/logs/final-mobile-viewport.json').write_text(json.dumps(screen,indent=2));shot('final-mobile');snap('mobile')
+    before=state('mobile-draw-start');cmd('click','[data-tool="road"]')
+    cmd('mouse','move',*world(180,350));cmd('mouse','down');cmd('mouse','move',*world(450,420))
+    cmd('set','viewport','420','844');cmd('wait','--fn','Flowstate.camera.w===document.querySelector("canvas").getBoundingClientRect().width');cmd('mouse','move',*world(750,550));cmd('set','viewport','390','844');cmd('wait','--fn','Flowstate.camera.w===document.querySelector("canvas").getBoundingClientRect().width')
+    cmd('mouse','move',*world(1050,450));cmd('mouse','move',*world(1320,350));shot('mobile-resized-road-preview');cmd('mouse','up')
+    after=state('mobile-resized-road');shot('mobile-resized-road')
+    assert after['roads']>before['roads'] and after['diag']['components']==1
+    cmd('focus','#cityCanvas');cmd('press','Control+z');assert js('Flowstate.city.roads.length')==before['roads']
+    print('PASS 390x844, 393x852 at DPR 3, no horizontal overflow, real pointer road drawing through two viewport resizes, coherent graph and keyboard undo')
+    cmd('click','[data-tool="pan"]');old=js('Flowstate.camera')
+    x,y=world(750,450);cmd('mouse','move',x,y);cmd('mouse','down');cmd('mouse','move',x+40,y+25);cmd('mouse','up')
+    new=js('Flowstate.camera');assert abs(new['x']-old['x'])>100
+    zoom=new['zoom'];cmd('click','#zoomIn');assert js('Flowstate.camera.zoom')>zoom;cmd('click','#fitMap')
+    cmd('click','[data-tool="select"]')
+    v=js('(()=>{const v=Flowstate.sim.vehicles.find(v=>v.type==="car"&&!v.pending&&v.pos>20&&v.pos<v.path[v.index].length-20),e=v.path[v.index],a=Flowstate.city.nodes.find(n=>n.id===e.from),b=Flowstate.city.nodes.find(n=>n.id===e.to),dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),off=(v.lane+.65)*9;return {id:v.id,x:a.x+dx*v.pos/len-dy/len*off,y:a.y+dy*v.pos/len+dx/len*off};})()')
+    clickmap(v['x'],v['y']);assert 'Origin' in cmd('get','text','#inspectorPanel') and 'Destination' in cmd('get','text','#inspectorPanel')
+    shot('mobile-vehicle-path');cmd('scrollintoview','#inspectorPanel');shot('mobile-inspector')
+    print('PASS pointer pan, zoom / fit, visible vehicle route selection, and mobile inspector navigation')
+    cmd('click','#settingsButton');snap('mobile-settings')
+    for selector,value in [('#setting-weather','rain')]:cmd('select',selector,value)
+    for selector,value in [('#setting-hour','22'),('#setting-demand','2'),('#setting-headway','1.8'),('#setting-frequency','25'),('#setting-capacity','50'),('#setting-dwell','4'),('#setting-incidentRate','20')]:cmd('fill',selector,value);cmd('press','Tab')
+    cmd('uncheck','#setting-laneChange');cmd('check','#setting-event');cmd('click','[data-close="settingsDialog"]:not(.icon)')
+    assert js('Flowstate.city.settings.weather')=='rain';assert js('Flowstate.city.routes.every(r=>r.frequency===25&&r.capacity===50&&r.dwell===4)')
+    cmd('click','#stepButton')
+    assert js('Flowstate.sim.vehicles.filter(v=>!v.pending&&!v.atStop).every(v=>v.speed<=Flowstate.city.roads.find(r=>r.id===v.path[v.index].road).speed/3.6*.72001)')
+    state('mobile-settings-applied');cmd('scrollintoview','#mapWrap');shot('mobile-night-rain')
+    print('PASS labeled mobile settings, actual rain speed limit, night treatment, demand/headway, service frequency/capacity/dwell, event and incident controls')
+    cmd('click','#helpButton');assert 'Make room' in cmd('get','text','#helpDialog');cmd('press','Escape');assert not js('document.querySelector("#helpDialog").open')
+    cmd('click','#saveButton');assert js('document.querySelector("#saveDialog").open');cmd('press','Escape')
+    cmd('click','[data-view="analytics"]');shot('mobile-analytics');cmd('click','[data-view="map"]')
+    cmd('set','viewport','1280','800');cmd('select','#scenarioSelect','downtown');cmd('click','#pauseButton');cmd('click','#fitMap');cmd('scroll','up','2000')
+    state('mobile-end-desktop');shot('final-desktop-after-mobile')
+    print('PASS mobile help / Escape, save navigation, analytics, and desktop resize recovery')
+
+if __name__=='__main__':main()

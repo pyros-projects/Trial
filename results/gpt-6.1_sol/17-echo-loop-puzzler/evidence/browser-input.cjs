@@ -1,0 +1,24 @@
+// Real held keyboard input via the CDP endpoint of the agent-browser session.
+// The agent-browser CLI sends taps; this utility supplies sustained game input.
+const {execFileSync}=require('node:child_process');
+const url=execFileSync('agent-browser',['--session',process.env.ECHO_BROWSER_SESSION||'echo','get','cdp-url'],{encoding:'utf8'}).trim();
+const port=new URL(url).port;let ws,serial=0;const pending=new Map();
+(async()=>{const targets=await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();const target=targets.find(t=>t.type==='page'&&t.url.startsWith('file:'));
+ws=new WebSocket(target.webSocketDebuggerUrl);ws.addEventListener('message',e=>{const p=JSON.parse(e.data),task=pending.get(p.id);if(task){pending.delete(p.id);p.error?task.reject(p.error):task.resolve(p.result)}});await new Promise(r=>ws.addEventListener('open',r));
+const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))});
+const keyInfo=code=>({code,key:code.startsWith('Key')?code.slice(3).toLowerCase():code==='Space'?' ':code,windowsVirtualKeyCode:({ArrowLeft:37,ArrowRight:39,ArrowUp:38,Space:32,Enter:13,Escape:27}[code]||code.slice(3).charCodeAt(0)),nativeVirtualKeyCode:0});
+const down=code=>send('Input.dispatchKeyEvent',{type:'keyDown',...keyInfo(code)}),up=code=>send('Input.dispatchKeyEvent',{type:'keyUp',...keyInfo(code)}),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const state=async()=>JSON.parse((await send('Runtime.evaluate',{expression:'JSON.stringify(window.echoLab.state)',returnByValue:true})).result.value);
+const keys=(process.argv[3]||'ArrowRight').split(',');
+if(process.argv[2]==='down'){for(const k of keys)await down(k)}
+if(process.argv[2]==='up'){for(const k of keys)await up(k)}
+if(process.argv[2]==='dpi'){await send('Emulation.setDeviceMetricsOverride',{width:+process.argv[3],height:+process.argv[4],deviceScaleFactor:+process.argv[5],mobile:false})}
+if(process.argv[2]==='hold'){for(const k of keys)await down(k);await sleep(+process.argv[4]||100);for(const k of keys)await up(k)}
+if(process.argv[2]==='to'){const x=+process.argv[4],timeout=Date.now()+9000;for(const k of keys)await down(k);let s;do{await sleep(16);s=await state();if(Date.now()>timeout||s.won)break}while(keys.includes('ArrowLeft')?s.player.x>x:s.player.x<x);for(const k of keys)await up(k);if(process.argv[5]==='pause'&&!s.paused&&!s.won){await down('KeyP');await up('KeyP')}if(Date.now()>timeout){console.error('TIMEOUT reaching x='+x);process.exitCode=1}}
+if(process.argv[2]==='wait'){await sleep(+process.argv[3]||100)}
+if(process.argv[2]==='tap'){for(const k of keys)await down(k);await sleep(70);for(const k of keys)await up(k)}
+if(['point','drag'].includes(process.argv[2])){const v=(await send('Runtime.evaluate',{expression:'JSON.stringify({s:echoLab.state.editor,r:document.querySelector("#game").getBoundingClientRect().toJSON()})',returnByValue:true})).result.value;const {s,r}=JSON.parse(v);const xy=(x,y)=>({x:r.left+s.panX+x*s.zoom,y:r.top+s.panY+y*s.zoom});const a=xy(+process.argv[3],+process.argv[4]);await send('Input.dispatchMouseEvent',{type:'mouseMoved',...a});await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...a});if(process.argv[2]==='drag'){const b=xy(+process.argv[5],+process.argv[6]);for(let i=1;i<=6;i++){await send('Input.dispatchMouseEvent',{type:'mouseMoved',buttons:1,x:a.x+(b.x-a.x)*i/6,y:a.y+(b.y-a.y)*i/6});await sleep(20)}await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...b})}else await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...a})}
+if(process.argv[2]==='touch'){await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});const v=(await send('Runtime.evaluate',{expression:'JSON.stringify([2,4].map(i=>{const r=document.querySelector(`[data-input="${i}"]`).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,id:i}}))',returnByValue:true})).result.value;const points=JSON.parse(v);await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});await sleep(+process.argv[3]||300);await send('Input.dispatchTouchEvent',{type:process.argv[4]==='cancel'?'touchCancel':'touchEnd',touchPoints:[]});await sleep(30);await send('Emulation.setTouchEmulationEnabled',{enabled:false})}
+if(['hold','tap'].includes(process.argv[2])&&process.argv.at(-1)==='pause'){const s=await state();if(!s.paused&&!s.won){await down('KeyP');await up('KeyP')}}
+const s=await state();console.log(JSON.stringify({level:s.level,frame:s.frame,echoes:s.echoes,paused:s.paused,input:s.input,player:{x:s.player.x,y:s.player.y,grounded:s.player.grounded,carry:s.player.carry},actors:s.actors,channels:s.channels,events:s.events,divergence:s.divergence,won:s.won,audio:s.audio},null,2));ws.close();
+})().catch(e=>{console.error(e);ws?.close();process.exitCode=1});
