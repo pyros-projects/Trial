@@ -1,6 +1,6 @@
 # Deploy Trial to Netlify
 
-The deployment scripts build a small public gallery in `dist/site`, then upload that directory through Netlify CLI. A draft deploy is the default. Production requires an explicit flag.
+The deployment scripts build the gallery in `dist/site` and its apps in `dist/artifacts`, then upload both through Netlify CLI to separate origins on the same project. A draft deploy is the default. Production requires an explicit flag.
 
 The published showcase is [trial-by-pyro.netlify.app](https://trial-by-pyro.netlify.app/). Its Netlify project ID is `80ef3988-ce08-4df7-b6ea-713e2f9ac354`.
 
@@ -40,13 +40,13 @@ sh scripts/build-site.sh
 netlify dev --offline --dir dist/site --port 8888 --no-open
 ```
 
-Open `http://localhost:8888`. Netlify Dev applies the exported redirects and response headers. A plain file server does not apply those rules and is insufficient for checking preview isolation and the API routes.
+Open `http://localhost:8888`. Apps load from the configured `artifactOrigin`. For local app interaction checks, build with `--artifact-origin http://localhost:8889` (PowerShell: `-ArtifactOrigin http://localhost:8889`) and run `python -m http.server 8889 --directory dist/artifacts` in another terminal. This serves the original apps from a separate local origin. The plain app server does not apply source-download redirects or response headers; verify those on a Netlify draft. Netlify Dev handles the gallery's API routes.
 
 The build prints the file count, total byte size, and screenshot size reduction. For a machine-readable report, use `python tools/build_site.py --json`. The public data is saved at `dist/site/api/data.json`.
 
 PowerShell accepts `-Python 'C:\path\to\python.exe'`, `-Screenshots none`, and `-Json`. POSIX accepts `PYTHON=/path/to/python sh scripts/build-site.sh --screenshots none --json`. The Python CLI also accepts `--screenshots none`.
 
-Only `dist/site` is replaced by a rebuild. The exporter refuses to overwrite unrelated files or follow symlinks and Windows junctions. `dist/.site-export-owned` records ownership; retain it when rebuilding an existing export.
+Only the owned `dist/site` and `dist/artifacts` outputs are replaced by a rebuild. The exporter refuses to overwrite unrelated files or follow symlinks and Windows junctions. Retain their ownership markers in `dist` when rebuilding an existing export.
 
 ## Deploy to an existing site
 
@@ -62,11 +62,13 @@ sh scripts/deploy-netlify.sh --site-id YOUR_SITE_ID
 
 Alternatively, set `NETLIFY_SITE_ID` or link this directory once with `netlify link`, then run the deployment script without a site argument. Explicit site IDs take precedence over the environment and the local link. If no target is selected, the script stops before deployment.
 
-The scripts check authentication, rebuild the public export, and call `netlify deploy --dir dist/site --no-build --json`. The returned JSON contains the deploy URL. They set `CI=true` for the CLI so missing information causes an error instead of an interactive prompt.
+Set `artifactOrigin` in `gallery/static/appsettings.json` to `https://builds--YOUR_SITE_NAME.netlify.app`. The scripts verify that this matches the selected existing project before uploading. They copy the exact `dist/artifacts` export into an isolated temporary CLI directory, deploy it with `--alias builds`, clean up that directory, then deploy `dist/site` with `--prod`. Isolation prevents Netlify CLI from merging the gallery's headers into the app upload. The artifact upload never uses `--prod`. Drafts use a separate `builds-preview` alias and an origin override, leaving the production apps unchanged. If the artifact upload fails, the gallery upload does not run. Do not use either alias as a Git branch name.
+
+Both returned JSON records contain their deploy URLs. The scripts set `CI=true` so missing information causes an error instead of an interactive prompt. Publish through these scripts: uploading only `dist/site` does not update the apps.
 
 ## Create a site explicitly
 
-When creating the first site is intended, choose its name:
+The split export requires an existing project. For a new installation, create the Netlify project and then set `siteUrl` and `artifactOrigin` to its actual names before deploying. The legacy single-origin mode, with `artifactOrigin` omitted, also supports explicit creation through the wrappers:
 
 ```powershell
 .\scripts\deploy-netlify.ps1 -SiteName 'trial-by-pyro'
@@ -122,7 +124,7 @@ These exclusions apply to the static deployment, not GitHub. Evidence and other 
 
 Turn off **Project configuration > General > Powered by Netlify badge** for this showcase. Netlify can inject that badge into HTML responses at its edge, including submitted builds, which changes their downloaded hashes. The setting is already off for `trial-by-pyro.netlify.app`; check it when creating a different site. [Netlify documents the per-project setting and edge injection](https://docs.netlify.com/manage/projects/powered-by-netlify-badge/).
 
-Netlify may also add hosting comments and metadata to HTML preview responses. The **Source** button uses `/sources/*`, an internal rewrite to the same stored artifact with `application/octet-stream` and attachment headers. This preserves original download bytes without publishing another copy. The SHA-256 in the public inventory identifies those original bytes. Verify source downloads on a real Netlify draft or production deploy; Netlify Dev may apply rewrite headers differently.
+Netlify may also add hosting comments and metadata to HTML preview responses. The **Source** button uses `/sources/*` on the app origin, an internal rewrite to the same stored artifact with `application/octet-stream` and attachment headers. This preserves original download bytes without publishing another copy. Older gallery-origin HTML and source routes redirect to the app origin; they do not proxy executable HTML onto the gallery origin. The SHA-256 in the public inventory identifies the original bytes. Verify source downloads on a real Netlify draft or production deploy; Netlify Dev may apply rewrite headers differently.
 
 The public data declares `mode: "public"` and a generation timestamp. Scores are `null`, check lists are empty, and check counts are zero because evaluation data is omitted. This does not turn missing evidence into a passing result. The local gallery continues to read full results with its existing behavior.
 
@@ -134,7 +136,9 @@ The exporter rejects `netlify` and `data-netlify` attributes in **all** submitte
 
 `/api/data` rewrites to `/api/data.json`; `/api/export.csv` downloads the public inventory. Prompt documents use `/prompts/<task-id>/prompt.md` and `/prompts/<task-id>/acceptance.md`.
 
-Public artifact URLs live below `/artifacts/`. Source buttons use the `/sources/` attachment routes described above. The generated `_headers` applies a CSP sandbox to artifact pages, without `allow-same-origin`. The gallery also uses an opaque-origin iframe for public previews. This keeps submitted scripts from accessing the gallery's document, storage or service workers. Browser features that require a normal origin, including local storage, may be unavailable in public previews; download the HTML and run it separately when those features matter.
+Public app URLs live below `/artifacts/` on `https://builds--trial-by-pyro.netlify.app`. These HTML apps have no iframe or HTTP CSP sandbox. Forms, browser storage, import/export, popups, and other normal browser capabilities are available subject to the browser's own permissions. The browser's same-origin policy keeps app scripts from accessing the gallery's document or storage. Apps share their own origin with each other; this is not per-app storage isolation. Saved data remains in the visitor's browser, with no application server or database deployed. **Open app** opens a separate tab if a browser restricts an embedded feature.
+
+Only the app HTML and its serving rules go into `dist/artifacts`; thumbnails stay in `dist/site`. If `artifactOrigin` is omitted, the exporter retains the older single-origin layout and its opaque sandbox, now allowing form submission. The viewer also keeps this safe fallback for same-origin runtime URLs. Legacy custom-catalog demos retain their existing disposable-demo policy.
 
 **Copy link** creates a URL such as `https://trial-by-pyro.netlify.app/share/gpt-6_astra/04-deformable-physics/`. The exported `index.html` at that path contains the model label, prompt title, description, canonical URL, and Open Graph / Twitter card metadata. Its image points to the run's existing published screenshot. With screenshots disabled or absent, the page omits image metadata and uses a summary card. Link-preview appearance and refresh timing depend on the receiving platform.
 

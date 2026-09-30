@@ -646,6 +646,194 @@ token = "PRIVATE-TOKEN"
         self.assertIn("Content-Disposition: attachment", source_headers)
         self.assertIn("no-transform", source_headers)
 
+    def split_settings(self, **changes):
+        settings = json.loads(self.model_settings)
+        settings.update(siteUrl="https://gallery.example.test", artifactOrigin="https://builds.example.test")
+        settings.update(changes)
+        (self.root / "gallery/static/appsettings.json").write_text(json.dumps(settings), encoding="utf-8")
+
+    def test_split_export_moves_only_app_html_off_the_gallery_origin(self):
+        self.split_settings()
+        screenshot = b"Selected screenshot"
+        (self.run / "screenshot.png").write_bytes(screenshot)
+        private = self.run / "evidence/private.json"
+        private.parent.mkdir()
+        private.write_text("PRIVATE EVIDENCE", encoding="utf-8")
+        original_open = Path.open
+
+        def guarded_open(path, *args, **kwargs):
+            if path == private:
+                raise AssertionError("The exporter read raw evidence")
+            return original_open(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "open", guarded_open), mock.patch.object(build_site, "pillow_modules", return_value=None):
+            report, data = self.export()
+        artifact = data["results"][0]["artifact"]
+        self.assertEqual(artifact["url"], "https://builds.example.test/artifacts/Model%20One/01-fluid-simulation/index.html")
+        self.assertEqual(artifact["source_url"], "https://builds.example.test/sources/Model%20One/01-fluid-simulation/index.html")
+        self.assertEqual(artifact["screenshot_url"], "/artifacts/Model%20One/01-fluid-simulation/screenshot.png")
+        self.assertEqual(self.resolve_url(artifact["screenshot_url"]).read_bytes(), screenshot)
+        self.assertFalse(list((self.output / "artifacts").rglob("*.html")))
+        artifact_output = self.root / "dist/artifacts"
+        published = artifact_output / "artifacts/Model One/01-fluid-simulation/index.html"
+        self.assertEqual(published.read_bytes(), self.html)
+        self.assertEqual(hashlib.sha256(published.read_bytes()).hexdigest(), artifact["sha256"])
+        self.assertEqual((self.run / "index.html").read_bytes(), self.html)
+        self.assertEqual({p.relative_to(artifact_output).as_posix() for p in artifact_output.rglob("*") if p.is_file()},
+                         {"artifacts/Model One/01-fluid-simulation/index.html", "_headers", "_redirects"})
+        _, share = self.share_document(data["results"][0])
+        self.assertEqual(share.metadata["og:image"], "https://gallery.example.test" + artifact["screenshot_url"])
+        self.assertEqual(report["artifact_origin"], "https://builds.example.test")
+        self.assertEqual(report["artifact_output"], str(artifact_output))
+        self.assertEqual(report["artifact_files"], 3)
+        self.assertEqual(report["artifact_bytes"], sum(p.stat().st_size for p in artifact_output.rglob("*") if p.is_file()))
+        self.assertEqual(report["bytes"], sum(p.stat().st_size for p in self.output.rglob("*") if p.is_file()))
+
+    def test_split_routes_redirect_to_normal_origin_and_keep_source_attachments(self):
+        self.split_settings()
+        self.export(screenshots="none")
+        redirects = (self.output / "_redirects").read_text(encoding="utf-8").splitlines()
+        self.assertIn("/artifacts/* https://builds.example.test/artifacts/:splat 302", redirects)
+        self.assertIn("/sources/* https://builds.example.test/sources/:splat 302", redirects)
+        self.assertNotIn("/sources/* /artifacts/:splat 200", redirects)
+        artifact_output = self.root / "dist/artifacts"
+        self.assertEqual((artifact_output / "_redirects").read_text(encoding="utf-8"), "/sources/* /artifacts/:splat 200\n")
+        headers = (artifact_output / "_headers").read_text(encoding="utf-8")
+        self.assertNotIn("sandbox", headers)
+        self.assertIn("X-Content-Type-Options: nosniff", headers)
+        self.assertIn("Referrer-Policy: no-referrer", headers)
+        self.assertIn("Content-Type: application/octet-stream", headers)
+        self.assertIn("Content-Disposition: attachment", headers)
+        self.assertIn("no-transform", headers)
+
+    def test_artifact_origin_rejects_unsafe_and_equivalent_gallery_origins(self):
+        self.export(screenshots="none")
+        previous = (self.output / "api/data.json").read_bytes()
+        unsafe = [None, "", 42, [], "//builds.example.test", "javascript:alert(1)",
+                  "https://user:secret@builds.example.test", "https://builds.example.test/path",
+                  "https://builds.example.test?", "https://builds.example.test#",
+                  "https://builds.example.test\\@evil.test", "https://builds.example.test\n",
+                  "https://builds.example.test:99999", "https://GALLERY.example.test:443/"]
+        for value in unsafe:
+            with self.subTest(artifactOrigin=value):
+                self.split_settings(artifactOrigin=value)
+                with self.assertRaises(ValueError):
+                    self.export(screenshots="none")
+                self.assertEqual((self.output / "api/data.json").read_bytes(), previous)
+                self.assertFalse((self.root / "dist/artifacts").exists())
+
+    def test_artifact_origin_override_is_normalized_without_rewriting_settings(self):
+        self.split_settings()
+        path = self.root / "gallery/static/appsettings.json"
+        original = path.read_bytes()
+        report, data = self.export(screenshots="none", artifact_origin="https://BUILDS-PREVIEW.example.test:443/")
+        self.assertEqual(report["artifact_origin"], "https://builds-preview.example.test")
+        self.assertTrue(data["results"][0]["artifact"]["url"].startswith("https://builds-preview.example.test/artifacts/"))
+        self.assertEqual((self.output / "appsettings.json").read_bytes(), original)
+        self.assertEqual(path.read_bytes(), original)
+        with self.assertRaises(ValueError):
+            self.export(screenshots="none", artifact_origin="https://gallery.example.test/")
+
+    def test_artifact_origin_does_not_accept_browser_equivalent_ip_spellings(self):
+        for origin in ("http://127.1", "http://2130706433", "http://0x7f000001", "http://0177.0.0.1"):
+            with self.subTest(artifactOrigin=origin):
+                self.split_settings(siteUrl="http://127.0.0.1", artifactOrigin=origin)
+                with self.assertRaises(ValueError):
+                    self.export(screenshots="none")
+        self.split_settings(siteUrl="http://[::1]", artifactOrigin="http://[0:0:0:0:0:0:0:1]:80/")
+        with self.assertRaises(ValueError):
+            self.export(screenshots="none")
+
+    def test_split_export_does_not_replace_unowned_artifact_directory(self):
+        self.export(screenshots="none")
+        previous = (self.output / "api/data.json").read_bytes()
+        self.split_settings()
+        artifact_output = self.root / "dist/artifacts"
+        artifact_output.mkdir()
+        sentinel = artifact_output / "keep.txt"
+        sentinel.write_text("User data", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            self.export(screenshots="none")
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "User data")
+        self.assertEqual((self.output / "api/data.json").read_bytes(), previous)
+
+    def test_split_export_stages_both_outputs_and_removes_stale_artifacts_on_success(self):
+        self.split_settings()
+        self.export(screenshots="none")
+        artifact_output = self.root / "dist/artifacts"
+        self.assertTrue(artifact_output.is_dir())
+        previous = {p: p.read_bytes() for out in (self.output, artifact_output) for p in out.rglob("*") if p.is_file()}
+        prompt = self.root / "prompts/01-fluid-simulation/acceptance.md"
+        prompt.unlink()
+        with self.assertRaises(ValueError):
+            self.export(screenshots="none")
+        self.assertEqual({p: p.read_bytes() for p in previous}, previous)
+        prompt.write_text("Restored prompt", encoding="utf-8")
+        (self.run / "index.html").unlink()
+        report, data = self.export(screenshots="none")
+        self.assertEqual(data["results"], [])
+        self.assertFalse(list(artifact_output.rglob("*.html")))
+        self.assertEqual(report["artifact_files"], 2)
+
+    def test_artifact_staging_failure_preserves_both_existing_exports(self):
+        self.split_settings()
+        self.export(screenshots="none")
+        artifact_output = self.root / "dist/artifacts"
+        previous = {p: p.read_bytes() for out in (self.output, artifact_output) for p in out.rglob("*") if p.is_file()}
+        original_write = Path.write_text
+
+        def fail_artifact_headers(path, *args, **kwargs):
+            if path.name == "_headers" and path.parent.name == "artifacts":
+                raise OSError("Fixture: app staging write failed")
+            return original_write(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "write_text", fail_artifact_headers), self.assertRaises(OSError):
+            self.export(screenshots="none")
+        self.assertEqual({p: p.read_bytes() for p in previous}, previous)
+
+    def test_split_export_rejects_artifact_junctions_before_replacing_gallery(self):
+        if not hasattr(Path, "is_junction"):
+            self.skipTest("Junction checks require Python 3.12 or newer")
+        self.split_settings()
+        self.export(screenshots="none")
+        previous = (self.output / "api/data.json").read_bytes()
+        targets = (self.root / "dist/artifacts", self.root / "dist/.artifacts-export-owned",
+                   self.root / "dist/artifacts/artifacts")
+        for target in targets:
+            with self.subTest(target=target), mock.patch.object(Path, "is_junction", lambda path: path == target):
+                with self.assertRaises(ValueError):
+                    self.export(screenshots="none")
+                self.assertEqual((self.output / "api/data.json").read_bytes(), previous)
+
+    def test_split_export_keeps_legacy_demo_routes_and_policy_in_gallery(self):
+        self.split_settings()
+        self.add_catalog_task("fixture-demo", "Legacy demo")
+        catalog_path = self.root / "prompts/catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog[-1]["track"] = "real-apps"
+        catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+        demo = self.run.parent / "fixture-demo/project/gallery/index.html"
+        demo.parent.mkdir(parents=True)
+        demo.write_bytes(self.html)
+        _, data = self.export(screenshots="none")
+        artifact = next(row["artifact"] for row in data["results"] if row["task_id"] == "fixture-demo")
+        self.assertEqual(artifact["url"], "/demos/Model%20One/fixture-demo/index.html")
+        self.assertEqual(self.resolve_url(artifact["url"]).read_bytes(), self.html)
+        self.assertFalse((self.root / "dist/artifacts/demos").exists())
+        self.assertIn("Content-Security-Policy: " + build_site.DEMO_CSP,
+                      (self.output / "_headers").read_text(encoding="utf-8"))
+
+    def test_unconfigured_export_keeps_opaque_origin_but_allows_forms(self):
+        report, data = self.export(screenshots="none")
+        headers = (self.output / "_headers").read_text(encoding="utf-8")
+        artifact_headers = headers.split("/artifacts/*\n", 1)[1].split("\n/", 1)[0]
+        self.assertIn("allow-forms", artifact_headers)
+        self.assertNotIn("allow-same-origin", artifact_headers)
+        self.assertTrue(data["results"][0]["artifact"]["url"].startswith("/artifacts/"))
+        self.assertIsNone(report["artifact_origin"])
+        self.assertIsNone(report["artifact_output"])
+        self.assertEqual(report["artifact_files"], 0)
+
     def test_share_pages_have_canonical_metadata_and_plain_viewer_link(self):
         report, data = self.export(screenshots="none")
         row = data["results"][0]
@@ -834,18 +1022,41 @@ class DeployScriptTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name) / "package"
         (self.root / "tools").mkdir(parents=True)
-        (self.root / "tools/build_site.py").write_text('print("Fixture build completed.")\n', encoding="utf-8")
+        (self.root / "tools/build_site.py").write_text('''import json, os, sys
+from pathlib import Path
+Path(os.environ["FAKE_BUILD_LOG"]).write_text(json.dumps(sys.argv[1:]), encoding="utf-8")
+for directory in ("dist/site", "dist/artifacts"):
+    Path(directory).mkdir(parents=True, exist_ok=True)
+Path("dist/artifacts/check.html").write_bytes(b"original artifact bytes")
+print("Fixture build completed.")
+''', encoding="utf-8")
         shutil.copytree(ROOT / "scripts", self.root / "scripts")
+        shutil.copy2(ROOT / "netlify.toml", self.root / "netlify.toml")
         fakebin = self.root / "fakebin"
         fakebin.mkdir()
         fake = fakebin / "fake_cli.py"
-        fake.write_text('''import json, os, sys
+        fake.write_text('''import json, os, sys, tomllib
 from pathlib import Path
 with Path(os.environ["FAKE_CLI_LOG"]).open("a", encoding="utf-8") as log:
-    log.write(json.dumps({"args": sys.argv[1:], "ci": os.environ.get("CI")}) + "\\n")
+    log.write(json.dumps({"args": sys.argv[1:], "ci": os.environ.get("CI"), "cwd": str(Path.cwd())}) + "\\n")
 if sys.argv[1] == "status":
     print(os.environ["FAKE_CLI_STATUS"])
     sys.exit(int(os.environ["FAKE_CLI_STATUS_EXIT"]))
+if sys.argv[1] == "sites:list":
+    print(os.environ["FAKE_CLI_SITES"])
+    sys.exit(0)
+if sys.argv[1] != "deploy":
+    sys.exit("Unexpected fake CLI command")
+if "--config" in sys.argv:
+    sys.exit("Unknown option --config")
+if "--alias" in sys.argv:
+    deploy_dir = Path(sys.argv[sys.argv.index("--dir") + 1])
+    publish = tomllib.loads(Path("netlify.toml").read_text(encoding="utf-8"))["build"]["publish"]
+    if Path(publish).resolve() != deploy_dir.resolve():
+        sys.exit("Artifact deploy would inherit headers from a different publish directory")
+    if (deploy_dir / "check.html").read_bytes() != b"original artifact bytes":
+        sys.exit("Staged artifact bytes changed")
+    sys.exit(int(os.environ["FAKE_CLI_ARTIFACT_EXIT"]))
 print('{"deploy_url":"https://example.invalid"}')
 ''', encoding="utf-8")
         # Both shims intentionally coexist: PowerShell must select the native launcher for its OS.
@@ -854,8 +1065,11 @@ print('{"deploy_url":"https://example.invalid"}')
         shim.write_text(f'#!/bin/sh\nexec "{Path(sys.executable).as_posix()}" "{fake.as_posix()}" "$@"\n', encoding="utf-8")
         shim.chmod(0o755)
         self.log = self.root / "cli-calls.jsonl"
+        self.build_log = self.root / "build-args.json"
         self.env = dict(os.environ, PATH=str(fakebin) + os.pathsep + os.environ["PATH"], PYTHON=sys.executable,
                         FAKE_CLI_LOG=str(self.log), FAKE_CLI_STATUS_EXIT="1",
+                        FAKE_BUILD_LOG=str(self.build_log), FAKE_CLI_ARTIFACT_EXIT="0",
+                        FAKE_CLI_SITES=json.dumps([{"id": "existing-site", "name": "trial-by-pyro"}]),
                         FAKE_CLI_STATUS=json.dumps({"loggedIn": True, "linked": False, "error": {"code": "NOT_LINKED"}}))
         self.env.pop("NETLIFY_SITE_ID", None)
         self.shells = []
@@ -872,10 +1086,93 @@ print('{"deploy_url":"https://example.invalid"}')
 
     def invoke(self, command, arguments):
         self.log.unlink(missing_ok=True)
+        self.build_log.unlink(missing_ok=True)
         result = subprocess.run(command + arguments, cwd=self.root, env=self.env,
                                 capture_output=True, text=True, timeout=25)
         calls = [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
         return result, calls
+
+    def configure_artifact_origin(self, origin="https://builds--trial-by-pyro.netlify.app"):
+        settings = self.root / "gallery/static/appsettings.json"
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text(json.dumps({"artifactOrigin": origin}), encoding="utf-8")
+
+    def test_split_production_uploads_artifact_alias_before_gallery_only_production(self):
+        self.configure_artifact_origin()
+        for name, command in self.shells:
+            arguments = ["-SiteId", "existing-site", "-Production"] if name == "powershell" else ["--site-id", "existing-site", "--prod"]
+            with self.subTest(shell=name):
+                result, calls = self.invoke(command, arguments)
+                self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+                self.assertEqual([call["args"][0] for call in calls], ["status", "sites:list", "deploy", "deploy"])
+                artifact, gallery = [call["args"] for call in calls if call["args"][0] == "deploy"]
+                self.assertEqual(artifact[artifact.index("--dir") + 1], "public")
+                self.assertEqual(artifact[artifact.index("--alias") + 1], "builds")
+                self.assertEqual(artifact[artifact.index("--site") + 1], "existing-site")
+                self.assertNotIn("--config", artifact)
+                self.assertNotIn("--prod", artifact)
+                self.assertEqual(gallery[gallery.index("--dir") + 1], "dist/site")
+                self.assertIn("--prod", gallery)
+                self.assertNotIn("--alias", gallery)
+                self.assertNotIn("--config", gallery)
+                self.assertNotEqual(Path(calls[-2]["cwd"]), self.root)
+                self.assertFalse(Path(calls[-2]["cwd"]).exists(), "Artifact staging must be cleaned up")
+                self.assertEqual(Path(calls[-1]["cwd"]), self.root)
+
+    def test_split_draft_uses_separate_artifact_alias_and_build_origin(self):
+        self.configure_artifact_origin()
+        for name, command in self.shells:
+            arguments = ["-SiteId", "existing-site"] if name == "powershell" else ["--site-id", "existing-site"]
+            with self.subTest(shell=name):
+                result, calls = self.invoke(command, arguments)
+                self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+                deploys = [call["args"] for call in calls if call["args"][0] == "deploy"]
+                self.assertEqual(len(deploys), 2)
+                self.assertEqual(deploys[0][deploys[0].index("--dir") + 1], "public")
+                self.assertEqual(deploys[0][deploys[0].index("--alias") + 1], "builds-preview")
+                self.assertNotIn("--config", deploys[0])
+                self.assertEqual(deploys[1][deploys[1].index("--dir") + 1], "dist/site")
+                self.assertNotIn("--config", deploys[1])
+                self.assertTrue(all("--prod" not in deploy for deploy in deploys))
+                build_args = json.loads(self.build_log.read_text(encoding="utf-8"))
+                self.assertEqual(build_args[build_args.index("--artifact-origin") + 1], "https://builds-preview--trial-by-pyro.netlify.app")
+
+    def test_split_origin_must_match_existing_target_before_build_or_upload(self):
+        self.configure_artifact_origin()
+        self.env["FAKE_CLI_SITES"] = json.dumps([{"id": "existing-site", "name": "different-site"}])
+        for name, command in self.shells:
+            arguments = ["-SiteId", "existing-site"] if name == "powershell" else ["--site-id", "existing-site"]
+            with self.subTest(shell=name):
+                result, calls = self.invoke(command, arguments)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("artifactOrigin", result.stderr + result.stdout)
+                self.assertFalse(any(call["args"][0] == "deploy" for call in calls))
+                self.assertFalse(self.build_log.exists())
+
+    def test_split_new_site_requires_linking_an_existing_target(self):
+        self.configure_artifact_origin()
+        for name, command in self.shells:
+            arguments = ["-SiteName", "trial-by-pyro"] if name == "powershell" else ["--site-name", "trial-by-pyro"]
+            with self.subTest(shell=name):
+                result, calls = self.invoke(command, arguments)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("existing site", result.stderr + result.stdout)
+                self.assertFalse(any(call["args"][0] == "deploy" for call in calls))
+                self.assertFalse(self.build_log.exists())
+
+    def test_failed_artifact_upload_aborts_gallery_upload(self):
+        self.configure_artifact_origin()
+        self.env["FAKE_CLI_ARTIFACT_EXIT"] = "17"
+        for name, command in self.shells:
+            arguments = ["-SiteId", "existing-site", "-Production"] if name == "powershell" else ["--site-id", "existing-site", "--prod"]
+            with self.subTest(shell=name):
+                result, calls = self.invoke(command, arguments)
+                self.assertNotEqual(result.returncode, 0)
+                deploys = [call["args"] for call in calls if call["args"][0] == "deploy"]
+                self.assertEqual(len(deploys), 1)
+                self.assertEqual(deploys[0][deploys[0].index("--dir") + 1], "public")
+                self.assertNotIn("--prod", deploys[0])
+                self.assertFalse(Path(calls[-1]["cwd"]).exists(), "Failed artifact staging must be cleaned up")
 
     def test_missing_target_never_calls_deploy(self):
         for name, command in self.shells:

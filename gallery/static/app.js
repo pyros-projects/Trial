@@ -71,7 +71,7 @@
   }
   function liveBuildNotice(row) {
     const notice=buildNotice(row);if(!notice)return '';
-    return `<div class="live-notice-anchor"><details id="live-build-notice" class="live-info build-notice live-build-notice" data-notice-type="${notice.type}" open><summary>${noticeHeading(notice)}</summary><p class="build-notice-message">${escape(notice.message)}</p></details></div>`;
+    return `<details id="live-build-notice" class="live-info build-notice live-build-notice" data-notice-type="${notice.type}" open><summary class="button" aria-label="Build notice"><span class="notice-icon" aria-hidden="true">!</span><span class="live-notice-label">Notice</span></summary><div class="live-info-panel build-notice live-notice-panel" data-notice-type="${notice.type}"><div class="live-info-heading"><strong>${noticeHeading(notice)}</strong><button id="close-live-notice" class="icon-button" aria-label="Hide build notice">×</button></div><p class="build-notice-message">${escape(notice.message)}</p></div></details>`;
   }
   function modelProfile(row) {
     const profile=state.data?.model_profiles?.[row.model_key];
@@ -486,10 +486,13 @@
     renderViewer();if(!$('#viewer').open)$('#viewer').showModal();
   }
   function sourceLink(a) {return a.source_url?(isPublic()||a.kind==='project'?a.source_url:a.source_url+'?download=1'):null;}
+  function isolatedArtifact(row) {
+    try {const url=new URL(row.artifact.url,location.href);return ['http:','https:'].includes(url.protocol)&&url.origin!==location.origin;}catch{return false;}
+  }
   function previewContent(row) {
     const a=row.artifact;
     const start=a.url?`<button id="launch-preview" class="button primary">Launch live preview ↗</button>`:'';
-    return `<div class="preview-controls"><span>${escape(a.demo?'Disposable gallery demo':a.kind==='html'?'Self-contained HTML':a.kind==='project'?'Multi-file source project':a.kind==='archive'?'Source archive':'No artifact supplied')} · ${bytes(a.bytes)}</span><div><label for="viewport-size">Viewport</label><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></div></div>${a.warning?`<div class="notice">${escape(a.warning)}</div>`:''}<div id="preview-area" class="preview-area">${a.screenshot_url?`<div><img class="preview-image" src="${escape(a.screenshot_url)}" alt="Submitted screenshot"><div class="preview-prompt">${start}<p>Submitted screenshot. Launch the live artifact to inspect behavior.</p></div></div>`:`<div class="preview-prompt"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><h3>${a.url?'Ready when you are.':a.exists?'Source is ready to inspect.':'No artifact was recorded.'}</h3><p>${a.url?'Live previews run only when you explicitly open them. Inspect the controls, interactions and actual application state.':'No application is launched automatically. Review the source and its startup instructions, launch it manually in a disposable environment, then provide its loopback URL in metadata.json.'}</p>${start}${!a.url&&a.source_url?`<a class="button" href="${escape(sourceLink(a))}" download>Download source ↓</a>`:''}</div>`}</div><p class="viewer-note">${a.demo?'This demo keeps changes only while it is open. Reset or reload starts fresh. Backend durability and security are evaluated in the full local app.':isPublic()?'Public previews have restricted browser storage. Download the HTML to test persistence and file-based workflows locally.':'Inspect the actual interactions. For persistence or authentication checks, use Open app in a separate browser context.'}</p>`;
+    return `<div class="preview-controls"><span>${escape(a.demo?'Disposable gallery demo':a.kind==='html'?'Self-contained HTML':a.kind==='project'?'Multi-file source project':a.kind==='archive'?'Source archive':'No artifact supplied')} · ${bytes(a.bytes)}</span><div><label for="viewport-size">Viewport</label><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></div></div>${a.warning?`<div class="notice">${escape(a.warning)}</div>`:''}<div id="preview-area" class="preview-area">${a.screenshot_url?`<div><img class="preview-image" src="${escape(a.screenshot_url)}" alt="Submitted screenshot"><div class="preview-prompt">${start}<p>Submitted screenshot. Launch the live artifact to inspect behavior.</p></div></div>`:`<div class="preview-prompt"><span class="visual-icon" aria-hidden="true">${escape(row.icon)}</span><h3>${a.url?'Ready when you are.':a.exists?'Source is ready to inspect.':'No artifact was recorded.'}</h3><p>${a.url?'Live previews run only when you explicitly open them. Inspect the controls, interactions and actual application state.':'No application is launched automatically. Review the source and its startup instructions, launch it manually in a disposable environment, then provide its loopback URL in metadata.json.'}</p>${start}${!a.url&&a.source_url?`<a class="button" href="${escape(sourceLink(a))}" download>Download source ↓</a>`:''}</div>`}</div><p class="viewer-note">${a.demo?'This demo keeps changes only while it is open. Reset or reload starts fresh. Backend durability and security are evaluated in the full local app.':isPublic()?(isolatedArtifact(row)?'Your saved data stays in this browser. Use Open app if your browser restricts embedded features.':'This deployment has no separate app origin. Browser storage remains restricted.'):'Inspect the actual interactions. For persistence or authentication checks, use Open app in a separate browser context.'}</p>`;
   }
   function evidenceContent(row) {
     const a=row.artifact;const c=row.checks;
@@ -525,7 +528,7 @@
     $('#viewer-title').textContent=row.task_title;$('#viewer-kicker').textContent=`${modelName(row)} / ${row.run_id}`;
     document.querySelectorAll('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===state.tab)));
     const a=row.artifact;
-    $('#viewer-actions').innerHTML=`${copyLinkButton(row)}${row.prompts.prompt?`<button class="button quiet" data-open-prompt="${escape(row.task_id)}">Prompt</button>`:''}${a.source_url?`<a class="button quiet" href="${escape(sourceLink(a))}" download>Source ↓</a>`:''}${a.url&&!isPublic()?`<a class="button quiet" href="${escape(a.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:''}`;
+    $('#viewer-actions').innerHTML=`${copyLinkButton(row)}${row.prompts.prompt?`<button class="button quiet" data-open-prompt="${escape(row.task_id)}">Prompt</button>`:''}${a.source_url?`<a class="button quiet" href="${escape(sourceLink(a))}" download>Source ↓</a>`:''}${a.url?`<a class="button quiet" href="${escape(a.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:''}`;
     $('#viewer-content').innerHTML=detailBuildNotice(row)+(state.tab==='preview'?previewContent(row):state.tab==='evidence'?evidenceContent(row):detailsContent(row));
   }
   function resizeFrame() {
@@ -573,11 +576,12 @@
     $('#viewer').classList.add('is-live');
     $('#viewer').style.setProperty('--model-color',modelColor(row));
     $('#viewer-title').textContent=`${row.task_title} · ${modelName(row)}`;
-    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button>${liveModelControl(row)}<span class="live-title">${escape(row.task_title)}</span><div class="live-tools">${row.artifact.demo?`<button id="reset-demo" class="button" title="Discard changes and start a fresh demo">Reset demo</button>`:""}${liveSetup(row)}${liveGuidance(row)}${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label></div><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div>${liveBuildNotice(row)}<div id="preview-area" class="preview-area live-area"></div>`;
+    $('#viewer-content').innerHTML=`<div class="live-bar"><button id="back-to-build" class="button" aria-label="Back to build details">← Build</button>${liveModelControl(row)}<span class="live-title">${escape(row.task_title)}</span><div class="live-tools">${row.artifact.demo?`<button id="reset-demo" class="button" title="Discard changes and start a fresh demo">Reset demo</button>`:""}${liveSetup(row)}${liveGuidance(row)}${liveBuildNotice(row)}${copyLinkButton(row,'button')}<label class="live-size"><span class="sr-only">Preview viewport</span><select id="viewport-size"><option value="fit">Full viewport</option><option value="1280x800">Desktop · 1280 × 800</option><option value="768x1024">Tablet · 768 × 1024</option><option value="390x844">Mobile · 390 × 844</option></select></label></div><button id="close-live" class="icon-button" aria-label="Close live preview">×</button></div><div id="preview-area" class="preview-area live-area"></div>`;
     $('#viewport-size').value=viewport;
     const frame=document.createElement('iframe');frame.id='artifact-frame';frame.title=`Live ${row.task_title}`;
-    frame.setAttribute('sandbox',row.artifact.demo?'allow-scripts allow-downloads':isPublic()?'allow-scripts allow-downloads allow-modals allow-pointer-lock':'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-pointer-lock allow-popups');
-    frame.allow='autoplay; fullscreen';frame.referrerPolicy='no-referrer';frame.src=row.artifact.url;
+    if(row.artifact.demo)frame.setAttribute('sandbox','allow-scripts allow-downloads');
+    else if(!isolatedArtifact(row))frame.setAttribute('sandbox','allow-scripts allow-forms allow-downloads allow-modals allow-pointer-lock allow-popups');
+    frame.allow='autoplay; fullscreen; clipboard-read; clipboard-write; gamepad';frame.referrerPolicy='no-referrer';frame.src=row.artifact.url;
     $('#preview-area').replaceChildren(frame);resizeFrame();$('#'+focusTarget).focus();
   }
   document.addEventListener('click',event=>{
@@ -597,7 +601,7 @@
     if(target.id==='reset-demo')launchPreview(false,'reset-demo');
     if(target.id==='back-to-build'){renderViewer();clearPlayLink();$('#launch-preview')?.focus();}
     if(target.id==='close-live')closeViewer();
-    if(target.id==='close-live-guide'||target.id==='close-live-setup')closeLiveInfo();
+    if(target.id==='close-live-guide'||target.id==='close-live-setup'||target.id==='close-live-notice')closeLiveInfo();
   });
   filterIDs.forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',()=>{render();saveSettings();}));
   document.addEventListener('change',event=>{

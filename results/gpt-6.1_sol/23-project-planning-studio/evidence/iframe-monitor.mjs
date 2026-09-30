@@ -1,0 +1,8 @@
+import fs from 'node:fs';
+const [url,path]=process.argv.slice(2),ws=new WebSocket(url);let seq=0;const pending=new Map(),attached=new Set();
+const write=value=>fs.appendFileSync(path,JSON.stringify({...value,time:new Date().toISOString()})+'\n');
+const call=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});
+async function attach(t){if(!['page','iframe'].includes(t.type)||!t.url.includes('127.0.0.1:')||attached.has(t.targetId))return;attached.add(t.targetId);try{const {sessionId}=await call('Target.attachToTarget',{targetId:t.targetId,flatten:true});write({attached:t.url,sessionId,type:t.type});await call('Runtime.enable',{},sessionId);await call('Log.enable',{},sessionId);await call('Network.enable',{},sessionId);}catch(e){write({monitorError:String(e)});}}
+ws.addEventListener('message',event=>{const m=JSON.parse(event.data);if(m.id&&pending.has(m.id)){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(new Error(JSON.stringify(m.error))):p.resolve(m.result);}else if(['Runtime.exceptionThrown','Runtime.consoleAPICalled','Log.entryAdded','Network.loadingFailed'].includes(m.method))write(m);else if(['Target.targetCreated','Target.targetInfoChanged'].includes(m.method))attach(m.params.targetInfo);});
+await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});});
+await call('Target.setDiscoverTargets',{discover:true});const {targetInfos}=await call('Target.getTargets');await Promise.all(targetInfos.map(attach));console.log('CDP diagnostics monitor attached');await new Promise(()=>{});

@@ -298,7 +298,7 @@ class BrowserTests(BrowserEnvironment):
             (run / 'index.html').write_text('<!doctype html><title>Additional comparison fixture</title>', encoding='utf-8')
         return keys
 
-    def public_export(self):
+    def public_export(self, isolated=False):
         from http.server import SimpleHTTPRequestHandler
         from fnmatch import fnmatch
         from tools import build_site
@@ -313,20 +313,13 @@ class BrowserTests(BrowserEnvironment):
                 for filename in ('prompt.md', 'acceptance.md'):
                     (folder / filename).write_text('Synthetic project integration fixture.', encoding='utf-8')
         output = root / 'dist/site'
-        build_site.build_site(root, screenshots='none')
-        data = json.loads((output / 'api/data.json').read_text(encoding='utf-8'))
         self.public_requests = requests = []
-        rules = []
-        for line in (output / '_headers').read_text(encoding='utf-8').splitlines():
-            if line.startswith('/'):
-                rules.append((line, []))
-            elif line.strip():
-                name, value = line.strip().split(':', 1)
-                rules[-1][1].append((name, value.strip()))
 
         class PublicHandler(SimpleHTTPRequestHandler):
+            export_root = output
+
             def __init__(self, *args, **kwargs):
-                super().__init__(*args, directory=str(output), **kwargs)
+                super().__init__(*args, directory=str(self.export_root), **kwargs)
 
             def do_GET(self):
                 requests.append(('GET', urlsplit(self.path).path))
@@ -339,6 +332,13 @@ class BrowserTests(BrowserEnvironment):
                 self.send_error(405)
 
             def end_headers(self):
+                rules = []
+                for line in (self.export_root / '_headers').read_text(encoding='utf-8').splitlines():
+                    if line.startswith('/'):
+                        rules.append((line, []))
+                    elif line.strip():
+                        name, value = line.strip().split(':', 1)
+                        rules[-1][1].append((name, value.strip()))
                 for pattern, headers in rules:
                     if fnmatch(urlsplit(self.path).path, pattern):
                         for name, value in headers:
@@ -349,8 +349,24 @@ class BrowserTests(BrowserEnvironment):
                 pass
 
         http = server.QuietThreadingHTTPServer(('127.0.0.1', 0), PublicHandler)
-        threading.Thread(target=http.serve_forever, daemon=True).start()
-        self.addCleanup(http.server_close);self.addCleanup(http.shutdown)
+        self.addCleanup(http.server_close)
+        settings_path = root / 'gallery/static/appsettings.json'
+        settings = json.loads(settings_path.read_text(encoding='utf-8'))
+        settings.pop('artifactOrigin', None)
+        artifact_http = None
+        if isolated:
+            class ArtifactHandler(PublicHandler):
+                export_root = root / 'dist/artifacts'
+            artifact_http = server.QuietThreadingHTTPServer(('127.0.0.1', 0), ArtifactHandler)
+            self.addCleanup(artifact_http.server_close)
+            settings['artifactOrigin'] = f'http://127.0.0.1:{artifact_http.server_address[1]}'
+        settings_path.write_text(json.dumps(settings), encoding='utf-8')
+        build_site.build_site(root, screenshots='none')
+        data = json.loads((output / 'api/data.json').read_text(encoding='utf-8'))
+        for service in (http, artifact_http):
+            if service is not None:
+                threading.Thread(target=service.serve_forever, daemon=True).start()
+                self.addCleanup(service.shutdown)
         return f'http://127.0.0.1:{http.server_address[1]}', data
 
     def demo_fixture(self):
@@ -1027,6 +1043,46 @@ window.probe=async origin=>{
         expect(category.locator('.run-card')).to_have_count(6)
         self.assertEqual(self.errors, [])
 
+    def test_isolated_public_app_supports_forms_storage_and_files_without_gallery_access(self):
+        from playwright.sync_api import expect
+        self.fixture()
+        run = self.results / 'UI fixture - not a model evaluation/01-fluid-simulation-001'
+        (run / 'index.html').write_text('''<!doctype html><title>Browser capability fixture</title>
+<dialog open><form method="dialog"><button id="done">Done</button></form></dialog>
+<button id="save">Save</button><output id="saved"></output>
+<input id="import" type="file"><output id="imported"></output>
+<button id="export">Export</button><output id="parent-access"></output>
+<script>
+const saved=document.querySelector('#saved');
+try { saved.textContent=localStorage.getItem('fixture')||'empty'; } catch { saved.textContent='blocked'; }
+document.querySelector('#save').onclick=()=>{localStorage.setItem('fixture','retained');saved.textContent=localStorage.getItem('fixture')};
+document.querySelector('#import').onchange=async e=>document.querySelector('#imported').textContent=await e.target.files[0].text();
+document.querySelector('#export').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['original export']));a.download='fixture.txt';a.click()};
+try { parent.document.body.dataset.leaked='yes';document.querySelector('#parent-access').textContent='accessible'; }
+catch { document.querySelector('#parent-access').textContent='isolated'; }
+</script>''', encoding='utf-8')
+        origin, data = self.public_export(isolated=True)
+        row = data['results'][0]
+        self.page.goto(origin + row['share_url'])
+        frame = self.page.frame_locator('#artifact-frame')
+        expect(frame.locator('#saved')).to_have_text('empty')
+        self.assertIsNone(self.page.locator('#artifact-frame').get_attribute('sandbox'))
+        frame.locator('#done').click()
+        expect(frame.locator('dialog')).not_to_be_visible()
+        frame.locator('#save').click()
+        expect(frame.locator('#saved')).to_have_text('retained')
+        expect(frame.locator('#parent-access')).to_have_text('isolated')
+        self.assertIsNone(self.page.evaluate('document.body.dataset.leaked'))
+        self.assertIsNone(self.page.evaluate("localStorage.getItem('fixture')"))
+        frame.locator('#import').set_input_files({'name': 'fixture.txt', 'mimeType': 'text/plain', 'buffer': b'imported content'})
+        expect(frame.locator('#imported')).to_have_text('imported content')
+        with self.page.expect_download() as transfer:
+            frame.locator('#export').click()
+        self.assertEqual(Path(transfer.value.path()).read_bytes(), b'original export')
+        self.page.reload()
+        expect(frame.locator('#saved')).to_have_text('retained')
+        self.assertEqual(self.errors, [])
+
     def test_public_share_page_redirects_to_sandboxed_viewer_and_copies_its_url(self):
         from playwright.sync_api import expect
         self.fixture()
@@ -1404,6 +1460,9 @@ window.probe=async origin=>{
         from playwright.sync_api import expect
         keys = self.comparison_fixture()
         ids = [key + '/01-fluid-simulation-main' for key in keys]
+        run = self.results / keys[0] / '01-fluid-simulation-main/index.html'
+        with run.open('a', encoding='utf-8') as artifact:
+            artifact.write('<style>#increment{position:fixed;top:10px;right:12px;width:220px;height:40px}</style>')
         (self.results / keys[0] / 'model.toml').write_text('harness = "Fixture CLI"\nsetting = "Fixture setting"\n', encoding='utf-8')
         config = json.loads((server.STATIC_ROOT / 'appsettings.json').read_text(encoding='utf-8'))
         message = 'Runtime fixture <img src=x onerror="window.__noticeXss=1"> ' + 'W' * 300
@@ -1417,22 +1476,27 @@ window.probe=async origin=>{
         summary = notice.locator('summary')
         expect(notice).to_have_js_property('open', True)
         expect(notice).to_have_attribute('data-notice-type', 'runtime-error')
-        expect(summary.get_by_text('Attention: Runtime error', exact=True)).to_be_visible()
+        expect(notice.get_by_text('Attention: Runtime error', exact=True)).to_be_visible()
         expect(notice.locator('.build-notice-message')).to_have_text(message)
         expect(notice.locator('img,script,a')).to_have_count(0)
         summary.click()
         expect(notice).to_have_js_property('open', False)
+        self.assertTrue(self.page.locator('#artifact-frame').evaluate('''node=>{
+            const r=node.getBoundingClientRect();
+            return document.elementFromPoint(r.right-20,r.top+20)===node;
+        }'''), 'A hidden notice must leave top-right app controls unobstructed')
         frame = self.page.frame_locator('#artifact-frame')
-        frame.locator('#increment').click()
+        frame.locator('#increment').click(timeout=3000)
         expect(frame.locator('#increment')).to_have_text('Count: 1')
         original = self.page.locator('#artifact-frame').element_handle()
+        time_origin = frame.locator('#increment').evaluate('() => performance.timeOrigin')
         for width in (1440, 768, 390, 320):
             with self.subTest(width=width):
                 self.page.set_viewport_size({'width': width, 'height': 844})
                 before = self.page.locator('#artifact-frame').bounding_box()
                 summary.click()
                 expect(notice).to_have_js_property('open', True)
-                panel = notice.locator('.build-notice-message')
+                panel = notice.locator('.live-info-panel')
                 expect(panel).to_be_visible()
                 bounds = panel.bounding_box()
                 self.assertGreaterEqual(bounds['x'], 0)
@@ -1441,12 +1505,37 @@ window.probe=async origin=>{
                 self.assertLessEqual(bounds['y'] + bounds['height'], 844)
                 self.assertTrue(self.page.locator('.live-bar').evaluate('node=>node.scrollWidth<=node.clientWidth'))
                 self.assertEqual(before, self.page.locator('#artifact-frame').bounding_box())
-                self.page.keyboard.press('Escape')
+                if width == 1440:
+                    notice.get_by_role('button', name='Hide build notice').click()
+                elif width == 390:
+                    notice.get_by_role('button', name='Hide build notice').focus()
+                    self.page.keyboard.press('Enter')
+                else:
+                    self.page.keyboard.press('Escape')
                 expect(notice).to_have_js_property('open', False)
+                expect(panel).not_to_be_visible()
+                expect(summary).to_be_focused()
                 expect(self.page.locator('#viewer')).to_be_visible()
                 self.assertTrue(original.evaluate('node=>node.isConnected'))
+                self.assertTrue(original.evaluate('''node=>{
+                    const r=node.getBoundingClientRect();
+                    return document.elementFromPoint(r.right-20,r.top+20)===node;
+                }'''), 'A hidden notice must leave top-right app controls unobstructed')
                 expect(frame.locator('#increment')).to_have_text('Count: 1')
+                self.assertEqual(frame.locator('#increment').evaluate('() => performance.timeOrigin'), time_origin)
                 self.assertEqual(before, self.page.locator('#artifact-frame').bounding_box())
+        self.page.set_viewport_size({'width': 1440, 'height': 1000})
+        self.page.locator('#viewport-size').select_option('1280x800')
+        fixed = self.page.locator('#artifact-frame').bounding_box()
+        self.assertEqual((fixed['width'], fixed['height']), (1280, 800))
+        summary.focus()
+        self.page.keyboard.press('Enter')
+        expect(notice).to_have_js_property('open', True)
+        notice.get_by_role('button', name='Hide build notice').click()
+        self.assertEqual(fixed, self.page.locator('#artifact-frame').bounding_box())
+        expect(frame.locator('#increment')).to_have_text('Count: 1')
+        self.assertEqual(frame.locator('#increment').evaluate('() => performance.timeOrigin'), time_origin)
+        self.page.locator('#viewport-size').select_option('fit')
         summary.click()
         self.page.locator('.live-setup summary').click()
         expect(notice).to_have_js_property('open', False)
@@ -1472,7 +1561,7 @@ window.probe=async origin=>{
         self.page.locator('#live-model').select_option(ids[1])
         expect(notice).to_have_js_property('open', True)
         expect(notice).to_have_attribute('data-notice-type', 'slow-start')
-        expect(summary.get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
+        expect(notice.get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
         expect(notice.locator('.build-notice-message')).to_have_text('First shader initialization may take several minutes.')
         self.assertFalse(original.evaluate('node=>node.isConnected'))
         expect(frame.locator('#build-model')).to_have_text(keys[1])
@@ -1520,7 +1609,7 @@ window.probe=async origin=>{
         notice = self.page.locator('#live-build-notice')
         expect(notice).to_have_js_property('open', True)
         expect(notice).to_have_attribute('data-notice-type', 'runtime-error')
-        expect(notice.locator('summary').get_by_text('Attention: Runtime error', exact=True)).to_be_visible()
+        expect(notice.get_by_text('Attention: Runtime error', exact=True)).to_be_visible()
         expect(notice.locator('.build-notice-message')).to_have_text('Public sandbox blocks this submitted persistence path.')
         expect(self.page.frame_locator('#artifact-frame').locator('#increment')).to_have_text('Count: 0')
         self.assertNotIn('allow-same-origin', self.page.locator('#artifact-frame').get_attribute('sandbox'))
@@ -1531,12 +1620,12 @@ window.probe=async origin=>{
         row = next(row for row in data['results'] if row['id'] == ids[1])
         self.page.goto(origin + row['share_url'])
         expect(notice).to_have_js_property('open', True)
-        expect(notice.locator('summary').get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
+        expect(notice.get_by_text('Attention: May take minutes to load', exact=True)).to_be_visible()
         expect(notice.locator('.build-notice-message')).to_have_text('Shader initialization may take several minutes.')
         row = next(row for row in data['results'] if row['id'] == ids[3])
         self.page.goto(origin + row['share_url'])
         expect(notice).to_have_attribute('data-notice-type', 'run-cancelled')
-        expect(notice.locator('summary').get_by_text('Attention: Agent run cancelled', exact=True)).to_be_visible()
+        expect(notice.get_by_text('Attention: Agent run cancelled', exact=True)).to_be_visible()
         expect(notice.locator('.build-notice-message')).to_have_text('I cancelled the agent run after repeated unsuccessful playtesting attempts.')
         counter = self.page.frame_locator('#artifact-frame').locator('#increment')
         notice.locator('summary').click()

@@ -1,0 +1,20 @@
+import runpy,json,xml.etree.ElementTree as ET
+h=runpy.run_path('evidence/browser-checks.py');globals().update({k:v for k,v in h.items() if not k.startswith('__')})
+def controls():
+    reset();button('Gantt');button('Select T2 Build');label('Not before date','2026-09-14');button('Apply changes');dated=state();button('Clear date constraint');interval_expect(SEED,6);button('Undo');assert state()['model']==dated['model'] and state()['schedule']==dated['schedule'];button('Redo');interval_expect(SEED,6)
+    reset();button('Manage');label('New resource name','Engineering');button('Add resource to draft');assert len(state()['model']['resources'])==2;button('Apply resources');s=state();assert s['model']['resources'][-1]==dict(id='R3',name='Engineering',capacity=1)
+    button('Undo');assert len(state()['model']['resources'])==2;button('Redo');button('Manage');button('Delete resource R3');button('Apply resources');assert len(state()['model']['resources'])==2;button('Undo');assert len(state()['model']['resources'])==3
+    reset();button('New task');label('New task ID','U');label('New task name','Resource-independent root');label('New task priority','0');button('Create task');button('Gantt');button('Select T1 Design')
+    run('click','.dependency-chooser summary');run('check','[data-dependency=U]');button('Apply changes');s=state();assert s['model']['tasks'][0]['predecessors']==['U'] and s['schedule']['T1']['start']==1;button('Undo');interval_expect({**SEED,'U':[0,1]},6)
+    button('Edit project settings');label('Project start date','2026-09-12');button('Apply project settings');assert state()['model']['project']['startDate']=='2026-09-14';assert 'normalized forward to Monday' in run('get','text','#status');button('Undo');assert state()['model']['project']['startDate']=='2026-09-07'
+    reset();assert not run('errors').strip()
+def load_test():
+    reset();m=state()['model'];m['resources']=[dict(id='R'+str(i),name='Team '+str(i),capacity=1) for i in range(8)];m['tasks']=[dict(id='X'+str(i).zfill(3),name='Workstream '+str(i),duration=2,priority=i,resourceId='R'+str(i%8),predecessors=[],notBefore=None) for i in range(50)]
+    import_text(m);s=state();assert len(s['schedule'])==50 and s['completion']==14 and s['cpm']['completion']==2;button('Gantt');assert ev('document.querySelectorAll(".gantt-bar").length')==50;shot('additional-50-tasks-eight-resources');button('Resources');assert ev('document.querySelectorAll("[data-capacity]").length')==8;assert ev("Array.from(document.querySelectorAll('.occupancy-count')).every(e=>!e.textContent.includes('/')||Number(e.textContent.split('/')[0])<=Number(e.textContent.split('/')[1]))")
+    m['resources']=[dict(id='R'+str(i),name='Team '+str(i),capacity=4) for i in range(32)];m['tasks']=[dict(id='X'+str(i).zfill(3),name='Workstream '+str(i),duration=5,priority=i,resourceId='R'+str(i%32),predecessors=[],notBefore=None) for i in range(200)]
+    import_text(m);s=state();assert len(s['schedule'])==200 and s['completion']==10 and s['cpm']['completion']==5;button('Gantt');assert ev('document.querySelectorAll(".gantt-bar").length')==200;button('Tasks');assert ev('document.querySelectorAll("[data-task-row]").length')==200
+    before=state();bad=json.loads(json.dumps(m));bad['tasks'].append({**bad['tasks'][0],'id':'EXTRA'});button('Files');label('Plan JSON',json.dumps(bad));button('Import JSON');unchanged(before);assert '200 tasks' in run('get','text','#dialog-error');button('Done');reset();assert not run('errors').strip()
+def long_svg():
+    reset();m=state()['model'];m['project']['name']='W'*200;m['tasks']=[dict(id='A'*64,name='W'*200,duration=0,priority=0,resourceId=None,predecessors=[],notBefore=None)];import_text(m);button('Files');run('download','[data-action=export-svg]',str(ROOT/'evidence/downloads/long-labels.svg'));button('Done')
+    root=ET.parse(ROOT/'evidence/downloads/long-labels.svg').getroot();assert float(root.attrib['width'])>=4400;reset()
+for name,fn in [('ADDITIONAL-CONTROLS',controls),('ADDITIONAL-LARGE-INPUT',load_test),('ADDITIONAL-SVG-LONG-LABELS',long_svg)]:check(name,fn)

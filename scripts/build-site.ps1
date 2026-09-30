@@ -2,6 +2,7 @@
 param(
     [string]$Python = $env:PYTHON,
     [ValidateSet('auto', 'none')][string]$Screenshots = 'auto',
+    [string]$ArtifactOrigin,
     [switch]$Json
 )
 
@@ -18,6 +19,7 @@ if (-not $Python) {
     }
 }
 $buildArgs = @('tools/build_site.py', '--screenshots', $Screenshots)
+if ($ArtifactOrigin) { $buildArgs += @('--artifact-origin', $ArtifactOrigin) }
 if ($Json) { $buildArgs += '--json' }
 Push-Location (Split-Path -Parent $PSScriptRoot)
 try {

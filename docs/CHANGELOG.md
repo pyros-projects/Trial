@@ -1,5 +1,16 @@
 # Changelog
 
+## GPT-6.1 Sol completes all 24 prompts: 2026-09-30
+
+- Added Sol's vector/layout studio, project planning studio, and **Afterimage** capstone, an interactive experiment in information loss and recovery. Sol now covers all 24 prompts; the showcase contains 171 builds across nine models.
+- Preserved the submitted files and the existing first position, amber tint, and reported Codex · Max setup.
+
+## Normal browser capabilities and dismissible notices: 2026-09-30
+
+- Moved public app HTML to a separate origin without iframe or HTTP sandbox restrictions. Forms, browser storage, and file workflows use normal browser behavior; submitted HTML remains unchanged.
+- Moved build notices into the viewer toolbar. Hiding a notice clears the entire app area without reloading or resizing the running build.
+- Added artifact-first Netlify publishing with separate production and preview aliases, preserving source downloads and existing share links.
+
 ## Opus 5.5 through prompt 16: 2026-09-30
 
 - Added Opus 5.5's ecosystem, digital logic lab, and roguelike. It now covers prompts 01–16; the showcase contains 168 builds across nine models.

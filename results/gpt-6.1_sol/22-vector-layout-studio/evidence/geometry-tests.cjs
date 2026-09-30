@@ -1,0 +1,10 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const h=fs.existsSync('index.html')?fs.readFileSync('index.html','utf8'):'';
+const code=h.match(/\/\* GEOMETRY_START \*\/([\s\S]*?)\/\* GEOMETRY_END \*\//)?.[1]||'';
+const c=vm.createContext({console});vm.runInContext(code+'\nthis.api={mul,inv,point,curveBox};',c);
+const {mul,inv,point,curveBox}=c.api;
+const b=curveBox([{x:100,y:100,in:{x:100,y:100},out:{x:100,y:0}},{x:200,y:100,in:{x:200,y:0},out:{x:200,y:100}}],false);
+for(const [k,v] of Object.entries({x:100,y:25,w:100,h:75}))assert(Math.abs(b[k]-v)<.000001,`${k}: ${b[k]}`);
+const m=[0,2,-2,0,300,60],p={x:13,y:29};const q=point(inv(m),point(m,p));assert(Math.abs(q.x-p.x)<1e-9&&Math.abs(q.y-p.y)<1e-9);
+assert.deepEqual(Array.from(mul(m,inv(m))).map(x=>Math.round(x*1e6)/1e6),[1,0,0,1,0,0]);
+console.log('PASS cubic extrema, inverse coordinate continuity, matrix composition');

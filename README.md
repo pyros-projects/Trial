@@ -161,7 +161,7 @@ These are the settings I used, with their original labels. They describe this co
 sh scripts/build-site.sh
 ```
 
-The export is written to `dist/site/`. The [hosting guide](docs/DEPLOYMENT.md) explains optional thumbnail generation and the Netlify scripts, including explicit site selection and draft versus production deployment.
+The gallery is written to `dist/site/`, with app HTML in `dist/artifacts/`. The configured `artifactOrigin` gives apps normal browser capabilities on a separate origin. The [hosting guide](docs/DEPLOYMENT.md) explains the Netlify scripts that publish both outputs, optional thumbnails, and draft versus production deployment.
 
 ## Read the evidence
 

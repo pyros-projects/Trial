@@ -28,7 +28,7 @@ CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "look_for", 
 DEFAULT_SITE_URL = "https://trial-by-pyro.netlify.app"
 OWNER_MARKER = "public-static-export-v1\n"
 REDIRECTS = "/api/data /api/data.json 200\n/api/catalog /prompts/catalog.json 200\n/sources/* /artifacts/:splat 200\n/demo-sources/* /demos/:splat 200\n"
-ARTIFACT_SANDBOX = "sandbox allow-scripts allow-downloads allow-modals allow-pointer-lock"
+ARTIFACT_SANDBOX = "sandbox allow-scripts allow-forms allow-downloads allow-modals allow-pointer-lock"
 HEADERS = f"""/*
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
@@ -53,6 +53,15 @@ HEADERS = f"""/*
 /api/export.csv
   Content-Disposition: attachment; filename="results.csv"
 """
+ARTIFACT_HEADERS = """/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/sources/*
+  Content-Type: application/octet-stream
+  Content-Disposition: attachment
+"""
+ARTIFACT_REDIRECTS = "/sources/* /artifacts/:splat 200\n"
 
 
 def linked(path: Path) -> bool:
@@ -98,37 +107,49 @@ def public_catalog(root: Path) -> list[dict[str, str]]:
     return catalog
 
 
-def share_settings(root: Path) -> tuple[str, dict[str, str]]:
-    """Read public presentation settings, defaulting siteUrl to DEFAULT_SITE_URL."""
-    path = regular_file(root, "gallery/static/appsettings.json")
-    if path is None:
-        raise ValueError("gallery/static/appsettings.json must be a regular file inside the package.")
-    settings = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(settings, dict):
-        raise ValueError("appsettings.json must contain a JSON object.")
-    origin = settings.get("siteUrl", DEFAULT_SITE_URL)
-    error = "appsettings.siteUrl must be an HTTP(S) origin without credentials, path, query, or fragment."
+def normalize_origin(origin: Any, setting: str) -> str:
+    """Validate origins once for settings and command-line overrides."""
+    error = f"{setting} must be an HTTP(S) origin without credentials, path, query, or fragment."
     if not isinstance(origin, str) or not origin or any(character.isspace() or ord(character) < 32 or character in "\\?#" for character in origin):
         raise ValueError(error)
     try:
         parsed = urlsplit(origin)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.path not in {"", "/"}:
             raise ValueError(error)
-        hostname = parsed.hostname.encode("idna").decode("ascii")
+        hostname = parsed.hostname.encode("idna").decode("ascii").lower()
         if ":" in hostname:
             hostname = f"[{ipaddress.IPv6Address(hostname)}]"
+        elif re.fullmatch(r"[0-9]+|0x[0-9a-f]+", hostname.rsplit(".", 1)[-1]):
+            # Browsers expand IPv4 shorthand; accept only canonical dotted addresses.
+            hostname = str(ipaddress.IPv4Address(hostname))
         elif not all(re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?", label) for label in hostname.split(".")):
             raise ValueError(error)
-        port = f":{parsed.port}" if parsed.port is not None else ""
+        port = f":{parsed.port}" if parsed.port is not None and parsed.port != {"http": 80, "https": 443}[parsed.scheme] else ""
     except (ValueError, UnicodeError) as exc:
         raise ValueError(error) from exc
+    return f"{parsed.scheme}://{hostname}{port}"
+
+
+def share_settings(root: Path, artifact_origin: str | None = None) -> tuple[str, str | None, dict[str, str]]:
+    """Read public origins and labels without modifying the source settings."""
+    path = regular_file(root, "gallery/static/appsettings.json")
+    if path is None:
+        raise ValueError("gallery/static/appsettings.json must be a regular file inside the package.")
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(settings, dict):
+        raise ValueError("appsettings.json must contain a JSON object.")
+    site_origin = normalize_origin(settings.get("siteUrl", DEFAULT_SITE_URL), "appsettings.siteUrl")
+    if artifact_origin is not None or "artifactOrigin" in settings:
+        artifact_origin = normalize_origin(artifact_origin if artifact_origin is not None else settings["artifactOrigin"], "appsettings.artifactOrigin")
+        if artifact_origin == site_origin:
+            raise ValueError("appsettings.artifactOrigin must use a different origin from appsettings.siteUrl.")
     labels = {}
     models = settings.get("models", [])
     if isinstance(models, list):
         for model in models:
             if isinstance(model, dict) and isinstance(model.get("key"), str) and isinstance(model.get("label"), str) and model["label"].strip():
                 labels.setdefault(model["key"], model["label"])
-    return f"{parsed.scheme}://{hostname}{port}", labels
+    return site_origin, artifact_origin, labels
 
 
 def social_page(title: str, description: str, canonical: str, viewer: str, *,
@@ -463,19 +484,23 @@ def export_csv(rows: list[dict[str, Any]]) -> bytes:
     return stream.getvalue().encode("utf-8-sig")
 
 
-def validate_output(root: Path, output: Path) -> Path:
-    expected = root / "dist/site"
+def validate_output(root: Path, output: Path, *, name: str = "site") -> Path:
+    if name not in {"site", "artifacts"}:
+        raise ValueError("Unknown export destination.")
+    expected = root / "dist" / name
     if output.absolute() != expected or output.resolve() != expected:
-        raise ValueError("The public export destination must be the package's dist/site directory.")
+        raise ValueError(f"The public export destination must be the package's dist/{name} directory.")
     for path in (root / "dist", output):
         if linked(path) or (path.exists() and not path.is_dir()):
             raise ValueError(f"Refusing an output path that is a link or non-directory: {path}")
-    marker = root / "dist/.site-export-owned"
+    marker = root / "dist" / f".{name}-export-owned"
     if linked(marker):
         raise ValueError("The export ownership marker must not be a link.")
+    if marker.exists() and (not marker.is_file() or marker.read_text(encoding="utf-8") != OWNER_MARKER):
+        raise ValueError("The export ownership marker is invalid.")
     if output.exists() and any(output.iterdir()):
-        if not marker.is_file() or marker.read_text(encoding="utf-8") != OWNER_MARKER:
-            raise ValueError("dist/site contains files not owned by this exporter; choose an empty directory by moving them first.")
+        if not marker.is_file():
+            raise ValueError(f"dist/{name} contains files not owned by this exporter; choose an empty directory by moving them first.")
         # Check the complete resolved cleanup target before recursive deletion.
         for parent, directories, files in os.walk(output, followlinks=False):
             for name in (*directories, *files):
@@ -484,7 +509,8 @@ def validate_output(root: Path, output: Path) -> Path:
     return marker
 
 
-def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screenshots: str = "auto") -> dict[str, Any]:
+def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screenshots: str = "auto",
+               artifact_origin: str | None = None) -> dict[str, Any]:
     if screenshots not in {"auto", "none"}:
         raise ValueError("screenshots must be 'auto' or 'none'.")
     root = root.expanduser().resolve(strict=True)
@@ -493,18 +519,26 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
         output = root / output
     marker = validate_output(root, output)
     catalog = public_catalog(root)
-    site_origin, model_labels = share_settings(root)
+    site_origin, artifact_origin, model_labels = share_settings(root, artifact_origin)
+    artifact_output = root / "dist/artifacts" if artifact_origin else None
+    artifact_marker = validate_output(root, artifact_output, name="artifacts") if artifact_output else None
     state = PublicGalleryState(root, catalog)
     rows = state.scan()
     modules = pillow_modules() if screenshots == "auto" else None
     report: dict[str, Any] = {"output": str(output), "html_files": len(rows), "screenshots": 0,
                               "unoptimized_screenshots": 0, "source_screenshot_bytes": 0,
                               "screenshot_bytes": 0, "comparison_images": 0,
-                              "comparison_image_bytes": 0, "warnings": []}
+                              "comparison_image_bytes": 0, "warnings": [],
+                              "artifact_origin": artifact_origin,
+                              "artifact_output": str(artifact_output) if artifact_output else None,
+                              "artifact_files": 0, "artifact_bytes": 0}
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".site-build-", dir=output.parent) as temporary:
         stage = Path(temporary) / "site"
         stage.mkdir()
+        artifact_stage = Path(temporary) / "artifacts" if artifact_output else None
+        if artifact_stage:
+            artifact_stage.mkdir()
         for name in STATIC_FILES:
             source = regular_file(root, f"gallery/static/{name}")
             if source is None:
@@ -528,26 +562,31 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
             if source is None:
                 raise ValueError("A source HTML artifact changed or became a link during export.")
             route = 'demos' if row['artifact'].get('demo') else 'artifacts'
-            target = stage / route / relative
+            gallery_target = stage / route / relative
+            target = artifact_stage / route / relative if artifact_stage and route == 'artifacts' else gallery_target
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
             validate_static_html(target.read_bytes())
             row["artifact"].update(bytes=target.stat().st_size, sha256=server.file_sha256(target))
+            if artifact_origin and route == 'artifacts':
+                for field in ("url", "source_url"):
+                    row["artifact"][field] = artifact_origin + row["artifact"][field]
             if screenshots == "none":
                 continue
             files = {path.name.lower(): path for path in run.iterdir() if path.is_file() and not linked(path)}
             shot = server.find_named(files, server.SCREENSHOT_NAMES)
             if shot is None:
                 continue
+            gallery_target.parent.mkdir(parents=True, exist_ok=True)
             report["source_screenshot_bytes"] += shot.stat().st_size
             if modules is None:
                 if not report["warnings"]:
                     report["warnings"].append("Pillow is unavailable; selected screenshots were copied at original size. Install it in the build interpreter with 'python -m pip install Pillow' for smaller 1280px WebP previews.")
-                thumb = target.parent / shot.name
+                thumb = gallery_target.parent / shot.name
                 shutil.copyfile(shot, thumb)
                 report["unoptimized_screenshots"] += 1
             else:
-                thumb = target.parent / "screenshot.webp"
+                thumb = gallery_target.parent / "screenshot.webp"
                 try:
                     thumbnail(shot, thumb, modules)
                 except (OSError, ValueError) as error:
@@ -571,31 +610,49 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
         model_images = list((stage / "models").glob("*/preview.jpg"))
         report.update(model_pages=len(model_urls), model_images=len(model_images),
                       model_image_bytes=sum(path.stat().st_size for path in model_images))
-        data = {"mode": "public", "generated_at": server.utc_iso(), "artifact_origin": "/artifacts",
+        data = {"mode": "public", "generated_at": server.utc_iso(), "artifact_origin": artifact_origin or "/artifacts",
                 "catalog": catalog, "summary": state.summary(rows), "results": rows,
                 "comparison_urls": comparison_urls, "model_urls": model_urls,
                 "model_profiles": server.load_model_profiles(state.results_root, (row["model_key"] for row in rows))}
         write_json(stage / "api/data.json", data)
         (stage / "api/export.csv").write_bytes(export_csv(rows))
-        (stage / "_redirects").write_text(REDIRECTS, encoding="utf-8")
+        redirects = REDIRECTS
+        if artifact_origin:
+            redirects = redirects.replace(ARTIFACT_REDIRECTS,
+                f"/sources/* {artifact_origin}/sources/:splat 302\n/artifacts/* {artifact_origin}/artifacts/:splat 302\n")
+        (stage / "_redirects").write_text(redirects, encoding="utf-8")
         (stage / "_headers").write_text(HEADERS, encoding="utf-8")
         files = [path for path in stage.rglob("*") if path.is_file()]
         report.update(files=len(files), bytes=sum(path.stat().st_size for path in files))
+        if artifact_stage:
+            (artifact_stage / "_headers").write_text(ARTIFACT_HEADERS, encoding="utf-8")
+            (artifact_stage / "_redirects").write_text(ARTIFACT_REDIRECTS, encoding="utf-8")
+            files = [path for path in artifact_stage.rglob("*") if path.is_file()]
+            report.update(artifact_files=len(files), artifact_bytes=sum(path.stat().st_size for path in files))
+        # Finish both staging trees and recheck every cleanup target before replacing either.
         validate_output(root, output)
+        if artifact_output:
+            validate_output(root, artifact_output, name="artifacts")
         if output.exists():
             shutil.rmtree(output)
         stage.replace(output)
         marker.write_text(OWNER_MARKER, encoding="utf-8")
+        if artifact_output:
+            if artifact_output.exists():
+                shutil.rmtree(artifact_output)
+            artifact_stage.replace(artifact_output)
+            artifact_marker.write_text(OWNER_MARKER, encoding="utf-8")
     return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--screenshots", choices=("auto", "none"), default="auto", help="Auto creates 1280px WebP images with optional Pillow; otherwise selected screenshots retain their original bytes and extension.")
+    parser.add_argument("--artifact-origin", help="Override the separate HTTP(S) app origin, for example for a preview deployment.")
     parser.add_argument("--json", action="store_true", help="Print the build size report as JSON.")
     args = parser.parse_args()
     try:
-        report = build_site(screenshots=args.screenshots)
+        report = build_site(screenshots=args.screenshots, artifact_origin=args.artifact_origin)
     except (OSError, ValueError) as error:
         print(f"Build failed: {error}", file=sys.stderr)
         return 1
@@ -605,6 +662,9 @@ def main() -> int:
         print(f"Built {report['html_files']} HTML results and {report['screenshots']} screenshots.")
         print(f"Publish: {report['output']}")
         print(f"Size: {report['bytes']:,} bytes ({report['bytes'] / 1024 / 1024:.2f} MiB) in {report['files']} files.")
+        if report["artifact_output"]:
+            print(f"Apps: {report['artifact_output']} -> {report['artifact_origin']}")
+            print(f"App size: {report['artifact_bytes']:,} bytes in {report['artifact_files']} files.")
         if report["source_screenshot_bytes"]:
             print(f"Screenshots: {report['source_screenshot_bytes']:,} source bytes -> {report['screenshot_bytes']:,} published bytes.")
         for warning in report["warnings"]:

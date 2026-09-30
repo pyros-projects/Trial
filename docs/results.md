@@ -26,11 +26,11 @@ Prompt identities reuse the `icon` in [catalog.json](../prompts/catalog.json) th
 
 ## Build notices
 
-Maintain short observations in the `buildNotices` object in [appsettings.json](../gallery/static/appsettings.json), keyed by the exact `model-folder/run-folder` ID. Each entry has a `type` (`runtime-error`, `slow-start`, or `run-cancelled`) and a plain-text `message` of 1–500 characters, without control characters. Optional `scope: "public"` limits a notice to the public showcase; the default `"all"` shows it in both galleries. The existing entries demonstrate a slow shader startup, a JavaScript error, storage access blocked by the public sandbox, and a cancelled agent run.
+Maintain short observations in the `buildNotices` object in [appsettings.json](../gallery/static/appsettings.json), keyed by the exact `model-folder/run-folder` ID. Each entry has a `type` (`runtime-error`, `slow-start`, or `run-cancelled`) and a plain-text `message` of 1–500 characters, without control characters. Optional `scope: "public"` limits a notice to the public showcase; the default `"all"` shows it in both galleries. The existing entries demonstrate a slow shader startup, a JavaScript error, and a cancelled agent run.
 
 Use `run-cancelled` for context about an interrupted generation or testing run. It does not classify the submitted app as broken or disable its preview. GLM's stealth entry records my observation: I cancelled the run after about an hour because the agent kept unsuccessfully attempting to finish its own game during playtesting. This is not a verdict that the game cannot be completed.
 
-Cards show a short attention label. Build details show the explanation, and direct implementation links open it as a collapsible overlay. Collapsing the notice keeps the app's dimensions and running state intact. Switching models displays that build's own notice. Refresh reloads the settings.
+Cards show a short attention label. Build details show the explanation, and direct implementation links open it from the toolbar's **Notice** control. **Hide notice**, Escape, or clicking the app clears the entire overlay; only the toolbar control remains for reopening it. Dismissing or reopening keeps the app's dimensions and running state intact. Switching models displays that build's own notice. Refresh reloads the settings.
 
 GLM's drone racer has a runtime-error notice for particle effects during flight: `ps is not defined` interrupts rendering and HUD updates while physics continues. The fault is in the submitted particle renderer and occurs after startup.
 
@@ -190,7 +190,7 @@ Give the tested agent only the selected `prompt.md` in a separate workspace. `ac
 
 Every prompt permits planning, file creation, execution, inspection, testing, and improvement from the start, within the assigned tools and budget. The preferred browser workflow is the installed `agent-browser` skill; a documented real-browser fallback is allowed if it is unavailable. Record missing checks as blocked rather than passed.
 
-Every current task delivers one self-contained `index.html` with no runtime network dependencies. Development tools and temporary local servers are allowed. Tasks 21–24 explicitly use in-memory session state and user-initiated downloads instead of required persistent browser storage. Their main workflows must work in the public opaque-origin iframe. The original 01–20 prompts retain their existing requirements.
+Every current task delivers one self-contained `index.html` with no runtime network dependencies. Development tools and temporary local servers are allowed. Tasks 21–24 explicitly use in-memory session state and user-initiated downloads instead of required persistent browser storage. Their authored requirements still cover unavailable storage; current hosting runs the HTML apps on a separate origin without a sandbox. The original prompt requirements are unchanged.
 
 Prompt 24 additionally requires actual live research with the harness's web tools, a distinct concept beyond the other 23 briefs, and a concise research record in `evidence/research.md`. Preserve that record for evaluation. The public website excludes the raw evidence; the app's embedded concept note and references remain part of its delivered HTML.
 
