@@ -1,5 +1,12 @@
 # Changelog
 
+## Opus 5.5 through prompt 16: 2026-09-30
+
+- Added Opus 5.5's ecosystem, digital logic lab, and roguelike. It now covers prompts 01–16; the showcase contains 168 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and the model collection. Model order, colors, and reported setups are unchanged.
+- Added a public-viewer notice for the roguelike's blocked New run and Settings dialog submissions; the default run remains playable.
+- Preserved original submissions and excluded raw evidence from the website.
+
 ## GPT-6.1 Sol through prompt 21: 2026-09-30
 
 - Added Sol's ecosystem, digital logic lab, roguelike, echo-loop puzzler, weather lab, node graphics studio, traffic simulator, and spreadsheet studio. Sol now covers prompts 01–21; the showcase contains 165 builds across nine models.

@@ -1,0 +1,12 @@
+import { loadCore } from './loadcore.mjs';
+const C = loadCore();
+const [,, seed = 'ember', style = 'mixed', n = '1'] = process.argv.filter(a => a !== '--src');
+const fl = C.generateFloor({ seed, style }, +n);
+const ch = { 0: '#', 1: '.', 2: '+', 3: "'", 4: 'L', 5: '>', 6: '<', 7: '~', 8: ':', 9: '^', 10: '"', 11: ',', 12: 'O', 13: '*', 14: '_', 15: '=', 16: '=', 17: '.', 18: '=', 19: '_' };
+const g = fl.t.map(t => ch[t]);
+for (const e of fl.spawn.enemies) g[e.y * fl.w + e.x] = e.k[0].toUpperCase();
+for (const i of fl.spawn.items) g[i.y * fl.w + i.x] = i.k === 'key' ? 'k' : '!';
+for (const t of fl.spawn.traps) g[t.y * fl.w + t.x] = 'x';
+g[fl.entry.y * fl.w + fl.entry.x] = '@';
+for (let y = 0; y < fl.h; y++) console.log(g.slice(y * fl.w, (y + 1) * fl.w).join(''));
+console.log(fl.style, 'attempt', fl.attempt, fl.validation.checks.map(c => (c.ok ? '✓ ' : '✗ ') + c.name + ' ' + c.detail).join('\n'));
