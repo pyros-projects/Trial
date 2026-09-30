@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## Opus 5.5 through prompt 18: 2026-09-30
+
+Opus 5.5 adds its echo-loop puzzler and weather/storm laboratory, covering prompts **01–18**. The showcase contains **173 builds across nine models**. Model order, colors, and the reported **Claude Code · xhigh** setup are unchanged; Sol remains first with all 24 prompts.
+
+All **168 original files totaling 51,495,852 bytes** are preserved. Two thumbnail aliases exactly copy visually inspected supplied 1280 × 800 captures: Echo Loop's Switchback level and Stormlab's developed squall. No final-HTML capture binding is claimed. The bounded publication review covered **71 UTF-8 text files and 97 PNGs**. No confirmed credentials, private identity linkage, external runtime dependencies, or Netlify Forms were found; user paths use the existing Pyro pseudonym, and evidence endpoints are local tooling or offline probes. PNGs have valid checksums, no metadata, and no trailing payload. Selected image pixels were inspected; remaining screenshots were not exhaustively reviewed. Submitted scripts and skills were not executed or followed. Raw evidence remains public in GitHub and excluded from Netlify.
+
+Both apps passed **10 bounded integration checks in each of the Netlify draft and production**: native movement and Rewind create an echo and start a second loop; Stormlab renders terrain/clouds and pauses. The **1440 × 957** desktop and **390 × 765** narrow frames preserve the iframe and app state, with no document-level horizontal overflow; closing removes the iframe. Desktop and narrow captures were visually reviewed in each environment. No page/console errors, failed requests, or external runtime requests appeared. No new notice was needed; the six existing notices remain unchanged. These checks do not establish puzzle completion, scientific correctness, sustained performance, or physical touch-device usability.
+
+The draft and production each passed **184 live byte comparisons**, including all **173 original HTML artifacts**, the two new source downloads, thumbnails, and share pages. Four legacy-route redirects and six excluded-file 404 checks passed. The 168 original files and two thumbnail aliases also match their staged Git blobs byte-for-byte.
+
+Production gallery **`6abcc57e5884f400f78b57fc`** contains **472 files totaling 11,760,715 bytes**; app alias deploy **`6abcc572e46b40dd3d247584`** contains **175 files totaling 20,430,960 bytes**. All **16 focused production gallery checks passed**, including the 173-build count, Opus's 18-build collection and setup/color, unchanged model order, new decoded thumbnails and canonical sharing, prompt comparisons, hidden missing builds, and compact/expanded three/two/one-column grids without overflow. Homepage and collection captures were visually inspected, and the README preview was refreshed from the decoded production homepage.
+
 ## GPT-6.1 Sol completes all 24 prompts: 2026-09-30
 
 Sol adds its vector/layout studio, project planner, and **Afterimage** capstone, an interactive experiment in information loss and recovery. Its collection now covers all **24 prompts**, bringing the showcase to **171 builds across nine models**. The configured first position, amber tint, and reported **Codex · Max** setup are unchanged.

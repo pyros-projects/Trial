@@ -1,5 +1,10 @@
 # Changelog
 
+## Opus 5.5 through prompt 18: 2026-09-30
+
+- Added Opus 5.5's echo-loop puzzler and weather/storm laboratory. It now covers prompts 01–18; the showcase contains 173 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and the model collection. Model order, colors, and reported Claude Code · xhigh setup are unchanged.
+
 ## GPT-6.1 Sol completes all 24 prompts: 2026-09-30
 
 - Added Sol's vector/layout studio, project planning studio, and **Afterimage** capstone, an interactive experiment in information loss and recovery. Sol now covers all 24 prompts; the showcase contains 171 builds across nine models.
