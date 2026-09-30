@@ -1,5 +1,10 @@
 # Changelog
 
+## Opus 5.5 through prompt 22: 2026-09-30
+
+- Added Opus 5.5's node graphics studio, traffic simulator, spreadsheet/chart studio, and vector/layout studio. It now covers prompts 01–22; the showcase contains 177 builds across nine models.
+- Updated supplied screenshot previews, prompt comparisons, and the model collection. Model order, colors, and reported Claude Code · xhigh setup are unchanged.
+
 ## Opus 5.5 through prompt 18: 2026-09-30
 
 - Added Opus 5.5's echo-loop puzzler and weather/storm laboratory. It now covers prompts 01–18; the showcase contains 173 builds across nine models.

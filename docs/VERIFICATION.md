@@ -2,6 +2,18 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## Opus 5.5 through prompt 22: 2026-09-30
+
+Opus 5.5 adds its node graphics studio, traffic simulator, spreadsheet/chart studio, and vector/layout studio, covering prompts **01–22**. The showcase contains **177 builds across nine models**. Model order, colors, and the reported **Claude Code · xhigh** setup are unchanged; Sol remains first with all 24 prompts.
+
+All **278 original files totaling 40,738,925 bytes** are preserved. Four thumbnail aliases exactly copy visually inspected supplied 1280 × 800 captures. No final-HTML capture binding is claimed. The bounded publication review covered **130 text files, 146 PNGs, one ZIP, and one WebM**, including 12 SVG documents. No confirmed credentials, private identity linkage, external runtime dependencies, or Netlify Forms were found. Deliberately hostile SVG/import fixtures are raw test evidence, excluded from Netlify. PNGs have valid checksums and no metadata or trailing payload; the ZIP holds 12 clean PNG frames and a sequence manifest. The WebM contains VP9 video and ordinary Chrome metadata without attachments or trailing payload. Selected screenshots were visually inspected; remaining image pixels and video frames were not exhaustively reviewed. Submitted scripts and skills were not executed or followed. Raw evidence remains public in GitHub and excluded from Netlify; no original files are ignored by Git.
+
+All four apps passed **20 bounded integration checks in each of the Netlify draft and production**. Native workflows cover pausing and stepping the node animation, pausing traffic, editing a spreadsheet cell with dependent formula/chart propagation, and duplicating then undoing a vector layer. Eight desktop/narrow captures were visually reviewed in each environment. The maximized iframe and running state survive viewport changes, and closing removes the iframe. No page/console errors, failed requests, or external runtime requests appeared. No new notice was needed; the six existing notices remain unchanged. These checks do not establish full editor, simulation, spreadsheet, or touch-device correctness.
+
+The draft and production each passed **194 live byte comparisons**, including all **177 original HTML artifacts**, the four new source downloads, thumbnails, and share pages. Eight legacy-route redirects and six excluded-file 404 checks passed. Original app HTML remains unchanged and runs on the separate app origin without a sandbox. All 278 original files and four thumbnail aliases also match their staged Git blobs byte-for-byte.
+
+Production gallery **`6abcf85836e2dbfff94615f9`** contains **480 files totaling 12,013,525 bytes**; app alias deploy **`6abcf84dbd5af8960c041c51`** contains **179 files totaling 21,494,576 bytes**. All **20 focused production gallery checks passed**, including the 177-build count, Opus's 22-build collection and setup/color, unchanged model order, four decoded new thumbnails and canonical sharing, prompt comparisons, and compact/expanded three/two/one-column grids without overflow. Homepage and collection captures were visually inspected, and the README preview was refreshed from the decoded production homepage.
+
 ## Opus 5.5 through prompt 18: 2026-09-30
 
 Opus 5.5 adds its echo-loop puzzler and weather/storm laboratory, covering prompts **01–18**. The showcase contains **173 builds across nine models**. Model order, colors, and the reported **Claude Code · xhigh** setup are unchanged; Sol remains first with all 24 prompts.
