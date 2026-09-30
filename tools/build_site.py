@@ -21,6 +21,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
 from gallery import server
 from gallery.demos import DEMO_PATH, DEMO_CSP, demo_file, validate_static_html
+from gallery.videos import load_video_experiments, video_prompt_file
 
 STATIC_FILES = ("index.html", "app.js", "appsettings.json", "styles.css", "favicon.svg", "logo-mark.svg", "deep-swe-snapshot.png")
 CATALOG_FIELDS = ("id", "title", "category", "icon", "description", "look_for", "track", "artifact_type", "rubric")
@@ -467,6 +468,39 @@ def model_pages(stage: Path, catalog: list[dict[str, str]], rows: list[dict[str,
     return urls
 
 
+def video_pages(stage: Path, experiments: list[dict[str, Any]], origin: str,
+                labels: dict[str, str]) -> int:
+    """Publish crawler handoffs using YouTube thumbnails without downloading media."""
+    def write_page(route: str, title: str, description: str, viewer: str, video_id: str | None) -> None:
+        page = stage / route.lstrip("/") / "index.html"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(social_page(
+            title, description, origin + route, viewer,
+            image=f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" if video_id else None,
+            image_alt=title, link_text="Open the video experiment",
+        ), encoding="utf-8")
+
+    first_id = experiments[0]["videos"][0]["youtube_id"] if experiments else None
+    write_page("/videos/", "Video lab | Trial - a Vibe Benchmark",
+               "Watch recorded model experiments, read their prompts, and compare the results.",
+               "/#videos", first_id)
+    pages = 1
+    for experiment in experiments:
+        encoded = quote(experiment["id"], safe="")
+        write_page(experiment["share_url"], f"{experiment['title']} | Trial Video lab",
+                   experiment["description"], f"/#videos/{encoded}",
+                   experiment["videos"][0]["youtube_id"])
+        pages += 1
+        for video in experiment["videos"]:
+            label = labels.get(video["model_key"], video["model_key"])
+            title = f"{label}: {video.get('title') or experiment['title']}"
+            write_page(video["share_url"], f"{title} | Trial Video lab",
+                       experiment["description"], f"/#watch/{encoded}/{quote(video['youtube_id'], safe='')}",
+                       video["youtube_id"])
+            pages += 1
+    return pages
+
+
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
@@ -519,6 +553,7 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
         output = root / output
     marker = validate_output(root, output)
     catalog = public_catalog(root)
+    video_experiments = load_video_experiments(root / "videos")
     site_origin, artifact_origin, model_labels = share_settings(root, artifact_origin)
     artifact_output = root / "dist/artifacts" if artifact_origin else None
     artifact_marker = validate_output(root, artifact_output, name="artifacts") if artifact_output else None
@@ -554,6 +589,11 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
         write_json(stage / "prompts/catalog.json", catalog)
+        for experiment in video_experiments:
+            source = video_prompt_file(root / "videos", experiment["id"])
+            target = stage / "videos" / experiment["id"] / "prompt.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
         for row in rows:
             run = state.results_root / row["model_key"] / row["run_key"]
             relative = Path(row["model_key"]) / row["run_key"] / row["artifact"]["filename"]
@@ -610,10 +650,16 @@ def build_site(root: Path = PACKAGE_ROOT, output: Path | None = None, *, screens
         model_images = list((stage / "models").glob("*/preview.jpg"))
         report.update(model_pages=len(model_urls), model_images=len(model_images),
                       model_image_bytes=sum(path.stat().st_size for path in model_images))
+        report.update(video_experiments=len(video_experiments),
+                      videos=sum(len(experiment["videos"]) for experiment in video_experiments),
+                      video_share_pages=video_pages(stage, video_experiments, site_origin, model_labels))
+        model_keys = {row["model_key"] for row in rows}
+        model_keys.update(video["model_key"] for experiment in video_experiments for video in experiment["videos"])
         data = {"mode": "public", "generated_at": server.utc_iso(), "artifact_origin": artifact_origin or "/artifacts",
                 "catalog": catalog, "summary": state.summary(rows), "results": rows,
                 "comparison_urls": comparison_urls, "model_urls": model_urls,
-                "model_profiles": server.load_model_profiles(state.results_root, (row["model_key"] for row in rows))}
+                "video_experiments": video_experiments,
+                "model_profiles": server.load_model_profiles(state.results_root, model_keys)}
         write_json(stage / "api/data.json", data)
         (stage / "api/export.csv").write_bytes(export_csv(rows))
         redirects = REDIRECTS

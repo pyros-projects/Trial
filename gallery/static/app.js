@@ -5,10 +5,11 @@
   const score = value => value == null ? '—' : Number(value).toFixed(1);
   const bytes = value => value == null ? 'Unknown' : value < 1024 ? `${value} B` : value < 1048576 ? `${(value/1024).toFixed(1)} KiB` : `${(value/1048576).toFixed(1)} MiB`;
   const label = track => track === 'real-apps' ? 'SOURCE PROJECT' : 'HTML EXPERIENCE';
-  const state = {data:null, modelSettings:new Map(), buildNotices:new Map(), view:'gallery', selected:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, collectionModel:null, modelTrigger:null, tab:'preview', promptText:'', promptToken:0, loading:false};
+  const state = {data:null, modelSettings:new Map(), buildNotices:new Map(), view:'gallery', selected:null, video:null, categoryTask:null, categoryTrigger:null, categoryAllModels:false, collectionModel:null, modelTrigger:null, tab:'preview', promptText:'', promptToken:0, loading:false};
   const noticeLabels={'runtime-error':'Runtime error','slow-start':'May take minutes to load','run-cancelled':'Agent run cancelled'};
   const headings = {
     gallery:['THE SHOWCASE','Show me what it <em>built.</em>','Same prompts. Different models. Put the results next to each other and look closer.'],
+    videos:['THE VIDEO LAB','Same brief.<br>Different <em>films.</em>','Research. Script. Motion. Voice. Sound. From the first source to the final cut, the agent owns the whole thing.'],
     catalog:['THE PROMPTS','One prompt.<br><em>Go build.</em>','Simulations, games, creative tools and a research-led capstone. Each challenge becomes a single HTML file you can open and try.'],
     leaderboard:['THE EVALUATIONS','Bring the<br><em>receipts.</em>','Independent checks on the finished artifact. Keep the tasks, tools and budgets comparable.'],
     guide:['THE FIELD GUIDE','From prompt<br>to <em>proof.</em>','Choose a challenge. Let the agent build and test. Keep the result. Take a closer look.'],
@@ -102,6 +103,56 @@
   const playHash=row=>'#play/'+row.id.split('/').map(encodeURIComponent).join('/');
   const comparisonHash=key=>'#compare/'+encodeURIComponent(key);
   const modelHash=key=>'#model/'+encodeURIComponent(key);
+  const videoHash=(experiment,video)=>video?'#watch/'+encodeURIComponent(experiment.id)+'/'+video.youtube_id:'#videos/'+encodeURIComponent(experiment.id);
+  const videoExperiments=()=>state.data?.video_experiments||[];
+  function findVideo(ref) {
+    const parts=ref.split('/');if(parts.length>2)return {};const [key,id]=parts;const experiment=videoExperiments().find(item=>item.id===key);
+    return {experiment,video:experiment?.videos.find(item=>item.youtube_id===id)};
+  }
+  async function copyVideoLink(ref) {
+    const {experiment,video}=findVideo(ref);if(!experiment)return;
+    const share=(video||experiment).share_url;
+    const url=new URL(isPublic()&&share?.startsWith('/videos/')?share:location.pathname,location.origin);
+    if(!isPublic()||!share?.startsWith('/videos/'))url.hash=videoHash(experiment,video);
+    try{await navigator.clipboard.writeText(url.href);toast(video?'Film link copied.':'Experiment link copied.');}
+    catch{window.prompt('Copy this video lab link:',url.href);}
+  }
+  function renderVideos() {
+    const experiments=videoExperiments();const count=experiments.reduce((total,item)=>total+item.videos.length,0);
+    $('#nav-video-count').textContent=count;
+    $('#video-lab-count').textContent=`${experiments.length} ${experiments.length===1?'experiment':'experiments'} / ${count} ${count===1?'film':'films'}`;
+    $('#video-experiments').innerHTML=experiments.map((experiment,index)=>`<article class="video-experiment" id="video-experiment-${escape(experiment.id)}">
+      <header class="video-brief"><div><span class="eyebrow"><span class="video-glyph" aria-hidden="true">▷</span> VIDEO EXPERIMENT / ${String(index+1).padStart(2,'0')}</span><h2>${escape(experiment.title)}</h2><p>${escape(experiment.description)}</p><span class="video-format">${escape(experiment.format)}</span></div><div class="video-brief-actions"><button class="button" data-video-prompt="${escape(experiment.id)}">Read &amp; copy prompt ↗</button><button class="button" data-copy-video="${escape(experiment.id)}" aria-label="Copy link to video experiment: ${escape(experiment.title)}">Copy link</button></div></header>
+      <div class="video-look-for"><span class="eyebrow">LOOK FOR</span><p>${escape(experiment.look_for)}</p></div>
+      <div class="video-grid">${[...experiment.videos].sort(compareModels).map(video=>{
+        const ref=escape(experiment.id+'/'+video.youtube_id);const name=escape(modelName(video));
+        return `<article class="video-card" style="--model-color:${modelColor(video)}"><div class="card-model"><div class="model-identity"><span class="model-avatar" aria-hidden="true">${name.replace(/[^a-z0-9]/ig,'').slice(0,2).toUpperCase()}</span><div><span class="model-name">${name}</span>${video.setting?`<span class="model-setup">${escape(video.setting)}</span>`:''}</div></div><span class="video-medium">FILM</span></div><button class="video-poster" data-watch-video="${ref}" aria-label="Watch ${name}: ${escape(video.title||experiment.title)}"><img src="https://i.ytimg.com/vi/${video.youtube_id}/hqdefault.jpg" alt="" loading="lazy" width="480" height="360" referrerpolicy="no-referrer"><span class="video-play" aria-hidden="true">▶</span><span class="video-watch-label">Watch film</span>${video.duration?`<span class="video-duration">${escape(video.duration)}</span>`:''}</button><div class="video-card-caption"><h3>${escape(video.title||experiment.title)}</h3><div><button class="card-open" data-copy-video="${ref}" aria-label="Copy film link: ${name}">Copy link</button><a class="card-open" href="https://www.youtube.com/watch?v=${video.youtube_id}" target="_blank" rel="noopener noreferrer" aria-label="Watch ${name} on YouTube">YouTube ↗</a></div></div></article>`;
+      }).join('')}</div></article>`).join('')||'<div class="empty"><h2>The screening room is waiting.</h2><p>No video experiments have been published yet.</p></div>';
+  }
+  function openVideo(ref,updateUrl=true) {
+    const {experiment,video}=findVideo(ref);if(!video||!/^[-\w]{11}$/.test(video.youtube_id))return false;
+    if(state.video===ref&&$('#video-viewer').open)return true;
+    if(state.view!=='videos')setView('videos',false);state.video=ref;
+    $('#video-kicker').textContent=experiment.title;
+    $('#video-title').textContent=video.title||modelName(video);
+    $('#video-model').innerHTML=[...experiment.videos].sort(compareModels).map(item=>`<option value="${escape(experiment.id+'/'+item.youtube_id)}">${escape(modelName(item))}${item.setting?' · '+escape(item.setting):''}</option>`).join('');
+    $('#video-model').value=ref;$('#video-viewer').style.setProperty('--model-color',modelColor(video));
+    $('#video-youtube').href='https://www.youtube.com/watch?v='+video.youtube_id;
+    $('#copy-video-link').dataset.copyVideo=ref;$('#video-look-for').textContent=experiment.look_for;
+    const frame=document.createElement('iframe');frame.id='video-frame';frame.title=`${modelName(video)}: ${video.title||experiment.title}`;
+    frame.src='https://www.youtube-nocookie.com/embed/'+video.youtube_id+'?autoplay=1&rel=0';
+    // YouTube requires the embedding origin even though the gallery defaults to no-referrer.
+    frame.referrerPolicy='strict-origin-when-cross-origin';frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;
+    $('#video-stage').replaceChildren(frame);
+    if(!$('#video-viewer').open)$('#video-viewer').showModal();
+    if(updateUrl)try{history.pushState(null,'',videoHash(experiment,video));}catch{ /* The player also works without history access. */ }
+    return true;
+  }
+  function closeVideo(updateUrl=true) {
+    const experiment=state.video?findVideo(state.video).experiment:null;
+    $('#video-stage').replaceChildren();state.video=null;$('#video-viewer').close();
+    if(updateUrl&&location.hash.startsWith('#watch/'))try{history.replaceState(null,'',experiment?videoHash(experiment):'#videos');}catch{ /* Playback has still stopped. */ }
+  }
   function copyLinkButton(row, className='button quiet') {
     return row.artifact.url?`<button class="${className}" data-copy-run="${escape(row.id)}" aria-label="Copy link to ${escape(modelName(row))}: ${escape(row.task_title)}">Copy link</button>`:'';
   }
@@ -151,6 +202,18 @@
     if(!state.data)return;
     $('#prompt-dialog').close();$('#link-error').hidden=true;
     const route=location.hash.slice(1);
+    if(route==='videos'||route.startsWith('videos/')||route.startsWith('watch/')){
+      let ref='';try{ref=decodeURIComponent(route.slice(route.indexOf('/')+1));}catch{ /* Invalid links show the video lab. */ }
+      closeViewer();closeCategory(false);closeModel(false);
+      if(route.startsWith('watch/')&&openVideo(ref,false))return;
+      closeVideo(false);setView('videos',false);
+      const experiment=videoExperiments().find(item=>item.id===ref);
+      if((route!=='videos'&&!experiment)||route.startsWith('watch/')){
+        $('#link-error').textContent='This video experiment or film is unavailable. Choose a film from the video lab.';$('#link-error').hidden=false;
+      }else if(experiment)document.getElementById('video-experiment-'+experiment.id)?.scrollIntoView({behavior:'instant',block:'start'});
+      return;
+    }
+    closeVideo(false);
     if(route.startsWith('model/')){
       let key;try{key=decodeURIComponent(route.slice(6));}catch{ /* Invalid links use the unavailable-collection message. */ }
       closeViewer();closeCategory(false);
@@ -191,7 +254,7 @@
   }
   function setView(view, updateUrl=true) {
     if (!Object.hasOwn(headings,view)||(isPublic()&&view==='leaderboard')) view='gallery';
-    if(state.view!==view){closeCategory();closeModel();}
+    if(state.view!==view){closeCategory();closeModel();closeVideo(false);}
     $('#link-error').hidden=true;
     if(state.view!==view)window.scrollTo({top:0,behavior:'instant'});
     state.view=view;
@@ -203,9 +266,9 @@
       if(active) button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
     });
     $('#current-section').textContent=headings[view][0];$('#hero-title').innerHTML=headings[view][1];$('#hero-description').textContent=headings[view][2];
-    $('#filters').hidden=view==='guide'||view==='why';$('#run-filters').hidden=view==='catalog';
+    $('#filters').hidden=['guide','why','videos'].includes(view);$('#run-filters').hidden=view==='catalog';
     $('#recorded-only-filter').hidden=view!=='gallery';
-    $('.stats').hidden=view==='why';$('.workspace-tools').hidden=view==='why';
+    $('.stats').hidden=view==='why'||view==='videos';$('.workspace-tools').hidden=view==='why'||view==='videos';$('.hero-note').hidden=view==='videos';
     render();saveSettings();
   }
   function fillSelect(id, entries, firstLabel, desired) {
@@ -415,7 +478,7 @@
     $('#leaderboard-content').innerHTML=content||'<div class="empty"><h2>No matching runs yet.</h2><p>Import results and attach independent evaluator scores to see model summaries.</p></div>';
   }
   function render() {
-    renderGallery();renderCatalog();renderLeaderboard();renderCategory();renderModel();
+    renderGallery();renderCatalog();renderLeaderboard();renderCategory();renderModel();renderVideos();
   }
   async function loadData() {
     if(state.loading)return;state.loading=true;$('#refresh').disabled=true;$('#connection-status').textContent='Scanning…';
@@ -463,11 +526,11 @@
       $('#error-banner').textContent=`Could not read the gallery: ${error.message}. Start the Python gallery server and retry.`;$('#error-banner').hidden=false;$('#connection-status').textContent='Connection error';
     }finally{state.loading=false;$('#refresh').disabled=false;}
   }
-  async function openPrompt(taskId) {
-    const task=state.data?.catalog.find(t=>t.id===taskId);if(!task)return;
-    $('#prompt-mark').innerHTML=promptMark(task);
+  async function openPrompt(taskId,isVideo=false) {
+    const task=(isVideo?videoExperiments():state.data?.catalog)?.find(t=>t.id===taskId);if(!task)return;
+    $('#prompt-mark').innerHTML=isVideo?'<span class="video-glyph" aria-hidden="true">▷</span>':promptMark(task);
     const token=++state.promptToken;state.promptText='';$('#prompt-title').textContent=task.title;$('#prompt-content').textContent='Loading prompt…';$('#copy-status').textContent='';$('#copy-prompt').disabled=true;
-    const url=`/prompts/${encodeURIComponent(taskId)}/prompt.md`;$('#download-prompt').href=url;$('#download-prompt').target='_blank';$('#download-prompt').rel='noopener';
+    const url=isVideo?task.prompt_url:`/prompts/${encodeURIComponent(taskId)}/prompt.md`;$('#download-prompt').href=url;$('#download-prompt').target='_blank';$('#download-prompt').rel='noopener';
     if(!$('#prompt-dialog').open)$('#prompt-dialog').showModal();
     try{const response=await fetch(url);if(!response.ok)throw new Error(`HTTP ${response.status}`);const text=await response.text();if(token!==state.promptToken)return;state.promptText=text;$('#prompt-content').textContent=text;$('#copy-prompt').disabled=false;}
     catch(error){if(token===state.promptToken)$('#prompt-content').textContent=`Could not load prompt: ${error.message}`;}
@@ -593,6 +656,10 @@
     if(target.dataset.copyTask)copyCategoryLink(target.dataset.copyTask);
     if(target.dataset.copyModel)copyModelLink(target.dataset.copyModel);
     if(target.dataset.openPrompt)openPrompt(target.dataset.openPrompt);
+    if(target.dataset.videoPrompt)openPrompt(target.dataset.videoPrompt,true);
+    if(target.dataset.watchVideo)openVideo(target.dataset.watchVideo);
+    if(target.dataset.copyVideo)copyVideoLink(target.dataset.copyVideo);
+    if(target.id==='close-video')closeVideo();
     if(target.dataset.expandTask)openCategory(target.dataset.expandTask,target);
     if(target.dataset.expandModel)openModel(target.dataset.expandModel,target);
     if(target.dataset.shiftModels)shiftComparison(target.closest('.prompt-group'),Number(target.dataset.shiftModels));
@@ -610,6 +677,7 @@
     }
     if(event.target.id==='viewport-size')resizeFrame();
     if(event.target.id==='live-model')switchLiveModel(event.target.value);
+    if(event.target.id==='video-model')openVideo(event.target.value);
   });
   $('#refresh').addEventListener('click',loadData);
   $('#clear-filters').addEventListener('click',()=>{for(const id of filterIDs)$('#'+id).value=id==='search'?'':id==='sort'?'task':'all';setRecordedOnly(true);render();saveSettings();});
@@ -622,6 +690,8 @@
   $('#model-viewer').addEventListener('close',finishModelClose);
   $('#viewer').addEventListener('close',finishViewerClose);
   $('#viewer').addEventListener('cancel',event=>{event.preventDefault();if(!closeLiveInfo())closeViewer();});
+  $('#video-viewer').addEventListener('cancel',event=>{event.preventDefault();closeVideo();});
+  $('#video-viewer').addEventListener('close',()=>{if(!$('#video-viewer').open){$('#video-stage').replaceChildren();state.video=null;}});
   $('#close-prompt').addEventListener('click',()=>$('#prompt-dialog').close());
   $('#prompt-dialog').addEventListener('close',()=>{state.promptToken++;});
   $('#copy-prompt').addEventListener('click',copyPrompt);
@@ -632,7 +702,7 @@
       else shiftComparison(group,event.key==='ArrowRight'?1:-1);
     }
     if(event.key==='Escape'&&$('#viewer').open&&closeLiveInfo()){event.preventDefault();return;}
-    if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#category-viewer').open&&!$('#model-viewer').open&&!$('#prompt-dialog').open){event.preventDefault();$('#search').focus();}
+    if(event.key==='/'&&!$('#filters').hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#viewer').open&&!$('#category-viewer').open&&!$('#model-viewer').open&&!$('#prompt-dialog').open&&!$('#video-viewer').open){event.preventDefault();$('#search').focus();}
   });
   window.addEventListener('hashchange',()=>followRoute());
   document.addEventListener('scroll',event=>{

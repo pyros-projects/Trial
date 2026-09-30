@@ -1,5 +1,11 @@
 # Changelog
 
+## Video lab: 2026-09-30
+
+- Added a separate home for video experiments, starting with **What follows if the curve keeps going?** and films from GPT-6.1 Sol, Opus 5.5, and GPT-6 Astra. The 24 HTML challenges retain their own catalog and counts.
+- Added model-colored film cards, a large YouTube player with model switching, Look for guidance, the unchanged original prompt, and shareable experiment/film links with preview metadata.
+- Video experiments live in `videos/catalog.json`. Netlify publishes only selected metadata, prompt text, and share pages; video files and production evidence stay outside the export.
+
 ## Opus 5.5 through prompt 22: 2026-09-30
 
 - Added Opus 5.5's node graphics studio, traffic simulator, spreadsheet/chart studio, and vector/layout studio. It now covers prompts 01–22; the showcase contains 177 builds across nine models.

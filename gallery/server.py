@@ -30,14 +30,17 @@ from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 try:
     from .projects import project_summary, project_zip, validate_preview_url
     from .demos import DEMO_PATH, DEMO_CSP, demo_file
+    from .videos import load_video_experiments, video_prompt_file
 except ImportError:
     from projects import project_summary, project_zip, validate_preview_url
     from demos import DEMO_PATH, DEMO_CSP, demo_file
+    from videos import load_video_experiments, video_prompt_file
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 STATIC_ROOT = PACKAGE_ROOT / 'gallery/static'
 RESULTS_ROOT = PACKAGE_ROOT / 'results'
 PROMPTS_ROOT = PACKAGE_ROOT / 'prompts'
+VIDEOS_ROOT = PACKAGE_ROOT / 'videos'
 CATALOG_PATH = PROMPTS_ROOT / 'catalog.json'
 HTML_NAMES = ('index.html', 'result.html', 'app.html')
 SCREENSHOT_NAMES = tuple(f'{name}{ext}' for name in ('screenshot', 'preview') for ext in ('.png','.webp','.jpg','.jpeg'))
@@ -299,9 +302,13 @@ class GalleryState:
 
     def data(self) -> dict:
         results=self.scan()
+        video_experiments=load_video_experiments(VIDEOS_ROOT)
+        model_keys={row['model_key'] for row in results}
+        model_keys.update(video['model_key'] for experiment in video_experiments for video in experiment['videos'])
         return {'generated_at':utc_iso(),'artifact_origin':self.artifact_origin,'catalog':self.catalog,
                 'summary':self.summary(results),'results':results,
-                'model_profiles':load_model_profiles(RESULTS_ROOT, (row['model_key'] for row in results))}
+                'video_experiments':video_experiments,
+                'model_profiles':load_model_profiles(RESULTS_ROOT, model_keys)}
 
 
 class QuietThreadingHTTPServer(ThreadingHTTPServer):
@@ -403,6 +410,15 @@ def make_gallery_handler(state: GalleryState) -> type[CommonHandler]:
             if path.startswith('/prompts/'):
                 target=safe_relative_file(PROMPTS_ROOT,path[len('/prompts/'):])
                 if target is None:self.send_error(404);return
+                self.send_file(target,'text/plain');return
+            if path.startswith('/videos/'):
+                try:
+                    experiment=next((item for item in load_video_experiments(VIDEOS_ROOT)
+                                     if item['prompt_url']==path),None)
+                    if experiment is None:self.send_error(404);return
+                    target=video_prompt_file(VIDEOS_ROOT,experiment['id'])
+                except (OSError,ValueError):
+                    self.send_error(404);return
                 self.send_file(target,'text/plain');return
             target=safe_relative_file(STATIC_ROOT,path)
             if target is not None:self.send_file(target);return

@@ -4,6 +4,37 @@ Trial reads one artifact per run from a results directory. The local gallery let
 
 The public static export contains a smaller set: the gallery, public prompt text, standalone HTML builds, thumbnails, selected shared model setup fields, and small share pages with link-preview metadata. Raw run metadata, evaluator reports, notes, evidence, project source, and archives are excluded. These exclusions apply to the static website: files committed to a public Git repository are still public. See [Hosting](DEPLOYMENT.md) for the export and deployment commands.
 
+## Add a video experiment
+
+Video lab is a separate collection of recorded experiments. It does not add tasks, builds, or scores to the 24-prompt HTML benchmark. Keep the original prompt at `videos/<experiment-id>/prompt.md` and add an entry to `videos/catalog.json`:
+
+```json
+[
+  {
+    "id": "short-animation",
+    "title": "A short animation",
+    "description": "Recorded results for the same animation brief.",
+    "look_for": "Watch timing, motion, and how clearly the sequence tells its story.",
+    "format": "Recorded video",
+    "videos": [
+      {
+        "youtube_id": "O8_O6q4zivw",
+        "model_key": "gpt-6.1_sol",
+        "title": "A recorded result",
+        "setting": "Max",
+        "duration": "7:01"
+      }
+    ]
+  }
+]
+```
+
+Use unique lowercase experiment slugs of at most 80 characters and exact 11-character YouTube IDs, unique within each experiment. IDs differing only in letter case are rejected because their export paths collide on Windows. Each video needs a model folder key; `title`, `setting`, and `duration` are optional. Only include settings and durations you actually know for that recording. An HTML run's harness or effort setting is not evidence of how a video was produced. Match `model_key` to the display settings in `gallery/static/appsettings.json`.
+
+Titles and model keys are limited to 200 characters; description and Look for text to 4,000; format and setting to 100. Text must be non-empty and contain no control characters. Duration uses minutes and two-digit seconds, such as `7:00` or `123:45`. The catalog must be a UTF-8 JSON array no larger than 1 MiB. Missing catalogs produce an empty collection; invalid catalogs, missing prompts, links, and junctions stop the export with an error.
+
+The website publishes only the selected catalog fields, unchanged prompt bytes, and share pages. `/videos/` opens Video lab, `/videos/<experiment-id>/` opens the experiment, and `/videos/<experiment-id>/<youtube-id>/` opens one recording. Link previews reference YouTube's thumbnail URL; no video or thumbnail is downloaded into the export. Unlisted files, research notes, local recordings, and raw catalog fields stay outside the website. The local server serves only declared experiment prompts from this tree; use hash links locally. Rebuild and redeploy after changing the catalog.
+
 ## Included results
 
 The 2026-09-30 checkout contains 168 submitted HTML builds for all 24 tasks across nine model folders:

@@ -19,6 +19,7 @@
 
 <div align="center">
   <a href="https://trial-by-pyro.netlify.app/">Live Showcase</a> &middot;
+  <a href="https://trial-by-pyro.netlify.app/videos/">Video Lab</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="prompts/README.md">Prompts</a> &middot;
   <a href="docs/results.md">Results Guide</a> &middot;
@@ -58,6 +59,7 @@ Keep the benchmarks. Get your hands on the work.
 - **Try the output.** Run live HTML builds across the full viewport, or choose desktop, tablet, and mobile sizes. Switch models without leaving the prompt, and open **Look for** when you want a few useful things to try. Download the source to inspect it yourself.
 - **Share a build, comparison, or model collection.** Choose **Copy link** on a card to share its maximized app, beside a prompt to share the expanded comparison, or in a model heading to share all of its builds. Each has its own title and screenshot preview.
 - **Run any of the 24 prompts.** Read and copy the complete task, including validation checks and delivery requirements, from the prompt library.
+- **Watch the whole production.** The [Video lab](https://trial-by-pyro.netlify.app/videos/) gives filmmaking experiments their own space: the same brief, different models, finished films. Compare research, storytelling, motion design, narration, and sound. Open the original prompt, switch films in the player, or share an experiment or a single film.
 - **Give the agent the last word.** The Capstone asks it to research, choose a concept the other 23 tasks do not cover, and build a complete experience. Then you get to try its judgment, too.
 - **Keep evaluation honest.** The local gallery shows evaluator checks, source hashes, stale reports, score summaries, and CSV export. Missing scores stay missing.
 - **Share a focused showcase.** Export the gallery, public prompts, HTML builds, thumbnails, and small share pages for static hosting. Evaluation records and project archives are excluded from that export.
@@ -75,6 +77,14 @@ Use Trial when you want to inspect what a coding model can build, choose challen
 The three new apps keep the interesting part in reach: edit a formula, move a shape, delay a task, and see whether the system holds together. The Capstone hands the choice of subject to the agent. It must use live web research, explain what its idea adds, and deliver something you can actually explore.
 
 The previous multi-file Real Apps track is preserved on [`experimental/real-apps`](https://github.com/pyros-projects/Trial/tree/experimental/real-apps), including its fixtures and backend checks. The current collection needs no application database or write service. Tasks 21–24 explicitly keep changes in memory; saving means choosing to download a file.
+
+### Video lab
+
+What happens when the output has a timeline instead of a toolbar? I wanted to see an agent handle the entire production: research, script, visuals, voice, music, edit, and its own quality checks. A polished opening is easy to like. Keeping an argument clear for a whole film is a different test.
+
+The first experiment, [**What follows if the curve keeps going?**](https://trial-by-pyro.netlify.app/videos/accelerate/), asks for an original documentary about a deliberately conditional scenario: AI progress keeps compounding. Look at the research, the pacing, and whether the visuals actually explain the argument. Listen to the mix. Notice where evidence ends and extrapolation begins. A convincing film is not proof of its predictions.
+
+Video experiments sit alongside the 24 HTML challenges and keep their own briefs and outputs. Films play from YouTube; the site hosts the original prompt and a small public catalog, not video files or production evidence. Add another experiment through [`videos/catalog.json`](videos/catalog.json); the [results guide](docs/results.md#add-a-video-experiment) covers the format.
 
 ## Quick Start
 

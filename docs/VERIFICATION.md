@@ -2,6 +2,16 @@
 
 These checks validate the package and gallery, not implementations or model performance. The current catalog contains 24 challenges; older entries below describe the collection as it existed at the time.
 
+## Video lab: 2026-09-30
+
+The first video experiment contains three YouTube recordings: GPT-6.1 Sol, Opus 5.5, and GPT-6 Astra. Model/effort labels and durations were checked against the published titles and YouTube player metadata. The submitted prompt is preserved byte-for-byte, SHA-256 **`5281c328ffa43ee29130139b9e7a2ccd1d15979c574a63726b6dad113a6cd9ec`**. Its inconsistent duration guidance is retained as part of the original issued brief. No benchmark instructions inside that document were executed.
+
+The final opt-in suite ran **146 tests: 145 passed, one Windows symlink check skipped**. New checks cover the video catalog allowlist, validation before export replacement, linked-path rejection, public model-specific share metadata, unchanged HTML counts, prompt copying, responsive navigation, lazy player creation, model switching, and iframe cleanup. A close/reopen regression is covered. An intercepted embed request confirms the iframe's origin-only referrer overrides the gallery's global no-referrer policy. Automated video fixtures block remote media; a separate live browser review observed YouTube playback and decoded all three thumbnails on desktop/mobile without page errors or document overflow. These checks do not assess the films' factual accuracy, full playback, or benchmark compliance.
+
+The release retains **177 HTML builds across 24 prompts** alongside **one video experiment and three films**. The export adds five video share pages and the original prompt. Media stays on YouTube; production recordings, research notes, and undeclared files are not exported. All 177 exported HTML files match the existing submitted originals byte-for-byte. The draft passed **12 exact HTTP byte comparisons** and **five excluded-path 404 checks**; app-origin sandbox behavior remains unchanged.
+
+Production gallery **`6abd19b41c4dc80d16b0e667`** contains **486 files totaling 12,061,513 bytes**. The app alias **`6abd18c9f1a9f90cfa04469e`** retains **179 files totaling 21,494,576 bytes**. Production passed the same **12 exact HTTP comparisons** and **five excluded-path checks**. All 435 release-snapshot inputs match the workspace, and the served gallery assets match the final tested source. **28 live UI checks passed**, including original-prompt display, all experiment/film copy links and model-specific Open Graph metadata, real playback, model switching, teardown, invalid links, and desktop/tablet/mobile layouts. Sol/Astra durations were then aligned with YouTube's displayed **7:01**, followed by a focused production rendering check and repeated byte/allowlist verification. Only the opening seconds were watched; social-platform cache refresh and actual message unfurling were not tested.
+
 ## Opus 5.5 through prompt 22: 2026-09-30
 
 Opus 5.5 adds its node graphics studio, traffic simulator, spreadsheet/chart studio, and vector/layout studio, covering prompts **01–22**. The showcase contains **177 builds across nine models**. Model order, colors, and the reported **Claude Code · xhigh** setup are unchanged; Sol remains first with all 24 prompts.
